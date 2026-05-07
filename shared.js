@@ -1025,28 +1025,44 @@ async function _doSaveTurno(){
   }
   if(!skipMerma && mermaData.length) invalidateCache('merma');
 
-  // ── Save gestión pendiente ──
+  // ── Save gestión pendiente como incidencia independiente ──
   if(toggleState.gestion==='si'){
     const gTipoEl = document.getElementById('g-tipo');
     const gDescEl = document.getElementById('g-desc');
-    var createdGestionTask = await createTask({
-      titulo: (gTipoEl&&gTipoEl.value) ? gTipoEl.value : 'Gestión pendiente',
-      dept_destino: currentUser.area||'Administración',
-      dept_origen: currentUser.area||'',
-      prioridad: 'Media',
-      deadline: getMinTaskDeadline(),
-      descripcion: gDescEl ? gDescEl.value.trim() : '',
-      origen: 'gestion_pendiente',
-      shift_id: shiftId,
-      creado_por: currentUser.nombre
-    });
-    if(!createdGestionTask){
-      console.error('Gestión pendiente task insert failed',{shift_id:shiftId});
-      const alertArea=document.getElementById('turno-alert-area');
-      if(alertArea) alertArea.innerHTML='<div class="alert a-err">No se pudo guardar la gestión pendiente. Inténtalo de nuevo.</div>';
-      return;
+    const gDesc   = gDescEl ? gDescEl.value.trim() : '';
+    const gTipo   = gTipoEl ? gTipoEl.value : '';
+    if(gDesc){
+      const gRecord = {
+        id:         genId(),
+        shift_id:   shiftId,
+        employee_id: currentUser.id,
+        nombre:     currentUser.nombre,
+        area:       currentUser.area||'',
+        departamento: currentUser.area||'',
+        fecha,
+        servicio,
+        categoria:  'Gestión pendiente',
+        tipo_incidencia: gTipo || 'Gestión pendiente',
+        descripcion: gDesc,
+        accion_inmediata: '',
+        accion_tomada: '',
+        requiere_formacion: 'No',
+        requiere_disciplina: 'No',
+        estado:     INCIDENT_STATES.ABIERTA,
+        severidad:  'Pendiente revision',
+        staff_implicado_ids: '[]',
+        staff_implicado_nombres: '[]',
+        created_at: ts
+      };
+      const savedG = await dbInsert('incidencias', gRecord);
+      if(!savedG){
+        console.error('Gestión pendiente insert failed', gRecord);
+        const alertArea = document.getElementById('turno-alert-area');
+        if(alertArea) alertArea.innerHTML='<div class="alert a-err">No se pudo guardar la gestión pendiente.</div>';
+        return;
+      }
+      invalidateCache('incidencias');
     }
-    tareasCreadas++;
   }
 
   // ── Generate tasks ──
@@ -1888,11 +1904,6 @@ async function doValidacion(newEstado){
   var saveResult = await dbUpdate('shifts', validatingShiftId, updatePayload);
   console.log('[VALIDACION] Result:', saveResult);
   invalidateCache('shifts');
-  if(newEstado==='Validado'){
-    const incis=await getDB('incidencias');
-    for(const i of incis){ if(i.shift_id===validatingShiftId) await dbUpdate('incidencias',i.id,{estado:INCIDENT_STATES.CERRADA}); }
-    invalidateCache('incidencias');
-  }
   auditLog('VALIDACION',`${currentUser.nombre} → ${newEstado}`);
   closeModal('modal-validar'); renderValidacion();
   toast(`Registro: ${newEstado}`,newEstado==='Validado'?'ok':'warn');
