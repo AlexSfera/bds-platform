@@ -1761,18 +1761,45 @@ tr:hover td{background:rgba(255,255,255,.018);}
   <optgroup label="Cocina">
     <option>Jefe de Cocina</option>
     <option>Segundo Jefe de Cocina</option>
-    <option>Cocinero</option>
-    <option>Cocinera</option>
+    <option>Cocinero / Cocinera</option>
     <option>Ayudante de cocina</option>
     <option>Friegue</option>
   </optgroup>
   <optgroup label="Sala">
     <option>Jefe de Sala</option>
     <option>Jefe de Sector</option>
-    <option>Camarero</option>
-    <option>Camarera</option>
-    <option>Ayudante camarero</option>
-    <option>Ayudante camarera</option>
+    <option>Camarero / Camarera</option>
+    <option>Ayudante camarero / Ayudante camarera</option>
+  </optgroup>
+  <optgroup label="Recepción Hotel">
+    <option>Jefe de Recepción</option>
+    <option>Recepcionista</option>
+    <option>Recepcionista de noche</option>
+  </optgroup>
+  <optgroup label="Mantenimiento">
+    <option>Jefe de Mantenimiento</option>
+    <option>Técnico de mantenimiento</option>
+    <option>Auxiliar técnico</option>
+  </optgroup>
+  <optgroup label="Limpieza / Housekeeping">
+    <option>Gobernanta</option>
+    <option>Camarero/a de pisos</option>
+    <option>Auxiliar de limpieza</option>
+  </optgroup>
+  <optgroup label="SYNCROLAB">
+    <option>Entrenador</option>
+    <option>Fisioterapeuta</option>
+    <option>Médico / Doctor</option>
+    <option>Coordinador SYNCROLAB</option>
+  </optgroup>
+  <optgroup label="Administración">
+    <option>Administrador</option>
+    <option>Responsable RRHH</option>
+    <option>Asistente de dirección</option>
+  </optgroup>
+  <optgroup label="Economato">
+    <option>Responsable de economato</option>
+    <option>Auxiliar de almacén</option>
   </optgroup>
   <optgroup label="Dirección / F&amp;B">
     <option>F&amp;B Manager</option>
@@ -1781,10 +1808,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
   </optgroup>
   <optgroup label="Otros">
     <option>Técnico</option>
-    <option>Recepcionista</option>
-    <option>Entrenador</option>
-    <option>Fisioterapeuta</option>
-    <option>Camarero de pisos</option>
     <option>Otro</option>
   </optgroup>
 </select></div>
@@ -1793,7 +1816,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="fg"><label>Estado</label><select id="emp-estado"><option>Activo</option><option>Baja</option><option>Vacaciones</option></select></div>
       <div class="fg"><label>Responsable de turno</label><select id="emp-resp"><option value="1">Sí</option><option value="0">No</option></select></div>
       <div class="fg"><label>Puede validar</label><select id="emp-val"><option value="0">No</option><option value="1">Sí</option></select></div>
-      <div class="fg"><label>Rol sistema</label><select id="emp-rol"><option value="empleado">Empleado</option><option value="chef">Chef</option><option value="fb">F&B Manager</option><option value="admin">Administrador</option></select></div>
+      <div class="fg"><label>Rol sistema</label><select id="emp-rol"><option value="empleado">Empleado</option><option value="chef">Chef</option><option value="fb">F&B Manager</option><option value="admin">Administrador</option><option value="jefe_recepcion">Jefe de Recepción</option><option value="supervisor">Supervisor</option><option value="mantenimiento">Mantenimiento</option></select></div>
       <div class="fg sp2"><label>Observaciones</label><textarea id="emp-obs" rows="2"></textarea></div>
     </div>
     <div class="modal-footer">

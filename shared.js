@@ -384,7 +384,7 @@ async function startApp(){
   if(_portal){ _portal.style.display='none'; _portal.style.pointerEvents='none'; _portal.style.visibility='hidden'; }
   document.getElementById('app').style.display='block';
   var unTop=document.getElementById('user-name-top'); if(unTop) unTop.textContent=currentUser.nombre;
-  const rl={admin:'ADMIN',chef:'CHEF',fb:'F&B',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
+  const rl={admin:'ADMIN',chef:'CHEF',fb:'F&B',jefe_recepcion:'JEF.REC',supervisor:'SUPERV.',mantenimiento:'MANT.',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
   var urTop=document.getElementById('user-role-top'); if(urTop) urTop.textContent=rl[currentUser.rol]||currentUser.rol.toUpperCase();
   buildNav();
   // Show loading state
@@ -415,6 +415,8 @@ function getScreens(rol){
   if(rol==='chef')  return [base[0],base[1],base[3],base[4],base[5],base[7]];
   if(rol==='fb')    return [base[0],base[1],base[2],base[3],base[4],base[5],base[7]];
   if(rol==='jefe_recepcion') return [base[0],base[1],base[3],base[4],base[5],base[8]];
+  if(rol==='supervisor') return [base[0],base[1],base[3],base[4],base[5],base[7]];
+  if(rol==='mantenimiento') return [base[0],base[1],base[3]];
   if(isSupervisor(currentUser)) return [base[0],base[1],base[3],base[4],base[5],base[7]];
   if(isSala)        return [base[0],base[1],base[2],base[3]];
   if(isRecepcion)   return [base[0],base[1],base[3],base[8]];
