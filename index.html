@@ -1761,45 +1761,18 @@ tr:hover td{background:rgba(255,255,255,.018);}
   <optgroup label="Cocina">
     <option>Jefe de Cocina</option>
     <option>Segundo Jefe de Cocina</option>
-    <option>Cocinero / Cocinera</option>
+    <option>Cocinero</option>
+    <option>Cocinera</option>
     <option>Ayudante de cocina</option>
     <option>Friegue</option>
   </optgroup>
   <optgroup label="Sala">
     <option>Jefe de Sala</option>
     <option>Jefe de Sector</option>
-    <option>Camarero / Camarera</option>
-    <option>Ayudante camarero / Ayudante camarera</option>
-  </optgroup>
-  <optgroup label="Recepción Hotel">
-    <option>Jefe de Recepción</option>
-    <option>Recepcionista</option>
-    <option>Recepcionista de noche</option>
-  </optgroup>
-  <optgroup label="Mantenimiento">
-    <option>Jefe de Mantenimiento</option>
-    <option>Técnico de mantenimiento</option>
-    <option>Auxiliar técnico</option>
-  </optgroup>
-  <optgroup label="Limpieza / Housekeeping">
-    <option>Gobernanta</option>
-    <option>Camarero/a de pisos</option>
-    <option>Auxiliar de limpieza</option>
-  </optgroup>
-  <optgroup label="SYNCROLAB">
-    <option>Entrenador</option>
-    <option>Fisioterapeuta</option>
-    <option>Médico / Doctor</option>
-    <option>Coordinador SYNCROLAB</option>
-  </optgroup>
-  <optgroup label="Administración">
-    <option>Administrador</option>
-    <option>Responsable RRHH</option>
-    <option>Asistente de dirección</option>
-  </optgroup>
-  <optgroup label="Economato">
-    <option>Responsable de economato</option>
-    <option>Auxiliar de almacén</option>
+    <option>Camarero</option>
+    <option>Camarera</option>
+    <option>Ayudante camarero</option>
+    <option>Ayudante camarera</option>
   </optgroup>
   <optgroup label="Dirección / F&amp;B">
     <option>F&amp;B Manager</option>
@@ -1808,6 +1781,10 @@ tr:hover td{background:rgba(255,255,255,.018);}
   </optgroup>
   <optgroup label="Otros">
     <option>Técnico</option>
+    <option>Recepcionista</option>
+    <option>Entrenador</option>
+    <option>Fisioterapeuta</option>
+    <option>Camarero de pisos</option>
     <option>Otro</option>
   </optgroup>
 </select></div>
@@ -1816,7 +1793,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="fg"><label>Estado</label><select id="emp-estado"><option>Activo</option><option>Baja</option><option>Vacaciones</option></select></div>
       <div class="fg"><label>Responsable de turno</label><select id="emp-resp"><option value="1">Sí</option><option value="0">No</option></select></div>
       <div class="fg"><label>Puede validar</label><select id="emp-val"><option value="0">No</option><option value="1">Sí</option></select></div>
-      <div class="fg"><label>Rol sistema</label><select id="emp-rol"><option value="empleado">Empleado</option><option value="chef">Chef</option><option value="fb">F&B Manager</option><option value="admin">Administrador</option><option value="jefe_recepcion">Jefe de Recepción</option><option value="supervisor">Supervisor</option><option value="mantenimiento">Mantenimiento</option></select></div>
+      <div class="fg"><label>Rol sistema</label><select id="emp-rol"><option value="empleado">Empleado</option><option value="chef">Chef</option><option value="fb">F&B Manager</option><option value="admin">Administrador</option></select></div>
       <div class="fg sp2"><label>Observaciones</label><textarea id="emp-obs" rows="2"></textarea></div>
     </div>
     <div class="modal-footer">
@@ -1837,6 +1814,12 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <script src="incidencia_tipos.js"></script>
     <script src="dashboard.js"></script>
 <script>
+// ── Timestamp local (hora del navegador, no UTC) ──────
+function localTs() {
+  var d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // ═══════════════════════════════════════════════════════
 // CHECKLIST PRE-TURNO
 // ═══════════════════════════════════════════════════════
@@ -2553,8 +2536,8 @@ async function saveCajaForm() {
     total_medios_pago: mediosPago,
     comentario: comentario,
     estado: 'Pendiente validación',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    created_at: localTs(),
+    updated_at: localTs()
   };
 
   try {
@@ -2885,7 +2868,7 @@ async function savePostError() {
     num_errores: _peFioSelectedEmps.length || s.num_errores || 0,
     estado: newFio ? 'Validado con FIO' : s.estado,
     comentario_validador: s.comentario_validador ? s.comentario_validador + ' | NOTA POSTERIOR: ' + comentario : 'NOTA POSTERIOR: ' + comentario,
-    updated_at: new Date().toISOString()
+    updated_at: localTs()
   });
   invalidateCache('shifts');
   await auditLog('POST_ERROR_ADDED', 'Nota posterior en turno '+shiftId+' por '+currentUser.nombre+' — '+comentario);
@@ -2918,8 +2901,8 @@ async function doRevalidar() {
     estado: 'Validado con FIO',
     comentario_validador: comentario,
     validado_por: currentUser.nombre,
-    validado_ts: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    validado_ts: localTs(),
+    updated_at: localTs()
   });
   invalidateCache('shifts');
   await auditLog('REVALIDADO_CON_FIO','shift_id: '+shiftId+' | responsable: '+currentUser.nombre+(empNombre?' | empleados: '+empNombre:''));
@@ -2953,13 +2936,13 @@ async function saveReopenShift() {
   var s = shifts.find(function(x){return x.id===shiftId;});
   if(!s){toast('Turno no encontrado','err');return;}
 
-  var nota = '[REABIERTO por ' + currentUser.nombre + ' — ' + new Date().toLocaleString('es-ES') + '] ' + motivo.trim();
+  var nota = '[REABIERTO por ' + currentUser.nombre + ' — ' + localTs() + '] ' + motivo.trim();
   var nuevoComentario = s.comentario_validador ? s.comentario_validador + ' | ' + nota : nota;
 
   await dbUpdate('shifts', shiftId, {
     estado: 'En corrección',
     comentario_validador: nuevoComentario,
-    updated_at: new Date().toISOString()
+    updated_at: localTs()
   });
   invalidateCache('shifts');
 
@@ -3057,8 +3040,8 @@ async function validarCierre(cajaId) {
   await dbUpdate('sala_cash_closures', cajaId, {
     estado: nextEstado,
     validado_por: currentUser.nombre,
-    validado_ts: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    validado_ts: localTs(),
+    updated_at: localTs()
   });
   invalidateCache('sala_cash_closures');
   toast('Cierre: estado → '+nextEstado,'ok');
@@ -3241,7 +3224,7 @@ async function pGo(){
          area:'Administracion',
          puesto:r==='admin'?'Administrador':r==='chef'?'Jefe de Cocina':'F&B Manager',
          coste:0,obs:'',
-         fecha_alta:new Date().toISOString().split('T')[0]};
+         fecha_alta:localTs().slice(0,10)};
     }
   } else {
     u=emps.find(function(e){return e.pin===pin&&e.estado==='Activo';});
@@ -3493,7 +3476,7 @@ async function submitRecCaja() {
   }
   document.getElementById('rec-caja-err').textContent='';
 
-  var ts=new Date().toISOString();
+  var ts=localTs();
   var fecha=document.getElementById('t-fecha')?document.getElementById('t-fecha').value:today();
   var record={
     id: _recCajaEditId||genId(),
@@ -3594,14 +3577,14 @@ async function reabrirCajaRec(cajaId) {
     await dbUpdate('cash_closings', cajaId, {
       estado:'reabierto',
       reabierto_por: currentUser.nombre,
-      fecha_reapertura: new Date().toISOString(),
+      fecha_reapertura: localTs(),
       motivo_reapertura: motivo.trim()
     });
     await dbInsert('closing_audit_log',{
       id:genId(),tabla:'cash_closings',registro_id:cajaId,
       usuario_id:currentUser.id,usuario_nombre:currentUser.nombre,
       accion:'reabierto',motivo:motivo.trim(),fecha_registro:today(),
-      created_at:new Date().toISOString()
+      created_at:localTs()
     });
     invalidateCache('cash_closings');
     toast('Caja reabierta','ok');
@@ -3619,7 +3602,7 @@ async function eliminarCajaRec(cajaId) {
       id:genId(),tabla:'cash_closings',registro_id:cajaId,
       usuario_id:currentUser.id,usuario_nombre:currentUser.nombre,
       accion:'eliminado',motivo:motivo.trim(),fecha_registro:today(),
-      created_at:new Date().toISOString()
+      created_at:localTs()
     });
     await dbDelete('cash_closings', cajaId);
     invalidateCache('cash_closings');
@@ -3667,7 +3650,7 @@ async function reabrirTurnoValidado(shiftId) {
     await dbUpdate('shifts', shiftId, {
       estado:'En corrección',
       comentario_validador:'Reabierto por '+currentUser.nombre+': '+motivo.trim(),
-      validado_por:null, validado_ts:null, updated_at:new Date().toISOString()
+      validado_por:null, validado_ts:null, updated_at:localTs()
     });
     await auditLog('REOPEN_SHIFT', currentUser.nombre+' reabrió turno '+shiftId+' — '+motivo.trim());
     invalidateCache('shifts');
@@ -3851,7 +3834,7 @@ async function saveFollowup() {
   if(!tipo){ errEl.textContent = 'Selecciona un tipo'; return; }
   if(!desc){ errEl.textContent = 'La descripción es obligatoria'; return; }
   errEl.textContent = '';
-  var ts = new Date().toISOString();
+  var ts = localTs();
   var respId = document.getElementById('fu-responsable').value;
   var respOpt = document.getElementById('fu-responsable');
   var respNombre = respId && respOpt ? (respOpt.options[respOpt.selectedIndex]||{}).text || '' : '';
@@ -3903,7 +3886,7 @@ async function submitCloseFollowup() {
   var errEl = document.getElementById('fu-close-err');
   if(!accion){ errEl.textContent = 'La acción realizada es obligatoria'; return; }
   if(!resultado){ errEl.textContent = 'El resultado es obligatorio'; return; }
-  var ts = new Date().toISOString();
+  var ts = localTs();
   // Calc tiempo solución
   try {
     var allIncis = await getDB('incidencias');
