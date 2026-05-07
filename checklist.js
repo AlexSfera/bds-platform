@@ -69,7 +69,7 @@ async function chkConfirm(){
   var isRec=currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción');
   if(isSala&&currentUser._activeDept!=='Recepción'){
     openCajaOfferModal();
-  } else if(isRec){
+  } else if(isRec || currentUser._activeDept === 'Recepción'){
     openRecKpiModal();
   } else {
     await _doSaveTurno();
@@ -96,7 +96,7 @@ function chkOpen(pendingData){
   var isFriegue=(currentUser&&(currentUser.area==='Friegue'||currentUser.puesto==='Friegue'));
   var isSala=(currentUser&&currentUser.area==='Sala');
   var isFnB=(currentUser&&(currentUser.rol==='fb'||currentUser.area==='F&B'));
-  var isRec=(currentUser&&currentUser.area==='Recepción');
+  var isRec=(currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción'));
   var recTurno=isRec?getRecTurnoValue():'';
   var sections,items;
   if(isRec){

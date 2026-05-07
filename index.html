@@ -1356,6 +1356,39 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="fg"><label>Stripe según MEWS (€) <span class="req">*</span></label><input type="number" id="rec-stripe-mews" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
     </div>
 
+    <!-- TRANSFERENCIAS -->
+    <div class="sec-div" style="margin-top:10px;">Transferencias</div>
+    <div class="grid2">
+      <div class="fg"><label>Transferencias según MEWS (€)</label>
+        <input type="number" id="rec-trans-mews" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()"></div>
+      <div class="fg"><label>Transferencias real (€)</label>
+        <input type="number" id="rec-trans-real" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()"></div>
+      <div class="fg"><label>Δ Transferencias</label>
+        <div id="rec-dif-trans" style="font-family:var(--font-mono);font-size:15px;font-weight:700;padding:8px 0;">—</div></div>
+    </div>
+
+    <!-- CARGOS HOTEL -->
+    <div class="sec-div" style="margin-top:10px;">Cargos Hotel</div>
+    <div class="grid2">
+      <div class="fg"><label>Room Charge (€)</label>
+        <input type="number" id="rec-room-charge" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="fg"><label>SYNCROLAB Charge (€)</label>
+        <input type="number" id="rec-syncrolab-charge" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="fg"><label>Cargo Alexander (€)</label>
+        <input type="number" id="rec-cargo-alexander" min="0" step="0.01" placeholder="0.00"></div>
+    </div>
+
+    <!-- PENSIONES -->
+    <div class="sec-div" style="margin-top:10px;">Pensiones</div>
+    <div class="grid2">
+      <div class="fg"><label>Desayunos pensión (nº personas)</label>
+        <input type="number" id="rec-desayunos-pension" min="0" step="1" placeholder="0"></div>
+      <div class="fg"><label>Media pensión (nº personas)</label>
+        <input type="number" id="rec-media-pension" min="0" step="1" placeholder="0"></div>
+      <div class="fg"><label>Pensión completa (nº personas)</label>
+        <input type="number" id="rec-pension-completa" min="0" step="1" placeholder="0"></div>
+    </div>
+
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">REAL / FÍSICO</div>
     <div class="grid2" style="margin-bottom:12px;">
       <div class="fg"><label>Cash real contado (€) <span class="req">*</span></label><input type="number" id="rec-cash-real" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
@@ -1866,7 +1899,7 @@ async function chkConfirm(){
   var isRec  = currentUser && (currentUser.area === 'Recepción' || currentUser._activeDept === 'Recepción');
   if(isSala && currentUser._activeDept !== 'Recepción') {
     openCajaOfferModal();
-  } else if(isRec) {
+  } else if(isRec || currentUser._activeDept === 'Recepción') {
     openRecKpiModal();
   } else {
     await _doSaveTurno();
@@ -3445,12 +3478,21 @@ async function submitRecCaja() {
   var mewsCash=parseFloat(document.getElementById('rec-cash-mews').value);
   var mewsTar=parseFloat(document.getElementById('rec-tarjeta-mews').value);
   var mewsStr=parseFloat(document.getElementById('rec-stripe-mews').value);
+  var mewsTrans=parseFloat(document.getElementById('rec-trans-mews').value)||0;
   var realCash=parseFloat(document.getElementById('rec-cash-real').value);
   var realTpv=parseFloat(document.getElementById('rec-tpv-real').value);
   var realStr=parseFloat(document.getElementById('rec-stripe-real').value);
+  var realTrans=parseFloat(document.getElementById('rec-trans-real').value)||0;
   var fondoRec=parseFloat(document.getElementById('rec-fondo-recibido').value)||0;
   var fondoTras=parseFloat(document.getElementById('rec-fondo-traspaso').value);
   var turno=getRecTurnoValue();
+  var roomCharge=parseFloat(document.getElementById('rec-room-charge').value)||0;
+  var syncrolabCharge=parseFloat(document.getElementById('rec-syncrolab-charge').value)||0;
+  var desayunosPension=parseInt(document.getElementById('rec-desayunos-pension').value)||0;
+  var mediaPension=parseInt(document.getElementById('rec-media-pension').value)||0;
+  var pensionCompleta=parseInt(document.getElementById('rec-pension-completa').value)||0;
+  var cargoAlexander=parseFloat(document.getElementById('rec-cargo-alexander').value)||0;
+  var cfImporte=parseFloat(document.getElementById('rec-cf-importe').value)||0;
 
   if(isNaN(mewsCash)) errs.push('Cash según MEWS obligatorio');
   if(isNaN(mewsTar))  errs.push('Tarjeta según MEWS obligatoria');
@@ -3460,7 +3502,12 @@ async function submitRecCaja() {
   if(isNaN(realStr))  errs.push('Stripe real obligatorio');
   if(isNaN(fondoTras)) errs.push('Fondo traspasado obligatorio');
 
-  var difTotal=(realCash-mewsCash)+(realTpv-mewsTar)+(realStr-mewsStr);
+  var difCash=realCash-mewsCash;
+  var difTar=realTpv-mewsTar;
+  var difStr=realStr-mewsStr;
+  var difTrans=realTrans-mewsTrans;
+  var difTotal=difCash+difTar+difStr+difTrans;
+
   var hasError=Math.abs(difTotal)>0.01;
   if(hasError){
     var exp=document.getElementById('rec-dif-exp').value.trim();
@@ -3476,13 +3523,11 @@ async function submitRecCaja() {
   }
   document.getElementById('rec-caja-err').textContent='';
 
-  var ts=localTs();
+  var ts=new Date().toISOString();
   var fecha=document.getElementById('t-fecha')?document.getElementById('t-fecha').value:today();
   var record={
     id: _recCajaEditId||genId(),
-    fecha: fecha,
-    departamento: 'recepcion',
-    turno: turno,
+    fecha, departamento:'recepcion', turno,
     shift_id: window._lastSavedShiftId||null,
     usuario_id: currentUser.id,
     usuario_nombre: currentUser.nombre,
@@ -3491,15 +3536,24 @@ async function submitRecCaja() {
     efectivo_real: realCash,
     tarjeta_real: realTpv,
     stripe_real: realStr,
-    total_real: realCash+realTpv+realStr,
-    total_sistema: mewsCash+mewsTar+mewsStr,
+    total_real: realCash+realTpv+realStr+realTrans,
+    total_sistema: mewsCash+mewsTar+mewsStr+mewsTrans,
     diferencia_total: difTotal,
     diferencia_explicacion: document.getElementById('rec-dif-exp').value.trim()||null,
     accion_tomada: document.getElementById('rec-dif-accion').value.trim()||null,
-    diferencia_informada: _recKpiState.dif_informado==='si',
     rec_cash_mews: mewsCash,
     rec_tarjeta_mews: mewsTar,
     rec_stripe_mews: mewsStr,
+    rec_transferencia_mews: mewsTrans,
+    rec_transferencia_real: realTrans,
+    diferencia_transferencia: difTrans,
+    rec_room_charge: roomCharge,
+    rec_syncrolab_charge: syncrolabCharge,
+    rec_desayunos_pension: desayunosPension,
+    rec_media_pension: mediaPension,
+    rec_pension_completa: pensionCompleta,
+    rec_cargo_alexander: cargoAlexander,
+    rec_cf_importe: cfImporte,
     rec_fondo_recibido: fondoRec,
     rec_fondo_traspaso: fondoTras,
     rec_fondo_inicial_dia: turno==='Noche'?(parseFloat(document.getElementById('rec-fondo-inicial').value)||null):null,
@@ -3985,48 +4039,45 @@ function calcRecDifs() {
   var mewsCash = parseFloat((document.getElementById('rec-cash-mews')||{}).value)||0;
   var mewsTar  = parseFloat((document.getElementById('rec-tarjeta-mews')||{}).value)||0;
   var mewsStr  = parseFloat((document.getElementById('rec-stripe-mews')||{}).value)||0;
+  var mewsTrans= parseFloat((document.getElementById('rec-trans-mews')||{}).value)||0;
   var realCash = parseFloat((document.getElementById('rec-cash-real')||{}).value)||0;
   var realTpv  = parseFloat((document.getElementById('rec-tpv-real')||{}).value)||0;
   var realStr  = parseFloat((document.getElementById('rec-stripe-real')||{}).value)||0;
+  var realTrans= parseFloat((document.getElementById('rec-trans-real')||{}).value)||0;
   var fondoRec = parseFloat((document.getElementById('rec-fondo-recibido')||{}).value)||0;
   var cfImporte= parseFloat((document.getElementById('rec-cf-importe')||{}).value)||0;
 
   var difCash  = realCash - mewsCash;
   var difTar   = realTpv  - mewsTar;
   var difStr   = realStr  - mewsStr;
-  var difTotal = difCash + difTar + difStr;
+  var difTrans = realTrans- mewsTrans;
+  var difTotal = difCash + difTar + difStr + difTrans;
 
-  function fmt(val){
-    return (val>=0?'+':'')+val.toFixed(2)+' €';
-  }
+  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
   function setColor(id, val){
-    var el = document.getElementById(id);
-    if(!el) return;
-    el.textContent = fmt(val);
-    el.style.color = Math.abs(val)<0.01?'var(--green)':val>0?'var(--blue)':'var(--red)';
+    var el=document.getElementById(id); if(!el) return;
+    el.textContent=fmt(val);
+    el.style.color=Math.abs(val)<0.01?'var(--green)':val>0?'var(--blue)':'var(--red)';
   }
   setColor('rec-dif-cash', difCash);
   setColor('rec-dif-tarjeta', difTar);
   setColor('rec-dif-stripe', difStr);
+  setColor('rec-dif-trans', difTrans);
   setColor('rec-dif-total', difTotal);
 
-  // Caja fuerte: fondo esperado = fondo recibido + cash MEWS - retiro CF
   var fondoEsperado = fondoRec + mewsCash - cfImporte;
-  var feEl = document.getElementById('rec-fondo-esperado');
-  if(feEl){
-    feEl.textContent = fondoEsperado.toFixed(2) + ' €';
-    feEl.style.color = fondoEsperado >= 0 ? 'var(--green)' : 'var(--red)';
-  }
+  var feEl=document.getElementById('rec-fondo-esperado');
+  if(feEl){ feEl.textContent=fondoEsperado.toFixed(2)+' €'; feEl.style.color=fondoEsperado>=0?'var(--green)':'var(--red)'; }
 
-  var hasError = Math.abs(difTotal) > 0.01;
-  var alertEl = document.getElementById('rec-dif-alert');
-  var expBlock = document.getElementById('rec-dif-exp-block');
-  if(alertEl) alertEl.style.display = hasError ? 'block' : 'none';
-  if(expBlock) expBlock.style.display = hasError ? 'block' : 'none';
+  var hasError=Math.abs(difTotal)>0.01;
+  var alertEl=document.getElementById('rec-dif-alert');
+  var expBlock=document.getElementById('rec-dif-exp-block');
+  if(alertEl) alertEl.style.display=hasError?'block':'none';
+  if(expBlock) expBlock.style.display=hasError?'block':'none';
 
-  var turno = typeof getRecTurnoValue === 'function' ? getRecTurnoValue() : '';
-  var fondoIni = document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display = turno === 'Noche' ? 'block' : 'none';
+  var turno=typeof getRecTurnoValue==='function'?getRecTurnoValue():'';
+  var fondoIni=document.getElementById('rec-fondo-inicial-block');
+  if(fondoIni) fondoIni.style.display=turno==='Noche'?'block':'none';
 }
 
 // ── renderFollowupList is called from initTurnoForm patch below ──
@@ -4068,7 +4119,10 @@ function submitRecKpi() {
   _recKpiState.comms_no_exp = (document.getElementById('kpi-comms-no-exp')||{}).value||'';
   _recKpiState.clientes_num = parseInt((document.getElementById('kpi-clientes-num')||{}).value)||0;
   closeRecKpiModal();
-  openRecCajaModal();
+  // Guardar turno ANTES de abrir caja — este era el bug principal
+  _doSaveTurno().then(function() {
+    openRecCajaModal();
+  });
 }
 
 // ── Hook into initTurnoForm for Recepción label changes ──

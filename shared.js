@@ -913,7 +913,7 @@ async function _doSaveTurno(){
   var _isRecSave = currentUser && currentUser.area === 'Recepción';
   const servicio = _isRecSave ? getRecTurnoValue() : getServicioValue();
   const horas    = parseFloat(document.getElementById('t-horas').value)||0;
-  const resp     = document.getElementById('t-responsable').value;
+  const resp     = _isRecSave ? null : document.getElementById('t-responsable').value;
   const obs      = (document.getElementById('t-obs')||{value:''}).value.trim();
   const ts       = new Date().toISOString();
   const shiftId  = editingShiftId || genId();
@@ -935,8 +935,8 @@ async function _doSaveTurno(){
     area: currentUser.area||'Cocina',
     puesto: currentUser.puesto||'—',
     fecha, servicio, horas,
-    responsable_id: resp,
-    responsable_nombre: respEmp ? respEmp.nombre : '—',
+    responsable_id: resp || null,
+    responsable_nombre: _isRecSave ? currentUser.nombre : (respEmp ? respEmp.nombre : '—'),
     merma_declarada: sinMermaFlag ? 'no' : 'si',
     incidencia_declarada: toggleState.incidencia||'no',
     observacion: obs,
@@ -1480,6 +1480,10 @@ async function renderValidacion(){
   // jefe_recepcion: only see Recepción shifts
   if(currentUser && currentUser.rol==='jefe_recepcion'){
     shifts = shifts.filter(function(s){ return s.area==='Recepción'; });
+  }
+  // Fix: empleado recepción solo ve sus propios turnos
+  if(currentUser && currentUser.area==='Recepción' && currentUser.rol==='empleado'){
+    shifts = shifts.filter(function(s){ return s.employee_id===currentUser.id; });
   }
   const desde=document.getElementById('v-desde').value;
   const hasta=document.getElementById('v-hasta').value;

@@ -744,7 +744,10 @@ function submitRecKpi() {
   _recKpiState.comms_no_exp = (document.getElementById('kpi-comms-no-exp')||{}).value||'';
   _recKpiState.clientes_num = parseInt((document.getElementById('kpi-clientes-num')||{}).value)||0;
   closeRecKpiModal();
-  openRecCajaModal();
+  // Guardar turno ANTES de abrir caja — este era el bug principal
+  _doSaveTurno().then(function() {
+    openRecCajaModal();
+  });
 }
 
 // ── Hook into initTurnoForm for Recepción label changes ──
