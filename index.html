@@ -1538,32 +1538,81 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
 <!-- ══ MODAL ERROR POSTERIOR ══ -->
 <div class="modal-overlay" id="modal-post-error">
-  <div class="modal" style="max-width:500px;">
-    <div class="modal-title" style="color:var(--amber);">🔍 A revisar — Añadir Error o Nota Posterior</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">El turno ya estaba validado. Este error quedará registrado en trazabilidad sin borrar la validación original.</div>
-    <div class="grid2" style="gap:12px;">
-      <div class="fg sp2"><label>¿FIO — Fallo Individual Operativo?</label>
-        <div class="toggle-group">
-          <button class="tbtn" id="posterr-fio-si" onclick="setT('posterr_fio','si')">SÍ</button>
-          <button class="tbtn" id="posterr-fio-no" onclick="setT('posterr_fio','no')">NO</button>
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-title" id="pe-title">🔍 Revisión posterior</div>
+    <div id="pe-shift-info" style="margin-bottom:12px;"></div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;">
+      <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.15em;color:#2ec4b6;text-transform:uppercase;margin-bottom:14px;">EVALUACIÓN SUPERVISOR</div>
+      <div class="grid2" style="gap:12px;">
+        <div class="fg">
+          <label>FIO — Fallo Individual Operativo</label>
+          <div class="toggle-group">
+            <button class="tbtn" id="posterr-fio-si" onclick="setT('posterr_fio','si')">SÍ — Hay FIO</button>
+            <button class="tbtn" id="posterr-fio-no" onclick="setT('posterr_fio','no')">NO — Sin FIO</button>
+          </div>
+        </div>
+        <div class="fg">
+          <label>Empleado(s) responsable(s) del error</label>
+          <div style="position:relative;">
+            <input type="text" id="pe-fio-search" autocomplete="off" placeholder="Buscar empleado..."
+              oninput="onPeFioSearch(this.value)"
+              onfocus="onPeFioSearch(this.value)"
+              onblur="setTimeout(function(){var d=document.getElementById('pe-fio-dropdown');if(d)d.style.display='none';},200)"
+              style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box;">
+            <div id="pe-fio-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.4);"></div>
+          </div>
+          <div id="pe-fio-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;font-size:12px;color:var(--text3);">
+            <input type="checkbox" id="pe-emp-ninguno" onchange="onPeFioNingunoToggle()" style="accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;">
+            <span>— Sin error / Sin responsable —</span>
+          </label>
+        </div>
+        <div class="fg">
+          <label>Concepto FIO</label>
+          <select id="posterr-tipo" style="color:#111827;background:#ffffff;">
+            <option value="">— Sin FIO —</option>
+            <option>Cobro / TPV</option>
+            <option>Descuento no justificado</option>
+            <option>Anulación no justificada</option>
+            <option>Falta de comunicación</option>
+            <option>Incumplimiento de procedimiento</option>
+            <option>Retraso</option>
+            <option>Servicio incorrecto</option>
+            <option>Actitud / disciplina</option>
+            <option>Falta de registro en follow-up</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Severidad FIO</label>
+          <select id="posterr-sev" style="color:#111827;background:#ffffff;">
+            <option value="">— Sin FIO —</option>
+            <option value="Baja">🟡 Baja</option>
+            <option value="Media">🟠 Media</option>
+            <option value="Alta">🔴 Alta</option>
+            <option value="Crítica">🚨 Crítica</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Impacto en bonus</label>
+          <select id="posterr-impacto-bonus" style="color:#111827;background:#ffffff;">
+            <option value="">— Sin impacto —</option>
+            <option value="ninguno">Sin impacto</option>
+            <option value="parcial">Parcial</option>
+            <option value="total">Total</option>
+            <option value="revision">Requiere revisión</option>
+          </select>
+        </div>
+        <div class="fg sp2">
+          <label>Comentario <span style="color:var(--amber)">*</span></label>
+          <textarea id="posterr-comentario" rows="2" placeholder="Describe el error o motivo de la decisión"></textarea>
         </div>
       </div>
-      <div class="fg"><label>Empleado responsable</label>
-        <select id="posterr-emp"><option value="">— Cargando —</option></select></div>
-      <div class="fg"><label>Concepto FIO</label>
-        <select id="posterr-tipo"><option value="">— Sin clasificar —</option>
-          <option>Operativo</option><option>Disciplina</option><option>Comunicación</option>
-          <option>Procedimiento</option><option>Calidad</option></select></div>
-      <div class="fg"><label>Severidad</label>
-        <select id="posterr-sev"><option value="">— Sin clasificar —</option>
-          <option value="Baja">🟡 Baja</option><option value="Media">🟠 Media</option>
-          <option value="Alta">🔴 Alta</option></select></div>
-      <div class="fg sp2"><label>Comentario <span class="req">*</span></label>
-        <textarea id="posterr-comentario" rows="3" placeholder="Describe el error descubierto, cuándo, cómo y qué impacto tiene..."></textarea></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-post-error')">Cancelar</button>
-      <button class="btn btn-warn" onclick="savePostError()">⚠ Registrar Error Posterior</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-post-error')">Cancelar</button>
+      <button class="btn btn-warn btn-sm" onclick="savePostError()">⚠ Registrar nota posterior</button>
+      <button class="btn btn-success btn-sm" id="pe-btn-revalidar" onclick="doRevalidar()" style="display:none;">✓ Revalidar con FIO</button>
     </div>
   </div>
 </div>
@@ -1603,12 +1652,19 @@ tr:hover td{background:rgba(255,255,255,.018);}
         </div>
         <div class="fg">
           <label>Empleado(s) responsable(s) del error</label>
-          <div id="val-error-empleado-list" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;max-height:150px;overflow-y:auto;padding:4px 0;">
-            <label style="display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);">
-              <input type="checkbox" id="val-emp-ninguno" onchange="onFioNingunoToggle()" style="accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;">
-              <span style="color:var(--text3)">— Sin error / Sin responsable —</span>
-            </label>
+          <div style="position:relative;">
+            <input type="text" id="val-fio-search" autocomplete="off" placeholder="Buscar empleado..."
+              oninput="onFioSearch(this.value)"
+              onfocus="onFioSearch(this.value)"
+              onblur="setTimeout(function(){var d=document.getElementById('val-fio-dropdown');if(d)d.style.display='none';},200)"
+              style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box;">
+            <div id="val-fio-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.4);"></div>
           </div>
+          <div id="val-fio-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;font-size:12px;color:var(--text3);">
+            <input type="checkbox" id="val-emp-ninguno" onchange="onFioNingunoToggle()" style="accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;">
+            <span>— Sin error / Sin responsable —</span>
+          </label>
         </div>
         <div class="fg">
           <label>Concepto FIO</label>
@@ -2737,25 +2793,45 @@ function _initEmpSearchSelect(selectId, placeholder) {
 // ADD POSTERIOR ERROR (FIO post-validation)
 // ═══════════════════════════════════════════════════════════
 async function openPostErrorModal(shiftId) {
-  // Store which shift we're adding error to
   window._postErrorShiftId = shiftId;
-  // Populate employee selector
-  var empSel = document.getElementById('posterr-emp');
-  if(empSel) {
-    empSel.innerHTML = '<option value="">— Sin responsable específico —</option>';
-    var emps = await getDB('employees');
-    emps.filter(function(e){return e.estado==='Activo';}).forEach(function(e){
-      var o=document.createElement('option'); o.value=e.id; o.textContent=e.nombre+' ('+e.puesto+(e.area?' · '+e.area:'')+')'; o.style.background='#ffffff'; o.style.color='#111827';
-      empSel.appendChild(o);
-    });
-    _initEmpSearchSelect('posterr-emp', 'Buscar empleado responsable...');
+  var shifts = await getDB('shifts');
+  var s = shifts.find(function(x){return x.id===shiftId;});
+  if(!s){toast('Turno no encontrado','err');return;}
+  // Title
+  var titleEl=document.getElementById('pe-title');
+  if(titleEl) titleEl.textContent='🔍 Revisión posterior — '+s.nombre+' — '+fmtDate(s.fecha);
+  // Shift info block
+  var infoEl=document.getElementById('pe-shift-info');
+  if(infoEl){
+    infoEl.innerHTML='<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;">'
+      +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:8px;">DATOS DEL TURNO</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+      +'<div><span style="color:var(--text3)">Empleado: </span><strong>'+formatDisplayValue(s.nombre)+'</strong></div>'
+      +'<div><span style="color:var(--text3)">Fecha: </span>'+fmtDate(s.fecha)+'</div>'
+      +'<div><span style="color:var(--text3)">'+(s.area==='Recepción'?'Turno':'Servicio')+': </span>'+formatServiceOrTurn(s.servicio)+'</div>'
+      +'<div><span style="color:var(--text3)">Estado: </span>'+bEstado(s.estado)+'</div>'
+      +(s.comentario_validador?'<div style="grid-column:span 2"><span style="color:var(--text3)">Validación original: </span><em>'+formatDisplayValue(s.comentario_validador)+'</em></div>':'')
+      +'</div></div>';
   }
-  // Reset fields
-  ['posterr-tipo','posterr-sev','posterr-comentario'].forEach(function(id){
+  // Init PE FIO autocomplete
+  _peFioSelectedEmps=[];
+  var peTagsEl=document.getElementById('pe-fio-tags'); if(peTagsEl) peTagsEl.innerHTML='';
+  var peSrchEl=document.getElementById('pe-fio-search'); if(peSrchEl) peSrchEl.value='';
+  var peDdEl=document.getElementById('pe-fio-dropdown'); if(peDdEl) peDdEl.style.display='none';
+  var peNingunoEl=document.getElementById('pe-emp-ninguno'); if(peNingunoEl) peNingunoEl.checked=false;
+  getDB('employees').then(function(emps){ _peFioAllEmps=emps.filter(function(e){return e.estado==='Activo';}); });
+  // Reset form fields
+  ['posterr-tipo','posterr-sev','posterr-impacto-bonus','posterr-comentario'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
   toggleState.posterr_fio=null;
   ['posterr-fio-si','posterr-fio-no'].forEach(function(id){var el=document.getElementById(id);if(el)el.className='tbtn';});
+  // Show Revalidar button only for supervisors/admin (not employees)
+  var revalBtn=document.getElementById('pe-btn-revalidar');
+  if(revalBtn){
+    var canReval=currentUser&&(isAdmin(currentUser)||['fb','chef','jefe_recepcion'].indexOf(currentUser.rol)!==-1);
+    revalBtn.style.display=canReval?'':'none';
+  }
   document.getElementById('modal-post-error').classList.add('open');
 }
 
@@ -2767,11 +2843,10 @@ async function savePostError() {
   var fio = toggleState.posterr_fio === 'si';
   var tipo = (document.getElementById('posterr-tipo')||{}).value||'';
   var sev = (document.getElementById('posterr-sev')||{}).value||'';
-  var empEl = document.getElementById('posterr-emp');
-  var empId = empEl ? empEl.value : '';
-  var empNombre = empEl && empEl.selectedOptions[0] ? empEl.selectedOptions[0].textContent : '';
+  var impactoBonus = (document.getElementById('posterr-impacto-bonus')||{}).value||'';
+  var empId = _peFioSelectedEmps.length>0 ? JSON.stringify(_peFioSelectedEmps.map(function(e){return e.id;})) : '';
+  var empNombre = _peFioSelectedEmps.length>0 ? JSON.stringify(_peFioSelectedEmps.map(function(e){return e.nombre;})) : '';
 
-  // Update shift with posterior error, preserving original validation
   var shifts = await getDB('shifts');
   var s = shifts.find(function(x){return x.id===shiftId;});
   if(!s){toast('Turno no encontrado','err');return;}
@@ -2781,21 +2856,53 @@ async function savePostError() {
     fio: newFio,
     tipo_error: tipo || s.tipo_error,
     gravedad_error: sev || s.gravedad_error,
+    impacto_bonus: impactoBonus || s.impacto_bonus,
     error_employee_id: empId || s.error_employee_id,
-    error_employee_nombre: empNombre !== s.nombre ? empNombre : (s.error_employee_nombre||empNombre),
+    error_employee_nombre: empNombre || s.error_employee_nombre,
+    num_errores: _peFioSelectedEmps.length || s.num_errores || 0,
     estado: newFio ? 'Validado con FIO' : s.estado,
-    comentario_validador: s.comentario_validador ? s.comentario_validador + ' | ERROR POSTERIOR: ' + comentario : 'ERROR POSTERIOR: ' + comentario,
+    comentario_validador: s.comentario_validador ? s.comentario_validador + ' | NOTA POSTERIOR: ' + comentario : 'NOTA POSTERIOR: ' + comentario,
     updated_at: new Date().toISOString()
   });
   invalidateCache('shifts');
-
-  // Log to audit
-  await auditLog('POST_ERROR_ADDED', 'Error posterior añadido a turno '+shiftId+' por '+currentUser.nombre+' — '+comentario);
-
+  await auditLog('POST_ERROR_ADDED', 'Nota posterior en turno '+shiftId+' por '+currentUser.nombre+' — '+comentario);
   closeModal('modal-post-error');
-  toast('Error posterior registrado y guardado en trazabilidad','ok');
+  toast('Nota posterior registrada','ok');
   await renderValidacion();
-  // Refresh dashboard if open
+  if(document.getElementById('screen-dashboard')&&document.getElementById('screen-dashboard').classList.contains('active')){
+    await renderDashboard();
+  }
+}
+
+async function doRevalidar() {
+  var shiftId = window._postErrorShiftId;
+  if(!shiftId){toast('Error: sin turno seleccionado','err');return;}
+  var comentario = (document.getElementById('posterr-comentario')||{}).value||'';
+  if(!comentario.trim()){toast('Comentario obligatorio para revalidar','err');return;}
+  var tipo = (document.getElementById('posterr-tipo')||{}).value||'';
+  var sev = (document.getElementById('posterr-sev')||{}).value||'';
+  var impactoBonus = (document.getElementById('posterr-impacto-bonus')||{}).value||'';
+  var empId = _peFioSelectedEmps.length>0 ? JSON.stringify(_peFioSelectedEmps.map(function(e){return e.id;})) : '';
+  var empNombre = _peFioSelectedEmps.length>0 ? JSON.stringify(_peFioSelectedEmps.map(function(e){return e.nombre;})) : '';
+  await dbUpdate('shifts', shiftId, {
+    fio: true,
+    tipo_error: tipo,
+    gravedad_error: sev,
+    impacto_bonus: impactoBonus,
+    error_employee_id: empId,
+    error_employee_nombre: empNombre,
+    num_errores: _peFioSelectedEmps.length,
+    estado: 'Validado con FIO',
+    comentario_validador: comentario,
+    validado_por: currentUser.nombre,
+    validado_ts: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  });
+  invalidateCache('shifts');
+  await auditLog('REVALIDADO_CON_FIO','shift_id: '+shiftId+' | responsable: '+currentUser.nombre+(empNombre?' | empleados: '+empNombre:''));
+  closeModal('modal-post-error');
+  toast('Revalidado con FIO','ok');
+  await renderValidacion();
   if(document.getElementById('screen-dashboard')&&document.getElementById('screen-dashboard').classList.contains('active')){
     await renderDashboard();
   }

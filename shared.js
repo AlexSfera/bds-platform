@@ -156,6 +156,10 @@ let sinMermaFlag= false;
 let editingShiftId    = null;
 let validatingShiftId = null;
 let _validatingMermas = [];
+let _fioSelectedEmps = []; // [{id, nombre, puesto, area}] — autocomplete multi-select
+let _fioAllEmps = [];      // full active employee list for search
+let _peFioSelectedEmps = []; // same for post-error modal (pe- prefix)
+let _peFioAllEmps = [];
 let _editEmpId        = null;
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -184,6 +188,7 @@ function today(){ return new Date().toISOString().split('T')[0]; }
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){ if(!ts) return '—'; var d=new Date(ts); return d.toLocaleDateString('es-ES')+' '+d.toTimeString().slice(0,5); }
 function fmtDateTs(fecha,ts){ return fmtDate(fecha)+(ts?' '+new Date(ts).toTimeString().slice(0,5):''); }
+function fmtTiempoGestion(mins){ if(!mins||mins<=0) return '—'; var h=Math.floor(mins/60),m=mins%60; return h>0?(h+'h'+(m>0?' '+m+'min':'')):(m+'min'); }
 function startOfWeek(){ var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); return d.toISOString().split('T')[0]; }
 function startOfMonth(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; }
 function isOverdue(dl){ return dl && dl < today(); }
@@ -504,7 +509,114 @@ async function populateDashEmpDropdowns(){
 // TOGGLES
 function onFioNingunoToggle(){
   if((document.getElementById('val-emp-ninguno')||{}).checked){
-    document.querySelectorAll('.val-emp-cb').forEach(function(cb){cb.checked=false;});
+    _fioSelectedEmps=[];
+    var tagsEl=document.getElementById('val-fio-tags');
+    if(tagsEl) tagsEl.innerHTML='';
+    var srch=document.getElementById('val-fio-search');
+    if(srch) srch.value='';
+    var dd=document.getElementById('val-fio-dropdown');
+    if(dd) dd.style.display='none';
+  }
+}
+function onFioSearch(q){
+  q=(q||'').toLowerCase().trim();
+  var dd=document.getElementById('val-fio-dropdown');
+  if(!dd) return;
+  var filtered=_fioAllEmps.filter(function(e){
+    if(_fioSelectedEmps.some(function(s){return s.id===e.id;})) return false;
+    if(!q) return true;
+    return (e.nombre+' '+e.puesto+' '+(e.area||'')).toLowerCase().indexOf(q)!==-1;
+  });
+  if(!filtered.length){ dd.style.display='none'; return; }
+  dd.innerHTML=filtered.slice(0,10).map(function(e){
+    var esc=function(s){return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");};
+    return '<div onclick="onFioSelectEmp(\''+esc(e.id)+'\',\''+esc(e.nombre)+'\',\''+esc(e.puesto)+'\',\''+esc(e.area||'')+'\',this)"'
+      +' style="padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);"'
+      +' onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+      +'<strong>'+formatDisplayValue(e.nombre)+'</strong>'
+      +' <span style="font-size:11px;color:var(--text3)">'+e.puesto+(e.area?' · '+e.area:'')+'</span>'
+      +'</div>';
+  }).join('');
+  dd.style.display='block';
+}
+function onFioSelectEmp(id,nombre,puesto,area){
+  if(_fioSelectedEmps.some(function(s){return s.id===id;})) return;
+  _fioSelectedEmps.push({id:id,nombre:nombre,puesto:puesto,area:area});
+  var ninguno=document.getElementById('val-emp-ninguno');
+  if(ninguno) ninguno.checked=false;
+  var tagsEl=document.getElementById('val-fio-tags');
+  if(tagsEl){
+    var chip=document.createElement('span');
+    chip.dataset.empId=id;
+    chip.style.cssText='display:inline-flex;align-items:center;gap:4px;background:var(--bg2);border:1px solid #8b5cf6;border-radius:4px;padding:3px 8px;font-size:12px;';
+    chip.innerHTML='<span>'+formatDisplayValue(nombre)+'</span>'
+      +'<button onclick="onFioRemoveEmp(\''+id.replace(/'/g,"\\'")+'\')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;line-height:1;padding:0 0 0 2px;">×</button>';
+    tagsEl.appendChild(chip);
+  }
+  var srch=document.getElementById('val-fio-search');
+  if(srch) srch.value='';
+  var dd=document.getElementById('val-fio-dropdown');
+  if(dd) dd.style.display='none';
+}
+function onFioRemoveEmp(id){
+  _fioSelectedEmps=_fioSelectedEmps.filter(function(s){return s.id!==id;});
+  var tagsEl=document.getElementById('val-fio-tags');
+  if(tagsEl){
+    var chip=tagsEl.querySelector('[data-emp-id="'+id+'"]');
+    if(chip) chip.remove();
+  }
+}
+// ── Post-error modal FIO autocomplete (pe- prefix) ──
+function onPeFioNingunoToggle(){
+  if((document.getElementById('pe-emp-ninguno')||{}).checked){
+    _peFioSelectedEmps=[];
+    var t=document.getElementById('pe-fio-tags'); if(t) t.innerHTML='';
+    var s=document.getElementById('pe-fio-search'); if(s) s.value='';
+    var d=document.getElementById('pe-fio-dropdown'); if(d) d.style.display='none';
+  }
+}
+function onPeFioSearch(q){
+  q=(q||'').toLowerCase().trim();
+  var dd=document.getElementById('pe-fio-dropdown'); if(!dd) return;
+  var filtered=_peFioAllEmps.filter(function(e){
+    if(_peFioSelectedEmps.some(function(s){return s.id===e.id;})) return false;
+    if(!q) return true;
+    return (e.nombre+' '+e.puesto+' '+(e.area||'')).toLowerCase().indexOf(q)!==-1;
+  });
+  if(!filtered.length){ dd.style.display='none'; return; }
+  var esc=function(s){return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");};
+  dd.innerHTML=filtered.slice(0,10).map(function(e){
+    return '<div onclick="onPeFioSelectEmp(\''+esc(e.id)+'\',\''+esc(e.nombre)+'\',\''+esc(e.puesto)+'\',\''+esc(e.area||'')+'\',this)"'
+      +' style="padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);"'
+      +' onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
+      +'<strong>'+formatDisplayValue(e.nombre)+'</strong>'
+      +' <span style="font-size:11px;color:var(--text3)">'+e.puesto+(e.area?' · '+e.area:'')+'</span>'
+      +'</div>';
+  }).join('');
+  dd.style.display='block';
+}
+function onPeFioSelectEmp(id,nombre,puesto,area){
+  if(_peFioSelectedEmps.some(function(s){return s.id===id;})) return;
+  _peFioSelectedEmps.push({id:id,nombre:nombre,puesto:puesto,area:area});
+  var ninguno=document.getElementById('pe-emp-ninguno'); if(ninguno) ninguno.checked=false;
+  var tagsEl=document.getElementById('pe-fio-tags');
+  if(tagsEl){
+    var chip=document.createElement('span');
+    chip.dataset.empId=id;
+    chip.style.cssText='display:inline-flex;align-items:center;gap:4px;background:var(--bg2);border:1px solid #8b5cf6;border-radius:4px;padding:3px 8px;font-size:12px;';
+    chip.innerHTML='<span>'+formatDisplayValue(nombre)+'</span>'
+      +'<button onclick="onPeFioRemoveEmp(\''+id.replace(/'/g,"\\'")+'\')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;line-height:1;padding:0 0 0 2px;">×</button>';
+    tagsEl.appendChild(chip);
+  }
+  var srch=document.getElementById('pe-fio-search'); if(srch) srch.value='';
+  var dd=document.getElementById('pe-fio-dropdown'); if(dd) dd.style.display='none';
+}
+function onPeFioRemoveEmp(id){
+  _peFioSelectedEmps=_peFioSelectedEmps.filter(function(s){return s.id!==id;});
+  var tagsEl=document.getElementById('pe-fio-tags');
+  if(tagsEl){
+    var chip=tagsEl.querySelector('[data-emp-id="'+id+'"]');
+    if(chip) chip.remove();
   }
 }
 function setT(name,val){
@@ -1390,7 +1502,7 @@ async function renderValidacion(){
   // Build validation table without nested template literals
   var valRows="";
   shifts.forEach(function(s){
-    var sm=mermas.filter(function(m){return String(m.shift_id)===String(s.id);});
+    var sm=mermas.filter(function(m){return recordMatchesShift(m,s);});
     var si=incis.filter(function(i){return recordMatchesShift(i,s);});
     var mCP=sm.some(function(m){return !m.coste_unitario||m.coste_unitario===0;});
     // For Sala: show ajustes count. For Cocina: show merma count
@@ -1468,13 +1580,16 @@ async function valSaveCloseGestion(gid,isTask){
   var ts=new Date().toISOString();
   if(isTask){
     var tt=await getDB('tareas'); var t=tt.find(function(x){return x.id===gid;}); if(!t) return;
-    await dbUpdate('tareas',gid,{estado:TASK_STATES.CERRADA,notas_cierre:txt,completada_por:currentUser.nombre,completada_ts:ts,updated_at:ts});
+    var tgMins=Math.round((Date.now()-new Date(t.created_at).getTime())/60000);
+    await dbUpdate('tareas',gid,{estado:TASK_STATES.CERRADA,notas_cierre:txt,completado_por:currentUser.nombre,completado_ts:ts,tiempo_gestion:tgMins,updated_at:ts});
     invalidateCache('tareas');
-    auditLog('VAL_GESTION_CLOSE',currentUser.nombre+' cerró gestión "'+t.titulo+'" — '+txt+' (shift '+validatingShiftId+')');
+    auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
   } else {
-    await dbUpdate('incidencias',gid,{estado:INCIDENT_STATES.CERRADA,accion_inmediata:txt});
+    var ii=await getDB('incidencias'); var inc=ii.find(function(x){return x.id===gid;}); if(!inc) return;
+    var tgMinsI=Math.round((Date.now()-new Date(inc.created_at).getTime())/60000);
+    await dbUpdate('incidencias',gid,{estado:INCIDENT_STATES.CERRADA,accion_inmediata:txt,cerrado_ts:ts,tiempo_gestion:tgMinsI});
     invalidateCache('incidencias');
-    auditLog('VAL_GESTION_CLOSE',currentUser.nombre+' cerró gestión-inci '+gid+' — '+txt+' (shift '+validatingShiftId+')');
+    auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMinsI+' min | accion: '+txt+' (shift '+validatingShiftId+')');
   }
   toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);
 }
@@ -1498,9 +1613,12 @@ function valShowCloseInciForm(iid){
 async function valSaveCloseInci(iid){
   var txt=((document.getElementById('iclose-text-'+iid)||{}).value||'').trim();
   if(!txt){toast('El campo "Acción para cerrar" es obligatorio','err');return;}
-  await dbUpdate('incidencias',iid,{estado:INCIDENT_STATES.CERRADA,accion_inmediata:txt});
+  var ii=await getDB('incidencias'); var inc=ii.find(function(x){return x.id===iid;}); if(!inc) return;
+  var ts=new Date().toISOString();
+  var tgMins=Math.round((Date.now()-new Date(inc.created_at).getTime())/60000);
+  await dbUpdate('incidencias',iid,{estado:INCIDENT_STATES.CERRADA,accion_inmediata:txt,cerrado_ts:ts,tiempo_gestion:tgMins});
   invalidateCache('incidencias');
-  auditLog('VAL_INCI_CLOSE',currentUser.nombre+' cerró incidencia '+iid+' — '+txt+' (shift '+validatingShiftId+')');
+  auditLog('INCIDENCIA_CERRADA','id: '+iid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
   toast('Incidencia cerrada','ok'); await openValidarModal(validatingShiftId);
 }
 
@@ -1511,7 +1629,7 @@ async function openValidarModal(shiftId){
   const s=(await getDB('shifts')).find(x=>x.id===shiftId); if(!s) return;
   if(!canValidateShift(currentUser,s)){ toast('No tienes permiso para validar registros de este departamento.','err'); return; }
   const allMerma=await dbGetAll('merma');
-  const mermas=allMerma.filter(m=>String(m.shift_id)===String(shiftId));
+  const mermas=allMerma.filter(m=>recordMatchesShift(m,s));
   _validatingMermas=mermas;
   const allIncis=await getDB('incidencias');
   const incis=allIncis.filter(function(i){return recordMatchesShift(i,s);});
@@ -1572,15 +1690,20 @@ async function openValidarModal(shiftId){
       if(g.deadline) info += '<div><span style="color:var(--text3)">Deadline: </span>'+fmtDate(g.deadline)+'</div>';
       info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Descripción: </span><strong>'+formatDisplayValue(g.descripcion || g.titulo)+'</strong></div>';
       info += '</div>';
-      if(canActOnStates){
-        var isClosed = isTask ? (gState===TASK_STATES.CERRADA||gState===TASK_STATES.VALIDADA) : (gState===INCIDENT_STATES.CERRADA||gState===INCIDENT_STATES.VALIDADA);
-        if(!isClosed){
-          var isOpen = isTask ? gState===TASK_STATES.ABIERTA : gState===INCIDENT_STATES.ABIERTA;
-          var gBtn = isOpen
-            ? '<button class="vbtn vbtn-primary" onclick="valAdvanceGestion(\''+g.id+'\','+isTask+',\'En proceso\')">▶ En proceso</button>'
-            : '<button class="vbtn vbtn-warn" onclick="valShowCloseGestionForm(\''+g.id+'\','+isTask+')">✓ Cerrar gestión</button>';
-          info += '<div id="g-btn-'+g.id+'" style="margin-top:8px;">'+gBtn+'</div>';
-        }
+      var isClosed = isTask ? (gState===TASK_STATES.CERRADA||gState===TASK_STATES.VALIDADA) : (gState===INCIDENT_STATES.CERRADA||gState===INCIDENT_STATES.VALIDADA);
+      if(isClosed){
+        var closedTs = isTask ? (g.completado_ts||g.completada_ts) : (g.cerrado_ts);
+        var tg = g.tiempo_gestion;
+        info += '<div style="margin-top:6px;font-size:11px;color:var(--text3);">'
+          +(closedTs?'Cerrado: <strong>'+fmtTs(closedTs)+'</strong>':'')
+          +(tg?' · Tiempo de gestión: <strong>'+fmtTiempoGestion(tg)+'</strong>':'')
+          +'</div>';
+      } else if(canActOnStates){
+        var isOpen = isTask ? gState===TASK_STATES.ABIERTA : gState===INCIDENT_STATES.ABIERTA;
+        var gBtn = isOpen
+          ? '<button class="vbtn vbtn-primary" onclick="valAdvanceGestion(\''+g.id+'\','+isTask+',\'En proceso\')">▶ En proceso</button>'
+          : '<button class="vbtn vbtn-warn" onclick="valShowCloseGestionForm(\''+g.id+'\','+isTask+')">✓ Cerrar gestión</button>';
+        info += '<div id="g-btn-'+g.id+'" style="margin-top:8px;">'+gBtn+'</div>';
       }
       info += '</div>';
     });
@@ -1613,14 +1736,17 @@ async function openValidarModal(shiftId){
         }catch(e){}
       }
       info += '</div>';
-      if(canActOnStates){
-        var isClosed = iState===INCIDENT_STATES.CERRADA||iState===INCIDENT_STATES.VALIDADA;
-        if(!isClosed){
-          var iBtn = iState===INCIDENT_STATES.ABIERTA
-            ? '<button class="vbtn vbtn-primary" onclick="valAdvanceInci(\''+inci.id+'\')">▶ En proceso</button>'
-            : '<button class="vbtn vbtn-warn" onclick="valShowCloseInciForm(\''+inci.id+'\')">✓ Cerrar incidencia</button>';
-          info += '<div id="i-btn-'+inci.id+'" style="margin-top:8px;">'+iBtn+'</div>';
-        }
+      var iClosedNow = iState===INCIDENT_STATES.CERRADA||iState===INCIDENT_STATES.VALIDADA;
+      if(iClosedNow){
+        info += '<div style="margin-top:6px;font-size:11px;color:var(--text3);">'
+          +(inci.cerrado_ts?'Cerrado: <strong>'+fmtTs(inci.cerrado_ts)+'</strong>':'')
+          +(inci.tiempo_gestion?' · Tiempo de gestión: <strong>'+fmtTiempoGestion(inci.tiempo_gestion)+'</strong>':'')
+          +'</div>';
+      } else if(canActOnStates){
+        var iBtn = iState===INCIDENT_STATES.ABIERTA
+          ? '<button class="vbtn vbtn-primary" onclick="valAdvanceInci(\''+inci.id+'\')">▶ En proceso</button>'
+          : '<button class="vbtn vbtn-warn" onclick="valShowCloseInciForm(\''+inci.id+'\')">✓ Cerrar incidencia</button>';
+        info += '<div id="i-btn-'+inci.id+'" style="margin-top:8px;">'+iBtn+'</div>';
       }
       info += '</div>';
     });
@@ -1667,32 +1793,25 @@ async function openValidarModal(shiftId){
   document.querySelectorAll('.modal-footer .btn-warn, .modal-footer .btn-danger, .modal-footer .btn-success').forEach(function(b){
     b.style.display='';
   });
-  // Populate error employee checkbox list
-  var empList=document.getElementById('val-error-empleado-list');
-  if(empList){
-    empList.innerHTML='<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);">'
-      +'<input type="checkbox" id="val-emp-ninguno" onchange="onFioNingunoToggle()" style="accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;">'
-      +'<span style="color:var(--text3)">— Sin error / Sin responsable —</span></label>';
-    getDB('employees').then(function(emps){
-      emps.filter(function(e){return e.estado==='Activo';}).forEach(function(e){
-        var lbl=document.createElement('label');
-        lbl.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 8px;cursor:pointer;font-size:13px;';
-        var cb=document.createElement('input');
-        cb.type='checkbox'; cb.value=e.id; cb.dataset.nombre=e.nombre;
-        cb.style.cssText='accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;';
-        cb.className='val-emp-cb';
-        cb.addEventListener('change',function(){ if(this.checked){var n=document.getElementById('val-emp-ninguno');if(n)n.checked=false;} });
-        lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(' '+e.nombre+' ('+e.puesto+(e.area?' · '+e.area:'')+')'));
-        empList.appendChild(lbl);
-      });
-    });
-  }
+  // Init FIO autocomplete
+  _fioSelectedEmps=[];
+  var tagsEl=document.getElementById('val-fio-tags');
+  if(tagsEl) tagsEl.innerHTML='';
+  var srchEl=document.getElementById('val-fio-search');
+  if(srchEl) srchEl.value='';
+  var ddEl=document.getElementById('val-fio-dropdown');
+  if(ddEl) ddEl.style.display='none';
+  var ningunoEl=document.getElementById('val-emp-ninguno');
+  if(ningunoEl) ningunoEl.checked=false;
+  getDB('employees').then(function(emps){
+    _fioAllEmps=emps.filter(function(e){return e.estado==='Activo';});
+  });
   // Reset FIO toggles
   ['fio-si','fio-no'].forEach(function(id){var el=document.getElementById(id);if(el)el.className='tbtn';});
   toggleState.fio=null;
   document.getElementById('val-gravedad').value='';
   document.getElementById('val-tipo-error').value='';
+  if(document.getElementById('val-impacto-bonus')) document.getElementById('val-impacto-bonus').value='';
   if(document.getElementById('val-num-errores')) document.getElementById('val-num-errores').value='0';
   document.getElementById('modal-validar').classList.add('open');
 }
@@ -1738,10 +1857,9 @@ async function doValidacion(newEstado){
   var fio = toggleState.fio === 'si';
   var valGravedad = (document.getElementById('val-gravedad')||{}).value || '';
   var valTipoError = (document.getElementById('val-tipo-error')||{}).value || '';
-  var checkedEmps=Array.from(document.querySelectorAll('.val-emp-cb:checked'));
-  var errorEmpId=checkedEmps.length>0?JSON.stringify(checkedEmps.map(function(cb){return cb.value;})):'';
-  var errorEmpNombre=checkedEmps.length>0?JSON.stringify(checkedEmps.map(function(cb){return cb.dataset.nombre;})):'';
-  var valNumErrores=checkedEmps.length;
+  var errorEmpId=_fioSelectedEmps.length>0?JSON.stringify(_fioSelectedEmps.map(function(e){return e.id;})):'';
+  var errorEmpNombre=_fioSelectedEmps.length>0?JSON.stringify(_fioSelectedEmps.map(function(e){return e.nombre;})):'';
+  var valNumErrores=_fioSelectedEmps.length;
 
   // CRITICAL: save all validation fields to Supabase
   var valCosteMerma = parseFloat((document.getElementById('val-coste-total')||{}).value)||0;
