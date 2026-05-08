@@ -1346,7 +1346,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:8px;">TRASPASO</div>
     <div class="fg" style="margin-bottom:12px;">
       <label>Fondo recibido del turno anterior (€)</label>
-      <input type="number" id="rec-fondo-recibido" min="0" step="0.01" placeholder="0.00" readonly style="opacity:0.7;cursor:not-allowed;background:var(--bg);color:var(--text);">
+      <input type="number" id="rec-fondo-recibido" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;">
     </div>
 
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">SEGÚN PMS MEWS</div>
@@ -3432,35 +3432,73 @@ function calcRecDifs() {
 function openRecCajaModal(existingId) {
   _recCajaEditId = existingId||null;
   // Reset form
-  ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-cash-real','rec-tpv-real','rec-stripe-real','rec-fondo-recibido','rec-fondo-traspaso','rec-fondo-inicial','rec-dif-exp','rec-dif-accion'].forEach(function(id){
+  ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
+   'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
+   'rec-fondo-traspaso','rec-fondo-inicial','rec-cf-importe',
+   'rec-room-charge','rec-syncrolab-charge','rec-desayunos-pension',
+   'rec-pension-comida-cena','rec-cargo-alexander','rec-dif-exp','rec-dif-accion'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
+
+  // BUG-29 FIX: fondo recibido = fondo_real_a_traspasar del último cierre, readonly
+  var fondoEl = document.getElementById('rec-fondo-recibido');
+  if(fondoEl){
+    fondoEl.value = '0.00';
+    fondoEl.setAttribute('readonly','readonly');
+    fondoEl.style.opacity='0.65';
+    fondoEl.style.cursor='not-allowed';
+  }
+  if(!existingId){
+    getDB('recepcion_cash').then(function(rows){
+      var sorted = rows
+        .filter(function(r){ return r.fondo_real_a_traspasar != null; })
+        .sort(function(a,b){
+          return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||'');
+        });
+      var ultimo = sorted[0];
+      if(fondoEl && ultimo){
+        fondoEl.value = parseFloat(ultimo.fondo_real_a_traspasar).toFixed(2);
+        calcRecDifs();
+      }
+    });
+  }
+
   var turno=getRecTurnoValue()||'—';
   var label=document.getElementById('rec-caja-turno-label');
   if(label) label.textContent=turno;
-  // Show/hide fondo inicial (only Noche)
   var fondoIni=document.getElementById('rec-fondo-inicial-block');
   if(fondoIni) fondoIni.style.display=turno==='Noche'?'block':'none';
-  document.getElementById('rec-dif-alert').style.display='none';
-  document.getElementById('rec-dif-exp-block').style.display='none';
-  document.getElementById('rec-caja-err').textContent='';
+  var alertEl=document.getElementById('rec-dif-alert');
+  var expBlock=document.getElementById('rec-dif-exp-block');
+  if(alertEl) alertEl.style.display='none';
+  if(expBlock) expBlock.style.display='none';
+  var errEl=document.getElementById('rec-caja-err');
+  if(errEl) errEl.textContent='';
+
   // Load existing if editing
   if(existingId){
-    getDB('cash_closings').then(function(rows){
+    getDB('recepcion_cash').then(function(rows){
       var row=rows.find(function(r){return r.id===existingId;});
       if(!row) return;
       var set=function(id,val){var el=document.getElementById(id);if(el&&val!=null)el.value=val;};
-      set('rec-fondo-recibido',row.rec_fondo_recibido);
-      set('rec-cash-mews',row.rec_cash_mews);
-      set('rec-tarjeta-mews',row.rec_tarjeta_mews);
-      set('rec-stripe-mews',row.rec_stripe_mews);
-      set('rec-cash-real',row.efectivo_real);
-      set('rec-tpv-real',row.tarjeta_real);
-      set('rec-stripe-real',row.stripe_real);
-      set('rec-fondo-traspaso',row.rec_fondo_traspaso);
-      set('rec-fondo-inicial',row.rec_fondo_inicial_dia);
-      set('rec-dif-exp',row.diferencia_explicacion);
-      set('rec-dif-accion',row.accion_tomada);
+      set('rec-fondo-recibido',    row.fondo_recibido);
+      set('rec-cash-mews',         row.cash_mews);
+      set('rec-tarjeta-mews',      row.tarjeta_mews);
+      set('rec-stripe-mews',       row.stripe_mews);
+      set('rec-trans-mews',        row.transferencia_mews);
+      set('rec-cash-real',         row.cash_real);
+      set('rec-tpv-real',          row.tpv_real);
+      set('rec-stripe-real',       row.stripe_real);
+      set('rec-trans-real',        row.transferencia_banco);
+      set('rec-fondo-traspaso',    row.fondo_traspasado);
+      set('rec-fondo-inicial',     row.fondo_inicial_siguiente);
+      set('rec-cf-importe',        row.retiro_caja_fuerte);
+      set('rec-room-charge',       row.room_charge_recibido);
+      set('rec-syncrolab-charge',  row.syncrolab_room_charged);
+      set('rec-desayunos-pension', row.desayunos_confirmados_mews);
+      set('rec-cargo-alexander',   row.cargo_alexander);
+      set('rec-dif-exp',           row.explicacion_diferencia);
+      set('rec-dif-accion',        row.accion_diferencia);
       calcRecDifs();
     });
   }
@@ -3525,53 +3563,68 @@ async function submitRecCaja() {
 
   var ts=new Date().toISOString();
   var fecha=document.getElementById('t-fecha')?document.getElementById('t-fecha').value:today();
+
+  // BUG-27 FIX: resolver shift_id si no está en memoria
+  var resolvedShiftIdCaja = window._lastSavedShiftId || null;
+  if(!resolvedShiftIdCaja && currentUser){
+    try {
+      var allShiftsCaja = await getDB('shifts');
+      var myShiftCaja = allShiftsCaja.find(function(s){ return s.employee_id===currentUser.id && s.fecha===fecha; });
+      if(myShiftCaja) resolvedShiftIdCaja = myShiftCaja.id;
+    } catch(e2){}
+  }
+
+  // BUG-29 FIX: fondo_real_a_traspasar = calculado (fondoRec + mewsCash - cfImporte), no manual
+  var fondoRealCalculado = fondoRec + mewsCash - cfImporte;
+
   var record={
     id: _recCajaEditId||genId(),
-    fecha, departamento:'recepcion', turno,
-    shift_id: window._lastSavedShiftId||null,
+    fecha: fecha, departamento:'recepcion', turno: turno,
+    shift_id: resolvedShiftIdCaja,
     usuario_id: currentUser.id,
     usuario_nombre: currentUser.nombre,
+    responsable_id: currentUser.id,
+    responsable_nombre: currentUser.nombre,
     estado: 'cerrado',
-    fondo_inicial: fondoRec,
-    efectivo_real: realCash,
-    tarjeta_real: realTpv,
+    fondo_recibido: fondoRec,
+    fondo_traspasado: fondoTras,
+    fondo_real_a_traspasar: fondoRealCalculado,
+    fondo_inicial_siguiente: turno==='Noche'?(parseFloat(document.getElementById('rec-fondo-inicial').value)||null):null,
+    retiro_caja_fuerte: cfImporte,
+    cash_mews: mewsCash,
+    tarjeta_mews: mewsTar,
+    stripe_mews: mewsStr,
+    transferencia_mews: mewsTrans,
+    cash_real: realCash,
+    tpv_real: realTpv,
     stripe_real: realStr,
-    total_real: realCash+realTpv+realStr+realTrans,
-    total_sistema: mewsCash+mewsTar+mewsStr+mewsTrans,
-    diferencia_total: difTotal,
-    diferencia_explicacion: document.getElementById('rec-dif-exp').value.trim()||null,
-    accion_tomada: document.getElementById('rec-dif-accion').value.trim()||null,
-    rec_cash_mews: mewsCash,
-    rec_tarjeta_mews: mewsTar,
-    rec_stripe_mews: mewsStr,
-    rec_transferencia_mews: mewsTrans,
-    rec_transferencia_real: realTrans,
-    diferencia_transferencia: difTrans,
-    rec_room_charge: roomCharge,
-    rec_syncrolab_charge: syncrolabCharge,
-    rec_desayunos_pension: desayunosPension,
-    rec_media_pension: mediaPension,
-    rec_pension_completa: pensionCompleta,
-    rec_cargo_alexander: cargoAlexander,
-    rec_cf_importe: cfImporte,
-    rec_fondo_recibido: fondoRec,
-    rec_fondo_traspaso: fondoTras,
-    rec_fondo_inicial_dia: turno==='Noche'?(parseFloat(document.getElementById('rec-fondo-inicial').value)||null):null,
+    transferencia_banco: realTrans,
+    dif_cash: difCash,
+    dif_tarjeta: difTar,
+    dif_stripe: difStr,
+    dif_transferencia: difTrans,
+    dif_total: difTotal,
+    explicacion_diferencia: document.getElementById('rec-dif-exp').value.trim()||null,
+    accion_diferencia: document.getElementById('rec-dif-accion').value.trim()||null,
+    room_charge_recibido: roomCharge,
+    syncrolab_room_charged: syncrolabCharge,
+    desayunos_confirmados_mews: desayunosPension,
+    cargo_alexander: cargoAlexander,
     created_at: _recCajaEditId?undefined:ts,
     updated_at: ts
   };
 
   try {
     if(_recCajaEditId){
-      await dbUpdate('cash_closings', _recCajaEditId, record);
+      await dbUpdate('recepcion_cash', _recCajaEditId, record);
       await auditLog('REC_CAJA_EDIT', currentUser.nombre+' editó caja recepción '+fecha+' turno '+turno);
       toast('Caja recepción actualizada','ok');
     } else {
-      await dbInsert('cash_closings', record);
+      await dbInsert('recepcion_cash', record);
       await auditLog('REC_CAJA_SAVE', currentUser.nombre+' cerró caja recepción '+fecha+' turno '+turno);
       toast('Caja recepción guardada','ok');
     }
-    invalidateCache('cash_closings');
+    invalidateCache('recepcion_cash');
     closeRecCajaModal();
     renderRecepcionCajaList();
   } catch(e){
@@ -3585,7 +3638,7 @@ async function renderRecepcionCajaList() {
   el.innerHTML='<div class="empty"><div class="empty-text">Cargando...</div></div>';
   var periodo=document.getElementById('rec-dash-periodo')?document.getElementById('rec-dash-periodo').value:'hoy';
   var rows=[];
-  try { rows=await getDB('cash_closings'); } catch(e){ rows=[]; }
+  try { rows=await getDB('recepcion_cash'); } catch(e){ rows=[]; }
   rows=rows.filter(function(r){return r.departamento==='recepcion';});
   // Filter by period
   var t=today(), sw=startOfWeek(), sm=startOfMonth();
@@ -3628,19 +3681,14 @@ async function reabrirCajaRec(cajaId) {
   var motivo=prompt('Motivo de reapertura (obligatorio):');
   if(!motivo||!motivo.trim()){toast('Motivo obligatorio','err');return;}
   try {
-    await dbUpdate('cash_closings', cajaId, {
+    await dbUpdate('recepcion_cash', cajaId, {
       estado:'reabierto',
       reabierto_por: currentUser.nombre,
-      fecha_reapertura: localTs(),
-      motivo_reapertura: motivo.trim()
+      comentario: motivo.trim(),
+      updated_at: new Date().toISOString()
     });
-    await dbInsert('closing_audit_log',{
-      id:genId(),tabla:'cash_closings',registro_id:cajaId,
-      usuario_id:currentUser.id,usuario_nombre:currentUser.nombre,
-      accion:'reabierto',motivo:motivo.trim(),fecha_registro:today(),
-      created_at:localTs()
-    });
-    invalidateCache('cash_closings');
+    await auditLog('REC_CAJA_REABRIR','Caja '+cajaId+' reabierta por '+currentUser.nombre+' — '+motivo.trim());
+    invalidateCache('recepcion_cash');
     toast('Caja reabierta','ok');
     renderRecepcionCajaList();
   } catch(e){ toast('Error: '+e.message,'err'); }
@@ -3652,14 +3700,9 @@ async function eliminarCajaRec(cajaId) {
   if(!motivo||!motivo.trim()){toast('Motivo obligatorio','err');return;}
   if(!confirm('¿Eliminar este cierre de caja? Esta acción quedará registrada en auditoría.')) return;
   try {
-    await dbInsert('closing_audit_log',{
-      id:genId(),tabla:'cash_closings',registro_id:cajaId,
-      usuario_id:currentUser.id,usuario_nombre:currentUser.nombre,
-      accion:'eliminado',motivo:motivo.trim(),fecha_registro:today(),
-      created_at:localTs()
-    });
-    await dbDelete('cash_closings', cajaId);
-    invalidateCache('cash_closings');
+    await auditLog('REC_CAJA_DELETE','Caja '+cajaId+' eliminada por '+currentUser.nombre+' — '+motivo.trim());
+    await dbDelete('recepcion_cash', cajaId);
+    invalidateCache('recepcion_cash');
     toast('Caja eliminada — registrado en auditoría','ok');
     renderRecepcionCajaList();
   } catch(e){ toast('Error: '+e.message,'err'); }
@@ -3671,7 +3714,7 @@ async function renderRecepcionDashboard() {
   el.innerHTML='<div class="empty"><div class="empty-text">Cargando...</div></div>';
   var periodo=document.getElementById('rec-dash-periodo2')?document.getElementById('rec-dash-periodo2').value:'hoy';
   var rows=[];
-  try { rows=await getDB('cash_closings'); } catch(e){ rows=[]; }
+  try { rows=await getDB('recepcion_cash'); } catch(e){ rows=[]; }
   rows=rows.filter(function(r){return r.departamento==='recepcion';});
   var t=today(), sw=startOfWeek(), sm=startOfMonth();
   if(periodo==='hoy') rows=rows.filter(function(r){return r.fecha===t;});
@@ -3888,38 +3931,51 @@ async function saveFollowup() {
   if(!tipo){ errEl.textContent = 'Selecciona un tipo'; return; }
   if(!desc){ errEl.textContent = 'La descripción es obligatoria'; return; }
   errEl.textContent = '';
+
+  // BUG-27 FIX: si no hay shift_id en memoria, buscar turno del empleado de hoy
+  var resolvedShiftId = window._lastSavedShiftId || null;
+  if(!resolvedShiftId && currentUser){
+    try {
+      var allShiftsToday = await getDB('shifts');
+      var todayStr = today();
+      var myShift = allShiftsToday.find(function(s){
+        return s.employee_id === currentUser.id && s.fecha === todayStr;
+      });
+      if(myShift) resolvedShiftId = myShift.id;
+    } catch(e2){}
+  }
+
   var ts = localTs();
-  var respId = document.getElementById('fu-responsable').value;
-  var respOpt = document.getElementById('fu-responsable');
-  var respNombre = respId && respOpt ? (respOpt.options[respOpt.selectedIndex]||{}).text || '' : '';
   var record = {
     id: genId(),
-    shift_id: window._lastSavedShiftId || null,
+    shift_id: resolvedShiftId,
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
+    departamento: currentUser.area || '—',
     fecha: today(),
     servicio: getRecTurnoValue() || getServicioValue() || '—',
-    categoria: 'Follow-up / Gestión',
+    categoria: 'Gestión pendiente',
     tipo_incidencia: tipo,
     descripcion: desc,
     accion_inmediata: '',
-    requiere_formacion: 'No',
-    requiere_disciplina: 'No',
+    requiere_formacion: 'no',
+    requiere_disciplina: 'no',
+    informado_responsable: 'no',
     estado: INCIDENT_STATES.ABIERTA,
-    severidad: 'Pendiente revision',
+    severidad: 'Media',
     staff_implicado_ids: '[]',
     staff_implicado_nombres: '[]',
     created_at: ts
   };
   try {
     var saved = await dbInsert('incidencias', record);
-    if(!saved){ console.error('Follow-up incidencia insert failed',record); errEl.textContent = 'No se pudo guardar. Revisa los datos e inténtalo de nuevo.'; return; }
+    if(!saved){ errEl.textContent = 'No se pudo guardar (respuesta vacía de BD)'; return; }
     invalidateCache('incidencias');
-    toast('Incidencia registrada', 'ok');
+    toast('Gestión pendiente registrada', 'ok');
     closeFollowupModal();
     renderFollowupList();
   } catch(e){
-    errEl.textContent = 'No se pudo guardar. Revisa los datos e inténtalo de nuevo.';
+    errEl.textContent = 'Error: ' + (e.message || JSON.stringify(e));
   }
 }
 
@@ -3963,8 +4019,12 @@ async function submitCloseFollowup() {
     var tiempoM = Math.floor((tiempoMs%3600000)/60000);
     var cierreTxt = 'Cierre: ' + accion + ' · Resultado: ' + resultado + (comentarioCierre ? ' · Comentario: ' + comentarioCierre : '');
     var saved = await dbUpdate('incidencias', _fuCloseId, {
-      estado: INCIDENT_STATES.CERRADA,
-      accion_inmediata: [inci.accion_inmediata, cierreTxt].filter(Boolean).join(' | ')
+      estado:           INCIDENT_STATES.CERRADA,
+      accion_tomada:    cierreTxt,
+      accion_inmediata: [inci.accion_inmediata, cierreTxt].filter(Boolean).join(' | '),
+      cerrado_por:      currentUser.nombre,
+      cerrado_ts:       ts,
+      tiempo_gestion:   Math.round(tiempoMs / 60000)
     });
     if(!saved){ errEl.textContent = 'No se pudo cerrar la incidencia. Inténtalo de nuevo.'; return; }
     invalidateCache('incidencias');
