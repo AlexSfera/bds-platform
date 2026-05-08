@@ -191,29 +191,15 @@ function openRecCajaModal(existingId) {
     var el=document.getElementById(id); if(el) el.value='';
   });
 
-  // BUG-29: Fondo recibido = fondo_real_a_traspasar del último cierre — readonly
+  // Preparar campo fondo — readonly siempre
   var fondoEl = document.getElementById('rec-fondo-recibido');
   if(fondoEl){
     fondoEl.value = '0.00';
     fondoEl.setAttribute('readonly','readonly');
-    fondoEl.style.opacity = '0.6';
-    fondoEl.style.cursor  = 'not-allowed';
-  }
-  if(!existingId){
-    getDB(REC_TABLE).then(function(rows){
-      var sorted = rows
-        .filter(function(r){ return r.fondo_real_a_traspasar != null; })
-        .sort(function(a,b){
-          return (b.fecha||'').localeCompare(a.fecha||'') ||
-                 (b.created_at||'').localeCompare(a.created_at||'');
-        });
-      var ultimo = sorted[0];
-      if(fondoEl && ultimo){
-        var fondo = parseFloat(ultimo.fondo_real_a_traspasar)||0;
-        fondoEl.value = fondo.toFixed(2);
-        calcRecDifs();
-      }
-    });
+    fondoEl.removeAttribute('oninput'); // no editable por usuario
+    fondoEl.style.opacity    = '0.7';
+    fondoEl.style.cursor     = 'not-allowed';
+    fondoEl.style.background = 'var(--bg)';
   }
 
   var turno = getRecTurnoValue() || '—';
@@ -231,14 +217,16 @@ function openRecCajaModal(existingId) {
   var errEl = document.getElementById('rec-caja-err');
   if(errEl) errEl.textContent = '';
 
-  // Cargar datos existentes si es edición
+  var m = document.getElementById('modal-rec-caja');
+
   if(existingId){
+    // EDICIÓN: cargar datos del cierre existente, luego abrir
     getDB(REC_TABLE).then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
-      if(!row) return;
+      if(!row){ if(m) m.style.display='flex'; return; }
       function set(id, val){ var el=document.getElementById(id); if(el && val!=null) el.value=val; }
-      // Campos reales de recepcion_cash
-      set('rec-fondo-recibido',    row.fondo_recibido);
+      // fondo_recibido también readonly en edición
+      if(fondoEl) fondoEl.value = parseFloat(row.fondo_recibido||0).toFixed(2);
       set('rec-cash-mews',         row.cash_mews);
       set('rec-tarjeta-mews',      row.tarjeta_mews);
       set('rec-stripe-mews',       row.stripe_mews);
@@ -253,17 +241,32 @@ function openRecCajaModal(existingId) {
       set('rec-room-charge',       row.room_charge_recibido);
       set('rec-syncrolab-charge',  row.syncrolab_room_charged);
       set('rec-desayunos-pension', row.desayunos_confirmados_mews);
-      set('rec-media-pension',     row.media_pension_personas);
-      set('rec-pension-completa',  row.pension_completa_personas);
       set('rec-cargo-alexander',   row.cargo_alexander);
       set('rec-dif-exp',           row.explicacion_diferencia);
       set('rec-dif-accion',        row.accion_diferencia);
       calcRecDifs();
+      if(m) m.style.display = 'flex';
+    });
+  } else {
+    // NUEVO: cargar fondo del último cierre, luego abrir modal
+    getDB(REC_TABLE).then(function(rows){
+      var sorted = rows
+        .filter(function(r){ return parseFloat(r.fondo_real_a_traspasar) >= 0; })
+        .sort(function(a,b){
+          return (b.fecha||'').localeCompare(a.fecha||'') ||
+                 (b.created_at||'').localeCompare(a.created_at||'');
+        });
+      var ultimo = sorted[0];
+      var fondo = ultimo ? (parseFloat(ultimo.fondo_real_a_traspasar)||0) : 0;
+      if(fondoEl){
+        fondoEl.value = fondo.toFixed(2);
+      }
+      // Abrir modal DESPUÉS de tener el fondo — evita race condition
+      if(m) m.style.display = 'flex';
+      // Calcular difs con fondo ya seteado
+      setTimeout(function(){ calcRecDifs(); }, 50);
     });
   }
-
-  var m = document.getElementById('modal-rec-caja');
-  if(m) m.style.display = 'flex';
 }
 
 function closeRecCajaModal() {
