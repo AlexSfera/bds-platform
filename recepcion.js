@@ -144,9 +144,10 @@ function calcRecDifs() {
 
   function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
   function setColor(id, val){
-    var el=document.getElementById(id); if(!el) return;
+    var el = document.getElementById(id); if(!el) return;
     el.textContent = fmt(val);
-    el.style.color = Math.abs(val)<0.01 ? 'var(--green)' : val>0 ? 'var(--blue)' : 'var(--red)';
+    // Cualquier diferencia != 0 es roja. Solo 0 es verde.
+    el.style.color = Math.abs(val) < 0.01 ? 'var(--green)' : 'var(--red)';
   }
   setColor('rec-dif-cash',    difCash);
   setColor('rec-dif-tarjeta', difTar);
@@ -180,14 +181,40 @@ function openRecCajaModal(existingId) {
   _recCajaEditId = existingId || null;
 
   // Reset todos los campos
+  // Reset campos editables — fondo se carga del cierre anterior
   ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
    'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
-   'rec-fondo-recibido','rec-fondo-traspaso','rec-fondo-inicial',
+   'rec-fondo-traspaso','rec-fondo-inicial',
    'rec-cf-importe','rec-room-charge','rec-syncrolab-charge',
-   'rec-desayunos-pension','rec-media-pension','rec-pension-completa',
+   'rec-desayunos-pension','rec-pension-comida-cena',
    'rec-cargo-alexander','rec-dif-exp','rec-dif-accion'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
+
+  // BUG-29: Fondo recibido = fondo_real_a_traspasar del último cierre — readonly
+  var fondoEl = document.getElementById('rec-fondo-recibido');
+  if(fondoEl){
+    fondoEl.value = '0.00';
+    fondoEl.setAttribute('readonly','readonly');
+    fondoEl.style.opacity = '0.6';
+    fondoEl.style.cursor  = 'not-allowed';
+  }
+  if(!existingId){
+    getDB(REC_TABLE).then(function(rows){
+      var sorted = rows
+        .filter(function(r){ return r.fondo_real_a_traspasar != null; })
+        .sort(function(a,b){
+          return (b.fecha||'').localeCompare(a.fecha||'') ||
+                 (b.created_at||'').localeCompare(a.created_at||'');
+        });
+      var ultimo = sorted[0];
+      if(fondoEl && ultimo){
+        var fondo = parseFloat(ultimo.fondo_real_a_traspasar)||0;
+        fondoEl.value = fondo.toFixed(2);
+        calcRecDifs();
+      }
+    });
+  }
 
   var turno = getRecTurnoValue() || '—';
   var label = document.getElementById('rec-caja-turno-label');
