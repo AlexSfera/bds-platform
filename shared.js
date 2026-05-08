@@ -1046,22 +1046,23 @@ async function _doSaveTurno(){
         descripcion: gDesc,
         accion_inmediata: '',
         accion_tomada: '',
-        requiere_formacion: 'No',
-        requiere_disciplina: 'No',
+        requiere_formacion: 'no',
+        requiere_disciplina: 'no',
+        informado_responsable: 'no',
         estado:     INCIDENT_STATES.ABIERTA,
-        severidad:  'Pendiente revision',
+        severidad:  'Media',
         staff_implicado_ids: '[]',
         staff_implicado_nombres: '[]',
         created_at: ts
       };
-      const savedG = await dbInsert('incidencias', gRecord);
-      if(!savedG){
-        console.error('Gestión pendiente insert failed', gRecord);
+      try {
+        await dbInsert('incidencias', gRecord);
+        invalidateCache('incidencias');
+      } catch(eG) {
         const alertArea = document.getElementById('turno-alert-area');
-        if(alertArea) alertArea.innerHTML='<div class="alert a-err">No se pudo guardar la gestión pendiente.</div>';
+        if(alertArea) alertArea.innerHTML='<div class="alert a-err">Error gestión: '+eG.message+'</div>';
         return;
       }
-      invalidateCache('incidencias');
     }
   }
 
@@ -1134,26 +1135,29 @@ async function _doSaveTurno(){
       employee_id:currentUser.id, nombre:currentUser.nombre,
       fecha, servicio,
       categoria:'Incidencia operativa',
-      severidad:'Pendiente revision',
+      severidad:'Media',
       descripcion: descEl ? descEl.value.trim() : '',
       accion_inmediata: accionEl ? accionEl.value.trim() : '',
-      requiere_formacion: 'No',
-      requiere_disciplina: 'No',
+      accion_tomada: '',
+      requiere_formacion: 'no',
+      requiere_disciplina: 'no',
+      informado_responsable: 'no',
+      departamento: currentUser.area||'',
       estado:INCIDENT_STATES.ABIERTA,
       created_at:ts,
       staff_implicado_ids: JSON.stringify(staff.ids),
       staff_implicado_nombres: JSON.stringify(staff.nombres),
       tipo_incidencia: tipoInciEl ? tipoInciEl.value : ''
     };
-    const inciResult = await dbInsert('incidencias', inciRecord);
-    if(!inciResult){
-      console.error('Incidencia insert failed',inciRecord);
+    try {
+      await dbInsert('incidencias', inciRecord);
+      incidenciasCreadas++;
+      invalidateCache('incidencias');
+    } catch(eI) {
       const alertArea=document.getElementById('turno-alert-area');
-      if(alertArea) alertArea.innerHTML='<div class="alert a-err">No se pudo guardar la incidencia operativa. Inténtalo de nuevo.</div>';
+      if(alertArea) alertArea.innerHTML='<div class="alert a-err">Error incidencia: '+eI.message+'</div>';
       return;
     }
-    incidenciasCreadas++;
-    invalidateCache('incidencias');
   }
 
   // ── Clean up and show result ──
@@ -1253,14 +1257,14 @@ function buildInciObj(shiftId,fecha,servicio,ts){
     id:genId(),shift_id:shiftId,employee_id:currentUser.id,nombre:currentUser.nombre,
     fecha,servicio,
     categoria:'Reportada por empleado',
-    severidad:'Pendiente revision',
+    severidad:'Media',
     descripcion:descEl?descEl.value.trim():'',
     accion_inmediata:accionEl?accionEl.value.trim():'',
     staff_implicado_ids:JSON.stringify(staff.ids),
     staff_implicado_nombres:JSON.stringify(staff.nombres),
     tipo_incidencia: (document.getElementById('i-tipo-incidencia')||{}).value||'',
-    requiere_formacion:'No',
-    requiere_disciplina:'No',
+    requiere_formacion:'no',
+    requiere_disciplina:'no',
     estado:INCIDENT_STATES.ABIERTA,
     created_at:ts
   };
