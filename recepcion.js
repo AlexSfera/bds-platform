@@ -136,7 +136,7 @@ function calcRecDifs() {
   var fondoRec  = gv('rec-fondo-recibido');
   var cfImporte = gv('rec-cf-importe');
 
-  var difCash  = (fondoRec + mewsCash) - realCash;  // (Fondo + MEWS) - Contado real
+  var difCash  = mewsCash - (realCash - fondoRec);
   var difTar   = mewsTar   - realTpv;               // MEWS - Real (sin fondo)
   var difStr   = mewsStr   - realStr;               // MEWS - Real (sin fondo)
   var difTrans = mewsTrans - realTrans;             // MEWS - Real (sin fondo)
@@ -310,7 +310,7 @@ async function submitRecCaja() {
   if(isNaN(fondoTras)) errs.push('Fondo traspasado obligatorio');
   if(!turno)           errs.push('Selecciona turno: Mañana, Tarde o Noche');
 
-  var difCash  = (fondoRec + mewsCash) - realCash;
+  var difCash  = mewsCash - (realCash - fondoRec);
   var difTar   = mewsTar   - realTpv;
   var difStr   = mewsStr   - realStr;
   var difTrans = mewsTrans - realTrans;
