@@ -191,15 +191,29 @@ function openRecCajaModal(existingId) {
     var el=document.getElementById(id); if(el) el.value='';
   });
 
-  // Preparar campo fondo — readonly siempre
+  // BUG-29: Fondo recibido = fondo_real_a_traspasar del último cierre — readonly
   var fondoEl = document.getElementById('rec-fondo-recibido');
   if(fondoEl){
     fondoEl.value = '0.00';
     fondoEl.setAttribute('readonly','readonly');
-    fondoEl.removeAttribute('oninput'); // no editable por usuario
-    fondoEl.style.opacity    = '0.7';
-    fondoEl.style.cursor     = 'not-allowed';
-    fondoEl.style.background = 'var(--bg)';
+    fondoEl.style.opacity = '0.6';
+    fondoEl.style.cursor  = 'not-allowed';
+  }
+  if(!existingId){
+    getDB(REC_TABLE).then(function(rows){
+      var sorted = rows
+        .filter(function(r){ return r.fondo_real_a_traspasar != null; })
+        .sort(function(a,b){
+          return (b.fecha||'').localeCompare(a.fecha||'') ||
+                 (b.created_at||'').localeCompare(a.created_at||'');
+        });
+      var ultimo = sorted[0];
+      if(fondoEl && ultimo){
+        var fondo = parseFloat(ultimo.fondo_real_a_traspasar)||0;
+        fondoEl.value = fondo.toFixed(2);
+        calcRecDifs();
+      }
+    });
   }
 
   var turno = getRecTurnoValue() || '—';
@@ -217,16 +231,14 @@ function openRecCajaModal(existingId) {
   var errEl = document.getElementById('rec-caja-err');
   if(errEl) errEl.textContent = '';
 
-  var m = document.getElementById('modal-rec-caja');
-
+  // Cargar datos existentes si es edición
   if(existingId){
-    // EDICIÓN: cargar datos del cierre existente, luego abrir
     getDB(REC_TABLE).then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
-      if(!row){ if(m) m.style.display='flex'; return; }
+      if(!row) return;
       function set(id, val){ var el=document.getElementById(id); if(el && val!=null) el.value=val; }
-      // fondo_recibido también readonly en edición
-      if(fondoEl) fondoEl.value = parseFloat(row.fondo_recibido||0).toFixed(2);
+      // Campos reales de recepcion_cash
+      set('rec-fondo-recibido',    row.fondo_recibido);
       set('rec-cash-mews',         row.cash_mews);
       set('rec-tarjeta-mews',      row.tarjeta_mews);
       set('rec-stripe-mews',       row.stripe_mews);
@@ -241,32 +253,17 @@ function openRecCajaModal(existingId) {
       set('rec-room-charge',       row.room_charge_recibido);
       set('rec-syncrolab-charge',  row.syncrolab_room_charged);
       set('rec-desayunos-pension', row.desayunos_confirmados_mews);
+      set('rec-media-pension',     row.media_pension_personas);
+      set('rec-pension-completa',  row.pension_completa_personas);
       set('rec-cargo-alexander',   row.cargo_alexander);
       set('rec-dif-exp',           row.explicacion_diferencia);
       set('rec-dif-accion',        row.accion_diferencia);
       calcRecDifs();
-      if(m) m.style.display = 'flex';
-    });
-  } else {
-    // NUEVO: cargar fondo del último cierre, luego abrir modal
-    getDB(REC_TABLE).then(function(rows){
-      var sorted = rows
-        .filter(function(r){ return parseFloat(r.fondo_real_a_traspasar) >= 0; })
-        .sort(function(a,b){
-          return (b.fecha||'').localeCompare(a.fecha||'') ||
-                 (b.created_at||'').localeCompare(a.created_at||'');
-        });
-      var ultimo = sorted[0];
-      var fondo = ultimo ? (parseFloat(ultimo.fondo_real_a_traspasar)||0) : 0;
-      if(fondoEl){
-        fondoEl.value = fondo.toFixed(2);
-      }
-      // Abrir modal DESPUÉS de tener el fondo — evita race condition
-      if(m) m.style.display = 'flex';
-      // Calcular difs con fondo ya seteado
-      setTimeout(function(){ calcRecDifs(); }, 50);
     });
   }
+
+  var m = document.getElementById('modal-rec-caja');
+  if(m) m.style.display = 'flex';
 }
 
 function closeRecCajaModal() {
@@ -353,7 +350,7 @@ async function submitRecCaja() {
     // Fondos
     fondo_recibido:            fondoRec,
     fondo_traspasado:          fondoTras,
-    fondo_real_a_traspasar:    fondoTras,
+    fondo_real_a_traspasar:    fondoRec + mewsCash - cfImporte,  // BUG-29 FIX: calculado, no manual
     fondo_inicial_siguiente:   turno === 'Noche' ? (gv('rec-fondo-inicial') || null) : null,
     retiro_caja_fuerte:        cfImporte,
     // MEWS
@@ -737,22 +734,37 @@ async function saveFollowup() {
   if(!desc){ if(errEl) errEl.textContent='La descripción es obligatoria'; return; }
   if(errEl) errEl.textContent = '';
 
+  // BUG-27 FIX: si no hay shift_id en memoria, buscar turno del empleado de hoy
+  var resolvedShiftId = window._lastSavedShiftId || null;
+  if(!resolvedShiftId && currentUser){
+    try {
+      var allShiftsToday = await getDB('shifts');
+      var todayStr = today();
+      var myShift = allShiftsToday.find(function(s){
+        return s.employee_id === currentUser.id && s.fecha === todayStr;
+      });
+      if(myShift) resolvedShiftId = myShift.id;
+    } catch(e){}
+  }
+
   var ts = new Date().toISOString();
   var record = {
     id: genId(),
-    shift_id: window._lastSavedShiftId || null,
+    shift_id: resolvedShiftId,
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
+    departamento: currentUser.area || '—',
     fecha: today(),
     servicio: getRecTurnoValue() || getServicioValue() || '—',
-    categoria: 'Follow-up / Gestión',
+    categoria: 'Gestión pendiente',
     tipo_incidencia: tipo,
     descripcion: desc,
     accion_inmediata: '',
-    requiere_formacion: 'No',
-    requiere_disciplina: 'No',
+    requiere_formacion: 'no',
+    requiere_disciplina: 'no',
     estado: INCIDENT_STATES.ABIERTA,
-    severidad: 'Pendiente revision',
+    severidad: 'Media',
+    informado_responsable: 'no',
     staff_implicado_ids: '[]',
     staff_implicado_nombres: '[]',
     created_at: ts
@@ -762,11 +774,11 @@ async function saveFollowup() {
     var saved = await dbInsert('incidencias', record);
     if(!saved){ if(errEl) errEl.textContent='No se pudo guardar. Inténtalo de nuevo.'; return; }
     invalidateCache('incidencias');
-    toast('Incidencia registrada','ok');
+    toast('Gestión pendiente registrada','ok');
     closeFollowupModal();
     renderFollowupList();
   } catch(e){
-    if(errEl) errEl.textContent = 'No se pudo guardar. Inténtalo de nuevo.';
+    if(errEl) errEl.textContent = 'Error: '+(e.message||JSON.stringify(e));
   }
 }
 
