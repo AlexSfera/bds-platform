@@ -136,10 +136,10 @@ function calcRecDifs() {
   var fondoRec  = gv('rec-fondo-recibido');
   var cfImporte = gv('rec-cf-importe');
 
-  var difCash  = realCash  - mewsCash;
-  var difTar   = realTpv   - mewsTar;
-  var difStr   = realStr   - mewsStr;
-  var difTrans = realTrans - mewsTrans;
+  var difCash  = (fondoRec + mewsCash) - realCash;  // (Fondo + MEWS) - Contado real
+  var difTar   = mewsTar   - realTpv;               // MEWS - Real (sin fondo)
+  var difStr   = mewsStr   - realStr;               // MEWS - Real (sin fondo)
+  var difTrans = mewsTrans - realTrans;             // MEWS - Real (sin fondo)
   var difTotal = difCash + difTar + difStr + difTrans;
 
   function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
@@ -283,10 +283,10 @@ async function submitRecCaja() {
   if(isNaN(fondoTras)) errs.push('Fondo traspasado obligatorio');
   if(!turno)           errs.push('Selecciona turno: Mañana, Tarde o Noche');
 
-  var difCash  = realCash  - mewsCash;
-  var difTar   = realTpv   - mewsTar;
-  var difStr   = realStr   - mewsStr;
-  var difTrans = realTrans - mewsTrans;
+  var difCash  = (fondoRec + mewsCash) - realCash;
+  var difTar   = mewsTar   - realTpv;
+  var difStr   = mewsStr   - realStr;
+  var difTrans = mewsTrans - realTrans;
   var difTotal = difCash + difTar + difStr + difTrans;
 
   var hasError = Math.abs(difTotal) > 0.01;
