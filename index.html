@@ -653,15 +653,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
             <div class="grid1">
               <div class="fg"><label>Tipo de gestión</label>
                 <select id="g-tipo">
-                  <option value="">— Seleccionar (opcional) —</option>
-                  <option>Seguimiento para siguiente turno</option>
-                  <option>Comunicación pendiente (mantenimiento / otro dept.)</option>
-                  <option>Información a confirmar</option>
-                  <option>Revisión pendiente</option>
-                  <option>Traspaso de tarea operativa</option>
-                  <option>Material / stock pendiente</option>
-                  <option>Gestión con cliente pendiente</option>
-                  <option>Otro</option>
+                  <option value="">— Seleccionar tipo —</option>
                 </select>
               </div>
               <div class="fg"><label>Descripción <span class="req">*</span></label>
@@ -4072,15 +4064,18 @@ var _origInitTurnoForm = typeof initTurnoForm === 'function' ? initTurnoForm : n
 
 // ── Patch: populate incidencia tipo selector on turno screen ──
 (function() {
-  // Populate inci tipos when turno screen opens — safe non-recursive patch
   var _origShow = typeof showScreen === 'function' ? showScreen : null;
   if (_origShow && !showScreen._inciPatched) {
     var _showScreenBase = _origShow;
     showScreen = function(id) {
       _showScreenBase(id);
-      if (id === 'turno' && typeof populateInciTipoSelector === 'function' && currentUser) {
+      if (id === 'turno' && currentUser) {
         setTimeout(function() {
-          populateInciTipoSelector('i-tipo-incidencia', currentUser.area || 'Cocina');
+          var dept = currentUser.area || 'Cocina';
+          if (typeof populateInciTipoSelector === 'function')
+            populateInciTipoSelector('i-tipo-incidencia', dept);
+          if (typeof populateGestionTipoSelector === 'function')
+            populateGestionTipoSelector('g-tipo', dept);
         }, 150);
       }
     };

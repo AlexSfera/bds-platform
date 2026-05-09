@@ -1,47 +1,56 @@
 // ═══════════════════════════════════════════════════════════════
-// INCIDENCIA_TIPOS — Tipos de incidencia/gestión por departamento
+// INCIDENCIA_TIPOS — Tipos de incidencia por departamento
+// GESTION_TIPOS   — Tipos de gestión pendiente por departamento
 // Usado por: formulario de turno, dashboard, filtros
 // ═══════════════════════════════════════════════════════════════
 
+// ── INCIDENCIAS ───────────────────────────────────────────────
 var INCIDENCIA_TIPOS = {
 
   'Cocina': [
-    'Petición de cliente',
     'Queja / cliente insatisfecho',
     'Error de comanda / servicio',
     'Error de cobro / TPV',
-    'Ajuste operativo: descuento / anulación / invitación',
-    'Devolución',
+    'Ajuste operativo / invitación / anulación',
+    'Devolución de producto / plato',
     'Problema cocina-sala',
-    'Problema con recepción / PMS',
-    'Falta de producto',
-    'Calidad del producto',
-    'Limpieza / orden',
-    'APPCC / seguridad alimentaria',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Problema recepción / PMS',
+    'Falta de producto / rotura de stock',
+    'Calidad de producto',
+    'APPCC / limpieza / orden / seguridad alimentaria',
+    'Incumplimiento de procedimiento',
     'Retraso / disciplina',
-    'Accidente o seguridad',
-    'Tarea operativa pendiente',
+    'Accidente / seguridad laboral',
     'Otro'
   ],
 
   'Sala': [
-    'Petición de cliente',
     'Queja / cliente insatisfecho',
     'Error de comanda / servicio',
     'Error de cobro / TPV',
-    'Ajuste operativo: descuento / anulación / invitación',
-    'Devolución',
     'Problema cocina-sala',
-    'Problema con recepción / PMS',
-    'Falta de producto',
-    'Calidad del producto',
-    'Limpieza / orden',
-    'APPCC / seguridad alimentaria',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Problema recepción / PMS',
+    'Falta de producto / rotura de stock',
+    'Calidad de producto',
+    'Limpieza / orden / APPCC / seguridad alimentaria',
+    'Incumplimiento de procedimiento',
     'Retraso / disciplina',
-    'Accidente o seguridad',
-    'Tarea operativa pendiente',
+    'Accidente / seguridad',
+    'Otro'
+  ],
+
+  'Recepción': [
+    'Cliente insatisfecho / queja',
+    'Error en reserva / MEWS',
+    'Error en check-in / check-out',
+    'Error de cobro / caja / factura',
+    'Problema con habitación',
+    'Problema con housekeeping / mantenimiento',
+    'Problema con restaurante / room charge / régimen',
+    'Problema de acceso / llaves / pulsera',
+    'Comunicación interna / procedimiento incumplido',
+    'Seguridad / accidente / conducta conflictiva',
+    'Problema laboral / clima de equipo',
     'Otro'
   ],
 
@@ -49,37 +58,14 @@ var INCIDENCIA_TIPOS = {
     'Limpieza / orden',
     'Falta de producto / material',
     'APPCC / seguridad alimentaria',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Incumplimiento de procedimiento',
     'Retraso / disciplina',
-    'Accidente o seguridad',
-    'Tarea operativa pendiente',
-    'Otro'
-  ],
-
-  'Recepción': [
-    'Petición de cliente',
-    'Queja / cliente insatisfecho',
-    'Error check-in / check-out',
-    'Error de reserva',
-    'Reserva / lead pendiente',
-    'Comunicación pendiente',
-    'Error en MEWS',
-    'Error de cobro / caja',
-    'Room charge / pensiones / desayuno',
-    'Problema con habitación',
-    'Problema con housekeeping',
-    'Problema con restaurante',
-    'Documentación pendiente',
-    'Pulsera / acceso',
-    'Incumplimiento de procedimiento / comunicación interna',
-    'Retraso / disciplina',
-    'Accidente o seguridad',
+    'Accidente / seguridad',
     'Otro'
   ],
 
   'Recepción SYNCROLAB': [
-    'Petición de cliente',
-    'Queja / cliente insatisfecho',
+    'Cliente insatisfecho / queja',
     'Error de reserva',
     'Reserva / lead pendiente',
     'Comunicación pendiente',
@@ -91,9 +77,9 @@ var INCIDENCIA_TIPOS = {
     'Problema con hotel',
     'Problema con Nubimed / Bitrix24',
     'Documentación pendiente',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Incumplimiento de procedimiento',
     'Retraso / disciplina',
-    'Accidente o seguridad',
+    'Accidente / seguridad',
     'Otro'
   ],
 
@@ -109,7 +95,7 @@ var INCIDENCIA_TIPOS = {
     'Seguimiento cliente pendiente',
     'Evaluación pendiente',
     'Problema con recepción / sistema',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Incumplimiento de procedimiento',
     'Retraso / disciplina',
     'Otro'
   ],
@@ -126,7 +112,7 @@ var INCIDENCIA_TIPOS = {
     'Problema con recepción',
     'Documentación pendiente',
     'Problema de seguridad',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Incumplimiento de procedimiento',
     'Retraso / disciplina',
     'Otro'
   ],
@@ -142,8 +128,8 @@ var INCIDENCIA_TIPOS = {
     'Problema con lavandería',
     'Problema con mantenimiento',
     'Problema con recepción / estado habitación',
-    'Accidente o seguridad',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Accidente / seguridad',
+    'Incumplimiento de procedimiento',
     'Retraso / disciplina',
     'Otro'
   ],
@@ -178,8 +164,7 @@ var INCIDENCIA_TIPOS = {
     'Problema con proveedor',
     'Pedido urgente',
     'Compra no autorizada',
-    'Tarea operativa pendiente',
-    'Incumplimiento de procedimiento / comunicación interna',
+    'Incumplimiento de procedimiento',
     'Retraso',
     'Otro'
   ],
@@ -205,18 +190,126 @@ var INCIDENCIA_TIPOS = {
 
 };
 
-// Alias para compatibilidad con IDs del dashboard
-INCIDENCIA_TIPOS['FnB'] = INCIDENCIA_TIPOS['Cocina'];
-INCIDENCIA_TIPOS['RecepcionSyncrolab'] = INCIDENCIA_TIPOS['Recepción SYNCROLAB'];
+// Alias
+INCIDENCIA_TIPOS['FnB']                  = INCIDENCIA_TIPOS['Cocina'];
+INCIDENCIA_TIPOS['RecepcionSyncrolab']   = INCIDENCIA_TIPOS['Recepción SYNCROLAB'];
 
-// ── FUNCIÓN PRINCIPAL ─────────────────────────────────────────
-// Devuelve la lista de tipos para un departamento dado
+// ── GESTIONES PENDIENTES ──────────────────────────────────────
+var GESTION_TIPOS = {
+
+  'Cocina': [
+    'Producción / mise en place pendiente',
+    'Stock / material pendiente',
+    'Reservas / grupos / eventos',
+    'Cliente / huésped pendiente',
+    'Pedido específico',
+    'Otro'
+  ],
+
+  'Sala': [
+    'Cliente / huésped — petición especial',
+    'Reserva / grupo / evento pendiente',
+    'Reposición / pedido de material',
+    'Información a confirmar',
+    'Otro'
+  ],
+
+  'Recepción': [
+    'Check-in / llegada pendiente',
+    'Check-out / salida pendiente',
+    'Cobro / factura pendiente',
+    'Reserva MEWS pendiente de revisar',
+    'Comunicación con cliente pendiente',
+    'Habitación / housekeeping pendiente',
+    'Solicitud especial de cliente',
+    'Gestión con otro departamento',
+    'Grupo / evento pendiente',
+    'Otro'
+  ],
+
+  'Friegue': [
+    'Material / producto pendiente',
+    'Tarea de limpieza pendiente',
+    'Comunicación con cocina pendiente',
+    'Otro'
+  ],
+
+  'Recepción SYNCROLAB': [
+    'Cliente / lead pendiente',
+    'Reserva pendiente de confirmar',
+    'Cobro / factura pendiente',
+    'Comunicación pendiente',
+    'Documentación pendiente',
+    'Coordinación con hotel pendiente',
+    'Otro'
+  ],
+
+  'Entrenadores': [
+    'Sesión pendiente de planificar',
+    'Seguimiento cliente pendiente',
+    'Evaluación pendiente',
+    'Material / instalación pendiente',
+    'Comunicación interna pendiente',
+    'Otro'
+  ],
+
+  'Fisioterapeutas': [
+    'Tratamiento pendiente de registrar',
+    'Seguimiento clínico pendiente',
+    'Derivación pendiente',
+    'Documentación pendiente',
+    'Comunicación interna pendiente',
+    'Otro'
+  ],
+
+  'Housekeeping': [
+    'Habitación pendiente de revisar',
+    'Reposición de amenities / lencería',
+    'Coordinación con recepción pendiente',
+    'Coordinación con mantenimiento pendiente',
+    'Otro'
+  ],
+
+  'Mantenimiento': [
+    'Avería pendiente de reparar',
+    'Revisión preventiva pendiente',
+    'Proveedor / presupuesto pendiente',
+    'Material / repuesto pendiente',
+    'Comunicación interna pendiente',
+    'Otro'
+  ],
+
+  'Economato': [
+    'Pedido pendiente de tramitar',
+    'Albarán pendiente de revisar',
+    'Stock pendiente de reponer',
+    'Comunicación con proveedor pendiente',
+    'Otro'
+  ],
+
+  'RRHH': [
+    'Documentación pendiente',
+    'Comunicación pendiente',
+    'Gestión administrativa pendiente',
+    'Otro'
+  ]
+
+};
+
+// Alias
+GESTION_TIPOS['FnB']                = GESTION_TIPOS['Cocina'];
+GESTION_TIPOS['RecepcionSyncrolab'] = GESTION_TIPOS['Recepción SYNCROLAB'];
+
+// ── FUNCIONES ─────────────────────────────────────────────────
+
 function getInciTipos(dept) {
   return INCIDENCIA_TIPOS[dept] || INCIDENCIA_TIPOS['Cocina'];
 }
 
-// ── POBLAR SELECTOR EN FORMULARIO DE TURNO ────────────────────
-// Llama esto cuando el departamento del usuario esté definido
+function getGestionTipos(dept) {
+  return GESTION_TIPOS[dept] || ['Otro'];
+}
+
 function populateInciTipoSelector(selectId, dept) {
   var el = document.getElementById(selectId);
   if (!el) return;
@@ -228,10 +321,19 @@ function populateInciTipoSelector(selectId, dept) {
     }).join('');
 }
 
-// ── POBLAR SELECTOR EN FILTROS DEL DASHBOARD ─────────────────
+function populateGestionTipoSelector(selectId, dept) {
+  var el = document.getElementById(selectId);
+  if (!el) return;
+  var tipos = getGestionTipos(dept);
+  var currentVal = el.value;
+  el.innerHTML = '<option value="">— Seleccionar tipo —</option>'
+    + tipos.map(function(t) {
+      return '<option value="' + t + '"' + (t === currentVal ? ' selected' : '') + '>' + t + '</option>';
+    }).join('');
+}
+
 function populateDashInciFilter(dept) {
-  var selectIds = ['di-cat', 'it-tipo'];
-  selectIds.forEach(function(id) {
+  ['di-cat', 'it-tipo'].forEach(function(id) {
     var el = document.getElementById(id);
     if (!el) return;
     var tipos = getInciTipos(dept);
@@ -243,14 +345,26 @@ function populateDashInciFilter(dept) {
   });
 }
 
-// ── AUTO-INIT AL CARGAR ───────────────────────────────────────
-// Se ejecuta automáticamente cuando el usuario está logado
-// y tiene área definida
+function populateDashGestionFilter(dept) {
+  var el = document.getElementById('dg-tipo');
+  if (!el) return;
+  var tipos = getGestionTipos(dept);
+  var currentVal = el.value;
+  el.innerHTML = '<option value="">Todas</option>'
+    + tipos.map(function(t) {
+      return '<option value="' + t + '"' + (t === currentVal ? ' selected' : '') + '>' + t + '</option>';
+    }).join('');
+}
+
+// Auto-init al cargar
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function() {
     if (typeof currentUser !== 'undefined' && currentUser && currentUser.area) {
+      populateInciTipoSelector('i-tipo-incidencia', currentUser.area);
+      populateGestionTipoSelector('g-tipo', currentUser.area);
       populateInciTipoSelector('it-tipo', currentUser.area);
-      populateInciTipoSelector('inci-tipo', currentUser.area);
+      populateDashInciFilter(currentUser.area);
+      populateDashGestionFilter(currentUser.area);
     }
   }, 800);
 });
