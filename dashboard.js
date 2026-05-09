@@ -204,10 +204,11 @@ async function renderDashboard() {
   _showDashSkeleton();
 
   // Cargar datos
-  var allShifts = await getDB('shifts');
-  var allMermas = await getDB('merma');
-  var allIncis = await getDB('incidencias');
-  var allTareas = await getDB('tareas');
+  var allShifts   = await getDB('shifts');
+  var allMermas   = await getDB('merma');
+  var allIncis    = await getDB('incidencias');
+  var allTareas   = await getDB('tareas');
+  var allGestiones = await getDB('gestiones');
 
   var shiftMap = {};
   allShifts.forEach(function(s) { if (s.id) shiftMap[s.id] = s; });
@@ -225,9 +226,12 @@ async function renderDashboard() {
     if (!s) return false;
     return validAreas.indexOf(_dashCanonicalDept(s.area)) !== -1;
   });
-  incis  = allIncis.filter(function(i)  { return _isOperationalIncident(i) && inciMatchDept(i, validAreas); });
-  tareas = allTareas.filter(function(t) { return tareaMatchDept(t, validAreas); });
-  var gestiones = tareas.filter(_isGestionTask);
+  incis    = allIncis.filter(function(i) { return inciMatchDept(i, validAreas); });
+  tareas   = allTareas.filter(function(t) { return tareaMatchDept(t, validAreas); });
+  var gestiones = allGestiones.filter(function(g) {
+    if(!g || !g.id) return false;
+    return _dashMatchesDept(g, validAreas, shiftMap);
+  });
 
   // Filtrar por periodo
   if (desde) {
@@ -235,7 +239,7 @@ async function renderDashboard() {
     mermas = mermas.filter(function(m) { var s = shiftMap[m.shift_id]; return s && s.fecha >= desde; });
     incis = incis.filter(function(i) { return i.fecha >= desde; });
     tareas = tareas.filter(function(t) { return (t.created_at || t.deadline || '') >= desde; });
-    gestiones = gestiones.filter(function(t) { return (t.created_at || t.deadline || '') >= desde; });
+    gestiones = gestiones.filter(function(g) { return (g.fecha || g.created_at || '') >= desde; });
   }
   if (empFilt) shifts = shifts.filter(function(s) { return s.nombre === empFilt; });
   if (sevFilt) shifts = shifts.filter(function(s) { return s.gravedad_error === sevFilt; });
@@ -527,7 +531,7 @@ function _renderGestiones(gestiones, shiftMap) {
   var dgEstado = (document.getElementById('dg-estado') || {}).value || '';
 
   var filtered = gestiones.slice();
-  if (dgDept)   filtered = filtered.filter(function(t) { return (t.area || t.dept_destino || '') === dgDept; });
+  if (dgDept)   filtered = filtered.filter(function(t) { return (t.departamento || t.area || '') === dgDept; });
   if (dgEstado) filtered = filtered.filter(function(t) { return normalizeTaskState(t.estado) === dgEstado; });
 
   if (!filtered.length) {
@@ -552,16 +556,15 @@ function _renderGestiones(gestiones, shiftMap) {
       var stColor = normSt === TASK_STATES.ABIERTA ? 'b-red' : normSt === TASK_STATES.EN_PROCESO ? 'b-blue' : 'b-green';
       var vencida = isOverdue(t.deadline);
       var hora = _localHora(t.created_at);
-      var fechaVal = t.fecha || (t.created_at ? (t.created_at.replace(' ', 'T').slice(0, 10)) : '');
-      var tipo = formatDisplayValue(t.titulo || t.origen) || '—';
-      var tShift = shiftMap && shiftMap[t.shift_id];
-      var accionTomada = (tShift && formatDisplayValue(tShift.i_accion)) || formatDisplayValue(t.notas_cierre) || '—';
-      var acciones = '<button class="btn btn-secondary btn-sm" onclick="_dashShowDetail(\'' + t.id + '\',\'tareas\')">Ver</button>';
-      if (isAdmin) acciones += ' <button class="btn btn-danger btn-sm" onclick="_dashDeleteRecord(\'' + t.id + '\',\'tareas\')">Eliminar</button>';
+      var fechaVal = t.fecha || (t.created_at ? t.created_at.replace(' ','T').slice(0,10) : '');
+      var tipo = formatDisplayValue(t.tipo_gestion || t.titulo || t.origen) || '—';
+      var accionTomada = formatDisplayValue(t.accion_tomada) || '—';
+      var acciones = '<button class="btn btn-secondary btn-sm" onclick="_dashShowDetail(\'' + t.id + '\',\'gestiones\')">Ver</button>';
+      if (isAdmin) acciones += ' <button class="btn btn-danger btn-sm" onclick="_dashDeleteRecord(\'' + t.id + '\',\'gestiones\')">Eliminar</button>';
       return '<tr style="' + (vencida ? 'background:rgba(239,68,68,.05)' : '') + '">'
         + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(fechaVal) + '</td>'
         + '<td style="font-family:var(--font-mono);font-size:11px">' + hora + '</td>'
-        + '<td>' + deptBadge(t.area || t.dept_destino || '—') + '</td>'
+        + '<td>' + deptBadge(t.departamento || t.area || '—') + '</td>'
         + '<td style="font-size:12px">' + tipo + '</td>'
         + '<td style="font-size:12px;max-width:200px">' + formatDisplayValue(t.descripcion) + '</td>'
         + '<td><span class="badge ' + stColor + '">' + normSt + '</span></td>'
@@ -606,11 +609,14 @@ function _renderTareas(tareas) {
   }
 
   el.innerHTML = '<table>'
-    + '<tr><th>Prioridad</th><th>Descripción</th><th>Destino</th><th>Responsable</th><th>Deadline</th><th>Estado</th></tr>'
+    + '<tr><th>Creada</th><th>Prioridad</th><th>Descripción</th><th>Destino</th><th>Responsable</th><th>Deadline</th><th>Estado</th></tr>'
     + abiertas.map(function(t) {
       var vencida = isOverdue(t.deadline);
       var prioColor = t.prioridad === 'Alta' ? 'b-red' : t.prioridad === 'Media' ? 'b-yellow' : 'b-gray';
+      var fechaCreada = t.created_at ? t.created_at.replace(' ','T').slice(0,10) : (t.deadline || '');
+      var horaCreada = _localHora(t.created_at);
       return '<tr style="' + (vencida ? 'background:rgba(239,68,68,.05)' : '') + '">'
+        + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(fechaCreada) + (horaCreada !== '—' ? '<br><span style="color:var(--text3)">' + horaCreada + '</span>' : '') + '</td>'
         + '<td><span class="badge ' + prioColor + '">' + (t.prioridad || '—') + '</span></td>'
         + '<td style="font-size:12px;max-width:200px">' + formatDisplayValue(t.descripcion) + '</td>'
         + '<td>' + deptBadge(t.dept_destino) + '</td>'

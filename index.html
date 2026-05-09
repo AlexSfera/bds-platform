@@ -2129,8 +2129,9 @@ async function openShiftDetail(shiftId){
   }
 
   // ── BLOQUE 3: Gestión pendiente ──
-  var gestions3 = allTareas.concat(incis.filter(function(i){ return i.categoria === 'Gestión pendiente'; }));
-  var incisOp3  = incis.filter(function(i){ return i.categoria !== 'Gestión pendiente'; });
+  var allGest3  = (await getDB('gestiones')).filter(function(g){ return recordMatchesShift(g,s); });
+  var gestions3 = allTareas.concat(allGest3);
+  var incisOp3  = incis.slice();
   if(gestions3.length>0){
     html += '<div style="background:var(--bg2);border:1px solid var(--amber);border-radius:8px;padding:14px;margin-bottom:12px;">';
     html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.15em;margin-bottom:10px;">3 · GESTIONES PENDIENTES DECLARADAS</div>';
@@ -3397,53 +3398,36 @@ function submitRecKpi() {
 }
 
 function calcRecDifs() {
-  var mewsCash  = parseFloat((document.getElementById('rec-cash-mews')||{}).value)||0;
-  var mewsTar   = parseFloat((document.getElementById('rec-tarjeta-mews')||{}).value)||0;
-  var mewsStr   = parseFloat((document.getElementById('rec-stripe-mews')||{}).value)||0;
-  var mewsTrans = parseFloat((document.getElementById('rec-trans-mews')||{}).value)||0;
-  var realCash  = parseFloat((document.getElementById('rec-cash-real')||{}).value)||0;
-  var realTpv   = parseFloat((document.getElementById('rec-tpv-real')||{}).value)||0;
-  var realStr   = parseFloat((document.getElementById('rec-stripe-real')||{}).value)||0;
-  var realTrans = parseFloat((document.getElementById('rec-trans-real')||{}).value)||0;
-  var fondoRec  = parseFloat((document.getElementById('rec-fondo-recibido')||{}).value)||0;
-  var cfImporte = parseFloat((document.getElementById('rec-cf-importe')||{}).value)||0;
+  var mewsCash=parseFloat(document.getElementById('rec-cash-mews').value)||0;
+  var mewsTar=parseFloat(document.getElementById('rec-tarjeta-mews').value)||0;
+  var mewsStr=parseFloat(document.getElementById('rec-stripe-mews').value)||0;
+  var realCash=parseFloat(document.getElementById('rec-cash-real').value)||0;
+  var realTpv=parseFloat(document.getElementById('rec-tpv-real').value)||0;
+  var realStr=parseFloat(document.getElementById('rec-stripe-real').value)||0;
 
-  // Fórmula correcta: MEWS - (Real - Fondo). Solo cash descuenta el fondo.
-  var difCash  = mewsCash - (realCash - fondoRec);
-  var difTar   = mewsTar  - realTpv;
-  var difStr   = mewsStr  - realStr;
-  var difTrans = mewsTrans - realTrans;
-  var difTotal = difCash + difTar + difStr + difTrans;
+  var difCash=realCash-mewsCash;
+  var difTar=realTpv-mewsTar;
+  var difStr=realStr-mewsStr;
+  var difTotal=difCash+difTar+difStr;
 
-  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
-  function setColor(id, val){
-    var el=document.getElementById(id); if(!el) return;
-    el.textContent = fmt(val);
-    el.style.color = Math.abs(val)<0.01 ? 'var(--green)' : 'var(--red)';
+  function colorDif(val){
+    var el_color=val===0?'var(--green)':val>0?'var(--blue)':'var(--red)';
+    return {text:(val>=0?'+':'')+val.toFixed(2)+' €',color:el_color};
   }
-  setColor('rec-dif-cash',    difCash);
-  setColor('rec-dif-tarjeta', difTar);
-  setColor('rec-dif-stripe',  difStr);
-  setColor('rec-dif-trans',   difTrans);
-  setColor('rec-dif-total',   difTotal);
+  var dc=colorDif(difCash), dt=colorDif(difTar), ds=colorDif(difStr), dtt=colorDif(difTotal);
+  var setCss=function(id,obj){var el=document.getElementById(id);if(el){el.textContent=obj.text;el.style.color=obj.color;}};
+  setCss('rec-dif-cash',dc); setCss('rec-dif-tarjeta',dt); setCss('rec-dif-stripe',ds); setCss('rec-dif-total',dtt);
 
-  // Fondo esperado a traspasar
-  var fondoEsperado = fondoRec + mewsCash - cfImporte;
-  var feEl = document.getElementById('rec-fondo-esperado');
-  if(feEl){
-    feEl.textContent = fondoEsperado.toFixed(2)+' €';
-    feEl.style.color = fondoEsperado >= 0 ? 'var(--green)' : 'var(--red)';
-  }
+  var hasError=Math.abs(difTotal)>0.01;
+  var alertEl=document.getElementById('rec-dif-alert');
+  var expBlock=document.getElementById('rec-dif-exp-block');
+  if(alertEl) alertEl.style.display=hasError?'block':'none';
+  if(expBlock) expBlock.style.display=hasError?'block':'none';
 
-  var hasError = Math.abs(difTotal) > 0.01;
-  var alertEl  = document.getElementById('rec-dif-alert');
-  var expBlock = document.getElementById('rec-dif-exp-block');
-  if(alertEl)  alertEl.style.display  = hasError ? 'block' : 'none';
-  if(expBlock) expBlock.style.display = hasError ? 'block' : 'none';
-
-  var turno   = getRecTurnoValue ? getRecTurnoValue() : '';
-  var fondoIni = document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display = turno==='Noche' ? 'block' : 'none';
+  // Noche: show fondo inicial
+  var turno=getRecTurnoValue();
+  var fondoIni=document.getElementById('rec-fondo-inicial-block');
+  if(fondoIni) fondoIni.style.display=turno==='Noche'?'block':'none';
 }
 
 function openRecCajaModal(existingId) {
@@ -3557,11 +3541,11 @@ async function submitRecCaja() {
   if(isNaN(realStr))  errs.push('Stripe real obligatorio');
   if(isNaN(fondoTras)) errs.push('Fondo traspasado obligatorio');
 
-  var difCash  = mewsCash - (realCash - fondoRec);
-  var difTar   = mewsTar  - realTpv;
-  var difStr   = mewsStr  - realStr;
-  var difTrans = mewsTrans - realTrans;
-  var difTotal = difCash + difTar + difStr + difTrans;
+  var difCash=realCash-mewsCash;
+  var difTar=realTpv-mewsTar;
+  var difStr=realStr-mewsStr;
+  var difTrans=realTrans-mewsTrans;
+  var difTotal=difCash+difTar+difStr+difTrans;
 
   var hasError=Math.abs(difTotal)>0.01;
   if(hasError){
@@ -3819,14 +3803,14 @@ async function renderFollowupList() {
     return txt.indexOf('gestion') !== -1 || txt.indexOf('gestión') !== -1;
   }
 
-  var gestiones = allTareas.filter(function(t){ return isTaskOpen(t) && isGestion(t) && sameDept(t); });
-  var tareas = allTareas.filter(function(t){ return isTaskOpen(t) && !isGestion(t) && sameDept(t); });
-  var gestionesHistoricas = allIncis.filter(function(i){ return isIncidentOpen(i) && i.categoria === 'Gestión pendiente' && sameDept(i); });
+  var allGestiones = []; try { allGestiones = await getDB('gestiones'); } catch(e){ allGestiones = []; }
+  var gestiones = allGestiones.filter(function(g){ try{ return isIncidentOpen(g) && sameDept(g); }catch(e){ return false; } });
+  var tareas = allTareas.filter(function(t){ try{ return isTaskOpen(t) && sameDept(t); }catch(e){ return false; } });
   var incidencias = isSupervisorUser
-    ? allIncis.filter(function(i){ return isIncidentOpen(i) && i.categoria !== 'Gestión pendiente' && sameDept(i); })
+    ? allIncis.filter(function(i){ try{ return isIncidentOpen(i) && sameDept(i); }catch(e){ return false; } })
     : [];
 
-  var total = gestiones.length + gestionesHistoricas.length + tareas.length + incidencias.length;
+  var total = gestiones.length + tareas.length + incidencias.length;
   if(countEl) countEl.textContent = total ? '(' + total + ' activas)' : '(sin activas)';
 
   if(!total){
@@ -3884,9 +3868,8 @@ async function renderFollowupList() {
 
   // Gestiones pendientes — visible to all
   html += '<div style="margin-bottom:10px;">';
-  html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.12em;margin-bottom:6px;">GESTIONES PENDIENTES (' + (gestiones.length + gestionesHistoricas.length) + ')</div>';
-  html += buildTaskRows(gestiones, 'Gestiones pendientes');
-  if(gestionesHistoricas.length) html += buildIncidentRows(gestionesHistoricas);
+  html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.12em;margin-bottom:6px;">GESTIONES PENDIENTES (' + gestiones.length + ')</div>';
+  html += buildIncidentRows(gestiones);
   html += '</div>';
 
   html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">';
@@ -3964,30 +3947,24 @@ async function saveFollowup() {
 
   var ts = localTs();
   var record = {
-    id: genId(),
-    shift_id: resolvedShiftId,
-    employee_id: currentUser.id,
-    nombre: currentUser.nombre,
+    id:           genId(),
+    shift_id:     resolvedShiftId,
+    employee_id:  currentUser.id,
+    nombre:       currentUser.nombre,
     departamento: currentUser.area || '—',
-    fecha: today(),
-    servicio: getRecTurnoValue() || getServicioValue() || '—',
-    categoria: 'Gestión pendiente',
-    tipo_incidencia: tipo,
-    descripcion: desc,
-    accion_inmediata: '',
-    requiere_formacion: 'no',
-    requiere_disciplina: 'no',
+    area:         currentUser.area || '—',
+    fecha:        today(),
+    servicio:     getRecTurnoValue() || getServicioValue() || '—',
+    tipo_gestion: tipo,
+    descripcion:  desc,
+    accion_tomada: '',
     informado_responsable: 'no',
-    estado: INCIDENT_STATES.ABIERTA,
-    severidad: 'Media',
-    staff_implicado_ids: '[]',
-    staff_implicado_nombres: '[]',
-    created_at: ts
+    estado:       INCIDENT_STATES.ABIERTA,
+    created_at:   ts
   };
   try {
-    var saved = await dbInsert('incidencias', record);
-    if(!saved){ errEl.textContent = 'No se pudo guardar (respuesta vacía de BD)'; return; }
-    invalidateCache('incidencias');
+    await dbInsert('gestiones', record);
+    invalidateCache('gestiones');
     toast('Gestión pendiente registrada', 'ok');
     closeFollowupModal();
     renderFollowupList();
@@ -4113,49 +4090,48 @@ var _origInitTurnoForm = typeof initTurnoForm === 'function' ? initTurnoForm : n
 
 // ── Update calcRecDifs to include caja fuerte logic ──
 function calcRecDifs() {
-  var mewsCash  = parseFloat((document.getElementById('rec-cash-mews')||{}).value)||0;
-  var mewsTar   = parseFloat((document.getElementById('rec-tarjeta-mews')||{}).value)||0;
-  var mewsStr   = parseFloat((document.getElementById('rec-stripe-mews')||{}).value)||0;
-  var mewsTrans = parseFloat((document.getElementById('rec-trans-mews')||{}).value)||0;
-  var realCash  = parseFloat((document.getElementById('rec-cash-real')||{}).value)||0;
-  var realTpv   = parseFloat((document.getElementById('rec-tpv-real')||{}).value)||0;
-  var realStr   = parseFloat((document.getElementById('rec-stripe-real')||{}).value)||0;
-  var realTrans = parseFloat((document.getElementById('rec-trans-real')||{}).value)||0;
-  var fondoRec  = parseFloat((document.getElementById('rec-fondo-recibido')||{}).value)||0;
-  var cfImporte = parseFloat((document.getElementById('rec-cf-importe')||{}).value)||0;
+  var mewsCash = parseFloat((document.getElementById('rec-cash-mews')||{}).value)||0;
+  var mewsTar  = parseFloat((document.getElementById('rec-tarjeta-mews')||{}).value)||0;
+  var mewsStr  = parseFloat((document.getElementById('rec-stripe-mews')||{}).value)||0;
+  var mewsTrans= parseFloat((document.getElementById('rec-trans-mews')||{}).value)||0;
+  var realCash = parseFloat((document.getElementById('rec-cash-real')||{}).value)||0;
+  var realTpv  = parseFloat((document.getElementById('rec-tpv-real')||{}).value)||0;
+  var realStr  = parseFloat((document.getElementById('rec-stripe-real')||{}).value)||0;
+  var realTrans= parseFloat((document.getElementById('rec-trans-real')||{}).value)||0;
+  var fondoRec = parseFloat((document.getElementById('rec-fondo-recibido')||{}).value)||0;
+  var cfImporte= parseFloat((document.getElementById('rec-cf-importe')||{}).value)||0;
 
-  // FÓRMULA CORRECTA: MEWS - (Real - Fondo). Solo cash descuenta el fondo.
-  var difCash  = mewsCash - (realCash - fondoRec);
-  var difTar   = mewsTar  - realTpv;
-  var difStr   = mewsStr  - realStr;
-  var difTrans = mewsTrans - realTrans;
+  var difCash  = realCash - mewsCash;
+  var difTar   = realTpv  - mewsTar;
+  var difStr   = realStr  - mewsStr;
+  var difTrans = realTrans- mewsTrans;
   var difTotal = difCash + difTar + difStr + difTrans;
 
   function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
   function setColor(id, val){
     var el=document.getElementById(id); if(!el) return;
-    el.textContent = fmt(val);
-    el.style.color = Math.abs(val)<0.01 ? 'var(--green)' : 'var(--red)';
+    el.textContent=fmt(val);
+    el.style.color=Math.abs(val)<0.01?'var(--green)':val>0?'var(--blue)':'var(--red)';
   }
-  setColor('rec-dif-cash',    difCash);
+  setColor('rec-dif-cash', difCash);
   setColor('rec-dif-tarjeta', difTar);
-  setColor('rec-dif-stripe',  difStr);
-  setColor('rec-dif-trans',   difTrans);
-  setColor('rec-dif-total',   difTotal);
+  setColor('rec-dif-stripe', difStr);
+  setColor('rec-dif-trans', difTrans);
+  setColor('rec-dif-total', difTotal);
 
   var fondoEsperado = fondoRec + mewsCash - cfImporte;
-  var feEl = document.getElementById('rec-fondo-esperado');
+  var feEl=document.getElementById('rec-fondo-esperado');
   if(feEl){ feEl.textContent=fondoEsperado.toFixed(2)+' €'; feEl.style.color=fondoEsperado>=0?'var(--green)':'var(--red)'; }
 
-  var hasError = Math.abs(difTotal) > 0.01;
-  var alertEl  = document.getElementById('rec-dif-alert');
-  var expBlock = document.getElementById('rec-dif-exp-block');
-  if(alertEl)  alertEl.style.display  = hasError ? 'block' : 'none';
-  if(expBlock) expBlock.style.display = hasError ? 'block' : 'none';
+  var hasError=Math.abs(difTotal)>0.01;
+  var alertEl=document.getElementById('rec-dif-alert');
+  var expBlock=document.getElementById('rec-dif-exp-block');
+  if(alertEl) alertEl.style.display=hasError?'block':'none';
+  if(expBlock) expBlock.style.display=hasError?'block':'none';
 
-  var turno = typeof getRecTurnoValue==='function' ? getRecTurnoValue() : '';
-  var fondoIni = document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display = turno==='Noche' ? 'block' : 'none';
+  var turno=typeof getRecTurnoValue==='function'?getRecTurnoValue():'';
+  var fondoIni=document.getElementById('rec-fondo-inicial-block');
+  if(fondoIni) fondoIni.style.display=turno==='Noche'?'block':'none';
 }
 
 // ── renderFollowupList is called from initTurnoForm patch below ──

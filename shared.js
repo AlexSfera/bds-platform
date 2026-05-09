@@ -91,7 +91,7 @@ async function setDB(table, data) {
 
 // ── MIGRATION from localStorage to Supabase ──
 async function migrateFromLocalStorage() {
-  const tables = ['employees','shifts','merma','incidencias','tareas','cash_closings','rec_shift_data','closing_audit_log'];
+  const tables = ['employees','shifts','merma','incidencias','gestiones','tareas','cash_closings','rec_shift_data','closing_audit_log'];
   let migrated = 0;
   for (const t of tables) {
     try {
@@ -185,6 +185,7 @@ function genId(){ return Date.now().toString(36)+Math.random().toString(36).slic
 
 // ── DATE & FORMAT HELPERS ──
 function today(){ return new Date().toISOString().split('T')[0]; }
+function localTs(){ var d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,19).replace('T',' '); }
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){ if(!ts) return '—'; var d=new Date(ts); return d.toLocaleDateString('es-ES')+' '+d.toTimeString().slice(0,5); }
 function fmtDateTs(fecha,ts){ return fmtDate(fecha)+(ts?' '+new Date(ts).toTimeString().slice(0,5):''); }
@@ -353,7 +354,7 @@ async function pinOk(){
   currentUser=found; currentPin=''; updPin(); startApp();
 }
 function logout(){ currentUser=null; currentPin=''; updPin(); document.getElementById('app').style.display='none'; document.getElementById('login-screen').style.display='flex'; }
-document.addEventListener('keydown',e=>{ if(document.getElementById('login-screen').style.display==='none') return; if(e.key>='0'&&e.key<='9') pinPress(e.key); if(e.key==='Backspace') pinDel(); if(e.key==='Enter') pinOk(); });
+document.addEventListener('keydown',e=>{ var ls=document.getElementById('login-screen'); if(!ls||ls.style.display==='none') return; if(e.key>='0'&&e.key<='9') pinPress(e.key); if(e.key==='Backspace') pinDel(); if(e.key==='Enter') pinOk(); });
 
 // ═══════════════════════════════════════════════════════════════════════
 // APP
@@ -915,7 +916,7 @@ async function _doSaveTurno(){
   const horas    = parseFloat(document.getElementById('t-horas').value)||0;
   const resp     = _isRecSave ? null : document.getElementById('t-responsable').value;
   const obs      = (document.getElementById('t-obs')||{value:''}).value.trim();
-  const ts       = new Date().toISOString();
+  const ts       = localTs();
   const shiftId  = editingShiftId || genId();
 
   const employees = await getDB('employees');
@@ -1025,7 +1026,7 @@ async function _doSaveTurno(){
   }
   if(!skipMerma && mermaData.length) invalidateCache('merma');
 
-  // ── Save gestión pendiente como incidencia independiente ──
+  // ── Save gestión pendiente → tabla gestiones ──
   if(toggleState.gestion==='si'){
     const gTipoEl = document.getElementById('g-tipo');
     const gDescEl = document.getElementById('g-desc');
@@ -1033,34 +1034,27 @@ async function _doSaveTurno(){
     const gTipo   = gTipoEl ? gTipoEl.value : '';
     if(gDesc){
       const gRecord = {
-        id:         genId(),
-        shift_id:   shiftId,
-        employee_id: currentUser.id,
-        nombre:     currentUser.nombre,
-        area:       currentUser.area||'',
+        id:           genId(),
+        shift_id:     shiftId,
+        employee_id:  currentUser.id,
+        nombre:       currentUser.nombre,
+        area:         currentUser.area||'',
         departamento: currentUser.area||'',
         fecha,
         servicio,
-        categoria:  'Gestión pendiente',
-        tipo_incidencia: gTipo || 'Gestión pendiente',
-        descripcion: gDesc,
-        accion_inmediata: '',
+        tipo_gestion: gTipo || 'Otro',
+        descripcion:  gDesc,
         accion_tomada: '',
-        requiere_formacion: 'no',
-        requiere_disciplina: 'no',
+        estado:       INCIDENT_STATES.ABIERTA,
         informado_responsable: 'no',
-        estado:     INCIDENT_STATES.ABIERTA,
-        severidad:  'Media',
-        staff_implicado_ids: '[]',
-        staff_implicado_nombres: '[]',
-        created_at: ts
+        created_at:   ts
       };
       try {
-        await dbInsert('incidencias', gRecord);
-        invalidateCache('incidencias');
+        await dbInsert('gestiones', gRecord);
+        invalidateCache('gestiones');
       } catch(eG) {
         const alertArea = document.getElementById('turno-alert-area');
-        if(alertArea) alertArea.innerHTML='<div class="alert a-err">Error gestión: '+eG.message+'</div>';
+        if(alertArea) alertArea.innerHTML='<div class="alert a-err">Error al guardar gestión: '+eG.message+'</div>';
         return;
       }
     }
@@ -1124,30 +1118,34 @@ async function _doSaveTurno(){
     }
   }
 
-  // ── Save incidencia ──
+  // ── Save incidencia operativa → tabla incidencias ──
   if(toggleState.incidencia==='si'){
-    const descEl   = document.getElementById('i-desc');
-    const accionEl = document.getElementById('i-accion');
-    const staff    = getStaffImplicado();
+    const descEl     = document.getElementById('i-desc');
+    const accionEl   = document.getElementById('i-accion');
+    const staff      = getStaffImplicado();
     const tipoInciEl = document.getElementById('i-tipo-incidencia');
     const inciRecord = {
-      id:genId(), shift_id:shiftId,
-      employee_id:currentUser.id, nombre:currentUser.nombre,
-      fecha, servicio,
-      categoria:'Incidencia operativa',
-      severidad:'Media',
-      descripcion: descEl ? descEl.value.trim() : '',
+      id:           genId(),
+      shift_id:     shiftId,
+      employee_id:  currentUser.id,
+      nombre:       currentUser.nombre,
+      departamento: currentUser.area||'',
+      area:         currentUser.area||'',
+      fecha,
+      servicio,
+      categoria:    'Incidencia operativa',
+      tipo_incidencia: tipoInciEl ? tipoInciEl.value : '',
+      descripcion:  descEl ? descEl.value.trim() : '',
       accion_inmediata: accionEl ? accionEl.value.trim() : '',
       accion_tomada: '',
-      requiere_formacion: 'no',
+      requiere_formacion:  'no',
       requiere_disciplina: 'no',
       informado_responsable: 'no',
-      departamento: currentUser.area||'',
-      estado:INCIDENT_STATES.ABIERTA,
-      created_at:ts,
-      staff_implicado_ids: JSON.stringify(staff.ids),
+      estado:       INCIDENT_STATES.ABIERTA,
+      severidad:    'Media',
+      staff_implicado_ids:     JSON.stringify(staff.ids),
       staff_implicado_nombres: JSON.stringify(staff.nombres),
-      tipo_incidencia: tipoInciEl ? tipoInciEl.value : ''
+      created_at:   ts
     };
     try {
       await dbInsert('incidencias', inciRecord);
@@ -1155,7 +1153,7 @@ async function _doSaveTurno(){
       invalidateCache('incidencias');
     } catch(eI) {
       const alertArea=document.getElementById('turno-alert-area');
-      if(alertArea) alertArea.innerHTML='<div class="alert a-err">Error incidencia: '+eI.message+'</div>';
+      if(alertArea) alertArea.innerHTML='<div class="alert a-err">Error al guardar incidencia: '+eI.message+'</div>';
       return;
     }
   }
@@ -1257,14 +1255,14 @@ function buildInciObj(shiftId,fecha,servicio,ts){
     id:genId(),shift_id:shiftId,employee_id:currentUser.id,nombre:currentUser.nombre,
     fecha,servicio,
     categoria:'Reportada por empleado',
-    severidad:'Media',
+    severidad:'Pendiente revision',
     descripcion:descEl?descEl.value.trim():'',
     accion_inmediata:accionEl?accionEl.value.trim():'',
     staff_implicado_ids:JSON.stringify(staff.ids),
     staff_implicado_nombres:JSON.stringify(staff.nombres),
     tipo_incidencia: (document.getElementById('i-tipo-incidencia')||{}).value||'',
-    requiere_formacion:'no',
-    requiere_disciplina:'no',
+    requiere_formacion:'No',
+    requiere_disciplina:'No',
     estado:INCIDENT_STATES.ABIERTA,
     created_at:ts
   };
