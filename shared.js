@@ -1450,7 +1450,7 @@ function canProgressTask(t){
   if(state===TASK_STATES.VALIDADA || state===TASK_STATES.CERRADA) return false;
   if(isAdmin(currentUser)) return true;
   if(isSupervisor(currentUser)) return canViewDepartment(currentUser,t&&t.dept_destino);
-  return false; // BUG-39: empleado no puede cambiar estado de tareas
+  return currentUser.area===t.dept_destino; // Empleado puede avanzar tarea de su dpto
 }
 
 async function advanceTask(taskId,newEstado){
