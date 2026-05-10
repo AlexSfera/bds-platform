@@ -184,7 +184,7 @@ function deptBadge(d) {
 function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
 // ── DATE & FORMAT HELPERS ──
-function today(){ return new Date().toISOString().split('T')[0]; }
+function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function localTs(){ var d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,19).replace('T',' '); }
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){ if(!ts) return '—'; var d=new Date(ts); return d.toLocaleDateString('es-ES')+' '+d.toTimeString().slice(0,5); }
@@ -353,15 +353,7 @@ async function pinOk(){
   }
   currentUser=found; currentPin=''; updPin(); startApp();
 }
-function logout(){
-  currentUser=null;
-  var ap=document.getElementById('app');
-  if(ap) ap.style.display='none';
-  var bn=document.getElementById('bottom-nav');
-  if(bn) bn.style.display='none';
-  var ps=document.getElementById('portal-screen');
-  if(ps){ ps.style.display='flex'; ps.style.visibility=''; ps.style.pointerEvents=''; }
-}
+function logout(){ currentUser=null; currentPin=''; updPin(); document.getElementById('app').style.display='none'; document.getElementById('login-screen').style.display='flex'; }
 document.addEventListener('keydown',e=>{ var ls=document.getElementById('login-screen'); if(!ls||ls.style.display==='none') return; if(e.key>='0'&&e.key<='9') pinPress(e.key); if(e.key==='Backspace') pinDel(); if(e.key==='Enter') pinOk(); });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1316,7 +1308,7 @@ function bIncidentEstado(e){var s=normalizeIncidentState(e);if(s===INCIDENT_STAT
 // ═══════════════════════════════════════════════════════════════════════
 // TASKS — CREATE
 async function createTask(data){
-  const ts=new Date().toISOString();
+  const ts=localTs();
   if(data.origen && data.origen!=='manual' && !data.shift_id){ toast('No se pudo crear la tarea asociada al turno. Inténtalo de nuevo.','err'); return null; }
   var dlCheck=validateTaskDeadline(data.deadline);
   if(!dlCheck.ok){ toast(dlCheck.msg,'err'); return null; }
@@ -1327,6 +1319,12 @@ async function createTask(data){
   auditLog('CREATE_TASK',`→ ${task.dept_destino}: ${task.titulo}`);
   toast(`Tarea creada → ${task.dept_destino}`,'ok');
   return task;
+}
+function bGestionEstado(st){
+  if(!st||st==='Abierta') return '<span class="badge b-red">Abierta</span>';
+  if(st==='En proceso') return '<span class="badge b-yellow">En proceso</span>';
+  if(st==='Cerrada') return '<span class="badge b-green">Cerrada</span>';
+  return '<span class="badge b-gray">'+st+'</span>';
 }
 function openTaskModal(){
   setDeadlineLimits();
@@ -1452,7 +1450,7 @@ function canProgressTask(t){
   if(state===TASK_STATES.VALIDADA || state===TASK_STATES.CERRADA) return false;
   if(isAdmin(currentUser)) return true;
   if(isSupervisor(currentUser)) return canViewDepartment(currentUser,t&&t.dept_destino);
-  return currentUser.area===t.dept_destino;
+  return false; // BUG-39: empleado no puede cambiar estado de tareas
 }
 
 async function advanceTask(taskId,newEstado){
@@ -1462,7 +1460,7 @@ async function advanceTask(taskId,newEstado){
   if(targetState===TASK_STATES.VALIDADA && !canValidateTask(currentUser,tareas[idx])){toast('Solo Admin puede validar esta tarea.','err');return;}
   if(targetState===TASK_STATES.CERRADA && !canCloseTask(currentUser,tareas[idx])){toast('No tienes permiso para cerrar esta tarea.','err');return;}
   if(targetState===TASK_STATES.EN_PROCESO && !canProgressTask(tareas[idx])){toast('Solo el departamento destinatario puede avanzar esta tarea','err');return;}
-  const ts=new Date().toISOString();
+  const ts=localTs();
   const tUpdate = {estado:targetState, updated_at:ts};
   if(targetState===TASK_STATES.CERRADA){tUpdate.completada_por=currentUser.nombre;tUpdate.completada_ts=ts;}
   if(targetState===TASK_STATES.VALIDADA){tUpdate.verificada_por=currentUser.nombre;tUpdate.verificada_ts=ts;}
@@ -1585,7 +1583,7 @@ async function renderValidacion(){
 async function valAdvanceGestion(gid,isTask,newState){
   if(isTask){
     var tt=await getDB('tareas'); var t=tt.find(function(x){return x.id===gid;}); if(!t) return;
-    await dbUpdate('tareas',gid,{estado:TASK_STATES.EN_PROCESO,updated_at:new Date().toISOString()});
+    await dbUpdate('tareas',gid,{estado:TASK_STATES.EN_PROCESO,updated_at:localTs()});
     invalidateCache('tareas');
     auditLog('VAL_GESTION_ADVANCE',currentUser.nombre+' → En proceso: '+t.titulo+' (shift '+validatingShiftId+')');
   } else {
@@ -1609,7 +1607,7 @@ function valShowCloseGestionForm(gid,isTask){
 async function valSaveCloseGestion(gid,isTask){
   var txt=((document.getElementById('gclose-text-'+gid)||{}).value||'').trim();
   if(!txt){toast('El campo "Acción para cerrar" es obligatorio','err');return;}
-  var ts=new Date().toISOString();
+  var ts=localTs();
   if(isTask){
     var tt=await getDB('tareas'); var t=tt.find(function(x){return x.id===gid;}); if(!t) return;
     var tgMins=Math.round((Date.now()-new Date(t.created_at).getTime())/60000);
@@ -1625,6 +1623,36 @@ async function valSaveCloseGestion(gid,isTask){
   }
   toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);
 }
+
+async function valAdvanceGestionNew(gid, newState){
+  var gg=await getDB('gestiones'); var g=gg.find(function(x){return x.id===gid;}); if(!g) return;
+  await dbUpdate('gestiones',gid,{estado:newState,updated_at:localTs()});
+  invalidateCache('gestiones');
+  auditLog('VAL_GESTION_ADVANCE',currentUser.nombre+' → '+newState+': gestión '+gid+' (shift '+validatingShiftId+')');
+  toast('Estado actualizado','ok'); await openValidarModal(validatingShiftId);
+}
+function valShowCloseGestionNewForm(gid, shiftId){
+  var c=document.getElementById('g-btn-'+gid); if(!c) return;
+  c.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;width:100%;">'
+    +'<label style="font-size:11px;color:var(--text3);">Acción tomada para cerrar <span style="color:var(--red)">*</span></label>'
+    +'<textarea id="gnew-close-'+gid+'" rows="2" placeholder="Describe la acción tomada..." style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:6px 8px;resize:vertical;width:100%;box-sizing:border-box;"></textarea>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button class="vbtn vbtn-warn" onclick="valSaveCloseGestionNew(''+gid+'')">💾 Guardar cierre</button>'
+    +'<button class="vbtn" onclick="openValidarModal(''+shiftId+'')">Cancelar</button>'
+    +'</div></div>';
+}
+async function valSaveCloseGestionNew(gid){
+  var txt=((document.getElementById('gnew-close-'+gid)||{}).value||'').trim();
+  if(!txt){toast('Acción tomada obligatoria','err');return;}
+  var gg=await getDB('gestiones'); var g=gg.find(function(x){return x.id===gid;}); if(!g) return;
+  var tgMins=Math.round((Date.now()-new Date(g.created_at).getTime())/60000);
+  var ts=localTs();
+  await dbUpdate('gestiones',gid,{estado:'Cerrada',accion_tomada:txt,cerrado_por:currentUser.nombre,cerrado_ts:ts,tiempo_gestion:tgMins,updated_at:ts});
+  invalidateCache('gestiones');
+  auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
+  toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);
+}
+
 async function valAdvanceInci(iid){
   await dbUpdate('incidencias',iid,{estado:INCIDENT_STATES.EN_PROCESO});
   invalidateCache('incidencias');
@@ -1646,7 +1674,7 @@ async function valSaveCloseInci(iid){
   var txt=((document.getElementById('iclose-text-'+iid)||{}).value||'').trim();
   if(!txt){toast('El campo "Acción para cerrar" es obligatorio','err');return;}
   var ii=await getDB('incidencias'); var inc=ii.find(function(x){return x.id===iid;}); if(!inc) return;
-  var ts=new Date().toISOString();
+  var ts=localTs();
   var tgMins=Math.round((Date.now()-new Date(inc.created_at).getTime())/60000);
   await dbUpdate('incidencias',iid,{estado:INCIDENT_STATES.CERRADA,accion_inmediata:txt,cerrado_ts:ts,tiempo_gestion:tgMins});
   invalidateCache('incidencias');
@@ -1667,6 +1695,8 @@ async function openValidarModal(shiftId){
   const incis=allIncis.filter(function(i){return recordMatchesShift(i,s);});
   const allTareas=await getDB('tareas');
   const shiftTareas=allTareas.filter(function(t){return recordMatchesShift(t,s);});
+  const allGestiones=await getDB('gestiones');
+  const shiftGestiones=allGestiones.filter(function(g){return g.shift_id===shiftId || g.employee_id===s.employee_id;});
   document.getElementById('mv-title').textContent=`${formatDisplayValue(s.nombre)} — ${fmtDateTs(s.fecha,s.created_at)} — ${formatServiceOrTurn(s.servicio)}`;
   // ── BUILD FULL SHIFT DETAIL FOR SUPERVISOR ──
   var info = '';
@@ -1705,40 +1735,36 @@ async function openValidarModal(shiftId){
     }catch(e){}
   }
 
-  // Block 3: Gestiones pendientes declaradas
-  var gestionesIncis = incis.filter(function(i){ return i.categoria === 'Gestión pendiente'; });
-  var gestionesList = shiftTareas.concat(gestionesIncis);
+  // Block 3: Gestiones pendientes — tabla gestiones (BUG-27b fix)
   var canActOnStates = isSupervisor(currentUser) || isAdmin(currentUser);
-  if(gestionesList.length>0){
-    gestionesList.forEach(function(g){
-      var isTask = !!g.dept_destino;
-      var gState = isTask ? normalizeTaskState(g.estado) : normalizeIncidentState(g.estado);
-      info += '<div style="background:var(--bg);border:1px solid var(--amber);border-radius:8px;padding:12px;margin-bottom:10px;">';
-      info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.15em;margin-bottom:8px;">GESTIONES PENDIENTES DECLARADAS</div>';
-      info += '<div style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
-      if(g.tipo_incidencia || g.origen) info += '<div><span style="color:var(--text3)">Tipo: </span><span class="badge b-yellow">'+formatDisplayValue(g.tipo_incidencia || g.origen)+'</span></div>';
-      if(g.estado) info += '<div><span style="color:var(--text3)">Estado: </span>'+(isTask ? bTaskEstado(g.estado) : bIncidentEstado(g.estado))+'</div>';
-      if(g.dept_destino) info += '<div><span style="color:var(--text3)">Departamento destino: </span>'+deptBadge(g.dept_destino)+'</div>';
-      if(g.deadline) info += '<div><span style="color:var(--text3)">Deadline: </span>'+fmtDate(g.deadline)+'</div>';
-      info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Descripción: </span><strong>'+formatDisplayValue(g.descripcion || g.titulo)+'</strong></div>';
+  if(shiftGestiones.length>0){
+    info += '<div style="background:var(--bg);border:1px solid var(--amber);border-radius:8px;padding:12px;margin-bottom:10px;">';
+    info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.15em;margin-bottom:8px;">GESTIONES PENDIENTES ('+shiftGestiones.length+')</div>';
+    shiftGestiones.forEach(function(g){
+      var gState = g.estado || 'Abierta';
+      info += '<div style="border-top:1px solid var(--border);padding:10px 0;">';
+      info += '<div style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
+      if(g.tipo_gestion) info += '<div><span style="color:var(--text3)">Tipo: </span><span class="badge b-yellow">'+formatDisplayValue(g.tipo_gestion)+'</span></div>';
+      info += '<div><span style="color:var(--text3)">Estado: </span>'+bGestionEstado(gState)+'</div>';
+      info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Descripción: </span><strong>'+formatDisplayValue(g.descripcion)+'</strong></div>';
+      if(g.accion_tomada) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Acción tomada: </span>'+formatDisplayValue(g.accion_tomada)+'</div>';
       info += '</div>';
-      var isClosed = isTask ? (gState===TASK_STATES.CERRADA||gState===TASK_STATES.VALIDADA) : (gState===INCIDENT_STATES.CERRADA||gState===INCIDENT_STATES.VALIDADA);
+      var isClosed = gState==='Cerrada';
       if(isClosed){
-        var closedTs = isTask ? (g.completado_ts||g.completada_ts) : (g.cerrado_ts);
-        var tg = g.tiempo_gestion;
         info += '<div style="margin-top:6px;font-size:11px;color:var(--text3);">'
-          +(closedTs?'Cerrado: <strong>'+fmtTs(closedTs)+'</strong>':'')
-          +(tg?' · Tiempo de gestión: <strong>'+fmtTiempoGestion(tg)+'</strong>':'')
+          +(g.cerrado_ts?'Cerrado: <strong>'+fmtTs(g.cerrado_ts)+'</strong>':'')
+          +(g.tiempo_gestion?' · Tiempo: <strong>'+fmtTiempoGestion(g.tiempo_gestion)+'</strong>':'')
+          +(g.cerrado_por?' · Por: <strong>'+formatDisplayValue(g.cerrado_por)+'</strong>':'')
           +'</div>';
       } else if(canActOnStates){
-        var isOpen = isTask ? gState===TASK_STATES.ABIERTA : gState===INCIDENT_STATES.ABIERTA;
-        var gBtn = isOpen
-          ? '<button class="vbtn vbtn-primary" onclick="valAdvanceGestion(\''+g.id+'\','+isTask+',\'En proceso\')">▶ En proceso</button>'
-          : '<button class="vbtn vbtn-warn" onclick="valShowCloseGestionForm(\''+g.id+'\','+isTask+')">✓ Cerrar gestión</button>';
+        var gBtn = gState==='Abierta'
+          ? '<button class="vbtn vbtn-primary" onclick="valAdvanceGestionNew(''+g.id+'','En proceso')">▶ En proceso</button>'
+          : '<button class="vbtn vbtn-warn" onclick="valShowCloseGestionNewForm(''+g.id+'',''+shiftId+'')">✓ Cerrar gestión</button>';
         info += '<div id="g-btn-'+g.id+'" style="margin-top:8px;">'+gBtn+'</div>';
       }
       info += '</div>';
     });
+    info += '</div>';
   } else {
     info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">Sin gestiones pendientes declaradas</div>';
   }
@@ -1898,7 +1924,7 @@ async function doValidacion(newEstado){
   var updatePayload = {
     estado: newEstado,
     validado_por: currentUser.nombre,
-    validado_ts: new Date().toISOString(),
+    validado_ts: localTs(),
     comentario_validador: comentario,
     fio: fio,
     gravedad_error: valGravedad,
@@ -2180,7 +2206,7 @@ async function saveEmpleado(){
     validador: parseInt(document.getElementById('emp-val').value)||0,
     rol: document.getElementById('emp-rol').value,
     obs: (document.getElementById('emp-obs')||{value:''}).value.trim(),
-    updated_at: new Date().toISOString()
+    updated_at: localTs()
   };
   // Explicit payload - ensure coste is always sent as number
   var empPayload = {
@@ -2214,7 +2240,7 @@ async function saveEmpleado(){
   } else {
     empPayload.id = 'E' + Date.now();
     empPayload.fecha_alta = today();
-    empPayload.created_at = new Date().toISOString();
+    empPayload.created_at = localTs();
     await dbInsert('employees', empPayload);
   }
   invalidateCache('employees');

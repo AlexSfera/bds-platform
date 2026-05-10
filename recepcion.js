@@ -274,7 +274,7 @@ async function submitRecCaja() {
   var errEl2 = document.getElementById('rec-caja-err');
   if(errEl2) errEl2.textContent = '';
 
-  var ts    = new Date().toISOString();
+  var ts    = localTs();
   var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : today();
 
   // BUG-16 FIX: nombres de columnas reales de recepcion_cash
@@ -467,7 +467,7 @@ async function reabrirCajaRec(cajaId) {
       estado: 'reabierto',
       reabierto_por: currentUser.nombre,
       comentario: motivo.trim(),
-      updated_at: new Date().toISOString()
+      updated_at: localTs()
     });
     await auditLog('REC_CAJA_REABRIR', 'Caja '+cajaId+' reabierta por '+currentUser.nombre+' — '+motivo.trim());
     invalidateCache(REC_TABLE);
@@ -506,7 +506,7 @@ async function reabrirTurnoValidado(shiftId) {
       estado: 'En corrección',
       comentario_validador: 'Reabierto por '+currentUser.nombre+': '+motivo.trim(),
       validado_por: null, validado_ts: null,
-      updated_at: new Date().toISOString()
+      updated_at: localTs()
     });
     await auditLog('REOPEN_SHIFT', currentUser.nombre+' reabrió turno '+shiftId+' — '+motivo.trim());
     invalidateCache('shifts');
@@ -688,7 +688,7 @@ async function saveFollowup() {
     } catch(e){}
   }
 
-  var ts = new Date().toISOString();
+  var ts = localTs();
   var record = {
     id: genId(),
     shift_id: resolvedShiftId,
@@ -742,7 +742,7 @@ async function submitCloseFollowup() {
   if(!accion){    if(errEl) errEl.textContent='La acción realizada es obligatoria'; return; }
   if(!resultado){ if(errEl) errEl.textContent='El resultado es obligatorio'; return; }
 
-  var ts = new Date().toISOString();
+  var ts = localTs();
   try {
     var allIncis = await getDB('incidencias');
     var inci = allIncis.find(function(i){ return i.id === _fuCloseId; });

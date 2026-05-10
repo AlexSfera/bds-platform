@@ -1355,8 +1355,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <input type="number" id="rec-trans-mews" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()"></div>
       <div class="fg"><label>Transferencias real (€)</label>
         <input type="number" id="rec-trans-real" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()"></div>
-      <div class="fg"><label>Δ Transferencias</label>
-        <div id="rec-dif-trans" style="font-family:var(--font-mono);font-size:15px;font-weight:700;padding:8px 0;">—</div></div>
+
     </div>
 
     <!-- CARGOS HOTEL -->
@@ -1390,10 +1389,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:12px;">
       <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">DIFERENCIAS CALCULADAS</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
         <div><div style="font-size:11px;color:var(--text3);">Δ Cash</div><div id="rec-dif-cash" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
         <div><div style="font-size:11px;color:var(--text3);">Δ Tarjeta</div><div id="rec-dif-tarjeta" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
         <div><div style="font-size:11px;color:var(--text3);">Δ Stripe</div><div id="rec-dif-stripe" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
+        <div><div style="font-size:11px;color:var(--text3);">Δ Transferencia</div><div id="rec-dif-trans" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
       </div>
       <div style="text-align:center;padding:10px;background:var(--bg4);border-radius:6px;">
         <div style="font-size:11px;color:var(--text3);">Diferencia operativa total</div>
@@ -1648,7 +1648,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-reabrir')">Cancelar</button>
-      <button class="btn btn-warn" onclick="saveReopenShift()">↩ Reabrir Informe</button>
+      <button class="btn btn-warn" onclick="saveReopenShift()">↩ Devolver al empleado</button>
     </div>
   </div>
 </div>
