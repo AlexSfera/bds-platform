@@ -274,7 +274,7 @@ async function submitRecCaja() {
   var errEl2 = document.getElementById('rec-caja-err');
   if(errEl2) errEl2.textContent = '';
 
-  var ts    = localTs();
+  var ts    = new Date().toISOString();
   var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : today();
 
   // BUG-16 FIX: nombres de columnas reales de recepcion_cash
@@ -467,7 +467,7 @@ async function reabrirCajaRec(cajaId) {
       estado: 'reabierto',
       reabierto_por: currentUser.nombre,
       comentario: motivo.trim(),
-      updated_at: localTs()
+      updated_at: new Date().toISOString()
     });
     await auditLog('REC_CAJA_REABRIR', 'Caja '+cajaId+' reabierta por '+currentUser.nombre+' — '+motivo.trim());
     invalidateCache(REC_TABLE);
@@ -506,7 +506,7 @@ async function reabrirTurnoValidado(shiftId) {
       estado: 'En corrección',
       comentario_validador: 'Reabierto por '+currentUser.nombre+': '+motivo.trim(),
       validado_por: null, validado_ts: null,
-      updated_at: localTs()
+      updated_at: new Date().toISOString()
     });
     await auditLog('REOPEN_SHIFT', currentUser.nombre+' reabrió turno '+shiftId+' — '+motivo.trim());
     invalidateCache('shifts');
@@ -536,10 +536,11 @@ async function renderFollowupList() {
     ? 'Gestiones pendientes, tareas e incidencias operativas del departamento.'
     : 'Gestiones pendientes y tareas visibles para tu departamento.';
 
-  var allIncis = [], allTareas = [], allShifts = [];
-  try { allIncis  = await getDB('incidencias'); } catch(e){}
-  try { allTareas = await getDB('tareas');      } catch(e){}
-  try { allShifts = await getDB('shifts');      } catch(e){}
+  var allIncis = [], allTareas = [], allShifts = [], allGestiones = [];
+  try { allIncis     = await getDB('incidencias'); } catch(e){}
+  try { allTareas    = await getDB('tareas');      } catch(e){}
+  try { allShifts    = await getDB('shifts');      } catch(e){}
+  try { allGestiones = await getDB('gestiones');   } catch(e){}
 
   var shiftMap = {};
   allShifts.forEach(function(s){ if(s.id) shiftMap[s.id] = s; });
@@ -557,14 +558,41 @@ async function renderFollowupList() {
     return txt.indexOf('gestion') !== -1 || txt.indexOf('gestión') !== -1;
   }
 
-  var gestiones         = allTareas.filter(function(t){ return isTaskOpen(t) && isGestion(t) && sameDept(t); });
-  var tareas            = allTareas.filter(function(t){ return isTaskOpen(t) && !isGestion(t) && sameDept(t); });
-  var gestionesHistoric = allIncis.filter(function(i){ return isIncidentOpen(i) && i.categoria === 'Gestión pendiente' && sameDept(i); });
-  var incidencias       = isSupervisorUser
-    ? allIncis.filter(function(i){ return isIncidentOpen(i) && i.categoria !== 'Gestión pendiente' && sameDept(i); })
-    : [];
+  // ── GESTIONES: todos del mismo dpto pueden ver + gestionar + cerrar ──
+  var gestiones = allGestiones.filter(function(g){
+    if(isAdmin(currentUser) || isSupervisorUser) return sameDept(g);
+    // Empleado: todas las gestiones de su departamento (no solo las propias)
+    return normalizeDeptName(g.departamento||g.area||'') === normalizeDeptName(dept)
+      && g.estado !== 'Cerrada';
+  }).filter(function(g){ return g.estado !== 'Cerrada'; });
 
-  var total = gestiones.length + gestionesHistoric.length + tareas.length + incidencias.length;
+  // ── TAREAS: empleados del dpto destino + empleado que la creó + admin ──
+  var tareas = allTareas.filter(function(t){
+    if(!isTaskOpen(t)) return false;
+    if(isAdmin(currentUser) || isSupervisorUser) return sameDept(t);
+    // Empleado: dpto destino O quien la creó
+    var esDeptDestino = normalizeDeptName(t.dept_destino||'') === normalizeDeptName(dept);
+    var esCreador = t.creado_por === currentUser.nombre || t.employee_id === currentUser.id;
+    return esDeptDestino || esCreador;
+  });
+
+  // ── INCIDENCIAS: empleado ve solo las suyas y solo hasta que se cierren ──
+  var incidencias;
+  if(isAdmin(currentUser) || isSupervisorUser){
+    incidencias = allIncis.filter(function(i){
+      return isIncidentOpen(i) && sameDept(i);
+    });
+  } else {
+    // Empleado: solo las suyas propias, y solo si no están cerradas
+    incidencias = allIncis.filter(function(i){
+      var esSuya = i.employee_id === currentUser.id || i.nombre === currentUser.nombre;
+      var abierta = normalizeIncidentState(i.estado) === INCIDENT_STATES.ABIERTA
+                 || normalizeIncidentState(i.estado) === INCIDENT_STATES.EN_PROCESO;
+      return esSuya && abierta;
+    });
+  }
+
+  var total = gestiones.length + tareas.length + incidencias.length;
   if(countEl) countEl.textContent = total ? '('+total+' activas)' : '(sin activas)';
 
   if(!total){
@@ -578,9 +606,12 @@ async function renderFollowupList() {
       + list.map(function(row){
         var acciones = '';
         var st = normalizeTaskState(row.estado);
-        if(canProgressTask(row) && st === TASK_STATES.ABIERTA)
+        var esDeptDestino = normalizeDeptName(row.dept_destino||'') === normalizeDeptName(dept);
+        var puedeAvanzar = isAdmin(currentUser) || isSupervisorUser || esDeptDestino;
+        // Empleado origen: solo ve (no puede avanzar ni cerrar)
+        if(puedeAvanzar && st === TASK_STATES.ABIERTA)
           acciones += '<button class="btn btn-secondary btn-sm" onclick="advanceTask(\''+row.id+'\',\'En proceso\')">▶ En proceso</button> ';
-        if(canCloseTask(currentUser, row) && st === TASK_STATES.EN_PROCESO)
+        if((isAdmin(currentUser) || isSupervisorUser || (esDeptDestino && st === TASK_STATES.EN_PROCESO)) && st === TASK_STATES.EN_PROCESO)
           acciones += '<button class="btn btn-secondary btn-sm" onclick="advanceTask(\''+row.id+'\',\'Cerrada\')">✓ Cerrar</button>';
         return '<tr>'
           + '<td style="font-family:var(--font-mono);font-size:11px;'+(isOverdue(row.deadline)?'color:var(--red);font-weight:700':'')+'">'
@@ -598,14 +629,16 @@ async function renderFollowupList() {
     if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
     return '<table><tr><th>Tipo</th><th>Descripción</th><th>Empleado</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr>'
       + list.map(function(i){
-        var canClose = isAdminUser || (isSupervisorUser && canViewDepartment(currentUser, getRecordDepartment(i, shiftMap)));
-        var normI    = normalizeIncidentState(i.estado);
-        var acciones = canClose
+        // Empleado: solo lectura (ve la incidencia hasta que se cierra, sin botones)
+        // Jefe/Admin: pueden gestionar y cerrar
+        var canManage = isAdminUser || (isSupervisorUser && canViewDepartment(currentUser, getRecordDepartment(i, shiftMap)));
+        var normI     = normalizeIncidentState(i.estado);
+        var acciones  = canManage
           ? (normI === INCIDENT_STATES.ABIERTA
               ? '<button class="btn btn-secondary btn-sm" onclick="advanceIncident(\''+i.id+'\',\'En proceso\')">▶ En proceso</button> '
               : '')
             + '<button class="btn btn-secondary btn-sm" onclick="openCloseFollowup(\''+i.id+'\')">✓ Cerrar</button>'
-          : '—';
+          : '👁 Solo lectura';
         return '<tr>'
           + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</td>'
           + '<td style="font-size:12px;max-width:200px;">'+formatDisplayValue(i.descripcion).slice(0,70)+(i.descripcion&&i.descripcion.length>70?'...':'')+'</td>'
@@ -617,10 +650,33 @@ async function renderFollowupList() {
       }).join('') + '</table>';
   }
 
+    function buildGestionRows(list){
+    if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
+    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr>'
+      + list.map(function(g){
+        var gState = g.estado || 'Abierta';
+        // Todos del mismo dpto pueden gestionar + cerrar
+        var canAct = isAdmin(currentUser) || isSupervisorUser
+          || normalizeDeptName(g.departamento||g.area||'') === normalizeDeptName(dept);
+        var acciones = '';
+        if(canAct){
+          if(gState === 'Abierta')
+            acciones = '<button class="btn btn-secondary btn-sm" onclick="advanceGestion(\''+g.id+'\',\'En proceso\')">▶ En proceso</button>';
+          else if(gState === 'En proceso')
+            acciones = '<button class="btn btn-secondary btn-sm" onclick="openCloseGestion(\''+g.id+'\')">✓ Cerrar</button>';
+        }
+        return '<tr>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(g.tipo_gestion)+'</td>'
+          + '<td style="font-size:12px;max-width:220px;">'+formatDisplayValue(g.descripcion)+'</td>'
+          + '<td>'+bGestionEstado(gState)+'</td>'
+          + '<td>'+(acciones||'—')+'</td>'
+          + '</tr>';
+      }).join('') + '</table>';
+  }
+
   var html = '<div style="margin-bottom:10px;">'
-    + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.12em;margin-bottom:6px;">GESTIONES PENDIENTES ('+(gestiones.length+gestionesHistoric.length)+')</div>'
-    + buildTaskRows(gestiones)
-    + (gestionesHistoric.length ? buildIncidentRows(gestionesHistoric) : '')
+    + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.12em;margin-bottom:6px;">GESTIONES PENDIENTES ('+gestiones.length+')</div>'
+    + buildGestionRows(gestiones)
     + '</div>';
 
   html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">'
@@ -636,6 +692,38 @@ async function renderFollowupList() {
   }
 
   el.innerHTML = html;
+}
+
+// ── Gestiones en Mi Turno (BUG-39) ──────────────────────────
+async function advanceGestion(gid, newState){
+  await dbUpdate('gestiones', gid, {estado: newState, updated_at: localTs()});
+  invalidateCache('gestiones');
+  auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
+  toast('Estado actualizado', 'ok');
+  if(typeof renderFollowupList === 'function') renderFollowupList();
+}
+
+async function openCloseGestion(gid){
+  var txt = prompt('Acción tomada para cerrar esta gestión (obligatorio):');
+  if(txt === null) return;
+  if(!txt.trim()){ toast('Acción obligatoria', 'err'); return; }
+  var gg = await getDB('gestiones');
+  var g = gg.find(function(x){ return x.id === gid; });
+  if(!g){ toast('Gestión no encontrada', 'err'); return; }
+  var tgMins = Math.round((Date.now() - new Date(g.created_at).getTime()) / 60000);
+  var ts = localTs();
+  await dbUpdate('gestiones', gid, {
+    estado: 'Cerrada',
+    accion_tomada: txt.trim(),
+    cerrado_por: currentUser.nombre,
+    cerrado_ts: ts,
+    tiempo_gestion: tgMins,
+    updated_at: ts
+  });
+  invalidateCache('gestiones');
+  auditLog('GESTION_CERRADA', 'id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt.trim());
+  toast('Gestión cerrada', 'ok');
+  if(typeof renderFollowupList === 'function') renderFollowupList();
 }
 
 async function openNewFollowup() {
@@ -688,7 +776,7 @@ async function saveFollowup() {
     } catch(e){}
   }
 
-  var ts = localTs();
+  var ts = new Date().toISOString();
   var record = {
     id: genId(),
     shift_id: resolvedShiftId,
@@ -742,7 +830,7 @@ async function submitCloseFollowup() {
   if(!accion){    if(errEl) errEl.textContent='La acción realizada es obligatoria'; return; }
   if(!resultado){ if(errEl) errEl.textContent='El resultado es obligatorio'; return; }
 
-  var ts = localTs();
+  var ts = new Date().toISOString();
   try {
     var allIncis = await getDB('incidencias');
     var inci = allIncis.find(function(i){ return i.id === _fuCloseId; });
@@ -840,3 +928,10 @@ document.addEventListener('DOMContentLoaded', function(){
     if(typeof renderFollowupList === 'function') renderFollowupList();
   }, 500);
 });
+
+function bGestionEstado(st){
+  if(!st||st==='Abierta') return '<span class="badge b-red">Abierta</span>';
+  if(st==='En proceso') return '<span class="badge b-yellow">En proceso</span>';
+  if(st==='Cerrada') return '<span class="badge b-green">Cerrada</span>';
+  return '<span class="badge b-gray">'+st+'</span>';
+}
