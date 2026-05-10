@@ -20,9 +20,40 @@ function openCajaForm(existingId) {
   ['caja-efectivo','caja-tarjeta','caja-room','caja-alexander',
    'caja-pension-d','caja-pension-m','caja-pension-c','caja-propinas',
    'caja-desc-imp','caja-desc-num','caja-anul-imp','caja-anul-num',
-   'caja-inv-imp','caja-inv-num','caja-diferencia','caja-comentario'].forEach(function(id){
+   'caja-inv-imp','caja-inv-num','caja-diferencia','caja-comentario',
+   'caja-ef-real','caja-ef-posmews','caja-fondo-fin','caja-retiro'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
+  // BUG-29 SALA: fondo inicial = fondo_final del último cierre, readonly
+  var fondoIniEl=document.getElementById('caja-fondo-ini');
+  if(fondoIniEl){
+    fondoIniEl.value='';
+    fondoIniEl.setAttribute('readonly','readonly');
+    fondoIniEl.style.opacity='0.65';
+    fondoIniEl.style.cursor='not-allowed';
+  }
+  if(!existingId){
+    dbGetAll('sala_cash_closures').then(function(rows){
+      var sorted=rows
+        .filter(function(r){ return r.fondo_final!=null; })
+        .sort(function(a,b){
+          return (b.fecha||'').localeCompare(a.fecha||'')||
+                 (b.created_at||'').localeCompare(a.created_at||'');
+        });
+      var ultimo=sorted[0];
+      if(fondoIniEl&&ultimo){
+        fondoIniEl.value=parseFloat(ultimo.fondo_final).toFixed(2);
+        calcCajaDifs();
+      }
+    });
+  } else {
+    dbGetAll('sala_cash_closures').then(function(rows){
+      var row=rows.find(function(r){ return r.id===existingId; });
+      if(!row) return;
+      if(fondoIniEl&&row.fondo_inicial!=null) fondoIniEl.value=parseFloat(row.fondo_inicial).toFixed(2);
+      calcCajaDifs();
+    });
+  }
   document.querySelectorAll('#caja-servicios-check input[type=checkbox]').forEach(function(cb){ cb.checked=false; });
   calcCajaTotal();
   document.getElementById('modal-caja').classList.add('open');
