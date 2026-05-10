@@ -24,14 +24,9 @@ function openCajaForm(existingId) {
    'caja-ef-real','caja-ef-posmews','caja-fondo-fin','caja-retiro'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
-  // BUG-29 SALA: fondo inicial = fondo_final del último cierre, readonly
+  // BUG-29 SALA: fondo inicial = fondo_final del último cierre, readonly en HTML
   var fondoIniEl=document.getElementById('caja-fondo-ini');
-  if(fondoIniEl){
-    fondoIniEl.value='';
-    fondoIniEl.setAttribute('readonly','readonly');
-    fondoIniEl.style.opacity='0.65';
-    fondoIniEl.style.cursor='not-allowed';
-  }
+  if(fondoIniEl) fondoIniEl.value='';
   if(!existingId){
     dbGetAll('sala_cash_closures').then(function(rows){
       var sorted=rows
