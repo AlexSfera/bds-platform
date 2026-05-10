@@ -1637,8 +1637,8 @@ function valShowCloseGestionNewForm(gid, shiftId){
     +'<label style="font-size:11px;color:var(--text3);">Acción tomada para cerrar <span style="color:var(--red)">*</span></label>'
     +'<textarea id="gnew-close-'+gid+'" rows="2" placeholder="Describe la acción tomada..." style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:6px 8px;resize:vertical;width:100%;box-sizing:border-box;"></textarea>'
     +'<div style="display:flex;gap:8px;">'
-    +'<button class="vbtn vbtn-warn" onclick="valSaveCloseGestionNew(''+gid+'')">💾 Guardar cierre</button>'
-    +'<button class="vbtn" onclick="openValidarModal(''+shiftId+'')">Cancelar</button>'
+    +'<button class="vbtn vbtn-warn" onclick="valSaveCloseGestionNew(\''+gid+'\')">💾 Guardar cierre</button>'
+    +'<button class="vbtn" onclick="openValidarModal(\''+shiftId+'\')">Cancelar</button>'
     +'</div></div>';
 }
 async function valSaveCloseGestionNew(gid){
@@ -1758,8 +1758,8 @@ async function openValidarModal(shiftId){
           +'</div>';
       } else if(canActOnStates){
         var gBtn = gState==='Abierta'
-          ? '<button class="vbtn vbtn-primary" onclick="valAdvanceGestionNew(''+g.id+'','En proceso')">▶ En proceso</button>'
-          : '<button class="vbtn vbtn-warn" onclick="valShowCloseGestionNewForm(''+g.id+'',''+shiftId+'')">✓ Cerrar gestión</button>';
+          ? '<button class="vbtn vbtn-primary" onclick="valAdvanceGestionNew(\''+g.id+'\',\'En proceso\')">▶ En proceso</button>'
+          : '<button class="vbtn vbtn-warn" onclick="valShowCloseGestionNewForm(\''+g.id+'\',\''+shiftId+'\')">✓ Cerrar gestión</button>';
         info += '<div id="g-btn-'+g.id+'" style="margin-top:8px;">'+gBtn+'</div>';
       }
       info += '</div>';
