@@ -121,58 +121,7 @@ function submitRecKpi() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// CAJA RECEPCIÓN — calcRecDifs con Transferencias
-// ═══════════════════════════════════════════════════════════════════════
-function calcRecDifs() {
-  function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
-  var mewsCash  = gv('rec-cash-mews');
-  var mewsTar   = gv('rec-tarjeta-mews');
-  var mewsStr   = gv('rec-stripe-mews');
-  var mewsTrans = gv('rec-trans-mews');
-  var realCash  = gv('rec-cash-real');
-  var realTpv   = gv('rec-tpv-real');
-  var realStr   = gv('rec-stripe-real');
-  var realTrans = gv('rec-trans-real');
-  var fondoRec  = gv('rec-fondo-recibido');
-  var cfImporte = gv('rec-cf-importe');
-
-  var difCash  = mewsCash - (realCash - fondoRec);
-  var difTar   = mewsTar   - realTpv;               // MEWS - Real (sin fondo)
-  var difStr   = mewsStr   - realStr;               // MEWS - Real (sin fondo)
-  var difTrans = mewsTrans - realTrans;             // MEWS - Real (sin fondo)
-  var difTotal = difCash + difTar + difStr + difTrans;
-
-  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
-  function setColor(id, val){
-    var el = document.getElementById(id); if(!el) return;
-    el.textContent = fmt(val);
-    // Cualquier diferencia != 0 es roja. Solo 0 es verde.
-    el.style.color = Math.abs(val) < 0.01 ? 'var(--green)' : 'var(--red)';
-  }
-  setColor('rec-dif-cash',    difCash);
-  setColor('rec-dif-tarjeta', difTar);
-  setColor('rec-dif-stripe',  difStr);
-  setColor('rec-dif-trans',   difTrans);
-  setColor('rec-dif-total',   difTotal);
-
-  // Fondo esperado en caja fuerte
-  var fondoEsperado = fondoRec + mewsCash - cfImporte;
-  var feEl = document.getElementById('rec-fondo-esperado');
-  if(feEl){
-    feEl.textContent = fondoEsperado.toFixed(2)+' €';
-    feEl.style.color = fondoEsperado >= 0 ? 'var(--green)' : 'var(--red)';
-  }
-
-  var hasError = Math.abs(difTotal) > 0.01;
-  var alertEl  = document.getElementById('rec-dif-alert');
-  var expBlock = document.getElementById('rec-dif-exp-block');
-  if(alertEl)  alertEl.style.display  = hasError ? 'block' : 'none';
-  if(expBlock) expBlock.style.display = hasError ? 'block' : 'none';
-
-  var turno   = typeof getRecTurnoValue === 'function' ? getRecTurnoValue() : '';
-  var fondoIni = document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display = turno === 'Noche' ? 'block' : 'none';
-}
+// calcRecDifs — definida en index.html (versión única y correcta)
 
 // ═══════════════════════════════════════════════════════════════════════
 // CAJA RECEPCIÓN — Abrir modal

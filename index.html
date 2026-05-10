@@ -3390,36 +3390,52 @@ function submitRecKpi() {
 }
 
 function calcRecDifs() {
-  var mewsCash=parseFloat(document.getElementById('rec-cash-mews').value)||0;
-  var mewsTar=parseFloat(document.getElementById('rec-tarjeta-mews').value)||0;
-  var mewsStr=parseFloat(document.getElementById('rec-stripe-mews').value)||0;
-  var realCash=parseFloat(document.getElementById('rec-cash-real').value)||0;
-  var realTpv=parseFloat(document.getElementById('rec-tpv-real').value)||0;
-  var realStr=parseFloat(document.getElementById('rec-stripe-real').value)||0;
+  function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  var mewsCash  = gv('rec-cash-mews');
+  var mewsTar   = gv('rec-tarjeta-mews');
+  var mewsStr   = gv('rec-stripe-mews');
+  var mewsTrans = gv('rec-trans-mews');
+  var realCash  = gv('rec-cash-real');
+  var realTpv   = gv('rec-tpv-real');
+  var realStr   = gv('rec-stripe-real');
+  var realTrans = gv('rec-trans-real');
+  var fondoRec  = parseFloat((document.getElementById('rec-fondo-recibido')||{}).value)||0;
+  var cfImporte = gv('rec-cf-importe');
 
-  var difCash=realCash-mewsCash;
-  var difTar=realTpv-mewsTar;
-  var difStr=realStr-mewsStr;
-  var difTotal=difCash+difTar+difStr;
+  // BUG-02b FIX: fórmula correcta con fondo inicial
+  var difCash  = mewsCash - (realCash - fondoRec);
+  var difTar   = mewsTar  - realTpv;
+  var difStr   = mewsStr  - realStr;
+  var difTrans = mewsTrans - realTrans;
+  var difTotal = difCash + difTar + difStr + difTrans;
 
-  function colorDif(val){
-    var el_color=val===0?'var(--green)':val>0?'var(--blue)':'var(--red)';
-    return {text:(val>=0?'+':'')+val.toFixed(2)+' €',color:el_color};
+  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
+  function setColor(id, val){
+    var el=document.getElementById(id); if(!el) return;
+    el.textContent = fmt(val);
+    // Solo 0 es verde. Cualquier diferencia es roja.
+    el.style.color = Math.abs(val)<0.01 ? 'var(--green)' : 'var(--red)';
   }
-  var dc=colorDif(difCash), dt=colorDif(difTar), ds=colorDif(difStr), dtt=colorDif(difTotal);
-  var setCss=function(id,obj){var el=document.getElementById(id);if(el){el.textContent=obj.text;el.style.color=obj.color;}};
-  setCss('rec-dif-cash',dc); setCss('rec-dif-tarjeta',dt); setCss('rec-dif-stripe',ds); setCss('rec-dif-total',dtt);
+  setColor('rec-dif-cash',    difCash);
+  setColor('rec-dif-tarjeta', difTar);
+  setColor('rec-dif-stripe',  difStr);
+  setColor('rec-dif-trans',   difTrans);
+  setColor('rec-dif-total',   difTotal);
 
-  var hasError=Math.abs(difTotal)>0.01;
-  var alertEl=document.getElementById('rec-dif-alert');
-  var expBlock=document.getElementById('rec-dif-exp-block');
-  if(alertEl) alertEl.style.display=hasError?'block':'none';
-  if(expBlock) expBlock.style.display=hasError?'block':'none';
+  // Fondo esperado en caja fuerte
+  var fondoEsperado = fondoRec + mewsCash - cfImporte;
+  var feEl = document.getElementById('rec-fondo-esperado');
+  if(feEl){ feEl.textContent=fondoEsperado.toFixed(2)+' €'; feEl.style.color=fondoEsperado>=0?'var(--green)':'var(--red)'; }
 
-  // Noche: show fondo inicial
-  var turno=getRecTurnoValue();
-  var fondoIni=document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display=turno==='Noche'?'block':'none';
+  var hasError = Math.abs(difTotal)>0.01;
+  var alertEl  = document.getElementById('rec-dif-alert');
+  var expBlock = document.getElementById('rec-dif-exp-block');
+  if(alertEl)  alertEl.style.display  = hasError?'block':'none';
+  if(expBlock) expBlock.style.display = hasError?'block':'none';
+
+  var turno    = typeof getRecTurnoValue==='function' ? getRecTurnoValue() : '';
+  var fondoIni = document.getElementById('rec-fondo-inicial-block');
+  if(fondoIni) fondoIni.style.display = turno==='Noche'?'block':'none';
 }
 
 function openRecCajaModal(existingId) {
@@ -3533,11 +3549,12 @@ async function submitRecCaja() {
   if(isNaN(realStr))  errs.push('Stripe real obligatorio');
   if(isNaN(fondoTras)) errs.push('Fondo traspasado obligatorio');
 
-  var difCash=realCash-mewsCash;
-  var difTar=realTpv-mewsTar;
-  var difStr=realStr-mewsStr;
-  var difTrans=realTrans-mewsTrans;
-  var difTotal=difCash+difTar+difStr+difTrans;
+  // BUG-02b FIX: fórmula correcta con fondo inicial
+  var difCash  = mewsCash - (realCash - fondoRec);
+  var difTar   = mewsTar  - realTpv;
+  var difStr   = mewsStr  - realStr;
+  var difTrans = mewsTrans - realTrans;
+  var difTotal = difCash + difTar + difStr + difTrans;
 
   var hasError=Math.abs(difTotal)>0.01;
   if(hasError){
@@ -4083,51 +4100,7 @@ var _origInitTurnoForm = typeof initTurnoForm === 'function' ? initTurnoForm : n
   }
 })();
 
-// ── Update calcRecDifs to include caja fuerte logic ──
-function calcRecDifs() {
-  var mewsCash = parseFloat((document.getElementById('rec-cash-mews')||{}).value)||0;
-  var mewsTar  = parseFloat((document.getElementById('rec-tarjeta-mews')||{}).value)||0;
-  var mewsStr  = parseFloat((document.getElementById('rec-stripe-mews')||{}).value)||0;
-  var mewsTrans= parseFloat((document.getElementById('rec-trans-mews')||{}).value)||0;
-  var realCash = parseFloat((document.getElementById('rec-cash-real')||{}).value)||0;
-  var realTpv  = parseFloat((document.getElementById('rec-tpv-real')||{}).value)||0;
-  var realStr  = parseFloat((document.getElementById('rec-stripe-real')||{}).value)||0;
-  var realTrans= parseFloat((document.getElementById('rec-trans-real')||{}).value)||0;
-  var fondoRec = parseFloat((document.getElementById('rec-fondo-recibido')||{}).value)||0;
-  var cfImporte= parseFloat((document.getElementById('rec-cf-importe')||{}).value)||0;
-
-  var difCash  = realCash - mewsCash;
-  var difTar   = realTpv  - mewsTar;
-  var difStr   = realStr  - mewsStr;
-  var difTrans = realTrans- mewsTrans;
-  var difTotal = difCash + difTar + difStr + difTrans;
-
-  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
-  function setColor(id, val){
-    var el=document.getElementById(id); if(!el) return;
-    el.textContent=fmt(val);
-    el.style.color=Math.abs(val)<0.01?'var(--green)':val>0?'var(--blue)':'var(--red)';
-  }
-  setColor('rec-dif-cash', difCash);
-  setColor('rec-dif-tarjeta', difTar);
-  setColor('rec-dif-stripe', difStr);
-  setColor('rec-dif-trans', difTrans);
-  setColor('rec-dif-total', difTotal);
-
-  var fondoEsperado = fondoRec + mewsCash - cfImporte;
-  var feEl=document.getElementById('rec-fondo-esperado');
-  if(feEl){ feEl.textContent=fondoEsperado.toFixed(2)+' €'; feEl.style.color=fondoEsperado>=0?'var(--green)':'var(--red)'; }
-
-  var hasError=Math.abs(difTotal)>0.01;
-  var alertEl=document.getElementById('rec-dif-alert');
-  var expBlock=document.getElementById('rec-dif-exp-block');
-  if(alertEl) alertEl.style.display=hasError?'block':'none';
-  if(expBlock) expBlock.style.display=hasError?'block':'none';
-
-  var turno=typeof getRecTurnoValue==='function'?getRecTurnoValue():'';
-  var fondoIni=document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display=turno==='Noche'?'block':'none';
-}
+// calcRecDifs definida en index.html arriba — no duplicar
 
 // ── renderFollowupList is called from initTurnoForm patch below ──
 // No showScreen override needed — avoids infinite recursion risk
