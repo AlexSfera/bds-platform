@@ -1441,11 +1441,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <label>Fondo real a traspasar (€) <span class="req">*</span></label>
       <input type="number" id="rec-fondo-traspaso" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;">
     </div>
-    <div id="rec-fondo-inicial-block" style="display:none;" class="fg">
-      <label>Fondo inicial día siguiente (€) — Solo turno noche <span class="req">*</span></label>
-      <input type="number" id="rec-fondo-inicial" min="0" step="0.01" placeholder="0.00" style="color:#111827;background:#ffffff;">
-    </div>
-
     <div id="rec-caja-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
     <div style="display:flex;gap:8px;">
       <button onclick="closeRecCaja()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">← Volver al KPI</button>
@@ -3433,9 +3428,6 @@ function calcRecDifs() {
   if(alertEl)  alertEl.style.display  = hasError?'block':'none';
   if(expBlock) expBlock.style.display = hasError?'block':'none';
 
-  var turno    = typeof getRecTurnoValue==='function' ? getRecTurnoValue() : '';
-  var fondoIni = document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display = turno==='Noche'?'block':'none';
 }
 
 function openRecCajaModal(existingId) {
@@ -3443,7 +3435,7 @@ function openRecCajaModal(existingId) {
   // Reset form
   ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
    'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
-   'rec-fondo-traspaso','rec-fondo-inicial','rec-cf-importe',
+   'rec-fondo-traspaso','rec-cf-importe',
    'rec-room-charge','rec-syncrolab-charge','rec-desayunos-pension',
    'rec-pension-comida-cena','rec-cargo-alexander','rec-dif-exp','rec-dif-accion'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
@@ -3475,8 +3467,6 @@ function openRecCajaModal(existingId) {
   var turno=getRecTurnoValue()||'—';
   var label=document.getElementById('rec-caja-turno-label');
   if(label) label.textContent=turno;
-  var fondoIni=document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display=turno==='Noche'?'block':'none';
   var alertEl=document.getElementById('rec-dif-alert');
   var expBlock=document.getElementById('rec-dif-exp-block');
   if(alertEl) alertEl.style.display='none';
@@ -3500,7 +3490,6 @@ function openRecCajaModal(existingId) {
       set('rec-stripe-real',       row.stripe_real);
       set('rec-trans-real',        row.transferencia_banco);
       set('rec-fondo-traspaso',    row.fondo_traspasado);
-      set('rec-fondo-inicial',     row.fondo_inicial_siguiente);
       set('rec-cf-importe',        row.retiro_caja_fuerte);
       set('rec-room-charge',       row.room_charge_recibido);
       set('rec-syncrolab-charge',  row.syncrolab_room_charged);
@@ -3561,10 +3550,6 @@ async function submitRecCaja() {
     var exp=document.getElementById('rec-dif-exp').value.trim();
     if(!exp) errs.push('Diferencia detectada: explicación obligatoria');
   }
-  if(turno==='Noche'){
-    var fondoIni=parseFloat(document.getElementById('rec-fondo-inicial').value);
-    if(isNaN(fondoIni)) errs.push('Fondo inicial día siguiente obligatorio (turno noche)');
-  }
   if(errs.length>0){
     document.getElementById('rec-caja-err').textContent=errs.join(' · ');
     return;
@@ -3599,7 +3584,7 @@ async function submitRecCaja() {
     fondo_recibido: fondoRec,
     fondo_traspasado: fondoTras,
     fondo_real_a_traspasar: fondoRealCalculado,
-    fondo_inicial_siguiente: turno==='Noche'?(parseFloat(document.getElementById('rec-fondo-inicial').value)||null):null,
+    fondo_inicial_siguiente: fondoTras,
     retiro_caja_fuerte: cfImporte,
     cash_mews: mewsCash,
     tarjeta_mews: mewsTar,

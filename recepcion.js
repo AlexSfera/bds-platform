@@ -133,7 +133,7 @@ function openRecCajaModal(existingId) {
   // Reset campos editables — fondo se carga del cierre anterior
   ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
    'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
-   'rec-fondo-traspaso','rec-fondo-inicial',
+   'rec-fondo-traspaso',
    'rec-cf-importe','rec-room-charge','rec-syncrolab-charge',
    'rec-desayunos-pension','rec-pension-comida-cena',
    'rec-cargo-alexander','rec-dif-exp','rec-dif-accion'].forEach(function(id){
@@ -169,9 +169,6 @@ function openRecCajaModal(existingId) {
   var label = document.getElementById('rec-caja-turno-label');
   if(label) label.textContent = turno;
 
-  var fondoIni = document.getElementById('rec-fondo-inicial-block');
-  if(fondoIni) fondoIni.style.display = turno === 'Noche' ? 'block' : 'none';
-
   var alertEl  = document.getElementById('rec-dif-alert');
   var expBlock = document.getElementById('rec-dif-exp-block');
   if(alertEl)  alertEl.style.display  = 'none';
@@ -197,7 +194,6 @@ function openRecCajaModal(existingId) {
       set('rec-stripe-real',       row.stripe_real);
       set('rec-trans-real',        row.transferencia_banco);
       set('rec-fondo-traspaso',    row.fondo_traspasado);
-      set('rec-fondo-inicial',     row.fondo_inicial_siguiente);
       set('rec-cf-importe',        row.retiro_caja_fuerte);
       set('rec-room-charge',       row.room_charge_recibido);
       set('rec-syncrolab-charge',  row.syncrolab_room_charged);
@@ -270,10 +266,6 @@ async function submitRecCaja() {
     var exp = (document.getElementById('rec-dif-exp')||{value:''}).value.trim();
     if(!exp) errs.push('Diferencia detectada: explicación obligatoria');
   }
-  if(turno === 'Noche'){
-    var fondoIniVal = gv('rec-fondo-inicial');
-    if(isNaN(fondoIniVal)) errs.push('Fondo inicial día siguiente obligatorio (turno noche)');
-  }
   if(errs.length > 0){
     var errEl = document.getElementById('rec-caja-err');
     if(errEl) errEl.textContent = errs.join(' · ');
@@ -300,7 +292,7 @@ async function submitRecCaja() {
     fondo_recibido:            fondoRec,
     fondo_traspasado:          fondoTras,
     fondo_real_a_traspasar:    fondoRec + mewsCash - cfImporte,  // BUG-29 FIX: calculado, no manual
-    fondo_inicial_siguiente:   turno === 'Noche' ? (gv('rec-fondo-inicial') || null) : null,
+    fondo_inicial_siguiente:   fondoTras,
     retiro_caja_fuerte:        cfImporte,
     // MEWS
     cash_mews:                 mewsCash,
