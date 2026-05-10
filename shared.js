@@ -353,7 +353,15 @@ async function pinOk(){
   }
   currentUser=found; currentPin=''; updPin(); startApp();
 }
-function logout(){ currentUser=null; currentPin=''; updPin(); document.getElementById('app').style.display='none'; document.getElementById('login-screen').style.display='flex'; }
+function logout(){
+  currentUser=null;
+  var ap=document.getElementById('app');
+  if(ap) ap.style.display='none';
+  var bn=document.getElementById('bottom-nav');
+  if(bn) bn.style.display='none';
+  var ps=document.getElementById('portal-screen');
+  if(ps){ ps.style.display='flex'; ps.style.visibility=''; ps.style.pointerEvents=''; }
+}
 document.addEventListener('keydown',e=>{ var ls=document.getElementById('login-screen'); if(!ls||ls.style.display==='none') return; if(e.key>='0'&&e.key<='9') pinPress(e.key); if(e.key==='Backspace') pinDel(); if(e.key==='Enter') pinOk(); });
 
 // ═══════════════════════════════════════════════════════════════════════
