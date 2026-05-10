@@ -533,8 +533,8 @@ async function renderFollowupList() {
 
   if(btnNew)     btnNew.style.display    = isSupervisorUser ? '' : 'none';
   if(subtitleEl) subtitleEl.textContent  = isSupervisorUser
-    ? 'Gestiones pendientes, tareas e incidencias operativas del departamento.'
-    : 'Gestiones pendientes y tareas visibles para tu departamento.';
+    ? 'Gestiones, tareas e incidencias activas del departamento.'
+    : 'Gestiones activas de tu departamento y tareas asignadas.';
 
   var allIncis = [], allTareas = [], allShifts = [], allGestiones = [];
   try { allIncis     = await getDB('incidencias'); } catch(e){}
@@ -576,21 +576,11 @@ async function renderFollowupList() {
     return esDeptDestino || esCreador;
   });
 
-  // ── INCIDENCIAS: empleado ve solo las suyas y solo hasta que se cierren ──
-  var incidencias;
-  if(isAdmin(currentUser) || isSupervisorUser){
-    incidencias = allIncis.filter(function(i){
-      return isIncidentOpen(i) && sameDept(i);
-    });
-  } else {
-    // Empleado: solo las suyas propias, y solo si no están cerradas
-    incidencias = allIncis.filter(function(i){
-      var esSuya = i.employee_id === currentUser.id || i.nombre === currentUser.nombre;
-      var abierta = normalizeIncidentState(i.estado) === INCIDENT_STATES.ABIERTA
-                 || normalizeIncidentState(i.estado) === INCIDENT_STATES.EN_PROCESO;
-      return esSuya && abierta;
-    });
-  }
+  // ── INCIDENCIAS: solo supervisor/admin las ve en Mi Turno (BUG-49) ──
+  // Empleado registra incidencias pero no las gestiona desde aquí
+  var incidencias = (isAdmin(currentUser) || isSupervisorUser)
+    ? allIncis.filter(function(i){ return isIncidentOpen(i) && sameDept(i); })
+    : [];
 
   var total = gestiones.length + tareas.length + incidencias.length;
   if(countEl) countEl.textContent = total ? '('+total+' activas)' : '(sin activas)';
@@ -696,11 +686,17 @@ async function renderFollowupList() {
 
 // ── Gestiones en Mi Turno (BUG-39) ──────────────────────────
 async function advanceGestion(gid, newState){
-  await dbUpdate('gestiones', gid, {estado: newState, updated_at: localTs()});
-  invalidateCache('gestiones');
-  auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
-  toast('Estado actualizado', 'ok');
-  if(typeof renderFollowupList === 'function') renderFollowupList();
+  try{
+    var res = await dbUpdate('gestiones', gid, {estado: newState});
+    if(!res){ toast('Error al actualizar estado','err'); return; }
+    invalidateCache('gestiones');
+    auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
+    toast('Estado actualizado', 'ok');
+    if(typeof renderFollowupList === 'function') renderFollowupList();
+  } catch(e){
+    console.error('[advanceGestion]', e);
+    toast('Error: '+e.message,'err');
+  }
 }
 
 async function openCloseGestion(gid){
@@ -712,14 +708,14 @@ async function openCloseGestion(gid){
   if(!g){ toast('Gestión no encontrada', 'err'); return; }
   var tgMins = Math.round((Date.now() - new Date(g.created_at).getTime()) / 60000);
   var ts = localTs();
-  await dbUpdate('gestiones', gid, {
+  var res = await dbUpdate('gestiones', gid, {
     estado: 'Cerrada',
     accion_tomada: txt.trim(),
     cerrado_por: currentUser.nombre,
     cerrado_ts: ts,
-    tiempo_gestion: tgMins,
-    updated_at: ts
+    tiempo_gestion: tgMins
   });
+  if(!res){ toast('Error al cerrar gestión','err'); return; }
   invalidateCache('gestiones');
   auditLog('GESTION_CERRADA', 'id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt.trim());
   toast('Gestión cerrada', 'ok');
