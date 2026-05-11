@@ -1476,7 +1476,12 @@ async function advanceTask(taskId,newEstado){
   invalidateCache('tareas');
   auditLog('TASK_ADVANCE',`${currentUser.nombre} → ${newEstado}: ${tareas[idx].titulo}`);
   toast(`Tarea: ${newEstado}`,'ok');
-  renderTareas(); updateDots();
+  // BUG-51: refresh context — modal validación o Mi Turno
+  if(typeof validatingShiftId !== 'undefined' && validatingShiftId){
+    openValidarModal(validatingShiftId);
+  } else {
+    try{ renderTareas(); updateDots(); } catch(e){}
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1634,7 +1639,7 @@ async function valSaveCloseGestion(gid,isTask){
 
 async function valAdvanceGestionNew(gid, newState){
   var gg=await getDB('gestiones'); var g=gg.find(function(x){return x.id===gid;}); if(!g) return;
-  await dbUpdate('gestiones',gid,{estado:newState,updated_at:localTs()});
+  await dbUpdate('gestiones',gid,{estado:newState});
   invalidateCache('gestiones');
   auditLog('VAL_GESTION_ADVANCE',currentUser.nombre+' → '+newState+': gestión '+gid+' (shift '+validatingShiftId+')');
   toast('Estado actualizado','ok'); await openValidarModal(validatingShiftId);
@@ -1704,7 +1709,10 @@ async function openValidarModal(shiftId){
   const allTareas=await getDB('tareas');
   const shiftTareas=allTareas.filter(function(t){return recordMatchesShift(t,s);});
   const allGestiones=await getDB('gestiones');
-  const shiftGestiones=allGestiones.filter(function(g){return g.shift_id===shiftId || g.employee_id===s.employee_id;});
+  const shiftGestiones=allGestiones.filter(function(g){
+    return (g.shift_id===shiftId || g.employee_id===s.employee_id)
+      && g.estado !== 'Cerrada';  // BUG-47b: no mostrar cerradas
+  });
   document.getElementById('mv-title').textContent=`${formatDisplayValue(s.nombre)} — ${fmtDateTs(s.fecha,s.created_at)} — ${formatServiceOrTurn(s.servicio)}`;
   // ── BUILD FULL SHIFT DETAIL FOR SUPERVISOR ──
   var info = '';
