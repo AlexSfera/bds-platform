@@ -1572,8 +1572,9 @@ async function renderValidacion(){
     var canSupervise = canValidateShift(currentUser,s);
     var btnRevisar = (!isReadOnly && canSupervise)
       ? '<button class="vbtn vbtn-primary" onclick="openValidarModal(\''+sid+'\')">Revisar</button>' : '';
+    // BUG-50: turno validado también abre openValidarModal para permitir gestionar gestiones/incidencias
     var btnVer = (isReadOnly && canSupervise)
-      ? '<button class="vbtn vbtn-sec" onclick="openShiftDetail(\''+sid+'\')">📋 Ver</button>' : '';
+      ? '<button class="vbtn vbtn-sec" onclick="openValidarModal(\''+sid+'\')">📋 Ver</button>' : '';
     var btnArevisar = ((isAdmin(currentUser)||currentUser.rol==='fb')&&s.estado==='Validado')
       ? '<button class="vbtn vbtn-warn" onclick="openPostErrorModal(\''+sid+'\')">🔍</button>' : '';
     var canReopen = isAdmin(currentUser)
