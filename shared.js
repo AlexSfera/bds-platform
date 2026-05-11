@@ -185,7 +185,7 @@ function genId(){ return Date.now().toString(36)+Math.random().toString(36).slic
 
 // ── DATE & FORMAT HELPERS ──
 function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function localTs(){ var d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,19).replace('T',' '); }
+function localTs(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); }
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){ if(!ts) return '—'; var d=new Date(ts); return d.toLocaleDateString('es-ES')+' '+d.toTimeString().slice(0,5); }
 function fmtDateTs(fecha,ts){ return fmtDate(fecha)+(ts?' '+new Date(ts).toTimeString().slice(0,5):''); }
