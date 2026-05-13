@@ -187,8 +187,24 @@ function genId(){ return Date.now().toString(36)+Math.random().toString(36).slic
 function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function localTs(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); }
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
-function fmtTs(ts){ if(!ts) return '—'; var d=new Date(ts); return d.toLocaleDateString('es-ES')+' '+d.toTimeString().slice(0,5); }
-function fmtDateTs(fecha,ts){ return fmtDate(fecha)+(ts?' '+new Date(ts).toTimeString().slice(0,5):''); }
+function fmtTs(ts){
+  if(!ts) return '—';
+  var d=new Date(ts);
+  return d.toLocaleDateString('es-ES')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function fmtDateTs(fecha,ts){
+  if(!fecha) return '—';
+  if(!ts) return fmtDate(fecha);
+  // hora_registro is already local (YYYY-MM-DD HH:MM:SS) — no conversion needed
+  // created_at from Supabase is UTC — convert via Date object
+  if(ts.indexOf('+') === -1 && ts.indexOf('Z') === -1 && ts.length <= 19) {
+    // Local timestamp — just extract time
+    return fmtDate(fecha)+' '+ts.slice(11,16);
+  }
+  // UTC timestamp — convert to local
+  var d=new Date(ts);
+  return fmtDate(fecha)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
 function fmtTiempoGestion(mins){ if(!mins||mins<=0) return '—'; var h=Math.floor(mins/60),m=mins%60; return h>0?(h+'h'+(m>0?' '+m+'min':'')):(m+'min'); }
 function startOfWeek(){ var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); return d.toISOString().split('T')[0]; }
 function startOfMonth(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; }
@@ -971,7 +987,7 @@ async function _doSaveTurno(){
     validado_por: null, validado_ts: null,
     comentario_validador: null,
     correcciones: [],
-    created_at: ts, updated_at: ts
+    hora_registro: ts, created_at: ts, updated_at: ts
   };
   var tareasCreadas = 0;
   var incidenciasCreadas = 0;
@@ -1584,7 +1600,7 @@ async function renderValidacion(){
     var btnDel = isAdmin(currentUser)
       ? '<button class="vbtn vbtn-del" onclick="deleteShift(\''+sid+'\')">🗑</button>' : '';
     aCell = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">'+btnRevisar+btnVer+btnArevisar+btnReabrir+btnDel+'</div>';
-    valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.created_at)+'</td>'
+    valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
       +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
