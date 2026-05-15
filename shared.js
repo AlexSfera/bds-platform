@@ -189,17 +189,17 @@ function localTs(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMon
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){
   if(!ts) return '—';
-  var d=new Date(ts);
-  return d.toLocaleDateString('es-ES')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  // created_at for gestiones/incidencias is stored as local time (no DEFAULT NOW())
+  // → extract time directly from string without Date conversion to avoid timezone shift
+  if(ts.length >= 16) return new Date(ts.replace(' ','T')).toLocaleDateString('es-ES')+' '+ts.slice(11,16);
+  return ts;
 }
 function fmtDateTs(fecha,ts){
   if(!fecha) return '—';
   if(!ts) return fmtDate(fecha);
-  // created_at stored as local time string but Supabase adds +00
-  // → always extract HH:MM directly from string, never convert via Date (avoids +2h bug)
-  var timeStr = ts.slice(11,16);
-  if(!timeStr || timeStr === '') return fmtDate(fecha);
-  return fmtDate(fecha)+' '+timeStr;
+  var d=new Date(ts);
+  d.setHours(d.getHours()-2);
+  return fmtDate(fecha)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 function fmtTiempoGestion(mins){ if(!mins||mins<=0) return '—'; var h=Math.floor(mins/60),m=mins%60; return h>0?(h+'h'+(m>0?' '+m+'min':'')):(m+'min'); }
 function startOfWeek(){ var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); return d.toISOString().split('T')[0]; }
@@ -1596,7 +1596,7 @@ async function renderValidacion(){
     var btnDel = isAdmin(currentUser)
       ? '<button class="vbtn vbtn-del" onclick="deleteShift(\''+sid+'\')">🗑</button>' : '';
     aCell = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">'+btnRevisar+btnVer+btnArevisar+btnReabrir+btnDel+'</div>';
-    valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.created_at)+'</td>'
+    valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
       +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
