@@ -2940,7 +2940,13 @@ async function renderValCajaList() {
         +'<td style="font-family:var(--font-mono)">'+(c.stripe_real||0).toFixed(2)+'€</td>'
         +'<td style="font-family:var(--font-mono)">'+(c.subtotal_neto||0).toFixed(2)+'€</td>'
         +'<td style="font-family:var(--font-mono)">'+(c.total_bruto||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€</td>'
+        +(function(){
+          var difEf=(c.diferencia_efectivo||0);
+          var difTar=(c.diferencia_tarjeta||0);
+          var difStr=(c.diferencia_stripe||0);
+          var tooltip='Ef: '+(difEf>=0?'+':'')+difEf.toFixed(2)+'€ | Tar: '+(difTar>=0?'+':'')+difTar.toFixed(2)+'€ | Stripe: '+(difStr>=0?'+':'')+difStr.toFixed(2)+'€';
+          return '<td style="font-family:var(--font-mono);color:'+difColor+';cursor:help" title="'+tooltip+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€</td>';
+        })()
         +'<td style="text-align:center">'+totalPens+'p</td>'
         +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+'</td>'
         +'<td style="white-space:nowrap;display:flex;gap:4px;">'
@@ -2950,7 +2956,7 @@ async function renderValCajaList() {
         +'</td>'
         +'</tr>';
     }).join('');
-    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
+    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Efectivo</th><th>Retiro</th><th>Tarjeta</th><th>Stripe</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Pensiones</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">No se puede cargar — ejecuta primero el SQL de Sala Phase 1.</div>';
   }
