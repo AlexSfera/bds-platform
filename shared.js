@@ -189,8 +189,9 @@ function localTs(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMon
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){
   if(!ts) return '—';
-  var d=new Date(ts);
-  return d.toLocaleDateString('es-ES')+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+  var timeStr = typeof ts === 'string' && ts.length >= 16 ? ts.slice(11,16) : '—';
+  var d = new Date(ts);
+  return (isNaN(d.getTime()) ? ts.slice(0,10) : d.toLocaleDateString('es-ES'))+' '+timeStr;
 }
 function fmtDateTs(fecha,ts){
   if(!fecha) return '—';

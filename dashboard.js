@@ -45,10 +45,10 @@ function getDashDeptsForUser() {
 // ── HELPERS LOCALES ───────────────────────────────────────────
 function _localHora(ts) {
   if (!ts) return '—';
-  var n = typeof ts === 'string' ? ts.replace(' ', 'T') : ts;
-  var d = new Date(n);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+  // Supabase stores UTC but the original value from localTs() is the local time
+  // e.g. "2026-05-15 22:16:54+00" → local time was 22:16, slice gives correct value
+  if (typeof ts === 'string' && ts.length >= 16) return ts.slice(11, 16);
+  return '—';
 }
 function _isFio(s) {
   return s.fio === true || s.fio === 1 || s.fio === 'true' || s.fio === '1';
