@@ -2944,15 +2944,15 @@ async function renderValCajaList() {
           var difEf=(c.diferencia_efectivo||0);
           var difTar=(c.diferencia_tarjeta||0);
           var difStr=(c.diferencia_stripe||0);
-          var tooltip='Ef: '+(difEf>=0?'+':'')+difEf.toFixed(2)+'€ | Tar: '+(difTar>=0?'+':'')+difTar.toFixed(2)+'€ | Stripe: '+(difStr>=0?'+':'')+difStr.toFixed(2)+'€';
-          return '<td style="font-family:var(--font-mono);color:'+difColor+';cursor:help" title="'+tooltip+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€</td>';
+          var breakdown='<div style="font-size:10px;color:var(--text3);margin-top:2px">Ef:'+(difEf>=0?'+':'')+difEf.toFixed(2)+'€ Tar:'+(difTar>=0?'+':'')+difTar.toFixed(2)+'€ Str:'+(difStr>=0?'+':'')+difStr.toFixed(2)+'€</div>';
+          return '<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€'+breakdown+'</td>';
         })()
         +'<td style="text-align:center">'+totalPens+'p</td>'
         +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+'</td>'
         +'<td style="white-space:nowrap;display:flex;gap:4px;">'
-        +(isPendiente&&canEdit?'<button class="vbtn vbtn-primary" data-cid="'+c.id+'" onclick="validarCierre(this.dataset.cid)">✓ Validar</button>':'')
-        +'<button class="vbtn vbtn-sec" data-cid="'+c.id+'" onclick="openCajaForm(this.dataset.cid)">📋 Ver</button>'
-        +(canEdit?'<button class="vbtn vbtn-warn" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">↩ Revisar</button>':'')
+        +(isPendiente&&canEdit?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
+        +'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
+        +(canEdit?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">↩ Revisar</button>':'')
         +'</td>'
         +'</tr>';
     }).join('');
@@ -2960,6 +2960,79 @@ async function renderValCajaList() {
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">No se puede cargar — ejecuta primero el SQL de Sala Phase 1.</div>';
   }
+}
+
+async function openCajaSummary(cajaId, showValidar) {
+  var data = await dbGetAll('sala_cash_closures');
+  var c = data.find(function(x){ return x.id === cajaId; });
+  if(!c){ toast('Cierre no encontrado','err'); return; }
+
+  var difOp = c.diferencia_operativa_sala || 0;
+  var difColor = Math.abs(difOp)<0.01 ? 'var(--green)' : Math.abs(difOp)>5 ? 'var(--red)' : 'var(--amber)';
+  var difEf = c.diferencia_efectivo||0;
+  var difTar = c.diferencia_tarjeta||0;
+  var difStr = c.diferencia_stripe||0;
+
+  function row(label, val, mono, color){
+    if(val===undefined||val===null||val==='') return '';
+    return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">'
+      +'<span style="color:var(--text3);font-size:11px;font-family:var(--font-mono);text-transform:uppercase">'+label+'</span>'
+      +'<span style="'+(mono?'font-family:var(--font-mono);':'')+( color?'color:'+color+';font-weight:700':'')+'">'+ val+'</span>'
+      +'</div>';
+  }
+
+  var html = '<div style="padding:4px 0">'
+    + row('Fecha', fmtDate(c.fecha))
+    + row('Responsable', c.responsable_nombre, false)
+    + row('Servicio', displayServicio(c.servicios||''), false)
+    + row('Estado', c.estado, false)
+    + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">EFECTIVO</div>'
+    + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2)+'€', true)
+    + row('Fondo inicial', (c.fondo_inicial||0).toFixed(2)+'€', true)
+    + row('Cash POSMEWS', (c.efectivo_posmews||0).toFixed(2)+'€', true)
+    + row('Fondo final', (c.fondo_final||0).toFixed(2)+'€', true)
+    + row('Retiro caja fuerte', (c.retiro_caja_fuerte||0).toFixed(2)+'€', true)
+    + row('Δ Efectivo', (difEf>=0?'+':'')+difEf.toFixed(2)+'€', true, Math.abs(difEf)<0.01?'var(--green)':'var(--red)')
+    + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TARJETA Y STRIPE</div>'
+    + row('Tarjeta POSMEWS', (c.tarjeta_posmews||0).toFixed(2)+'€', true)
+    + row('Tarjeta TPV físico', (c.tarjeta_tpv||0).toFixed(2)+'€', true)
+    + row('Δ Tarjeta', (difTar>=0?'+':'')+difTar.toFixed(2)+'€', true, Math.abs(difTar)<0.01?'var(--green)':'var(--red)')
+    + row('Stripe POSMEWS', (c.stripe_posmews||0).toFixed(2)+'€', true)
+    + row('Stripe real', (c.stripe_real||0).toFixed(2)+'€', true)
+    + row('Δ Stripe', (difStr>=0?'+':'')+difStr.toFixed(2)+'€', true, Math.abs(difStr)<0.01?'var(--green)':'var(--red)')
+    + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TOTALES</div>'
+    + row('Total neto sin IVA', (c.subtotal_neto||0).toFixed(2)+'€', true)
+    + row('Total bruto con IVA', (c.total_bruto||0).toFixed(2)+'€', true)
+    + row('Pensiones', ((parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0))+'p', true)
+    + '<div style="margin:12px 0 6px;padding:10px;border-radius:6px;background:var(--bg2);border:1px solid '+difColor+'">'
+    + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+difColor+';letter-spacing:.1em;margin-bottom:4px">DIFERENCIA OPERATIVA</div>'
+    + '<div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€</div>'
+    + '</div>'
+    + (c.comentario ? row('Comentario', c.comentario) : '')
+    + (c.validado_por ? row('Validado por', c.validado_por+' · '+fmtTs(c.validado_ts)) : '')
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">'
+    + (showValidar && c.estado !== 'Validado final'
+        ? '<button class="btn btn-success" onclick="validarCierre(''+cajaId+'');closeModal('modal-caja-summary')">✓ Confirmar Validación</button>'
+        : '')
+    + '<button class="btn btn-secondary" onclick="closeModal('modal-caja-summary')">Cerrar</button>'
+    + '</div>';
+
+  // Use existing detail overlay or create inline modal
+  var overlay = document.getElementById('modal-caja-summary');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'modal-caja-summary';
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'display:flex;z-index:2000';
+    overlay.innerHTML = '<div class="modal" style="max-width:520px;max-height:85vh;overflow-y:auto">'
+      +'<div class="modal-title">📋 Resumen Cierre de Caja</div>'
+      +'<div id="modal-caja-summary-body"></div>'
+      +'</div>';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+  document.getElementById('modal-caja-summary-body').innerHTML = html;
 }
 
 async function validarCierre(cajaId) {
