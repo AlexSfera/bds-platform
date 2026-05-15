@@ -189,14 +189,14 @@ function localTs(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMon
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){
   if(!ts) return '—';
-  var d=new Date(ts); d.setHours(d.getHours()-2);
-  return d.toLocaleDateString('es-ES')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var d=new Date(ts);
+  return d.toLocaleDateString('es-ES')+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 }
 function fmtDateTs(fecha,ts){
   if(!fecha) return '—';
   if(!ts) return fmtDate(fecha);
-  var d=new Date(ts); d.setHours(d.getHours()-2);
-  return fmtDate(fecha)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  var d=new Date(ts);
+  return fmtDate(fecha)+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 }
 function fmtTiempoGestion(mins){ if(!mins||mins<=0) return '—'; var h=Math.floor(mins/60),m=mins%60; return h>0?(h+'h'+(m>0?' '+m+'min':'')):(m+'min'); }
 function startOfWeek(){ var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); return d.toISOString().split('T')[0]; }
