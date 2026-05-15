@@ -189,24 +189,14 @@ function localTs(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMon
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){
   if(!ts) return '—';
-  var hasUTCOffset = ts.indexOf('+') !== -1 || ts.slice(-1) === 'Z';
-  if(hasUTCOffset){
-    // Supabase DEFAULT NOW() stored as UTC — subtract 2h
-    var d=new Date(ts); d.setHours(d.getHours()-2);
-    return d.toLocaleDateString('es-ES')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  }
-  // localTs() stored as plain string — slice directly
-  return new Date(ts.replace(' ','T')).toLocaleDateString('es-ES')+' '+ts.slice(11,16);
+  var d=new Date(ts); d.setHours(d.getHours()-2);
+  return d.toLocaleDateString('es-ES')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 function fmtDateTs(fecha,ts){
   if(!fecha) return '—';
   if(!ts) return fmtDate(fecha);
-  var hasUTCOffset = ts.indexOf('+') !== -1 || ts.slice(-1) === 'Z';
-  if(hasUTCOffset){
-    var d=new Date(ts); d.setHours(d.getHours()-2);
-    return fmtDate(fecha)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  }
-  return fmtDate(fecha)+' '+ts.slice(11,16);
+  var d=new Date(ts); d.setHours(d.getHours()-2);
+  return fmtDate(fecha)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 function fmtTiempoGestion(mins){ if(!mins||mins<=0) return '—'; var h=Math.floor(mins/60),m=mins%60; return h>0?(h+'h'+(m>0?' '+m+'min':'')):(m+'min'); }
 function startOfWeek(){ var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); return d.toISOString().split('T')[0]; }
