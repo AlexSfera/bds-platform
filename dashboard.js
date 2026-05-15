@@ -48,7 +48,7 @@ function _localHora(ts) {
   var n = typeof ts === 'string' ? ts.replace(' ', 'T') : ts;
   var d = new Date(n);
   if (isNaN(d.getTime())) return '—';
-  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  return d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 }
 function _isFio(s) {
   return s.fio === true || s.fio === 1 || s.fio === 'true' || s.fio === '1';
