@@ -475,7 +475,7 @@ function _renderIncidencias(incis, shiftMap) {
     return;
   }
 
-  filtered.sort(function(a, b) { return (b.fecha || '').localeCompare(a.fecha || ''); });
+  filtered.sort(function(a, b) { var ta=b.created_at||b.fecha||''; var tb=a.created_at||a.fecha||''; return ta.localeCompare(tb); });
 
   var isAdmin = currentUser && currentUser.rol === 'admin';
 
@@ -860,7 +860,7 @@ function _renderMerma(mermas) {
     return;
   }
 
-  filtered.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
+  filtered.sort(function(a, b) { var ta=b.created_at||b.fecha||''; var tb=a.created_at||a.fecha||''; return ta.localeCompare(tb); });
 
   el.innerHTML = '<table>'
     + '<tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Causa</th><th>Coste total</th><th>Declarante</th></tr>'
