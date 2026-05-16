@@ -529,6 +529,7 @@ async function reabrirTurnoValidado(shiftId) {
 var _fuCloseId = null;
 
 async function renderFollowupList() {
+  if(!currentUser) return;
   var el        = document.getElementById('followup-incidencias-list');
   var countEl   = document.getElementById('followup-count');
   var btnNew    = document.getElementById('btn-new-followup');
