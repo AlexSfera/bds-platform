@@ -2530,7 +2530,7 @@ async function renderCajaList() {
       var servs = displayServicio(c.servicios||'');
       var diffColor = Math.abs(c.diferencia_caja||0)>5?'var(--red)':'var(--green)';
       return '<tr>'
-        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'</td>'
+        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
         +'<td style="font-family:var(--font-mono);font-weight:700;color:#3b82f6">'+(c.subtotal_neto||0).toFixed(2)+' €</td>'
@@ -2929,9 +2929,12 @@ async function renderValCajaList() {
       var difColor = Math.abs(difOp)<0.01?'var(--green)':Math.abs(difOp)>5?'var(--red)':'var(--amber)';
       var isPendiente = c.estado!=='Validado final';
       var canEdit = currentUser.rol==='admin'||currentUser.rol==='fb';
+      var canValidar = canEdit;
+      var canRevisar = currentUser.rol==='admin'||currentUser.rol==='fb'
+        ||currentUser.rol==='jefe_recepcion'||currentUser.rol==='coordinador_syncrolab';
       var totalPens = (parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0);
       return '<tr>'
-        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'</td>'
+        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
         +'<td style="font-family:var(--font-mono)">'+(c.efectivo_real||0).toFixed(2)+'€</td>'
@@ -2949,10 +2952,12 @@ async function renderValCajaList() {
         })()
         +'<td style="text-align:center">'+totalPens+'p</td>'
         +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+'</td>'
-        +'<td style="white-space:nowrap;display:flex;gap:4px;">'
-        +(isPendiente&&canEdit?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
+        +'<td style="white-space:nowrap">'
+        +'<div style="display:flex;flex-direction:column;gap:4px;">'
+        +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
         +'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
-        +(canEdit?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">↩ Revisar</button>':'')
+        +(canRevisar?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">↩ Revisar</button>':'')
+        +'</div>'
         +'</td>'
         +'</tr>';
     }).join('');
@@ -2982,7 +2987,7 @@ async function openCajaSummary(cajaId, showValidar) {
   }
 
   var html = '<div style="padding:4px 0">'
-    + row('Fecha', fmtDate(c.fecha))
+    + row('Fecha / Hora cierre', fmtDate(c.fecha) + (c.created_at ? ' · ' + c.created_at.slice(11,16) : ''))
     + row('Responsable', c.responsable_nombre, false)
     + row('Servicio', displayServicio(c.servicios||''), false)
     + row('Estado', c.estado, false)
@@ -2996,7 +3001,15 @@ async function openCajaSummary(cajaId, showValidar) {
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TARJETA Y STRIPE</div>'
     + row('Tarjeta POSMEWS', (c.tarjeta_posmews||0).toFixed(2)+'€', true)
     + row('Tarjeta TPV físico', (c.tarjeta_tpv||0).toFixed(2)+'€', true)
-    + row('Δ Tarjeta', (difTar>=0?'+':'')+difTar.toFixed(2)+'€', true, Math.abs(difTar)<0.01?'var(--green)':'var(--red)')
+    + row('Propinas TPV', (c.propinas_tpv||0).toFixed(2)+'€', true)
+    + row('Propinas efectivo', (c.propinas||c.propinas_efectivo||0).toFixed(2)+'€', true)
+    + (function(){
+        var calcDifTar = (c.tarjeta_tpv||0) - (c.propinas_tpv||0) - (c.tarjeta_posmews||0);
+        var nota = Math.abs(calcDifTar - difTar) > 0.01
+          ? ' ⚠ DB: '+(difTar>=0?'+':'')+difTar.toFixed(2)+'€'
+          : '';
+        return row('Δ Tarjeta (TPV - Propinas - POSMEWS)', (calcDifTar>=0?'+':'')+calcDifTar.toFixed(2)+'€'+nota, true, Math.abs(calcDifTar)<0.01?'var(--green)':'var(--red)');
+      })()
     + row('Stripe POSMEWS', (c.stripe_posmews||0).toFixed(2)+'€', true)
     + row('Stripe real', (c.stripe_real||0).toFixed(2)+'€', true)
     + row('Δ Stripe', (difStr>=0?'+':'')+difStr.toFixed(2)+'€', true, Math.abs(difStr)<0.01?'var(--green)':'var(--red)')
@@ -3004,10 +3017,18 @@ async function openCajaSummary(cajaId, showValidar) {
     + row('Total neto sin IVA', (c.subtotal_neto||0).toFixed(2)+'€', true)
     + row('Total bruto con IVA', (c.total_bruto||0).toFixed(2)+'€', true)
     + row('Pensiones', ((parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0))+'p', true)
-    + '<div style="margin:12px 0 6px;padding:10px;border-radius:6px;background:var(--bg2);border:1px solid '+difColor+'">'
-    + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+difColor+';letter-spacing:.1em;margin-bottom:4px">DIFERENCIA OPERATIVA</div>'
-    + '<div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€</div>'
-    + '</div>'
+    + (function(){
+        var calcDifTar2 = (c.tarjeta_tpv||0) - (c.propinas_tpv||0) - (c.tarjeta_posmews||0);
+        var calcDifEf = (c.diferencia_efectivo||0);
+        var calcDifStr = (c.diferencia_stripe||0);
+        var calcTotal = calcDifEf + calcDifTar2 + calcDifStr;
+        var col = Math.abs(calcTotal)<0.01?'var(--green)':Math.abs(calcTotal)>5?'var(--red)':'var(--amber)';
+        return '<div style="margin:12px 0 6px;padding:10px;border-radius:6px;background:var(--bg2);border:1px solid '+col+'">'
+          + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+col+';letter-spacing:.1em;margin-bottom:4px">DIFERENCIA OPERATIVA (recalculada)</div>'
+          + '<div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:'+col+'">'+(calcTotal>=0?'+':'')+calcTotal.toFixed(2)+'€</div>'
+          + '<div style="font-size:11px;color:var(--text3);margin-top:4px">Ef:'+(calcDifEf>=0?'+':'')+calcDifEf.toFixed(2)+'€ · Tar:'+(calcDifTar2>=0?'+':'')+calcDifTar2.toFixed(2)+'€ · Str:'+(calcDifStr>=0?'+':'')+calcDifStr.toFixed(2)+'€</div>'
+          + '</div>';
+      })()
     + (c.comentario ? row('Comentario', c.comentario) : '')
     + (c.validado_por ? row('Validado por', c.validado_por+' · '+fmtTs(c.validado_ts)) : '')
     + '</div>'
@@ -3015,7 +3036,7 @@ async function openCajaSummary(cajaId, showValidar) {
     + (showValidar && c.estado !== 'Validado final'
         ? '<button class="btn btn-success" onclick="validarCierre(\''+cajaId+'\');closeModal(\'modal-caja-summary\')">✓ Confirmar Validación</button>'
         : '')
-    + '<button class="btn btn-secondary" onclick="closeModal(\'modal-caja-summary\')">Cerrar</button>'
+    + '<button class="btn btn-secondary" onclick="var m=document.getElementById(\'modal-caja-summary\');if(m)m.style.display=\'none\'">Cerrar</button>'
     + '</div>';
 
   // Use existing detail overlay or create inline modal
