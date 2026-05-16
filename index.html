@@ -1095,7 +1095,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- B5: DIFERENCIAS CALCULADAS -->
     <div style="background:var(--bg2);border:2px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">
-      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">5 · DIFERENCIAS CALCULADAS — Calculado automáticamente</div>
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">5 · DIFERENCIAS CALCULADAS</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
         <div><div style="font-size:11px;color:var(--text3);">Δ Cash</div><div id="caja-dif-ef" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
         <div><div style="font-size:11px;color:var(--text3);">Δ TPV (neto propinas)</div><div id="caja-dif-tar" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
@@ -2345,72 +2345,6 @@ function setCajaInformado(val){
   if(no) no.style.background = !val ? 'var(--red)' : '';
 }
 
-function calcCajaTotal() { calcCajaDifs(); }
-
-function calcCajaDifs() {
-  function getV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
-  function setColor(el, val) {
-    if(!el) return;
-    var abs = Math.abs(val);
-    el.style.color = abs < 0.01 ? 'var(--green)' : abs > 5 ? 'var(--red)' : 'var(--amber)';
-  }
-  function fmt(val){ return (val >= 0 ? '+' : '') + val.toFixed(2) + ' €'; }
-  function setEl(id, val){
-    var el = document.getElementById(id);
-    if(el){ el.textContent = fmt(val); setColor(el, val); }
-  }
-
-  // EFECTIVO
-  // diferencia_efectivo = efectivo_real_contado - (fondo_inicial + cash_posmews)
-  var efReal   = getV('caja-ef-real');
-  var efPosmews= getV('caja-ef-posmews');
-  var fondoIni = getV('caja-fondo-ini');
-  var fondoFin = getV('caja-fondo-fin');
-  var retiro   = getV('caja-retiro');
-  var efEsperado = fondoIni + efPosmews;
-  var difEf = efReal - efEsperado;
-  // Control retiro: efectivo_real debe = fondo_final + retiro
-  var difRetiro = efReal - fondoFin - retiro;
-
-  var efEspEl = document.getElementById('caja-ef-esperado');
-  if(efEspEl) efEspEl.textContent = efEsperado.toFixed(2) + ' €';
-  setEl('caja-dif-ef', difEf);
-  setEl('dif-ef-disp', difEf);
-  var retiroEl = document.getElementById('caja-dif-retiro');
-  if(retiroEl){
-    retiroEl.textContent = Math.abs(difRetiro) < 0.01 ? '✓ OK retiro' : 'Δ retiro: '+fmt(difRetiro);
-    retiroEl.style.color = Math.abs(difRetiro) < 0.01 ? 'var(--green)' : 'var(--red)';
-  }
-
-  // TARJETA: diferencia = (TPV - Propinas_TPV) - POSMEWS
-  var tarPosmews = getV('caja-tar-posmews');
-  var tarTpv     = getV('caja-tar-tpv');
-  var propinasTpv= getV('caja-propinas-tpv');
-  var tarCuadrada = tarTpv - propinasTpv;
-  var difTar = tarCuadrada - tarPosmews;
-  setEl('caja-dif-tar', difTar);
-  setEl('dif-tar-disp', difTar);
-
-  // STRIPE
-  var strPosmews = getV('caja-str-posmews');
-  var strReal    = getV('caja-str-real');
-  var difStr = strReal - strPosmews;
-  setEl('caja-dif-str', difStr);
-  setEl('dif-str-disp', difStr);
-
-  // DIFERENCIA OPERATIVA SALA (efectivo + tarjeta + stripe only)
-  var difTotal = difEf + difTar + difStr;
-  var totalEl = document.getElementById('dif-sala-total');
-  if(totalEl){ totalEl.textContent = fmt(difTotal); setColor(totalEl, difTotal); }
-
-  // Alert
-  var alertEl = document.getElementById('caja-diferencia-alert');
-  if(alertEl) alertEl.style.display = Math.abs(difTotal) > 0.01 ? 'block' : 'none';
-  // Show * on comentario when diferencia exists
-  var reqEl = document.getElementById('caja-comentario-req');
-  if(reqEl) reqEl.style.display = Math.abs(difTotal) > 0.01 ? 'inline' : 'none';
-}
-
 function checkCajaDiferencia() {
   var mediosTmp=(parseFloat((document.getElementById('caja-efectivo')||{}).value)||0)+(parseFloat((document.getElementById('caja-tarjeta')||{}).value)||0)+(parseFloat((document.getElementById('caja-room')||{}).value)||0)+(parseFloat((document.getElementById('caja-alexander')||{}).value)||0);
   var posmewsTmp=parseFloat((document.getElementById('caja-posmews-bruto')||{}).value)||0;
@@ -2425,124 +2359,6 @@ function getCajaServicios() {
   // If no services checked (hidden), use a default
   if(checked.length === 0) checked = ['Servicio'];
   return checked;
-}
-
-async function saveCajaForm() {
-  var fecha = (document.getElementById('caja-fecha')||{}).value||today();
-  var servicios = getCajaServicios();
-  // servicios auto-filled
-  // Calculate diferencia operativa from current form values
-  var _efR=parseFloat((document.getElementById('caja-ef-real')||{}).value)||0;
-  var _efP=parseFloat((document.getElementById('caja-ef-posmews')||{}).value)||0;
-  var _foI=parseFloat((document.getElementById('caja-fondo-ini')||{}).value)||0;
-  var _tTP=parseFloat((document.getElementById('caja-tar-tpv')||{}).value)||0;
-  var _tPS=parseFloat((document.getElementById('caja-tar-posmews')||{}).value)||0;
-  var _pTV=parseFloat((document.getElementById('caja-propinas-tpv')||{}).value)||0;
-  var _sR=parseFloat((document.getElementById('caja-str-real')||{}).value)||0;
-  var _sP=parseFloat((document.getElementById('caja-str-posmews')||{}).value)||0;
-  var _dEf = _efR - (_foI + _efP);
-  var _dTar = (_tTP - _pTV) - _tPS;
-  var _dStr = _sR - _sP;
-  var dif = _dEf + _dTar + _dStr;
-  var comentario = (document.getElementById('caja-comentario')||{}).value||'';
-  if(Math.abs(dif) > 0.01 && !comentario.trim()) {
-    toast('Hay diferencia en caja — el comentario es obligatorio','err');
-    document.getElementById('caja-comentario').focus();
-    return;
-  }
-
-  function getCV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
-  var efReal    = getCV('caja-ef-real');
-  var efPosmews = getCV('caja-ef-posmews');
-  var fondoIni  = getCV('caja-fondo-ini');
-  var fondoFin  = getCV('caja-fondo-fin');
-  var retiro    = getCV('caja-retiro');
-  var tarPosmews= getCV('caja-tar-posmews');
-  var tarTpv    = getCV('caja-tar-tpv');
-  var propinasTpv = getCV('caja-propinas-tpv');
-  var strPosmews= getCV('caja-str-posmews');
-  var strReal   = getCV('caja-str-real');
-  var difEf  = efReal - (fondoIni + efPosmews);
-  var difTar = (tarTpv - propinasTpv) - tarPosmews;
-  var difStr = strReal - strPosmews;
-  var difOperativa = difEf + difTar + difStr;
-  var mediosPago = efReal + tarTpv + strReal;
-  var bruto = parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0;
-  var ajustes=(parseFloat((document.getElementById('caja-desc-imp')||{}).value)||0)
-             +(parseFloat((document.getElementById('caja-anul-imp')||{}).value)||0)
-             +(parseFloat((document.getElementById('caja-inv-imp')||{}).value)||0);
-
-  var closure = {
-    id: _editingCajaId || genId(),
-    fecha: fecha,
-    servicios: JSON.stringify(servicios),
-    responsable_id: currentUser.id,
-    responsable_nombre: currentUser.nombre,
-    // Payment fields
-    efectivo_real: efReal,
-    efectivo_posmews: efPosmews,
-    fondo_inicial: fondoIni,
-    fondo_final: fondoFin,
-    retiro_caja_fuerte: retiro,
-    diferencia_efectivo: difEf,
-    tarjeta_posmews: tarPosmews,
-    tarjeta_tpv: tarTpv,
-    propinas_tpv: propinasTpv,
-    propinas: parseFloat((document.getElementById('caja-propinas')||{}).value)||0,
-    diferencia_tarjeta: difTar,
-    stripe_posmews: strPosmews,
-    stripe_real: strReal,
-    diferencia_stripe: difStr,
-    diferencia_operativa_sala: difOperativa,
-    diferencia_caja: difOperativa,
-    // PMS fields
-    room_charge: getCV('caja-room'),
-    cargo_alexander: getCV('caja-alexander'),
-    pension_desayuno: getCV('caja-pension-d'),
-    media_pension: getCV('caja-pension-m'),
-    pension_completa: getCV('caja-pension-c'),
-    // Totals (manual entry)
-    subtotal_neto: parseFloat((document.getElementById('caja-total-neto-manual')||{}).value)||0,
-    total_bruto: parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0,
-    total_medios_pago: mediosPago,
-    comentario: comentario,
-    estado: 'Pendiente validación',
-    created_at: localTs(),
-    updated_at: localTs()
-  };
-
-  try {
-    var cajaUrl = SUPABASE_URL + '/rest/v1/sala_cash_closures';
-    var cajaMethod = _editingCajaId ? 'PATCH' : 'POST';
-    var cajaFetchUrl = _editingCajaId ? cajaUrl + '?id=eq.' + encodeURIComponent(_editingCajaId) : cajaUrl;
-    var cajaRes = await fetch(cajaFetchUrl, {
-      method: cajaMethod,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify(closure)
-    });
-    console.log('[CAJA SAVE] status:', cajaRes.status, 'id:', closure.id);
-    if(!cajaRes.ok){
-      var errTxt = await cajaRes.text();
-      console.error('[CAJA ERROR]', errTxt);
-      toast('Error Supabase cierre caja: ' + cajaRes.status, 'err');
-      return;
-    }
-    invalidateCache('sala_cash_closures');
-    closeModal('modal-caja');
-    toast('Cierre de caja guardado ✓','ok');
-    await renderCajaList();
-    // Refresh validation tab if open
-    var valCajaEl = document.getElementById('val-caja-table');
-    if(valCajaEl) await renderValCajaList();
-  } catch(e) {
-    console.error('Caja save error:', e);
-    toast('Error al guardar cierre de caja: ' + e.message,'err');
-  }
 }
 
 async function renderCajaList() {
