@@ -1032,7 +1032,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">1 · FONDO INICIAL</div>
       <div class="grid2">
         <div class="fg"><label>Fecha <span class="req">*</span></label><input type="date" id="caja-fecha"></div>
-        <div class="fg"><label>Fondo recibido del turno anterior (€) <span style="font-size:10px;color:var(--text3);">— Calculado automáticamente</span></label>
+        <div class="fg"><label>Fondo recibido del turno anterior (€)</label>
           <input type="number" id="caja-fondo-ini" min="0" step="0.01" placeholder="0.00" readonly style="opacity:0.65;cursor:not-allowed;"></div>
       </div>
     </div>
@@ -1142,7 +1142,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="grid2">
         <div class="fg"><label>Retiro efectivo caja fuerte (€)</label>
           <input type="number" id="caja-retiro" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-        <div class="fg"><label>Fondo esperado a traspasar (€) <span style="font-size:10px;color:var(--text3);">— Calculado automáticamente</span></label>
+        <div class="fg"><label>Fondo esperado a traspasar (€)</label>
           <div id="caja-fondo-esperado" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div></div>
         <div class="fg"><label>Fondo real a traspasar (€) <span class="req">*</span></label>
           <input type="number" id="caja-fondo-real" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>

@@ -41,7 +41,9 @@ function openCajaForm(existingId) {
         });
       var ultimo=sorted[0];
       if(fondoIniEl&&ultimo){
-        fondoIniEl.value=parseFloat(ultimo.fondo_final).toFixed(2);
+        // Use fondo_real_sala (actual transferred) or fondo_final as fallback
+        var fondo = parseFloat(ultimo.fondo_real_sala||ultimo.fondo_final||0);
+        fondoIniEl.value = fondo.toFixed(2);
         calcCajaDifs();
       }
     });
@@ -70,6 +72,8 @@ function openCajaForm(existingId) {
       setF('caja-propinas-ef',  row.propinas_efectivo);
       setF('caja-retiro',   row.retiro_caja_fuerte);
       setF('caja-fondo-real', row.fondo_real_sala);
+      // Set fondoIni from DB for edit mode
+      if(fondoIniEl && row.fondo_inicial!=null) fondoIniEl.value=parseFloat(row.fondo_inicial).toFixed(2);
       var explEl=document.getElementById('caja-expl-diferencia'); if(explEl) explEl.value=row.explicacion_diferencia||'';
       var accionEl=document.getElementById('caja-accion-diferencia'); if(accionEl) accionEl.value=row.accion_diferencia||'';
       var comEl=document.getElementById('caja-comentario'); if(comEl) comEl.value=row.comentario||'';
