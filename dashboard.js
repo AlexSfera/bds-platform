@@ -222,9 +222,14 @@ async function renderDashboard() {
   var validAreas = _dashDeptSet(_dashCurrentDept);
   shifts = allShifts.filter(function(s) { return _inArea(s.area, validAreas); });
   mermas = allMermas.filter(function(m) {
+    // Primero intentar por shift
     var s = shiftMap[m.shift_id];
-    if (!s) return false;
-    return validAreas.indexOf(_dashCanonicalDept(s.area)) !== -1;
+    if (s) return validAreas.indexOf(_dashCanonicalDept(s.area)) !== -1;
+    // Fallback: usar area directa de la merma
+    if (m.area) return validAreas.indexOf(_dashCanonicalDept(m.area)) !== -1;
+    // Si es Cocina o FnB y la merma no tiene area, incluirla (mermas son de cocina por defecto)
+    if (_dashCurrentDept === 'Cocina' || _dashCurrentDept === 'FnB') return true;
+    return false;
   });
   incis    = allIncis.filter(function(i) { return inciMatchDept(i, validAreas); });
   tareas   = allTareas.filter(function(t) { return tareaMatchDept(t, validAreas); });
@@ -236,7 +241,11 @@ async function renderDashboard() {
   // Filtrar por periodo
   if (desde) {
     shifts = shifts.filter(function(s) { return s.fecha >= desde; });
-    mermas = mermas.filter(function(m) { var s = shiftMap[m.shift_id]; return s && s.fecha >= desde; });
+    mermas = mermas.filter(function(m) {
+      var s = shiftMap[m.shift_id];
+      if (s) return s.fecha >= desde;
+      return (m.fecha || '') >= desde;
+    });
     incis = incis.filter(function(i) { return i.fecha >= desde; });
     tareas = tareas.filter(function(t) { return (t.created_at || t.deadline || '') >= desde; });
     gestiones = gestiones.filter(function(g) { return (g.fecha || g.created_at || '') >= desde; });
