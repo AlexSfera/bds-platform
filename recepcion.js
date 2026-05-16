@@ -313,6 +313,7 @@ async function submitRecCaja() {
     tpv_real:                  realTpv,
     stripe_real:               realStr,
     transferencia_banco:       realTrans,
+    transferencia_banco_updated_at: window._recTransFecha || null,
     // Diferencias
     dif_cash:                  difCash,
     dif_tarjeta:               difTar,
