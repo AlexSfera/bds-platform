@@ -146,8 +146,13 @@ function calcCajaDifs() {
   var explBloque = document.getElementById('caja-expl-bloque');
   if(explBloque) explBloque.style.display = hayDif ? 'block' : 'none';
 
-  // Total bruto = Cash POSMEWS + Tarjeta POSMEWS + Stripe POSMEWS
-  var totalBruto = efPosmews + tarPosmews + strPosmews;
+  // Total bruto = Cash + Tarjeta + Stripe POSMEWS + Room Charge + Syncrolab + Alexander + Pensiones €
+  var roomCharge   = getV('caja-room');
+  var syncrolab    = getV('caja-syncrolab');
+  var alexander    = getV('caja-alexander');
+  var eurPensD     = getV('caja-eur-pension-desayuno');
+  var eurPensC     = getV('caja-eur-pension-comidacena');
+  var totalBruto   = efPosmews + tarPosmews + strPosmews + roomCharge + syncrolab + alexander + eurPensD + eurPensC;
   var totalBrutoEl = document.getElementById('caja-total-bruto-display');
   if(totalBrutoEl) totalBrutoEl.textContent = totalBruto.toFixed(2) + ' €';
 
@@ -285,7 +290,7 @@ async function saveCajaForm() {
     fondo_real_sala:    fondoReal,
     // Totales
     subtotal_neto: getCV('caja-total-neto-manual'),
-    total_bruto:   efPosmews + tarPosmews + strPosmews,  // Cash + Tarjeta + Stripe POSMEWS
+    total_bruto:   efPosmews + tarPosmews + strPosmews + getCV('caja-room') + getCV('caja-syncrolab') + getCV('caja-alexander') + getCV('caja-eur-pension-desayuno') + getCV('caja-eur-pension-comidacena'),
     estado: 'Pendiente validación',
     created_at: localTs(),
     updated_at: localTs()
