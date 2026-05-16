@@ -110,7 +110,7 @@ function calcCajaDifs() {
 
   // Diferencias: Real - POSMEWS (spec)
   var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
-  var propinasTpv = getV('caja-propinas-tpv');
+  var propinasTpv = getCV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
 
@@ -145,6 +145,20 @@ function calcCajaDifs() {
   if(alertEl) alertEl.style.display = hayDif ? 'block' : 'none';
   var explBloque = document.getElementById('caja-expl-bloque');
   if(explBloque) explBloque.style.display = hayDif ? 'block' : 'none';
+
+  // Total bruto = Cash POSMEWS + Tarjeta POSMEWS + Stripe POSMEWS
+  var totalBruto = efPosmews + tarPosmews + strPosmews;
+  var totalBrutoEl = document.getElementById('caja-total-bruto-display');
+  if(totalBrutoEl) totalBrutoEl.textContent = totalBruto.toFixed(2) + ' €';
+
+  // Verificación: totalBruto vs Cash real + (TPV - Propinas) + Stripe real
+  var totalReal = efReal + (tarTpv - propinasTpv) + strReal;
+  var difVerif = totalBruto - totalReal;
+  var verifEl = document.getElementById('caja-total-verif');
+  if(verifEl){
+    verifEl.textContent = Math.abs(difVerif)<0.01 ? '✓ Cuadrado' : 'Δ '+( difVerif>=0?'+':'')+difVerif.toFixed(2)+'€';
+    verifEl.style.color = Math.abs(difVerif)<0.01 ? 'var(--green)' : 'var(--red)';
+  }
 }
 
 function checkCajaDiferencia() {
@@ -180,13 +194,38 @@ async function saveCajaForm() {
 
   // Diferencias: Real - POSMEWS
   var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
-  var propinasTpv = getV('caja-propinas-tpv');
+  var propinasTpv = getCV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
   var difTotal = difEf + difTar + difStr;
 
   // Fondo esperado = Fondo recibido + Cash real - Retiro
   var fondoEsperado = efReal - retiro;  // Fondo esperado = Cash real - Retiro
+
+  // Validación campos obligatorios
+  var requiredFields = [
+    ['caja-ef-posmews', 'Cash POSMEWS'],
+    ['caja-tar-posmews', 'Tarjeta POSMEWS'],
+    ['caja-str-posmews', 'Stripe POSMEWS'],
+    ['caja-room', 'Room Charge'],
+    ['caja-syncrolab', 'SYNCROLAB Charge'],
+    ['caja-alexander', 'Cargo Alexander'],
+    ['caja-pension-desayuno-pax', 'Pensiones desayunos (pax)'],
+    ['caja-pension-comidacena-pax', 'Pensiones comida+cena (pax)'],
+    ['caja-ef-real', 'Cash real contado'],
+    ['caja-tar-tpv', 'TPV físico'],
+    ['caja-str-real', 'Stripe plataforma'],
+    ['caja-propinas-tpv', 'Propinas TPV'],
+    ['caja-fondo-real', 'Fondo real a traspasar']
+  ];
+  for(var ri=0; ri<requiredFields.length; ri++){
+    var rEl = document.getElementById(requiredFields[ri][0]);
+    if(!rEl || rEl.value==='' || rEl.value===null){
+      toast(requiredFields[ri][1]+' es obligatorio','err');
+      if(rEl) rEl.focus();
+      return;
+    }
+  }
 
   // Validación: si hay diferencia, explicación obligatoria
   var hayDif = Math.abs(difTotal) > 0.01;
@@ -246,7 +285,7 @@ async function saveCajaForm() {
     fondo_real_sala:    fondoReal,
     // Totales
     subtotal_neto: getCV('caja-total-neto-manual'),
-    total_bruto:   getCV('caja-total-bruto-manual'),
+    total_bruto:   efPosmews + tarPosmews + strPosmews,  // Cash + Tarjeta + Stripe POSMEWS
     estado: 'Pendiente validación',
     created_at: localTs(),
     updated_at: localTs()
