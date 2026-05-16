@@ -1023,114 +1023,142 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <!-- MODAL: Cierre Caja -->
 <div class="modal-overlay" id="modal-caja">
   <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
-    <div class="modal-title">💰 <span id="caja-form-title">Nuevo Cierre de Caja</span></div>
-    <div class="grid2" style="gap:14px;">
-      <div class="fg"><label>Fecha <span class="req">*</span></label><input type="date" id="caja-fecha"></div>
-<input type="hidden" id="caja-responsable">
-      <div style="display:none" id="caja-servicios-check">
-        <input type="checkbox" value="Servicio" checked>
-      </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Efectivo esperado = Fondo inicial + Cash POSMEWS · Diferencia = Real − Esperado</div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div class="fg"><label>Efectivo real contado (€)</label>
-            <input type="number" id="caja-ef-real" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-          <div class="fg"><label>Fondo de caja inicial (€) <span style="font-size:10px;color:var(--text3);">— del cierre anterior</span></label>
-            <input type="number" id="caja-fondo-ini" min="0" step="0.01" placeholder="0.00" readonly style="opacity:0.65;cursor:not-allowed;"></div>
-          <div class="fg"><label>Cash según POSMEWS (€)</label>
-            <input type="number" id="caja-ef-posmews" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-          <div class="fg"><label>Fondo de caja final (€)</label>
-            <input type="number" id="caja-fondo-fin" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-          <div class="fg"><label>Retiro efectivo caja fuerte (€)</label>
-            <input type="number" id="caja-retiro" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;padding:10px;background:var(--bg3);border-radius:6px;">
-          <div><div style="font-size:11px;color:var(--text3);">Efectivo esperado</div>
-            <div id="caja-ef-esperado" style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--text);">0.00 €</div></div>
-          <div><div style="font-size:11px;color:var(--text3);">Diferencia efectivo</div>
-            <div id="caja-dif-ef" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">0.00 €</div></div>
-          <div style="grid-column:span 2"><div style="font-size:11px;color:var(--text3);">Control retiro (Real − Fondo final − Retiro)</div>
-            <div id="caja-dif-retiro" style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text3);">—</div></div>
-        </div>
-      </div>
+    <div class="modal-title">💰 <span id="caja-form-title">Nuevo Cierre de Caja — Sala</span></div>
+    <input type="hidden" id="caja-responsable">
+    <div style="display:none" id="caja-servicios-check"><input type="checkbox" value="Servicio" checked></div>
 
-      <!-- TARJETA + STRIPE -->
-      <div class="fg sp2" style="background:var(--bg);border:2px solid #3b82f6;border-radius:8px;padding:16px;">
-        <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:12px;">TARJETA Y STRIPE</div>
+    <!-- B1: FONDO INICIAL -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">1 · FONDO INICIAL</div>
+      <div class="grid2">
+        <div class="fg"><label>Fecha <span class="req">*</span></label><input type="date" id="caja-fecha"></div>
+        <div class="fg"><label>Fondo recibido del turno anterior (€) <span style="font-size:10px;color:var(--text3);">— Calculado automáticamente</span></label>
+          <input type="number" id="caja-fondo-ini" min="0" step="0.01" placeholder="0.00" readonly style="opacity:0.65;cursor:not-allowed;"></div>
+      </div>
+    </div>
+
+    <!-- B2: VALORES POSMEWS -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">2 · VALORES SISTEMA POSMEWS</div>
+      <div class="grid2">
+        <div class="fg"><label>Cash POSMEWS (€)</label>
+          <input type="number" id="caja-ef-posmews" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Tarjeta POSMEWS (€)</label>
+          <input type="number" id="caja-tar-posmews" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Stripe POSMEWS (€)</label>
+          <input type="number" id="caja-str-posmews" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+      </div>
+    </div>
+
+    <!-- B3: CARGOS INTERNOS -->
+    <div style="background:var(--bg2);border:1px solid #f59e0b;border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#d97706;letter-spacing:.15em;margin-bottom:10px;">3 · CARGOS Y CONCEPTOS INTERNOS</div>
+      <div class="grid2">
+        <div class="fg"><label>Room Charge (€)</label>
+          <input type="number" id="caja-room" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+        <div class="fg"><label>SYNCROLAB Charge clientes (€)</label>
+          <input type="number" id="caja-syncrolab" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+        <div class="fg"><label>Cargo Alexander (€)</label>
+          <input type="number" id="caja-alexander" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#d97706;letter-spacing:.1em;margin-bottom:8px;">PENSIONES <span style="font-weight:400;color:var(--text3);">— Informativo · no genera diferencia obligatoria</span></div>
         <div class="grid2">
-          <div class="fg"><label>Tarjeta según POSMEWS (€)</label>
-            <input type="number" id="caja-tar-posmews" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-          <div class="fg"><label>Tarjeta según TPV físico (€)</label>
-            <input type="number" id="caja-tar-tpv" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-          <div class="fg"><label>Propinas TPV (€)</label>
-            <input type="number" id="caja-propinas-tpv" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-          <div class="fg"><label>Propinas efectivo (€)</label>
-            <input type="number" id="caja-propinas" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
-        </div>
-        <div style="padding:10px;background:var(--bg3);border-radius:6px;margin-top:10px;">
-          <div style="font-size:11px;color:var(--text3);">Diferencia tarjeta = (TPV − Propinas TPV) − POSMEWS</div>
-          <div id="caja-dif-tar" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">0.00 €</div>
-        </div>
-        <div class="grid2" style="margin-top:12px;">
-          <div class="fg"><label>Stripe según POSMEWS (€)</label>
-            <input type="number" id="caja-str-posmews" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-          <div class="fg"><label>Stripe real — Stripe.com (€)</label>
-            <input type="number" id="caja-str-real" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-        </div>
-        <div style="padding:10px;background:var(--bg3);border-radius:6px;margin-top:10px;">
-          <div style="font-size:11px;color:var(--text3);">Diferencia Stripe</div>
-          <div id="caja-dif-str" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">0.00 €</div>
+          <div class="fg"><label>Pensiones desayunos (nº pax)</label>
+            <input type="number" id="caja-pension-desayuno-pax" min="0" step="1" placeholder="0"></div>
+          <div class="fg"><label>Pensiones comida+cena (nº pax)</label>
+            <input type="number" id="caja-pension-comidacena-pax" min="0" step="1" placeholder="0"></div>
+          <div class="fg"><label>€ Pensiones Desayunos (importe)</label>
+            <input type="number" id="caja-eur-pension-desayuno" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+          <div class="fg"><label>€ Pensiones Comidas+Cenas (importe)</label>
+            <input type="number" id="caja-eur-pension-comidacena" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
         </div>
       </div>
+    </div>
 
-      <!-- DIFERENCIA OPERATIVA SALA -->
-      <div class="fg sp2" style="background:var(--bg2);border:2px solid #3b82f6;border-radius:8px;padding:16px;">
-        <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">DIFERENCIA OPERATIVA SALA = Δ Efectivo + Δ Tarjeta + Δ Stripe</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;">
-          <div><div style="font-size:11px;color:var(--text3);">Δ Efectivo</div><div id="dif-ef-disp" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
-          <div><div style="font-size:11px;color:var(--text3);">Δ Tarjeta</div><div id="dif-tar-disp" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
-          <div><div style="font-size:11px;color:var(--text3);">Δ Stripe</div><div id="dif-str-disp" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
-        </div>
-        <div style="text-align:center;margin-top:14px;padding:14px;background:var(--bg3);border-radius:8px;">
-          <div style="font-size:11px;color:var(--text3);">Diferencia operativa Sala total</div>
-          <div id="dif-sala-total" style="font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--green);">0.00 €</div>
-        </div>
-        <div id="caja-diferencia-alert" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;color:#dc2626;font-size:12px;margin-top:10px;font-family:var(--font-mono);">⚠ Diferencia detectada — comentario obligatorio</div>
+    <!-- B4: VALORES REALES -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">4 · VALORES REALES FÍSICOS</div>
+      <div class="grid2">
+        <div class="fg"><label>Cash real contado (€)</label>
+          <input type="number" id="caja-ef-real" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>TPV físico (€)</label>
+          <input type="number" id="caja-tar-tpv" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Stripe plataforma (€)</label>
+          <input type="number" id="caja-str-real" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
       </div>
+    </div>
 
-      <!-- CAMPOS PMS / RECEPCIÓN -->
-      <div class="fg sp2" style="background:var(--bg);border:1px solid #f59e0b;border-radius:8px;padding:14px;">
-        <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#d97706;letter-spacing:.15em;margin-bottom:4px;">CAMPOS PMS / RECEPCIÓN — PENDIENTE CONFIRMACIÓN EXTERNA</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Sala solo declara. Confirma Recepción / auditoría nocturna.</div>
-        <div class="grid2">
-          <div class="fg"><label>Room charge declarado (€)</label>
-            <input type="number" id="caja-room" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
-          <div class="fg"><label>Cargo Alexander declarado (€)</label>
-            <input type="number" id="caja-alexander" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
-          <div class="fg"><label>Pensiones desayuno (nº personas)</label>
-            <input type="number" id="caja-pension-d" min="0" placeholder="0" step="1"></div>
-          <div class="fg"><label>Media pensión (nº personas)</label>
-            <input type="number" id="caja-pension-m" min="0" placeholder="0" step="1"></div>
-          <div class="fg"><label>Pensión completa (nº personas)</label>
-            <input type="number" id="caja-pension-c" min="0" placeholder="0" step="1"></div>
+    <!-- B5: DIFERENCIAS CALCULADAS -->
+    <div style="background:var(--bg2);border:2px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">5 · DIFERENCIAS CALCULADAS — Calculado automáticamente</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
+        <div><div style="font-size:11px;color:var(--text3);">Δ Cash</div><div id="caja-dif-ef" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
+        <div><div style="font-size:11px;color:var(--text3);">Δ TPV</div><div id="caja-dif-tar" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
+        <div><div style="font-size:11px;color:var(--text3);">Δ Stripe</div><div id="caja-dif-str" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg3);border-radius:6px;">
+        <div style="font-size:11px;color:var(--text3);">Diferencia operativa total</div>
+        <div id="dif-sala-total" style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--green);">+0.00 €</div>
+      </div>
+      <!-- aliases for compatibility -->
+      <div style="display:none"><span id="dif-ef-disp"></span><span id="dif-tar-disp"></span><span id="dif-str-disp"></span></div>
+      <div id="caja-diferencia-alert" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;color:#dc2626;font-size:12px;margin-top:10px;">⚠ Diferencia detectada — explicación obligatoria antes de guardar</div>
+    </div>
+
+    <!-- B6: EXPLICACIÓN DIFERENCIA -->
+    <div id="caja-expl-bloque" style="display:none;background:var(--bg2);border:1px solid var(--red);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--red);letter-spacing:.15em;margin-bottom:10px;">6 · GESTIÓN DE DIFERENCIAS</div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label>Explicación de la diferencia <span class="req">*</span></label>
+        <textarea id="caja-expl-diferencia" rows="2" placeholder="Explica el motivo de la diferencia detectada..."></textarea>
+      </div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label>Acción tomada <span class="req">*</span></label>
+        <textarea id="caja-accion-diferencia" rows="2" placeholder="¿Qué hiciste para resolver la diferencia?"></textarea>
+      </div>
+      <div class="fg">
+        <label>¿Informado al responsable?</label>
+        <div style="display:flex;gap:10px;margin-top:6px;">
+          <button type="button" id="caja-informado-si" class="btn btn-secondary btn-sm" onclick="setCajaInformado(true)">Sí</button>
+          <button type="button" id="caja-informado-no" class="btn btn-secondary btn-sm" onclick="setCajaInformado(false)">No</button>
         </div>
       </div>
+    </div>
 
-      <!-- TOTALES FINALES -->
-      <div class="fg sp2" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;">
-        <div class="grid2">
-          <div class="fg"><label>Total neto sin IVA (€) <span class="req">*</span></label>
-            <input type="number" id="caja-total-neto-manual" step="0.01" placeholder="0.00" style="font-size:16px;font-weight:600;color:#3b82f6;"></div>
-          <div class="fg"><label>Total bruto con IVA (€) <span class="req">*</span></label>
-            <input type="number" id="caja-total-bruto-manual" step="0.01" placeholder="0.00" style="font-size:16px;font-weight:700;color:#d97706;"></div>
+    <!-- COMENTARIO GENERAL -->
+    <div class="fg" style="margin-bottom:12px;">
+      <label>Comentario general (opcional)</label>
+      <textarea id="caja-comentario" rows="2" placeholder="Observaciones adicionales..."></textarea>
+    </div>
+
+    <!-- B7: FONDO FINAL -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">7 · FONDO FINAL Y TRASPASO</div>
+      <div class="grid2">
+        <div class="fg"><label>Retiro efectivo caja fuerte (€)</label>
+          <input type="number" id="caja-retiro" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Fondo esperado a traspasar (€) <span style="font-size:10px;color:var(--text3);">— Calculado automáticamente</span></label>
+          <div id="caja-fondo-esperado" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div></div>
+        <div class="fg"><label>Fondo real a traspasar (€) <span class="req">*</span></label>
+          <input type="number" id="caja-fondo-real" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:4px;">
+          <div id="caja-fondo-dif" style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text3);">—</div>
         </div>
       </div>
+    </div>
 
-      <div class="fg sp2">
-        <label>Comentario <span id="caja-comentario-req" style="color:var(--red);display:none;">*</span></label>
-        <textarea id="caja-comentario" rows="2" placeholder="Obligatorio si hay diferencia — Observaciones, diferencias, incidencias de pago..."></textarea>
+    <!-- TOTALES -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div class="grid2">
+        <div class="fg"><label>Total neto sin IVA (€)</label>
+          <input type="number" id="caja-total-neto-manual" step="0.01" placeholder="0.00"></div>
+        <div class="fg"><label>Total bruto con IVA (€)</label>
+          <input type="number" id="caja-total-bruto-manual" step="0.01" placeholder="0.00"></div>
       </div>
+    </div>
 
-<div class="modal-footer">
+    <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-caja')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveCajaForm()">💾 Guardar Cierre</button>
     </div>
@@ -1370,14 +1398,16 @@ tr:hover td{background:rgba(255,255,255,.018);}
     </div>
 
     <!-- PENSIONES -->
-    <div class="sec-div" style="margin-top:10px;">Pensiones</div>
+    <div class="sec-div" style="margin-top:10px;">Pensiones <span style="font-size:10px;color:var(--text3);font-weight:400;">— Informativo · no bloquea validación</span></div>
     <div class="grid2">
-      <div class="fg"><label>Desayunos pensión (nº personas)</label>
-        <input type="number" id="rec-desayunos-pension" min="0" step="1" placeholder="0"></div>
-      <div class="fg"><label>Media pensión (nº personas)</label>
-        <input type="number" id="rec-media-pension" min="0" step="1" placeholder="0"></div>
-      <div class="fg"><label>Pensión completa (nº personas)</label>
-        <input type="number" id="rec-pension-completa" min="0" step="1" placeholder="0"></div>
+      <div class="fg"><label>Pensiones desayunos (nº pax)</label>
+        <input type="number" id="rec-pension-desayuno-pax" min="0" step="1" placeholder="0"></div>
+      <div class="fg"><label>Pensiones comida+cena (nº pax)</label>
+        <input type="number" id="rec-pension-comidacena-pax" min="0" step="1" placeholder="0"></div>
+      <div class="fg"><label>€ Pensiones Desayunos (importe)</label>
+        <input type="number" id="rec-eur-pension-desayuno" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+      <div class="fg"><label>€ Pensiones Comidas+Cenas (importe)</label>
+        <input type="number" id="rec-eur-pension-comidacena" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
     </div>
 
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">REAL / FÍSICO</div>
@@ -2300,6 +2330,15 @@ function openCajaForm(existingId) {
   document.querySelectorAll('#caja-servicios-check input[type=checkbox]').forEach(function(cb){ cb.checked = false; });
   calcCajaTotal();
   document.getElementById('modal-caja').classList.add('open');
+}
+
+var _cajaInformado = false;
+function setCajaInformado(val){
+  _cajaInformado = val;
+  var si = document.getElementById('caja-informado-si');
+  var no = document.getElementById('caja-informado-no');
+  if(si) si.style.background = val ? 'var(--green)' : '';
+  if(no) no.style.background = !val ? 'var(--red)' : '';
 }
 
 function calcCajaTotal() { calcCajaDifs(); }

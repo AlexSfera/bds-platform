@@ -17,11 +17,14 @@ function openCajaForm(existingId) {
   if(respEl){ respEl.value=currentUser.nombre+' — '+currentUser.puesto; respEl.readOnly=(currentUser.rol!=='admin'); }
   var lastShiftLink=document.getElementById('caja-shift-link');
   if(lastShiftLink) lastShiftLink.value=window._lastSavedShiftId||'';
-  ['caja-efectivo','caja-tarjeta','caja-room','caja-alexander',
-   'caja-pension-d','caja-pension-m','caja-pension-c','caja-propinas',
-   'caja-desc-imp','caja-desc-num','caja-anul-imp','caja-anul-num',
-   'caja-inv-imp','caja-inv-num','caja-diferencia','caja-comentario',
-   'caja-ef-real','caja-ef-posmews','caja-fondo-fin','caja-retiro'].forEach(function(id){
+  ['caja-ef-posmews','caja-tar-posmews','caja-str-posmews',
+   'caja-room','caja-syncrolab','caja-alexander',
+   'caja-pension-desayuno-pax','caja-pension-comidacena-pax',
+   'caja-eur-pension-desayuno','caja-eur-pension-comidacena',
+   'caja-ef-real','caja-tar-tpv','caja-str-real',
+   'caja-retiro','caja-fondo-real',
+   'caja-expl-diferencia','caja-accion-diferencia','caja-comentario',
+   'caja-total-neto-manual','caja-total-bruto-manual'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
   // BUG-29 SALA: fondo inicial = fondo_final del último cierre, readonly en HTML
@@ -46,6 +49,29 @@ function openCajaForm(existingId) {
       var row=rows.find(function(r){ return r.id===existingId; });
       if(!row) return;
       if(fondoIniEl&&row.fondo_inicial!=null) fondoIniEl.value=parseFloat(row.fondo_inicial).toFixed(2);
+      // Load POSMEWS values
+      function setF(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=parseFloat(val).toFixed(2); }
+      function setI(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=parseInt(val)||0; }
+      setF('caja-ef-posmews',  row.efectivo_posmews);
+      setF('caja-tar-posmews', row.tarjeta_posmews);
+      setF('caja-str-posmews', row.stripe_posmews);
+      setF('caja-room',        row.room_charge);
+      setF('caja-syncrolab',   row.syncrolab_charge);
+      setF('caja-alexander',   row.cargo_alexander);
+      setI('caja-pension-desayuno-pax',   row.pension_desayuno_pax);
+      setI('caja-pension-comidacena-pax', row.pension_comidacena_pax);
+      setF('caja-eur-pension-desayuno',   row.eur_pension_desayuno);
+      setF('caja-eur-pension-comidacena', row.eur_pension_comidacena);
+      setF('caja-ef-real',  row.efectivo_real);
+      setF('caja-tar-tpv',  row.tarjeta_tpv);
+      setF('caja-str-real', row.stripe_real);
+      setF('caja-retiro',   row.retiro_caja_fuerte);
+      setF('caja-fondo-real', row.fondo_real_sala);
+      var explEl=document.getElementById('caja-expl-diferencia'); if(explEl) explEl.value=row.explicacion_diferencia||'';
+      var accionEl=document.getElementById('caja-accion-diferencia'); if(accionEl) accionEl.value=row.accion_diferencia||'';
+      var comEl=document.getElementById('caja-comentario'); if(comEl) comEl.value=row.comentario||'';
+      var netoEl=document.getElementById('caja-total-neto-manual'); if(netoEl) netoEl.value=row.subtotal_neto||'';
+      var brutoEl=document.getElementById('caja-total-bruto-manual'); if(brutoEl) brutoEl.value=row.total_bruto||'';
       calcCajaDifs();
     });
   }
@@ -62,44 +88,55 @@ function calcCajaDifs() {
   function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
   function setEl(id,val){ var el=document.getElementById(id); if(el){el.textContent=fmt(val);setColor(el,val);} }
 
-  var efReal=getV('caja-ef-real');
-  var efPosmews=getV('caja-ef-posmews');
-  var fondoIni=getV('caja-fondo-ini');
-  var fondoFin=getV('caja-fondo-fin');
-  var retiro=getV('caja-retiro');
-  var efEsperado=fondoIni+efPosmews;
-  var difEf=efReal-efEsperado;
-  var difRetiro=efReal-fondoFin-retiro;
+  // Bloque 1 — Fondo
+  var fondoIni = getV('caja-fondo-ini');
 
-  var efEspEl=document.getElementById('caja-ef-esperado');
-  if(efEspEl) efEspEl.textContent=efEsperado.toFixed(2)+' €';
-  setEl('caja-dif-ef',difEf);
-  setEl('dif-ef-disp',difEf);
-  var retiroEl=document.getElementById('caja-dif-retiro');
-  if(retiroEl){ retiroEl.textContent=Math.abs(difRetiro)<0.01?'✓ OK retiro':'Δ retiro: '+fmt(difRetiro); retiroEl.style.color=Math.abs(difRetiro)<0.01?'var(--green)':'var(--red)'; }
+  // Bloque 4 — Valores reales
+  var efReal      = getV('caja-ef-real');
+  var tarTpv      = getV('caja-tar-tpv');
+  var strReal     = getV('caja-str-real');
 
-  var tarPosmews=getV('caja-tar-posmews');
-  var tarTpv=getV('caja-tar-tpv');
-  var propinasTpv=getV('caja-propinas-tpv');
-  var tarCuadrada=tarTpv-propinasTpv;
-  var difTar=tarCuadrada-tarPosmews;
-  setEl('caja-dif-tar',difTar);
-  setEl('dif-tar-disp',difTar);
+  // Bloque 2 — POSMEWS
+  var efPosmews   = getV('caja-ef-posmews');
+  var tarPosmews  = getV('caja-tar-posmews');
+  var strPosmews  = getV('caja-str-posmews');
 
-  var strPosmews=getV('caja-str-posmews');
-  var strReal=getV('caja-str-real');
-  var difStr=strReal-strPosmews;
-  setEl('caja-dif-str',difStr);
-  setEl('dif-str-disp',difStr);
+  // Diferencias: Real - POSMEWS (spec)
+  var difEf  = efReal  - efPosmews;
+  var difTar = tarTpv  - tarPosmews;
+  var difStr = strReal - strPosmews;
 
-  var difTotal=difEf+difTar+difStr;
-  var totalEl=document.getElementById('dif-sala-total');
-  if(totalEl){ totalEl.textContent=fmt(difTotal); setColor(totalEl,difTotal); }
+  setEl('caja-dif-ef',  difEf);
+  setEl('caja-dif-tar', difTar);
+  setEl('caja-dif-str', difStr);
+  setEl('dif-ef-disp',  difEf);
+  setEl('dif-tar-disp', difTar);
+  setEl('dif-str-disp', difStr);
 
-  var alertEl=document.getElementById('caja-diferencia-alert');
-  if(alertEl) alertEl.style.display=Math.abs(difTotal)>0.01?'block':'none';
-  var reqEl=document.getElementById('caja-comentario-req');
-  if(reqEl) reqEl.style.display=Math.abs(difTotal)>0.01?'inline':'none';
+  var difTotal = difEf + difTar + difStr;
+  var totalEl = document.getElementById('dif-sala-total');
+  if(totalEl){ totalEl.textContent = fmt(difTotal); setColor(totalEl, difTotal); }
+
+  // Bloque 7 — Fondo esperado a traspasar = Fondo recibido + Cash real - Retiro
+  var retiro        = getV('caja-retiro');
+  var fondoEsperado = fondoIni + efReal - retiro;
+  var fondoReal     = getV('caja-fondo-real');
+  var difFondo      = fondoReal - fondoEsperado;
+
+  var fondoEspEl = document.getElementById('caja-fondo-esperado');
+  if(fondoEspEl) fondoEspEl.textContent = fondoEsperado.toFixed(2) + ' €';
+  var fondoDifEl = document.getElementById('caja-fondo-dif');
+  if(fondoDifEl){
+    fondoDifEl.textContent = Math.abs(difFondo) < 0.01 ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + fmt(difFondo);
+    fondoDifEl.style.color = Math.abs(difFondo) < 0.01 ? 'var(--green)' : 'var(--red)';
+  }
+
+  // Mostrar/ocultar bloque de explicación si hay diferencia
+  var hayDif = Math.abs(difTotal) > 0.01;
+  var alertEl = document.getElementById('caja-diferencia-alert');
+  if(alertEl) alertEl.style.display = hayDif ? 'block' : 'none';
+  var explBloque = document.getElementById('caja-expl-bloque');
+  if(explBloque) explBloque.style.display = hayDif ? 'block' : 'none';
 }
 
 function checkCajaDiferencia() {
@@ -118,42 +155,90 @@ function getCajaServicios() {
 }
 
 async function saveCajaForm() {
-  var fecha=(document.getElementById('caja-fecha')||{}).value||today();
-  var servicios=getCajaServicios();
+  var fecha = (document.getElementById('caja-fecha')||{}).value || today();
+  var servicios = getCajaServicios();
   function getCV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
-  var efReal=getCV('caja-ef-real'), efPosmews=getCV('caja-ef-posmews'), fondoIni=getCV('caja-fondo-ini');
-  var fondoFin=getCV('caja-fondo-fin'), retiro=getCV('caja-retiro');
-  var tarPosmews=getCV('caja-tar-posmews'), tarTpv=getCV('caja-tar-tpv'), propinasTpv=getCV('caja-propinas-tpv');
-  var strPosmews=getCV('caja-str-posmews'), strReal=getCV('caja-str-real');
-  var difEf=efReal-(fondoIni+efPosmews);
-  var difTar=(tarTpv-propinasTpv)-tarPosmews;
-  var difStr=strReal-strPosmews;
-  var difOperativa=difEf+difTar+difStr;
-  var comentario=(document.getElementById('caja-comentario')||{}).value||'';
-  if(Math.abs(difOperativa)>0.01&&!comentario.trim()){
-    toast('Hay diferencia en caja — el comentario es obligatorio','err');
-    document.getElementById('caja-comentario').focus();
+  function getStr(id){ return ((document.getElementById(id)||{}).value||'').trim(); }
+
+  var fondoIni    = getCV('caja-fondo-ini');
+  var efPosmews   = getCV('caja-ef-posmews');
+  var tarPosmews  = getCV('caja-tar-posmews');
+  var strPosmews  = getCV('caja-str-posmews');
+  var efReal      = getCV('caja-ef-real');
+  var tarTpv      = getCV('caja-tar-tpv');
+  var strReal     = getCV('caja-str-real');
+  var retiro      = getCV('caja-retiro');
+  var fondoReal   = getCV('caja-fondo-real');
+
+  // Diferencias: Real - POSMEWS
+  var difEf  = efReal  - efPosmews;
+  var difTar = tarTpv  - tarPosmews;
+  var difStr = strReal - strPosmews;
+  var difTotal = difEf + difTar + difStr;
+
+  // Fondo esperado = Fondo recibido + Cash real - Retiro
+  var fondoEsperado = fondoIni + efReal - retiro;
+
+  // Validación: si hay diferencia, explicación obligatoria
+  var hayDif = Math.abs(difTotal) > 0.01;
+  var expl = getStr('caja-expl-diferencia');
+  var accion = getStr('caja-accion-diferencia');
+  if(hayDif && !expl) {
+    toast('Hay diferencia — la explicación es obligatoria','err');
+    document.getElementById('caja-expl-diferencia').focus();
     return;
   }
-  var mediosPago=efReal+tarTpv+strReal;
-  var closure={
-    id:_editingCajaId||genId(),
-    fecha:fecha, servicios:JSON.stringify(servicios),
-    responsable_id:currentUser.id, responsable_nombre:currentUser.nombre,
-    efectivo_real:efReal, efectivo_posmews:efPosmews, fondo_inicial:fondoIni,
-    fondo_final:fondoFin, retiro_caja_fuerte:retiro, diferencia_efectivo:difEf,
-    tarjeta_posmews:tarPosmews, tarjeta_tpv:tarTpv, propinas_tpv:propinasTpv,
-    propinas:getCV('caja-propinas'), diferencia_tarjeta:difTar,
-    stripe_posmews:strPosmews, stripe_real:strReal, diferencia_stripe:difStr,
-    diferencia_operativa_sala:difOperativa, diferencia_caja:difOperativa,
-    room_charge:getCV('caja-room'), cargo_alexander:getCV('caja-alexander'),
-    pension_desayuno:getCV('caja-pension-d'), media_pension:getCV('caja-pension-m'),
-    pension_completa:getCV('caja-pension-c'),
-    subtotal_neto:parseFloat((document.getElementById('caja-total-neto-manual')||{}).value)||0,
-    total_bruto:parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0,
-    total_medios_pago:mediosPago, comentario:comentario,
-    estado:'Pendiente validación',
-    created_at:new Date().toISOString(), updated_at:new Date().toISOString()
+  if(hayDif && !accion) {
+    toast('Hay diferencia — la acción tomada es obligatoria','err');
+    document.getElementById('caja-accion-diferencia').focus();
+    return;
+  }
+  var informado = !!(document.getElementById('caja-informado-si') || {checked:false}).checked;
+
+  var closure = {
+    id: _editingCajaId || genId(),
+    fecha: fecha,
+    servicios: JSON.stringify(servicios),
+    responsable_id: currentUser.id,
+    responsable_nombre: currentUser.nombre,
+    // Bloque 2 — POSMEWS
+    efectivo_posmews: efPosmews,
+    tarjeta_posmews:  tarPosmews,
+    stripe_posmews:   strPosmews,
+    // Bloque 3 — Cargos e internos
+    room_charge:              getCV('caja-room'),
+    syncrolab_charge:         getCV('caja-syncrolab'),
+    cargo_alexander:          getCV('caja-alexander'),
+    pension_desayuno_pax:     getCV('caja-pension-desayuno-pax'),
+    pension_comidacena_pax:   getCV('caja-pension-comidacena-pax'),
+    eur_pension_desayuno:     getCV('caja-eur-pension-desayuno'),
+    eur_pension_comidacena:   getCV('caja-eur-pension-comidacena'),
+    // Bloque 4 — Reales
+    efectivo_real: efReal,
+    tarjeta_tpv:   tarTpv,
+    stripe_real:   strReal,
+    // Diferencias calculadas
+    diferencia_efectivo: difEf,
+    diferencia_tarjeta:  difTar,
+    diferencia_stripe:   difStr,
+    diferencia_operativa_sala: difTotal,
+    diferencia_caja: difTotal,
+    // Bloque 6 — Explicación
+    explicacion_diferencia: expl,
+    accion_diferencia:      accion,
+    informado_responsable:  informado,
+    comentario: getStr('caja-comentario'),
+    // Bloque 7 — Fondo final
+    retiro_caja_fuerte: retiro,
+    fondo_inicial:      fondoIni,
+    fondo_final:        fondoEsperado,
+    fondo_real_sala:    fondoReal,
+    // Totales
+    subtotal_neto: getCV('caja-total-neto-manual'),
+    total_bruto:   getCV('caja-total-bruto-manual'),
+    estado: 'Pendiente validación',
+    created_at: localTs(),
+    updated_at: localTs()
   };
   try {
     var cajaUrl=SUPABASE_URL+'/rest/v1/sala_cash_closures';

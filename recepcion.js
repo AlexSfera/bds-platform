@@ -133,9 +133,10 @@ function openRecCajaModal(existingId) {
   // Reset campos editables — fondo se carga del cierre anterior
   ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
    'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
-   'rec-fondo-traspaso',
+   'rec-fondo-traspaso','rec-fondo-real',
    'rec-cf-importe','rec-room-charge','rec-syncrolab-charge',
-   'rec-desayunos-pension','rec-pension-comida-cena',
+   'rec-pension-desayuno-pax','rec-pension-comidacena-pax',
+   'rec-eur-pension-desayuno','rec-eur-pension-comidacena',
    'rec-cargo-alexander','rec-dif-exp','rec-dif-accion'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
@@ -197,9 +198,11 @@ function openRecCajaModal(existingId) {
       set('rec-cf-importe',        row.retiro_caja_fuerte);
       set('rec-room-charge',       row.room_charge_recibido);
       set('rec-syncrolab-charge',  row.syncrolab_room_charged);
-      set('rec-desayunos-pension', row.desayunos_confirmados_mews);
-      set('rec-media-pension',     row.media_pension_personas);
-      set('rec-pension-completa',  row.pension_completa_personas);
+      set('rec-pension-desayuno-pax',   row.pension_desayuno_pax);
+      set('rec-pension-comidacena-pax', row.pension_comidacena_pax);
+      set('rec-eur-pension-desayuno',   row.eur_pension_desayuno);
+      set('rec-eur-pension-comidacena', row.eur_pension_comidacena);
+      set('rec-fondo-real',             row.fondo_real_a_traspasar);
       set('rec-cargo-alexander',   row.cargo_alexander);
       set('rec-dif-exp',           row.explicacion_diferencia);
       set('rec-dif-accion',        row.accion_diferencia);
@@ -239,12 +242,13 @@ async function submitRecCaja() {
   var turno     = getRecTurnoValue();
 
   // Cargos hotel y pensiones
-  var roomCharge       = gv('rec-room-charge') || 0;
-  var syncrolabCharge  = gv('rec-syncrolab-charge') || 0;
-  var desayunosPension = gi('rec-desayunos-pension');
-  var mediaPension     = gi('rec-media-pension');
-  var pensionCompleta  = gi('rec-pension-completa');
-  var cargoAlexander   = gv('rec-cargo-alexander') || 0;
+  var roomCharge           = gv('rec-room-charge') || 0;
+  var syncrolabCharge      = gv('rec-syncrolab-charge') || 0;
+  var pensionDesayunoPax   = gi('rec-pension-desayuno-pax');
+  var pensionComidaCenaPax = gi('rec-pension-comidacena-pax');
+  var eurPensionDesayuno   = gv('rec-eur-pension-desayuno') || 0;
+  var eurPensionComidaCena = gv('rec-eur-pension-comidacena') || 0;
+  var cargoAlexander       = gv('rec-cargo-alexander') || 0;
 
   if(isNaN(mewsCash))  errs.push('Cash según MEWS obligatorio');
   if(isNaN(mewsTar))   errs.push('Tarjeta según MEWS obligatoria');
@@ -255,10 +259,13 @@ async function submitRecCaja() {
   if(isNaN(fondoTras)) errs.push('Fondo traspasado obligatorio');
   if(!turno)           errs.push('Selecciona turno: Mañana, Tarde o Noche');
 
-  var difCash  = mewsCash - (realCash - fondoRec);
-  var difTar   = mewsTar   - realTpv;
-  var difStr   = mewsStr   - realStr;
-  var difTrans = mewsTrans - realTrans;
+  // Spec: Diferencia = Real - MEWS
+  var difCash  = realCash  - mewsCash;
+  var difTar   = realTpv   - mewsTar;
+  var difStr   = realStr   - mewsStr;
+  var difTrans = realTrans - mewsTrans;
+  // Fondo esperado = Fondo recibido + Cash real - Retiro
+  var fondoEsperado = fondoRec + realCash - cfImporte;
   var difTotal = difCash + difTar + difStr + difTrans;
 
   var hasError = Math.abs(difTotal) > 0.01;
@@ -274,7 +281,7 @@ async function submitRecCaja() {
   var errEl2 = document.getElementById('rec-caja-err');
   if(errEl2) errEl2.textContent = '';
 
-  var ts    = localTs();
+  var ts    = new Date().toISOString();
   var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : today();
 
   // BUG-16 FIX: nombres de columnas reales de recepcion_cash
@@ -291,7 +298,7 @@ async function submitRecCaja() {
     // Fondos
     fondo_recibido:            fondoRec,
     fondo_traspasado:          fondoTras,
-    fondo_real_a_traspasar:    fondoRec + mewsCash - cfImporte,  // BUG-29 FIX: calculado, no manual
+    fondo_real_a_traspasar:    fondoEsperado,  // Fondo recibido + Cash real - Retiro
     fondo_inicial_siguiente:   fondoTras,
     retiro_caja_fuerte:        cfImporte,
     // MEWS
@@ -318,11 +325,12 @@ async function submitRecCaja() {
     // Cargos hotel
     room_charge_recibido:      roomCharge,
     syncrolab_room_charged:    syncrolabCharge,
-    // Pensiones
-    desayunos_confirmados_mews: desayunosPension,
-    media_pension_personas:    mediaPension,
-    pension_completa_personas: pensionCompleta,
-    cargo_alexander:           cargoAlexander,
+    // Pensiones (nuevos campos)
+    pension_desayuno_pax:    pensionDesayunoPax,
+    pension_comidacena_pax:  pensionComidaCenaPax,
+    eur_pension_desayuno:    eurPensionDesayuno,
+    eur_pension_comidacena:  eurPensionComidaCena,
+    cargo_alexander:         cargoAlexander,
     // Timestamps
     updated_at:                ts
   };
@@ -467,7 +475,7 @@ async function reabrirCajaRec(cajaId) {
       estado: 'reabierto',
       reabierto_por: currentUser.nombre,
       comentario: motivo.trim(),
-      updated_at: localTs()
+      updated_at: new Date().toISOString()
     });
     await auditLog('REC_CAJA_REABRIR', 'Caja '+cajaId+' reabierta por '+currentUser.nombre+' — '+motivo.trim());
     invalidateCache(REC_TABLE);
@@ -506,7 +514,7 @@ async function reabrirTurnoValidado(shiftId) {
       estado: 'En corrección',
       comentario_validador: 'Reabierto por '+currentUser.nombre+': '+motivo.trim(),
       validado_por: null, validado_ts: null,
-      updated_at: localTs()
+      updated_at: new Date().toISOString()
     });
     await auditLog('REOPEN_SHIFT', currentUser.nombre+' reabrió turno '+shiftId+' — '+motivo.trim());
     invalidateCache('shifts');
@@ -533,8 +541,8 @@ async function renderFollowupList() {
 
   if(btnNew)     btnNew.style.display    = isSupervisorUser ? '' : 'none';
   if(subtitleEl) subtitleEl.textContent  = isSupervisorUser
-    ? 'Gestiones, tareas e incidencias activas del departamento.'
-    : 'Gestiones activas de tu departamento y tareas asignadas.';
+    ? 'Gestiones pendientes, tareas e incidencias operativas del departamento.'
+    : 'Gestiones pendientes y tareas visibles para tu departamento.';
 
   var allIncis = [], allTareas = [], allShifts = [], allGestiones = [];
   try { allIncis     = await getDB('incidencias'); } catch(e){}
@@ -576,11 +584,21 @@ async function renderFollowupList() {
     return esDeptDestino || esCreador;
   });
 
-  // ── INCIDENCIAS: solo supervisor/admin las ve en Mi Turno (BUG-49) ──
-  // Empleado registra incidencias pero no las gestiona desde aquí
-  var incidencias = (isAdmin(currentUser) || isSupervisorUser)
-    ? allIncis.filter(function(i){ return isIncidentOpen(i) && sameDept(i); })
-    : [];
+  // ── INCIDENCIAS: empleado ve solo las suyas y solo hasta que se cierren ──
+  var incidencias;
+  if(isAdmin(currentUser) || isSupervisorUser){
+    incidencias = allIncis.filter(function(i){
+      return isIncidentOpen(i) && sameDept(i);
+    });
+  } else {
+    // Empleado: solo las suyas propias, y solo si no están cerradas
+    incidencias = allIncis.filter(function(i){
+      var esSuya = i.employee_id === currentUser.id || i.nombre === currentUser.nombre;
+      var abierta = normalizeIncidentState(i.estado) === INCIDENT_STATES.ABIERTA
+                 || normalizeIncidentState(i.estado) === INCIDENT_STATES.EN_PROCESO;
+      return esSuya && abierta;
+    });
+  }
 
   var total = gestiones.length + tareas.length + incidencias.length;
   if(countEl) countEl.textContent = total ? '('+total+' activas)' : '(sin activas)';
@@ -686,17 +704,11 @@ async function renderFollowupList() {
 
 // ── Gestiones en Mi Turno (BUG-39) ──────────────────────────
 async function advanceGestion(gid, newState){
-  try{
-    var res = await dbUpdate('gestiones', gid, {estado: newState});
-    if(!res){ toast('Error al actualizar estado','err'); return; }
-    invalidateCache('gestiones');
-    auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
-    toast('Estado actualizado', 'ok');
-    if(typeof renderFollowupList === 'function') renderFollowupList();
-  } catch(e){
-    console.error('[advanceGestion]', e);
-    toast('Error: '+e.message,'err');
-  }
+  await dbUpdate('gestiones', gid, {estado: newState, updated_at: localTs()});
+  invalidateCache('gestiones');
+  auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
+  toast('Estado actualizado', 'ok');
+  if(typeof renderFollowupList === 'function') renderFollowupList();
 }
 
 async function openCloseGestion(gid){
@@ -708,14 +720,14 @@ async function openCloseGestion(gid){
   if(!g){ toast('Gestión no encontrada', 'err'); return; }
   var tgMins = Math.round((Date.now() - new Date(g.created_at).getTime()) / 60000);
   var ts = localTs();
-  var res = await dbUpdate('gestiones', gid, {
+  await dbUpdate('gestiones', gid, {
     estado: 'Cerrada',
     accion_tomada: txt.trim(),
     cerrado_por: currentUser.nombre,
     cerrado_ts: ts,
-    tiempo_gestion: tgMins
+    tiempo_gestion: tgMins,
+    updated_at: ts
   });
-  if(!res){ toast('Error al cerrar gestión','err'); return; }
   invalidateCache('gestiones');
   auditLog('GESTION_CERRADA', 'id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt.trim());
   toast('Gestión cerrada', 'ok');
@@ -772,7 +784,7 @@ async function saveFollowup() {
     } catch(e){}
   }
 
-  var ts = localTs();
+  var ts = new Date().toISOString();
   var record = {
     id: genId(),
     shift_id: resolvedShiftId,
@@ -826,7 +838,7 @@ async function submitCloseFollowup() {
   if(!accion){    if(errEl) errEl.textContent='La acción realizada es obligatoria'; return; }
   if(!resultado){ if(errEl) errEl.textContent='El resultado es obligatorio'; return; }
 
-  var ts = localTs();
+  var ts = new Date().toISOString();
   try {
     var allIncis = await getDB('incidencias');
     var inci = allIncis.find(function(i){ return i.id === _fuCloseId; });
