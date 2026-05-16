@@ -110,7 +110,7 @@ function calcCajaDifs() {
 
   // Diferencias: Real - POSMEWS (spec)
   var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
-  var propinasTpv = getCV('caja-propinas-tpv');
+  var propinasTpv = getV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
 
@@ -194,7 +194,7 @@ async function saveCajaForm() {
 
   // Diferencias: Real - POSMEWS
   var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
-  var propinasTpv = getCV('caja-propinas-tpv');
+  var propinasTpv = getV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
   var difTotal = difEf + difTar + difStr;
