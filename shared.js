@@ -428,8 +428,8 @@ function getScreens(rol){
     {id:'rec-caja',  label:'🏦 Caja Recepción'},
   ];
   if(rol==='admin'){
-    // Admin siempre ve todo, incluyendo Caja Recepción y Cierre Caja
-    return [base[0],base[1],base[2],base[3],base[4],base[5],base[6],base[7],base[8]];
+    // Admin: sin Mi Turno ni Cierre Caja — no pertenecen a ningún departamento
+    return [base[0],base[3],base[4],base[5],base[6],base[7],base[8]];
   }
   if(rol==='chef')  return [base[0],base[1],base[3],base[4],base[5],base[7]];
   if(rol==='fb')    return [base[0],base[1],base[2],base[3],base[4],base[5],base[7]];
