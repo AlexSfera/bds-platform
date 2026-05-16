@@ -90,7 +90,7 @@ function openCajaForm(existingId) {
 function calcCajaTotal() { calcCajaDifs(); }
 
 function calcCajaDifs() {
-  function getV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  function getV(id){ var el=document.getElementById(id); if(!el) return 0; var v=parseFloat(el.value.replace(',','.')); return isNaN(v)?0:v; }
   function setColor(el,val){ if(!el) return; var abs=Math.abs(val); el.style.color=abs<0.01?'var(--green)':abs>5?'var(--red)':'var(--amber)'; }
   function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
   function setEl(id,val){ var el=document.getElementById(id); if(el){el.textContent=fmt(val);setColor(el,val);} }
