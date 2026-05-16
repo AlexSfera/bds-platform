@@ -127,7 +127,7 @@ function calcCajaDifs() {
 
   // Bloque 7 — Fondo esperado a traspasar = Fondo recibido + Cash real - Retiro
   var retiro        = getV('caja-retiro');
-  var fondoEsperado = fondoIni + efReal - retiro;
+  var fondoEsperado = fondoIni + efPosmews - retiro;
   var fondoReal     = getV('caja-fondo-real');
   var difFondo      = fondoReal - fondoEsperado;
 
@@ -186,7 +186,7 @@ async function saveCajaForm() {
   var difTotal = difEf + difTar + difStr;
 
   // Fondo esperado = Fondo recibido + Cash real - Retiro
-  var fondoEsperado = fondoIni + efReal - retiro;
+  var fondoEsperado = fondoIni + efPosmews - retiro;
 
   // Validación: si hay diferencia, explicación obligatoria
   var hayDif = Math.abs(difTotal) > 0.01;
