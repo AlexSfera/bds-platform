@@ -109,7 +109,7 @@ function calcCajaDifs() {
   var strPosmews  = getV('caja-str-posmews');
 
   // Diferencias: Real - POSMEWS (spec)
-  var difEf  = efReal  - efPosmews;
+  var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
   var propinasTpv = getV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
@@ -127,7 +127,7 @@ function calcCajaDifs() {
 
   // Bloque 7 — Fondo esperado a traspasar = Fondo recibido + Cash real - Retiro
   var retiro        = getV('caja-retiro');
-  var fondoEsperado = fondoIni + efPosmews - retiro;
+  var fondoEsperado = efReal - retiro;  // Fondo esperado = Cash real - Retiro
   var fondoReal     = getV('caja-fondo-real');
   var difFondo      = fondoReal - fondoEsperado;
 
@@ -179,14 +179,14 @@ async function saveCajaForm() {
   var fondoReal   = getCV('caja-fondo-real');
 
   // Diferencias: Real - POSMEWS
-  var difEf  = efReal  - efPosmews;
+  var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
   var propinasTpv = getV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
   var difTotal = difEf + difTar + difStr;
 
   // Fondo esperado = Fondo recibido + Cash real - Retiro
-  var fondoEsperado = fondoIni + efPosmews - retiro;
+  var fondoEsperado = efReal - retiro;  // Fondo esperado = Cash real - Retiro
 
   // Validación: si hay diferencia, explicación obligatoria
   var hayDif = Math.abs(difTotal) > 0.01;

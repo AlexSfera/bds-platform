@@ -259,13 +259,13 @@ async function submitRecCaja() {
   if(isNaN(fondoTras)) errs.push('Fondo traspasado obligatorio');
   if(!turno)           errs.push('Selecciona turno: Mañana, Tarde o Noche');
 
-  // Spec: Diferencia = Real - MEWS
-  var difCash  = realCash  - mewsCash;
+  // Δ Cash = Fondo recibido + Cash MEWS - Cash real
+  var difCash  = fondoRec + mewsCash - realCash;
   var difTar   = realTpv   - mewsTar;
   var difStr   = realStr   - mewsStr;
   var difTrans = realTrans - mewsTrans;
-  // Fondo esperado = Fondo recibido + Cash real - Retiro
-  var fondoEsperado = fondoRec + realCash - cfImporte;
+  // Fondo esperado = Cash real - Retiro
+  var fondoEsperado = realCash - cfImporte;
   var difTotal = difCash + difTar + difStr + difTrans;
 
   var hasError = Math.abs(difTotal) > 0.01;
