@@ -22,6 +22,7 @@ function openCajaForm(existingId) {
    'caja-pension-desayuno-pax','caja-pension-comidacena-pax',
    'caja-eur-pension-desayuno','caja-eur-pension-comidacena',
    'caja-ef-real','caja-tar-tpv','caja-str-real',
+   'caja-propinas-tpv','caja-propinas-ef',
    'caja-retiro','caja-fondo-real',
    'caja-expl-diferencia','caja-accion-diferencia','caja-comentario',
    'caja-total-neto-manual','caja-total-bruto-manual'].forEach(function(id){
@@ -62,9 +63,11 @@ function openCajaForm(existingId) {
       setI('caja-pension-comidacena-pax', row.pension_comidacena_pax);
       setF('caja-eur-pension-desayuno',   row.eur_pension_desayuno);
       setF('caja-eur-pension-comidacena', row.eur_pension_comidacena);
-      setF('caja-ef-real',  row.efectivo_real);
-      setF('caja-tar-tpv',  row.tarjeta_tpv);
-      setF('caja-str-real', row.stripe_real);
+      setF('caja-ef-real',      row.efectivo_real);
+      setF('caja-tar-tpv',      row.tarjeta_tpv);
+      setF('caja-str-real',     row.stripe_real);
+      setF('caja-propinas-tpv', row.propinas_tpv);
+      setF('caja-propinas-ef',  row.propinas_efectivo);
       setF('caja-retiro',   row.retiro_caja_fuerte);
       setF('caja-fondo-real', row.fondo_real_sala);
       var explEl=document.getElementById('caja-expl-diferencia'); if(explEl) explEl.value=row.explicacion_diferencia||'';
@@ -103,7 +106,8 @@ function calcCajaDifs() {
 
   // Diferencias: Real - POSMEWS (spec)
   var difEf  = efReal  - efPosmews;
-  var difTar = tarTpv  - tarPosmews;
+  var propinasTpv = getV('caja-propinas-tpv');
+  var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
 
   setEl('caja-dif-ef',  difEf);
@@ -172,7 +176,8 @@ async function saveCajaForm() {
 
   // Diferencias: Real - POSMEWS
   var difEf  = efReal  - efPosmews;
-  var difTar = tarTpv  - tarPosmews;
+  var propinasTpv = getV('caja-propinas-tpv');
+  var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
   var difTotal = difEf + difTar + difStr;
 
@@ -219,6 +224,8 @@ async function saveCajaForm() {
     stripe_real:   strReal,
     // Diferencias calculadas
     diferencia_efectivo: difEf,
+    propinas_tpv:        getCV('caja-propinas-tpv'),
+    propinas_efectivo:   getCV('caja-propinas-ef'),
     diferencia_tarjeta:  difTar,
     diferencia_stripe:   difStr,
     diferencia_operativa_sala: difTotal,
