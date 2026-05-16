@@ -283,11 +283,7 @@ async function renderDashboard() {
   else if (_dashCurrentDept === 'FnB') _renderKpiFnB(allShifts, allMermas, allIncis, desde);
   else if (_dashCurrentDept === 'Recepción') _renderKpiRecepcion(shifts);
 
-  // Mostrar/ocultar sección merma
-  var secMerma = document.getElementById('dash-sec-merma');
-  if (secMerma) {
-    secMerma.style.display = (_dashCurrentDept === 'Cocina' || _dashCurrentDept === 'FnB') ? 'block' : 'none';
-  }
+  // Merma has its own tab — no need to show/hide section
 
   // Restaurar pestaña activa tras el render
   _activateDashTab(_dashCurrentTab);
@@ -678,16 +674,30 @@ function _renderKpiCocina(shifts, mermas) {
   var el = document.getElementById('dash-kpi-especifico');
   if (!el) return;
 
-  var costeMerma = mermas.reduce(function(a, m) { return a + (m.coste_total || 0); }, 0);
+  // BUG-D01: calcular coste_total desde coste_unitario * cantidad si coste_total es 0
+  mermas.forEach(function(m){
+    if(!m.coste_total && m.coste_unitario && m.cantidad){
+      m.coste_total = parseFloat(m.coste_unitario) * parseFloat(m.cantidad);
+    }
+  });
+  var costeMerma = mermas.reduce(function(a, m) { return a + (parseFloat(m.coste_total)||0); }, 0);
   var mermaByProducto = {};
   mermas.forEach(function(m) {
     mermaByProducto[m.producto] = (mermaByProducto[m.producto] || 0) + (m.coste_total || 0);
   });
   var topMerma = Object.entries(mermaByProducto).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
 
-  var chkPct = shifts.length ? Math.round(
-    shifts.filter(function(s) { return s.checklist_items; }).length / shifts.length * 100
-  ) : 0;
+  // BUG-D02: APPCC % real — puntos completados / total puntos
+  var chkTotalPuntos = 0, chkCompletados = 0;
+  shifts.forEach(function(s){
+    if(!s.checklist_items) return;
+    try {
+      var items = JSON.parse(s.checklist_items);
+      chkTotalPuntos += items.length;
+      chkCompletados += items.filter(Boolean).length;
+    } catch(e) {}
+  });
+  var chkPct = chkTotalPuntos > 0 ? Math.round(chkCompletados / chkTotalPuntos * 100) : 0;
 
   el.innerHTML = '<div class="card-title" style="color:#f59e0b;">🍳 KPIs COCINA</div>'
     + '<div class="kpi-grid" style="margin-bottom:14px;">'

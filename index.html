@@ -860,7 +860,8 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="dash-tabs" role="tablist" aria-label="Secciones del dashboard">
         <button class="dash-tab active" role="tab" data-tab="turnos" onclick="_activateDashTab('turnos')">Turnos</button>
         <button class="dash-tab" role="tab" data-tab="incidencias" onclick="_activateDashTab('incidencias')">Incidencias</button>
-        <button class="dash-tab" role="tab" data-tab="gestiones" onclick="_activateDashTab('gestiones')">Gestiones pendientes</button>
+        <button class="dash-tab" role="tab" data-tab="gestiones" onclick="_activateDashTab('gestiones')">Gestiones</button>
+        <button class="dash-tab" role="tab" data-tab="merma" onclick="_activateDashTab('merma')">Merma</button>
         <button class="dash-tab" role="tab" data-tab="fio" onclick="_activateDashTab('fio')">FIO</button>
         <button class="dash-tab" role="tab" data-tab="tareas" onclick="_activateDashTab('tareas')">Tareas</button>
         <button class="dash-tab" role="tab" data-tab="costes" onclick="_activateDashTab('costes')">Costes</button>
@@ -888,17 +889,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
         </div>
         <div class="kpi-grid" id="kpi-incis"></div>
         <div class="card"><div class="card-title">INCIDENCIAS — DETALLE</div><div class="tbl-wrap" id="dash-inci-table"></div></div>
-        <div id="dash-sec-merma" style="display:none;">
-          <div class="sec-div">Merma</div>
-          <div class="filter-bar" style="margin-bottom:10px;">
-            <div class="fg"><label>Causa</label>
-              <select id="dm-causa" onchange="renderDashboard()"><option value="">Todas</option><option>Caducidad</option><option>Error de preparación</option><option>Accidente</option><option>Devolución sala</option><option>Exceso de producción</option><option>Otro</option></select></div>
-            <div class="fg"><label>Declarante</label>
-              <select id="dm-emp" onchange="renderDashboard()"><option value="">Todos</option></select></div>
-          </div>
-          <div class="kpi-grid" id="kpi-merma"></div>
-          <div class="card"><div class="card-title">MERMA — DETALLE</div><div class="tbl-wrap" id="dash-merma-table"></div></div>
-        </div>
+        <!-- Merma moved to dedicated tab -->
       </div>
 
       <!-- Panel: Gestiones -->
@@ -914,6 +905,18 @@ tr:hover td{background:rgba(255,255,255,.018);}
       </div>
 
       <!-- Panel: FIO -->
+      <!-- Panel: Merma -->
+      <div class="dash-panel" id="tab-panel-merma" role="tabpanel">
+        <div class="filter-bar" style="margin-bottom:10px;">
+          <div class="fg"><label>Causa</label>
+            <select id="dm-causa" onchange="renderDashboard()"><option value="">Todas</option><option>Caducidad</option><option>Error de preparación</option><option>Accidente</option><option>Devolución sala</option><option>Exceso de producción</option><option>Otro</option></select></div>
+          <div class="fg"><label>Declarante</label>
+            <select id="dm-emp" onchange="renderDashboard()"><option value="">Todos</option></select></div>
+        </div>
+        <div class="kpi-grid" id="kpi-merma"></div>
+        <div class="card"><div class="card-title">MERMA — DETALLE</div><div class="tbl-wrap" id="dash-merma-table"></div></div>
+      </div>
+
       <div class="dash-panel" id="tab-panel-fio" role="tabpanel">
         <div class="card" style="border-top:2px solid var(--red);">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
