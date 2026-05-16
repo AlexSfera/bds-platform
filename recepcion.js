@@ -275,7 +275,9 @@ async function submitRecCaja() {
   }
   if(errs.length > 0){
     var errEl = document.getElementById('rec-caja-err');
-    if(errEl) errEl.textContent = errs.join(' · ');
+    if(errEl){ errEl.textContent = errs.join(' · '); errEl.style.display='block'; }
+    console.error('submitRecCaja validation errors:', errs);
+    toast(errs[0], 'err');
     return;
   }
   var errEl2 = document.getElementById('rec-caja-err');
