@@ -3013,9 +3013,9 @@ async function openCajaSummary(cajaId, showValidar) {
     + '</div>'
     + '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">'
     + (showValidar && c.estado !== 'Validado final'
-        ? '<button class="btn btn-success" onclick="validarCierre(''+cajaId+'');closeModal('modal-caja-summary')">✓ Confirmar Validación</button>'
+        ? '<button class="btn btn-success" onclick="validarCierre(\''+cajaId+'\');closeModal(\'modal-caja-summary\')">✓ Confirmar Validación</button>'
         : '')
-    + '<button class="btn btn-secondary" onclick="closeModal('modal-caja-summary')">Cerrar</button>'
+    + '<button class="btn btn-secondary" onclick="closeModal(\'modal-caja-summary\')">Cerrar</button>'
     + '</div>';
 
   // Use existing detail overlay or create inline modal
