@@ -80,6 +80,19 @@ function openCajaForm(existingId) {
       var netoEl=document.getElementById('caja-total-neto-manual'); if(netoEl) netoEl.value=row.subtotal_neto||'';
       var brutoEl=document.getElementById('caja-total-bruto-manual'); if(brutoEl) brutoEl.value=row.total_bruto||'';
       calcCajaDifs();
+
+      // Bloquear formulario si el usuario no puede editar este cierre
+      var canEditCaja = currentUser.rol==='admin' || currentUser.rol==='fb';
+      var isPendiente = row.estado==='Pendiente validación';
+      var esPropio    = row.responsable_id===currentUser.id;
+      var canEdit     = canEditCaja || (isPendiente && esPropio);
+      if(!canEdit){
+        document.querySelectorAll('#modal-caja input, #modal-caja textarea, #modal-caja select').forEach(function(el){ el.readOnly=true; el.style.pointerEvents='none'; });
+        var btnGuardar = document.getElementById('caja-btn-guardar');
+        if(btnGuardar) btnGuardar.style.display='none';
+        var titleEl = document.getElementById('caja-form-title');
+        if(titleEl) titleEl.textContent = 'Ver Cierre de Caja (solo lectura)';
+      }
     });
   }
   document.querySelectorAll('#caja-servicios-check input[type=checkbox]').forEach(function(cb){ cb.checked=false; });

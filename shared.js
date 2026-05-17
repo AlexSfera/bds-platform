@@ -2332,7 +2332,7 @@ async function importBackup(event){
 
 // ═══════════════════════════════════════════════════════════════════════
 // MODAL HELPERS
-function closeModal(id){ document.getElementById(id).classList.remove('open'); if(id==='modal-validar') validatingShiftId=null; if(id==='modal-empleado') _editEmpId=null; }
+function closeModal(id){ var m=document.getElementById(id); if(!m) return; m.classList.remove('open'); if(id==='modal-caja'){ m.querySelectorAll('input,textarea,select').forEach(function(el){ el.readOnly=false; el.style.pointerEvents=''; }); var btn=document.getElementById('caja-btn-guardar'); if(btn) btn.style.display=''; } if(id==='modal-validar') validatingShiftId=null; if(id==='modal-empleado') _editEmpId=null; }
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(e.currentTarget.id); }));
 function toast(msg,type='ok'){ const c=document.getElementById('toast-c'); const t=document.createElement('div'); t.className=`toast ${type}`; t.textContent=msg; c.appendChild(t); setTimeout(()=>{ t.style.animation='toastOut .3s ease forwards'; setTimeout(()=>{ if(c.contains(t)) c.removeChild(t); },300); },3200); }
 
