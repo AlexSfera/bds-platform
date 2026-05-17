@@ -139,7 +139,7 @@ function calcCajaDifs() {
   if(reqEl) reqEl.style.display = Math.abs(difTotal) > 0.01 ? 'inline' : 'none';
 
   // FONDO ESPERADO = Cash real - Retiro
-  var fondoRealV = getV('caja-fondo-real');
+  var fondoRealV = getV('caja-ef-real');
   var retiroV    = getV('caja-retiro');
   var fondoEspV  = fondoRealV - retiroV;
   var fondoEspEl = document.getElementById('caja-fondo-esperado');
