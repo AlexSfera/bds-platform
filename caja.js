@@ -81,7 +81,7 @@ function openCajaForm(existingId) {
       var brutoEl=document.getElementById('caja-total-bruto-manual'); if(brutoEl) brutoEl.value=row.total_bruto||'';
       calcCajaDifs();
 
-      // Bloquear formulario si el usuario no puede editar este cierre
+      // Bloquear si el usuario no puede editar este cierre
       var canEditCaja = currentUser.rol==='admin' || currentUser.rol==='fb';
       var isPendiente = row.estado==='Pendiente validación';
       var esPropio    = row.responsable_id===currentUser.id;
@@ -220,7 +220,7 @@ async function saveCajaForm() {
 
   // Diferencias: Real - POSMEWS
   var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
-  var propinasTpv = getCV('caja-propinas-tpv');
+  var propinasTpv = getV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
   var difTotal = difEf + difTar + difStr;
@@ -448,7 +448,7 @@ async function renderValCajaList() {
         +'<td style="white-space:nowrap;display:flex;gap:4px;">'
         +(isPendiente&&canEdit?'<button class="vbtn vbtn-primary" data-cid="'+c.id+'" onclick="validarCierre(this.dataset.cid)">✓ Validar</button>':'')
         +'<button class="vbtn vbtn-sec" data-cid="'+c.id+'" onclick="openCajaForm(this.dataset.cid)">📋 Ver</button>'
-        +(canEdit?'<button class="vbtn vbtn-warn" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">↩ Revisar</button>':'')
+        +''
         +'</td>'
         +'</tr>';
     }).join('');
