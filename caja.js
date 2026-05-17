@@ -344,7 +344,7 @@ async function renderCajaList() {
     var rows=data.map(function(c){
       var servs=displayServicio(c.servicios||'');
       var diffColor=Math.abs(c.diferencia_caja||0)>5?'var(--red)':'var(--green)';
-      var isPendiente = c.estado==='Pendiente validación'||c.estado==='Pendiente Sala';
+      var isPendiente = c.estado==='Pendiente validación';
       var canEditThis = canEditCaja || (isPendiente && c.responsable_id===currentUser.id);
       return '<tr>'
         +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
@@ -431,7 +431,7 @@ async function renderValCajaList() {
         +'<td style="font-family:var(--font-mono)">'+(c.total_bruto||0).toFixed(2)+'€</td>'
         +'<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€</td>'
         +'<td style="text-align:center">'+totalPens+'p</td>'
-        +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+'</td>'
+        +'<td>'+bCajaEstado(c.estado||'Pendiente validación')+'</td>'
         +'<td style="white-space:nowrap;display:flex;gap:4px;">'
         +(isPendiente&&canEdit?'<button class="vbtn vbtn-primary" data-cid="'+c.id+'" onclick="validarCierre(this.dataset.cid)">✓ Validar</button>':'')
         +'<button class="vbtn vbtn-sec" data-cid="'+c.id+'" onclick="openCajaForm(this.dataset.cid)">📋 Ver</button>'
@@ -565,7 +565,7 @@ function switchDept(newDept) {
 }
 
 function bCajaEstado(e){
-  if(e==='Pendiente Sala'||e==='Pendiente validación'||e==='Pendiente') return '<span class="badge b-gray">● Pendiente Sala</span>';
+  if(e==='Pendiente validación'||e==='Pendiente') return '<span class="badge b-gray">● Pendiente validación</span>';
   if(e==='Revisado Sala'||e==='Cuadrado Sala') return '<span class="badge b-blue">✓ Revisado Sala</span>';
   if(e==='Pendiente PMS') return '<span class="badge b-orange">⏳ Pendiente PMS</span>';
   if(e==='Confirmado PMS') return '<span class="badge b-green">✓ Confirmado PMS</span>';
