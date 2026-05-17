@@ -132,7 +132,15 @@ function calcCajaDifs() {
   var difFondo      = fondoReal - fondoEsperado;
 
   var fondoEspEl = document.getElementById('caja-fondo-esperado');
-  if(fondoEspEl) fondoEspEl.textContent = fondoEsperado.toFixed(2) + ' €';
+  if(fondoEspEl){
+    if(efReal === 0 && retiro > 0){
+      fondoEspEl.textContent = '— (introduce Cash real primero)';
+      fondoEspEl.style.color = 'var(--text3)';
+    } else {
+      fondoEspEl.textContent = fondoEsperado.toFixed(2) + ' €';
+      fondoEspEl.style.color = fondoEsperado >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
   var fondoDifEl = document.getElementById('caja-fondo-dif');
   if(fondoDifEl){
     fondoDifEl.textContent = Math.abs(difFondo) < 0.01 ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + fmt(difFondo);
@@ -332,17 +340,20 @@ async function renderCajaList() {
     });
     data.sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
     if(!data.length){ el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo</div></div>'; return; }
+    var canEditCaja = currentUser.rol==='admin'||currentUser.rol==='fb';
     var rows=data.map(function(c){
       var servs=displayServicio(c.servicios||'');
       var diffColor=Math.abs(c.diferencia_caja||0)>5?'var(--red)':'var(--green)';
+      var isPendiente = c.estado==='Pendiente validación'||c.estado==='Pendiente Sala';
+      var canEditThis = canEditCaja || (isPendiente && c.responsable_id===currentUser.id);
       return '<tr>'
-        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'</td>'
+        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
         +'<td style="font-family:var(--font-mono);font-weight:700;color:#3b82f6">'+(c.subtotal_neto||0).toFixed(2)+' €</td>'
         +'<td style="font-family:var(--font-mono);color:'+diffColor+'">'+(c.diferencia_caja>=0?'+':'')+((c.diferencia_caja||0).toFixed(2))+' €</td>'
         +'<td>'+bEstado(c.estado)+'</td>'
-        +'<td><button class="btn btn-secondary btn-sm" onclick="openCajaForm(this.dataset.id)" data-id="'+c.id+'">✏️</button></td>'
+        +'<td>'+(canEditThis?'<button class="btn btn-secondary btn-sm" onclick="openCajaForm(this.dataset.id)" data-id="'+c.id+'">✏️</button>':'—')+'</td>'
         +'</tr>';
     }).join('');
     el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Total neto</th><th>Diferencia</th><th>Estado</th><th></th></tr>'+rows+'</table>';

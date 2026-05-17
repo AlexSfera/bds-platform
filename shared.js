@@ -437,7 +437,7 @@ function getScreens(rol){
   if(rol==='supervisor') return [base[0],base[1],base[3],base[4],base[5],base[7]];
   if(rol==='mantenimiento') return [base[0],base[1],base[3]];
   if(isSupervisor(currentUser)) return [base[0],base[1],base[3],base[4],base[5],base[7]];
-  if(isSala)        return [base[0],base[1],base[2],base[3]];
+  if(isSala)        return [base[0],base[1],base[3]];  // Cierre Caja solo via oferta post-turno
   if(isRecepcion)   return [base[0],base[1],base[3],base[8]];
   return [base[0],base[1],base[3]];
 }
