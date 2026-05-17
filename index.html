@@ -1146,8 +1146,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <div class="fg"><label>Retiro efectivo caja fuerte (€)</label>
           <input type="number" id="caja-retiro" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
         <div class="fg"><label>Fondo esperado a traspasar (€)</label>
-          <div id="caja-fondo-esperado" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div>
-        </div>
+          <div id="caja-fondo-esperado" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div></div>
         <div class="fg"><label>Fondo real a traspasar (€) <span class="req">*</span></label>
           <input type="number" id="caja-fondo-real" min="0" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
         <div style="display:flex;align-items:flex-end;padding-bottom:4px;">
@@ -2323,14 +2322,14 @@ function openCajaForm(existingId) {
   if(!existingId){
     dbGetAll('sala_cash_closures').then(function(rows){
       var sorted = rows
-        .filter(function(r){ return r.fondo_final != null; })
+        .filter(function(r){ return r.fondo_real_sala != null || r.fondo_final != null; })
         .sort(function(a,b){
           return (b.fecha || '').localeCompare(a.fecha || '') ||
                  (b.created_at || '').localeCompare(a.created_at || '');
         });
       var ultimo = sorted[0];
       if(fondoIniEl && ultimo){
-        fondoIniEl.value = parseFloat(ultimo.fondo_final).toFixed(2);
+        fondoIniEl.value = parseFloat(ultimo.fondo_real_sala || ultimo.fondo_final || 0).toFixed(2);
         calcCajaDifs();
       }
     });
@@ -2340,6 +2339,18 @@ function openCajaForm(existingId) {
       if(!row) return;
       if(fondoIniEl && row.fondo_inicial != null) fondoIniEl.value = parseFloat(row.fondo_inicial).toFixed(2);
       calcCajaDifs();
+      // Bloquear si el usuario no puede editar este cierre
+      var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb';
+      var isPendiente = row.estado === 'Pendiente validación';
+      var esPropio    = row.responsable_id === currentUser.id;
+      var canEdit     = canEditCaja || (isPendiente && esPropio);
+      if(!canEdit){
+        document.querySelectorAll('#modal-caja input, #modal-caja textarea, #modal-caja select').forEach(function(el){ el.readOnly=true; el.style.pointerEvents='none'; });
+        var btnGuardar = document.getElementById('caja-btn-guardar');
+        if(btnGuardar) btnGuardar.style.display = 'none';
+        var titleEl = document.getElementById('caja-form-title');
+        if(titleEl) titleEl.textContent = 'Ver Cierre de Caja (solo lectura)';
+      }
     });
   }
   document.querySelectorAll('#caja-servicios-check input[type=checkbox]').forEach(function(cb){ cb.checked = false; });
@@ -2356,7 +2367,71 @@ function setCajaInformado(val){
   if(no) no.style.background = !val ? 'var(--red)' : '';
 }
 
-// calcCajaTotal y calcCajaDifs definidas en caja.js
+function calcCajaTotal() { calcCajaDifs(); }
+
+function calcCajaDifs() {
+  function getV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  function setColor(el, val) {
+    if(!el) return;
+    var abs = Math.abs(val);
+    el.style.color = abs < 0.01 ? 'var(--green)' : abs > 5 ? 'var(--red)' : 'var(--amber)';
+  }
+  function fmt(val){ return (val >= 0 ? '+' : '') + val.toFixed(2) + ' €'; }
+  function setEl(id, val){
+    var el = document.getElementById(id);
+    if(el){ el.textContent = fmt(val); setColor(el, val); }
+  }
+
+  // EFECTIVO
+  // diferencia_efectivo = efectivo_real_contado - (fondo_inicial + cash_posmews)
+  var efReal   = getV('caja-ef-real');
+  var efPosmews= getV('caja-ef-posmews');
+  var fondoIni = getV('caja-fondo-ini');
+  var fondoFin = getV('caja-fondo-fin');
+  var retiro   = getV('caja-retiro');
+  var efEsperado = fondoIni + efPosmews;
+  var difEf = efReal - efEsperado;
+  // Control retiro: efectivo_real debe = fondo_final + retiro
+  var difRetiro = efReal - fondoFin - retiro;
+
+  var efEspEl = document.getElementById('caja-ef-esperado');
+  if(efEspEl) efEspEl.textContent = efEsperado.toFixed(2) + ' €';
+  setEl('caja-dif-ef', difEf);
+  setEl('dif-ef-disp', difEf);
+  var retiroEl = document.getElementById('caja-dif-retiro');
+  if(retiroEl){
+    retiroEl.textContent = Math.abs(difRetiro) < 0.01 ? '✓ OK retiro' : 'Δ retiro: '+fmt(difRetiro);
+    retiroEl.style.color = Math.abs(difRetiro) < 0.01 ? 'var(--green)' : 'var(--red)';
+  }
+
+  // TARJETA: diferencia = (TPV - Propinas_TPV) - POSMEWS
+  var tarPosmews = getV('caja-tar-posmews');
+  var tarTpv     = getV('caja-tar-tpv');
+  var propinasTpv= getV('caja-propinas-tpv');
+  var tarCuadrada = tarTpv - propinasTpv;
+  var difTar = tarCuadrada - tarPosmews;
+  setEl('caja-dif-tar', difTar);
+  setEl('dif-tar-disp', difTar);
+
+  // STRIPE
+  var strPosmews = getV('caja-str-posmews');
+  var strReal    = getV('caja-str-real');
+  var difStr = strReal - strPosmews;
+  setEl('caja-dif-str', difStr);
+  setEl('dif-str-disp', difStr);
+
+  // DIFERENCIA OPERATIVA SALA (efectivo + tarjeta + stripe only)
+  var difTotal = difEf + difTar + difStr;
+  var totalEl = document.getElementById('dif-sala-total');
+  if(totalEl){ totalEl.textContent = fmt(difTotal); setColor(totalEl, difTotal); }
+
+  // Alert
+  var alertEl = document.getElementById('caja-diferencia-alert');
+  if(alertEl) alertEl.style.display = Math.abs(difTotal) > 0.01 ? 'block' : 'none';
+  // Show * on comentario when diferencia exists
+  var reqEl = document.getElementById('caja-comentario-req');
+  if(reqEl) reqEl.style.display = Math.abs(difTotal) > 0.01 ? 'inline' : 'none';
+}
 
 function checkCajaDiferencia() {
   var mediosTmp=(parseFloat((document.getElementById('caja-efectivo')||{}).value)||0)+(parseFloat((document.getElementById('caja-tarjeta')||{}).value)||0)+(parseFloat((document.getElementById('caja-room')||{}).value)||0)+(parseFloat((document.getElementById('caja-alexander')||{}).value)||0);
@@ -2429,7 +2504,8 @@ async function saveCajaForm() {
     efectivo_real: efReal,
     efectivo_posmews: efPosmews,
     fondo_inicial: fondoIni,
-    fondo_final: fondoFin,
+    fondo_final: getCV('caja-fondo-real'),
+    fondo_real_sala: getCV('caja-fondo-real'),
     retiro_caja_fuerte: retiro,
     diferencia_efectivo: difEf,
     tarjeta_posmews: tarPosmews,
