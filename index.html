@@ -1159,9 +1159,13 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
       <div class="grid2">
         <div class="fg"><label>Total neto sin IVA (€)</label>
-          <input type="number" id="caja-total-neto-manual" step="0.01" placeholder="0.00"></div>
-        <div class="fg"><label>Total bruto con IVA (€)</label>
-          <input type="number" id="caja-total-bruto-manual" step="0.01" placeholder="0.00"></div>
+          <input type="number" id="caja-total-neto-manual" step="0.01" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+        <div class="fg">
+          <label>Total bruto — Calculado automáticamente</label>
+          <div id="caja-total-bruto-display" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--blue);padding:8px 0;">0.00 €</div>
+          <input type="hidden" id="caja-total-bruto-manual">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Verificación con reales: <span id="caja-total-verif" style="font-weight:700;">—</span></div>
+        </div>
       </div>
     </div>
 
