@@ -2431,6 +2431,29 @@ function calcCajaDifs() {
   // Show * on comentario when diferencia exists
   var reqEl = document.getElementById('caja-comentario-req');
   if(reqEl) reqEl.style.display = Math.abs(difTotal) > 0.01 ? 'inline' : 'none';
+
+  // FONDO ESPERADO = Cash real - Retiro
+  var fondoReal   = getV('caja-fondo-real');
+  var retiroVal   = getV('caja-retiro');
+  var fondoEsp    = fondoReal - retiroVal;
+  var fondoEspEl  = document.getElementById('caja-fondo-esperado');
+  if(fondoEspEl) fondoEspEl.textContent = fondoEsp.toFixed(2) + ' €';
+
+  // TOTAL BRUTO = Cash + Tarjeta + Stripe POSMEWS + Room Charge + SYNCROLAB + Alexander + Pensiones €
+  var totalBruto = getV('caja-ef-posmews') + getV('caja-tar-posmews') + getV('caja-str-posmews')
+                 + getV('caja-room') + getV('caja-syncrolab') + getV('caja-alexander')
+                 + getV('caja-eur-pension-desayuno') + getV('caja-eur-pension-comidacena');
+  var brutoEl = document.getElementById('caja-total-bruto-display');
+  if(brutoEl) brutoEl.textContent = totalBruto.toFixed(2) + ' €';
+
+  // VERIFICACION CON REALES
+  var totalReal = getV('caja-ef-real') + (getV('caja-tar-tpv') - getV('caja-propinas-tpv')) + getV('caja-str-real');
+  var difVerif  = totalBruto - totalReal;
+  var verifEl   = document.getElementById('caja-verif-real');
+  if(verifEl){
+    verifEl.textContent = 'Verificacion con reales: ' + (Math.abs(difVerif)<0.01 ? '✓ Cuadrado' : ('Δ '+(difVerif>=0?'+':'')+difVerif.toFixed(2)+'€'));
+    verifEl.style.color = Math.abs(difVerif)<0.01 ? 'var(--green)' : 'var(--amber)';
+  }
 }
 
 function checkCajaDiferencia() {
