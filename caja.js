@@ -34,14 +34,14 @@ function openCajaForm(existingId) {
   if(!existingId){
     dbGetAll('sala_cash_closures').then(function(rows){
       var sorted=rows
-        .filter(function(r){ return r.fondo_final!=null; })
+        .filter(function(r){ return r.fondo_real_sala!=null || r.fondo_final!=null; })
         .sort(function(a,b){
           return (b.fecha||'').localeCompare(a.fecha||'')||
                  (b.created_at||'').localeCompare(a.created_at||'');
         });
       var ultimo=sorted[0];
       if(fondoIniEl&&ultimo){
-        // Use fondo_real_sala (actual transferred) or fondo_final as fallback
+        
         var fondo = parseFloat(ultimo.fondo_real_sala||ultimo.fondo_final||0);
         fondoIniEl.value = fondo.toFixed(2);
         calcCajaDifs();
