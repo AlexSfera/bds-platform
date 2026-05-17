@@ -41,7 +41,7 @@ function openCajaForm(existingId) {
         });
       var ultimo=sorted[0];
       if(fondoIniEl&&ultimo){
-        
+        // Use fondo_real_sala (actual transferred) or fondo_final as fallback
         var fondo = parseFloat(ultimo.fondo_real_sala||ultimo.fondo_final||0);
         fondoIniEl.value = fondo.toFixed(2);
         calcCajaDifs();
@@ -207,7 +207,7 @@ async function saveCajaForm() {
 
   // Diferencias: Real - POSMEWS
   var difEf  = fondoIni + efPosmews - efReal;  // Δ Cash = Fondo recibido + Cash POSMEWS - Cash real
-  var propinasTpv = getV('caja-propinas-tpv');
+  var propinasTpv = getCV('caja-propinas-tpv');
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
   var difTotal = difEf + difTar + difStr;
