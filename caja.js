@@ -342,9 +342,9 @@ function calcCajaDifs() {
   // VERIFICACION CON REALES
   var totalReal = getV('caja-ef-real') + (getV('caja-tar-tpv') - getV('caja-propinas-tpv')) + getV('caja-str-real');
   var difVerif  = totalBruto - totalReal;
-  var verifEl   = document.getElementById('caja-verif-real');
+  var verifEl   = document.getElementById('caja-total-verif');
   if(verifEl){
-    verifEl.textContent = 'Verificación con reales: ' + (Math.abs(difVerif)<0.01 ? '✓ Cuadrado' : ('Δ '+(difVerif>=0?'+':'')+difVerif.toFixed(2)+'€'));
+    verifEl.textContent = Math.abs(difVerif)<0.01 ? '✓ Cuadrado' : ('Δ '+(difVerif>=0?'+':'')+difVerif.toFixed(2)+'€');
     verifEl.style.color = Math.abs(difVerif)<0.01 ? 'var(--green)' : 'var(--amber)';
   }
 }
