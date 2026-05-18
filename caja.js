@@ -1,3 +1,190 @@
+
+// ── HTML INJECTION ─────────────────────────────────────────
+(function injectCajaHTML() {
+  var root = document.getElementById('caja-root');
+  if(!root) { root = document.createElement('div'); root.id='caja-root'; document.body.appendChild(root); }
+  root.innerHTML = `<div class="screen" id="screen-caja">
+  <div class="page-header">
+    <div class="page-title">💰 Cierre Caja</div>
+    <div class="page-sub">Responsable de turno / Jefe de Sala / F&amp;B / Admin</div>
+  </div>
+  <div id="caja-alert-area"></div>
+  <div class="filter-bar" style="margin-bottom:16px;">
+    <div class="fg"><label>Periodo</label>
+      <select id="caja-filter-date" onchange="renderCajaList()">
+        <option value="hoy">Hoy</option><option value="semana">Esta semana</option>
+        <option value="mes">Este mes</option><option value="todo">Todos</option>
+      </select></div>
+    <div style="margin-left:auto;">
+      <button class="btn btn-primary" onclick="openCajaForm()">+ Nuevo Cierre</button>
+    </div>
+  </div>
+  <div id="caja-list" class="tbl-wrap"></div>
+</div>
+<div class="modal-overlay" id="modal-caja">
+  <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">💰 <span id="caja-form-title">Nuevo Cierre de Caja — Sala</span></div>
+    <input type="hidden" id="caja-responsable">
+    <div style="display:none" id="caja-servicios-check"><input type="checkbox" value="Servicio" checked></div>
+
+    <!-- B1: FONDO INICIAL -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">1 · FONDO INICIAL</div>
+      <div class="grid2">
+        <div class="fg"><label>Fecha <span class="req">*</span></label><input type="date" id="caja-fecha"></div>
+        <div class="fg"><label>Fondo recibido del turno anterior (€)</label>
+          <input type="text" inputmode="decimal" id="caja-fondo-ini" placeholder="0.00" readonly style="opacity:0.65;cursor:not-allowed;"></div>
+      </div>
+    </div>
+
+    <!-- B2: VALORES POSMEWS -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">2 · VALORES SISTEMA POSMEWS</div>
+      <div class="grid2">
+        <div class="fg"><label>Cash POSMEWS (€)</label>
+          <input type="text" inputmode="decimal" id="caja-ef-posmews" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Tarjeta POSMEWS (€)</label>
+          <input type="text" inputmode="decimal" id="caja-tar-posmews" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Stripe POSMEWS (€)</label>
+          <input type="text" inputmode="decimal" id="caja-str-posmews" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+      </div>
+    </div>
+
+    <!-- B3: CARGOS INTERNOS -->
+    <div style="background:var(--bg2);border:1px solid #f59e0b;border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#d97706;letter-spacing:.15em;margin-bottom:10px;">3 · CARGOS Y CONCEPTOS INTERNOS</div>
+      <div class="grid2">
+        <div class="fg"><label>Room Charge (€)</label>
+          <input type="text" inputmode="decimal" id="caja-room" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>SYNCROLAB Charge clientes (€)</label>
+          <input type="text" inputmode="decimal" id="caja-syncrolab" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Cargo Alexander (€)</label>
+          <input type="text" inputmode="decimal" id="caja-alexander" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#d97706;letter-spacing:.1em;margin-bottom:8px;">PENSIONES <span style="font-weight:400;color:var(--text3);">— Informativo · no genera diferencia obligatoria</span></div>
+        <div class="grid2">
+          <div class="fg"><label>Pensiones desayunos (nº pax)</label>
+            <input type="text" inputmode="decimal" id="caja-pension-desayuno-pax" placeholder="0"></div>
+          <div class="fg"><label>Pensiones comida+cena (nº pax)</label>
+            <input type="text" inputmode="decimal" id="caja-pension-comidacena-pax" placeholder="0"></div>
+          <div class="fg"><label>€ Pensiones Desayunos (importe)</label>
+            <input type="text" inputmode="decimal" id="caja-eur-pension-desayuno" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+          <div class="fg"><label>€ Pensiones Comidas+Cenas (importe)</label>
+            <input type="text" inputmode="decimal" id="caja-eur-pension-comidacena" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B4: VALORES REALES -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">4 · VALORES REALES FÍSICOS</div>
+      <div class="grid2">
+        <div class="fg"><label>Cash real contado (€)</label>
+          <input type="text" inputmode="decimal" id="caja-ef-real" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>TPV físico (€)</label>
+          <input type="text" inputmode="decimal" id="caja-tar-tpv" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Stripe plataforma (€)</label>
+          <input type="text" inputmode="decimal" id="caja-str-real" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Propinas TPV (€)</label>
+          <input type="text" inputmode="decimal" id="caja-propinas-tpv" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Propinas efectivo (€)</label>
+          <input type="text" inputmode="decimal" id="caja-propinas-ef" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+      </div>
+    </div>
+
+    <!-- B5: DIFERENCIAS CALCULADAS -->
+    <div style="background:var(--bg2);border:2px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">5 · DIFERENCIAS CALCULADAS — Calculado automáticamente</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
+        <div><div style="font-size:11px;color:var(--text3);">Δ Cash</div><div id="caja-dif-ef" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
+        <div><div style="font-size:11px;color:var(--text3);">Δ TPV (neto propinas)</div><div id="caja-dif-tar" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
+        <div><div style="font-size:11px;color:var(--text3);">Δ Stripe</div><div id="caja-dif-str" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg3);border-radius:6px;">
+        <div style="font-size:11px;color:var(--text3);">Diferencia operativa total</div>
+        <div id="dif-sala-total" style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--green);">+0.00 €</div>
+      </div>
+      <!-- aliases for compatibility -->
+      <div style="display:none"><span id="dif-ef-disp"></span><span id="dif-tar-disp"></span><span id="dif-str-disp"></span></div>
+      <div id="caja-diferencia-alert" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;color:#dc2626;font-size:12px;margin-top:10px;">⚠ Diferencia detectada — explicación obligatoria antes de guardar</div>
+    </div>
+
+    <!-- B6: EXPLICACIÓN DIFERENCIA -->
+    <div id="caja-expl-bloque" style="display:none;background:var(--bg2);border:1px solid var(--red);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--red);letter-spacing:.15em;margin-bottom:10px;">6 · GESTIÓN DE DIFERENCIAS</div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label>Explicación de la diferencia <span class="req">*</span></label>
+        <textarea id="caja-expl-diferencia" rows="2" placeholder="Explica el motivo de la diferencia detectada..."></textarea>
+      </div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label>Acción tomada <span class="req">*</span></label>
+        <textarea id="caja-accion-diferencia" rows="2" placeholder="¿Qué hiciste para resolver la diferencia?"></textarea>
+      </div>
+      <div class="fg">
+        <label>¿Informado al responsable?</label>
+        <div style="display:flex;gap:10px;margin-top:6px;">
+          <button type="button" id="caja-informado-si" class="btn btn-secondary btn-sm" onclick="setCajaInformado(true)">Sí</button>
+          <button type="button" id="caja-informado-no" class="btn btn-secondary btn-sm" onclick="setCajaInformado(false)">No</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMENTARIO GENERAL -->
+    <div class="fg" style="margin-bottom:12px;">
+      <label>Comentario general (opcional)</label>
+      <textarea id="caja-comentario" rows="2" placeholder="Observaciones adicionales..."></textarea>
+    </div>
+
+    <!-- B7: FONDO FINAL -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">7 · FONDO FINAL Y TRASPASO</div>
+      <div class="grid2">
+        <div class="fg"><label>Retiro efectivo caja fuerte (€)</label>
+          <input type="text" inputmode="decimal" id="caja-retiro" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Fondo esperado a traspasar (€)</label>
+          <div id="caja-fondo-esperado" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div></div>
+        <div class="fg"><label>Fondo real a traspasar (€) <span class="req">*</span></label>
+          <input type="text" inputmode="decimal" id="caja-fondo-real" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:4px;">
+          <div id="caja-fondo-dif" style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text3);">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOTALES -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+      <div class="grid2">
+        <div class="fg"><label>Total neto sin IVA (€)</label>
+          <input type="text" inputmode="decimal" id="caja-total-neto-manual" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
+        <div class="fg">
+          <label>Total bruto — Calculado automáticamente</label>
+          <div id="caja-total-bruto-display" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--blue);padding:8px 0;">0.00 €</div>
+          <input type="hidden" id="caja-total-bruto-manual">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Verificación con reales: <span id="caja-total-verif" style="font-weight:700;">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-caja')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCajaForm()">💾 Guardar Cierre</button>
+    </div>
+  </div>
+</div>
+<div id="modal-caja-offer" style="position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:700;padding:16px;">
+  <div style="background:var(--bg2);border:2px solid #3b82f6;border-radius:14px;padding:24px;width:100%;max-width:440px;">
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:8px;">SALA · TURNO COMPLETADO</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">¿Realizar cierre de caja ahora?</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">Como responsable de turno, puedes hacer el cierre de caja o dejarlo para más tarde.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button onclick="acceptCajaOffer()" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Sí, realizar cierre de caja</button>
+      <button onclick="declineCajaOffer()" style="width:100%;padding:14px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">No, solo guardar follow-up</button>
+    </div>
+  </div>
+</div>`;
+})();
+
 function initCajaForm() {
   renderCajaList();
 }
@@ -417,9 +604,9 @@ function addAjusteLine() {
     +'<option>Cargo Alexander</option><option>Otro</option>'
     +'</select></div>'
     +'<div class="fg"><label>Nº operaciones</label>'
-    +'<input type="number" id="aj-num-'+idx+'" min="1" value="1" style="font-size:13px;"></div>'
+    +'<input type="text" inputmode="decimal" id="aj-num-'+idx+'" min="1" value="1" style="font-size:13px;"></div>'
     +'<div class="fg"><label>Importe estimado (€)</label>'
-    +'<input type="number" id="aj-imp-'+idx+'" min="0" step="0.01" placeholder="0.00" style="font-size:13px;"></div>'
+    +'<input type="text" inputmode="decimal" id="aj-imp-'+idx+'" placeholder="0.00" style="font-size:13px;"></div>'
     +'<div class="fg"><label>¿Comunicado al responsable?</label>'
     +'<div class="toggle-group">'    +'<button class="tbtn" id="aj-resp-si-'+idx+'" data-idx="'+idx+'" data-val="si" onclick="setAjToggleBtn(this)">SÍ</button>'    +'<button class="tbtn" id="aj-resp-no-'+idx+'" data-idx="'+idx+'" data-val="no" onclick="setAjToggleBtn(this)">NO</button>'    +'</div></div>'
     +'<div class="fg sp2"><label>Motivo</label>'
@@ -732,8 +919,8 @@ async function declineCajaOffer() {
 // renderCostTable() — defined in dashboard.js (respects _dashCurrentDept)
 
 function fixLeadingZeros(el) {
-  // Remove leading zeros from numeric inputs
-  var v = el.value;
+  var v = el.value.replace(',', '.');
+  el.value = v;
   if(v.length > 1 && v[0] === '0' && v[1] !== '.') {
     el.value = parseFloat(v) || 0;
   }
