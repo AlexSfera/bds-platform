@@ -225,16 +225,9 @@ function normalizeTaskState(state){
   if(state===TASK_STATES.VALIDADA) return TASK_STATES.VALIDADA;
   return TASK_STATES.ABIERTA;
 }
-function normalizeIncidentState(state){
-  if(state==='Pendiente' || state==='Gestionada') return state==='Gestionada'?INCIDENT_STATES.CERRADA:INCIDENT_STATES.ABIERTA;
-  if(state===INCIDENT_STATES.ABIERTA || state==='abierta') return INCIDENT_STATES.ABIERTA;
-  if(state===INCIDENT_STATES.EN_PROCESO || state==='en proceso') return INCIDENT_STATES.EN_PROCESO;
-  if(state===INCIDENT_STATES.CERRADA) return INCIDENT_STATES.CERRADA;
-  if(state===INCIDENT_STATES.VALIDADA) return INCIDENT_STATES.VALIDADA;
-  return INCIDENT_STATES.ABIERTA;
-}
+// normalizeIncidentState → incidencias.js
 function isTaskOpen(t){ var s=normalizeTaskState(t&&t.estado); return s===TASK_STATES.ABIERTA||s===TASK_STATES.EN_PROCESO; }
-function isIncidentOpen(i){ var s=normalizeIncidentState(i&&i.estado); return s===INCIDENT_STATES.ABIERTA||s===INCIDENT_STATES.EN_PROCESO; }
+// isIncidentOpen → incidencias.js
 function normalizeDeptName(dept){ return String(dept||'').trim().toLowerCase(); }
 function isAdmin(user){ return !!user && user.rol==='admin'; }
 function isSupervisor(user){ return !!user && Object.prototype.hasOwnProperty.call(SUPERVISOR_DEPT_MAP,user.rol); }
@@ -277,8 +270,7 @@ function canCloseTask(user,task){
 }
 function canValidateShift(user,shift){ return canValidateDepartment(user,getRecordDepartment(shift)); }
 function canEditCashClosing(user,closing){ return isAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,getRecordDepartment(closing))) || (!!user&&(closing.responsable_id===user.id||closing.usuario_id===user.id)); }
-function canCloseIncident(user,incident){ return isAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,getRecordDepartment(incident))); }
-function canValidateIncident(user,incident){ return isAdmin(user) && normalizeIncidentState(incident&&incident.estado)===INCIDENT_STATES.CERRADA; }
+// canCloseIncident, canValidateIncident → incidencias.js
 function formatDisplayValue(value){
   if(value===null || value===undefined || value==='') return '—';
   if(Array.isArray(value)) return value.length?value.map(formatDisplayValue).join(', '):'—';
@@ -302,20 +294,7 @@ function recordMatchesShift(record, shift){
   if(record.servicio && shift.servicio && formatServiceOrTurn(record.servicio) !== formatServiceOrTurn(shift.servicio)) return false;
   return true;
 }
-async function advanceIncident(incidentId,newEstado){
-  var rows=await getDB('incidencias');
-  var inci=rows.find(function(i){return i.id===incidentId;});
-  if(!inci){ toast('No se encontró la incidencia.','err'); return; }
-  var target=normalizeIncidentState(newEstado);
-  if(target===INCIDENT_STATES.EN_PROCESO && !canCloseIncident(currentUser,inci)){ toast('No tienes permiso para gestionar incidencias de este departamento.','err'); return; }
-  if(target===INCIDENT_STATES.VALIDADA && !canValidateIncident(currentUser,inci)){ toast('Solo Admin puede validar incidencias.','err'); return; }
-  const saved=await dbUpdate('incidencias',incidentId,{estado: target});
-  if(!saved){ toast('No se pudo actualizar la incidencia. Inténtalo de nuevo.','err'); return; }
-  invalidateCache('incidencias');
-  toast('Incidencia: '+target,'ok');
-  if(typeof renderFollowupList==='function') renderFollowupList();
-  if(typeof renderDashboard==='function' && document.getElementById('screen-dashboard')?.classList.contains('active')) renderDashboard();
-}
+// advanceIncident → incidencias.js
 async function auditLog(action,detail){
   const row={
     id:genId(),
@@ -1265,26 +1244,7 @@ function saveTurno(){
     chkOpen({});
   }
 }
-function buildInciObj(shiftId,fecha,servicio,ts){
-  var descEl=document.getElementById('i-desc');
-  var accionEl=document.getElementById('i-accion');
-  var staff=getStaffImplicado();
-  return {
-    id:genId(),shift_id:shiftId,employee_id:currentUser.id,nombre:currentUser.nombre,
-    fecha,servicio,
-    categoria:'Reportada por empleado',
-    severidad:'Pendiente revision',
-    descripcion:descEl?descEl.value.trim():'',
-    accion_inmediata:accionEl?accionEl.value.trim():'',
-    staff_implicado_ids:JSON.stringify(staff.ids),
-    staff_implicado_nombres:JSON.stringify(staff.nombres),
-    tipo_incidencia: (document.getElementById('i-tipo-incidencia')||{}).value||'',
-    requiere_formacion:'No',
-    requiere_disciplina:'No',
-    estado:INCIDENT_STATES.ABIERTA,
-    created_at:ts
-  };
-}
+// buildInciObj → incidencias.js
 async function renderMisTurnos(){
   const shifts=(await getDB('shifts')).filter(s=>s.employee_id===currentUser.id).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,12);
   const el=document.getElementById('mis-turnos-table');
@@ -1299,7 +1259,7 @@ async function renderMisTurnos(){
     if(i.categoria==='Gestión pendiente') gestionMap[i.shift_id]=true;
     else inciMap[i.shift_id]=true;
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Turno</th><th>Horas</th>'+(isSalaDept?'<th>Ajustes</th>':'<th>Mermas</th>')+'<th>Gestión</th><th>Incid.</th><th>Estado</th></tr>'
+  el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Horas</th>'+(isSalaDept?'<th>Ajustes</th>':'<th>Mermas</th>')+'<th>Gestión</th><th>Incid.</th><th>Estado</th></tr>'
   +shifts.map(function(s){
     const mc=mermas.filter(m=>m.shift_id===s.id).length;
     return '<tr>'
@@ -1321,7 +1281,7 @@ function bEstado(e){const m={'Validado':'b-green ✓ Validado','Pendiente':'b-re
 function bSev(s){if(s==='Crítica')return'<span class="badge b-red">⛔ CRÍTICA</span>';if(s==='Alta')return'<span class="badge b-red">🔴 Alta</span>';if(s==='Media')return'<span class="badge b-orange">🟠 Media</span>';return'<span class="badge b-blue">🟡 Baja</span>';}
 function bPrio(p){if(p==='Alta')return'<span class="badge b-red">Alta</span>';if(p==='Media')return'<span class="badge b-orange">Media</span>';return'<span class="badge b-blue">Baja</span>';}
 function bTaskEstado(e){var s=normalizeTaskState(e);if(s===TASK_STATES.VALIDADA)return'<span class="badge b-green">✓ Validada</span>';if(s===TASK_STATES.CERRADA)return'<span class="badge b-orange">Cerrada</span>';if(s===TASK_STATES.EN_PROCESO)return'<span class="badge b-blue">En proceso</span>';return'<span class="badge b-red">Abierta</span>';}
-function bIncidentEstado(e){var s=normalizeIncidentState(e);if(s===INCIDENT_STATES.VALIDADA)return'<span class="badge b-green">✓ Validada</span>';if(s===INCIDENT_STATES.CERRADA)return'<span class="badge b-orange">Cerrada</span>';if(s===INCIDENT_STATES.EN_PROCESO)return'<span class="badge b-blue">En proceso</span>';return'<span class="badge b-red">Abierta</span>';}
+// bIncidentEstado → incidencias.js
 
 // ═══════════════════════════════════════════════════════════════════════
 // TASKS — CREATE
@@ -1505,8 +1465,8 @@ function onValDeptChange(){
   var rec='<option value="">Todos</option><option>Mañana</option><option>Tarde</option><option>Noche</option>';
   var all='<option value="">Todos</option><option>Desayuno</option><option>Comida</option><option>Cena</option><option>Evento</option><option>Otro</option><option>Mañana</option><option>Tarde</option><option>Noche</option>';
   if(dept==='Recepción'){ if(label) label.textContent='Turno'; sel.innerHTML=rec; }
-  else if(dept==='Cocina'||dept==='Sala'){ if(label) label.textContent='Turno'; sel.innerHTML=cocSala; }
-  else { if(label) label.textContent='Turno'; sel.innerHTML=all; }
+  else if(dept==='Cocina'||dept==='Sala'){ if(label) label.textContent='Servicio'; sel.innerHTML=cocSala; }
+  else { if(label) label.textContent='Servicio'; sel.innerHTML=all; }
 }
 
 function initValDeptFilter(){
@@ -1602,7 +1562,7 @@ async function renderValidacion(){
       +'<td style="text-align:center;">'+(s.fio===true?'<span class="badge b-red">FIO</span>':s.estado!=='Pendiente'?'<span style="color:var(--green);">✓</span>':'<span style="color:var(--text3);">—</span>')+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Turno</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
 }
 async function valAdvanceGestion(gid,isTask,newState){
   if(isTask){
@@ -1677,34 +1637,7 @@ async function valSaveCloseGestionNew(gid){
   toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);
 }
 
-async function valAdvanceInci(iid){
-  await dbUpdate('incidencias',iid,{estado:INCIDENT_STATES.EN_PROCESO});
-  invalidateCache('incidencias');
-  auditLog('VAL_INCI_ADVANCE',currentUser.nombre+' → En proceso: incidencia '+iid+' (shift '+validatingShiftId+')');
-  toast('En proceso','ok'); await openValidarModal(validatingShiftId);
-}
-function valShowCloseInciForm(iid){
-  var c=document.getElementById('i-btn-'+iid); if(!c) return;
-  var sid=validatingShiftId;
-  c.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;width:100%;">'
-    +'<label style="font-size:11px;color:var(--text3);">Acción para cerrar <span style="color:var(--red)">*</span></label>'
-    +'<textarea id="iclose-text-'+iid+'" rows="2" placeholder="Describe la acción tomada..." style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:6px 8px;resize:vertical;outline:none;width:100%;box-sizing:border-box;"></textarea>'
-    +'<div style="display:flex;gap:8px;">'
-    +'<button class="vbtn vbtn-warn" onclick="valSaveCloseInci(\''+iid+'\')">💾 Guardar cierre</button>'
-    +'<button class="vbtn" onclick="openValidarModal(\''+sid+'\')">Cancelar</button>'
-    +'</div></div>';
-}
-async function valSaveCloseInci(iid){
-  var txt=((document.getElementById('iclose-text-'+iid)||{}).value||'').trim();
-  if(!txt){toast('El campo "Acción para cerrar" es obligatorio','err');return;}
-  var ii=await getDB('incidencias'); var inc=ii.find(function(x){return x.id===iid;}); if(!inc) return;
-  var ts=localTs();
-  var tgMins=Math.round((Date.now()-new Date(inc.created_at).getTime())/60000);
-  await dbUpdate('incidencias',iid,{estado:INCIDENT_STATES.CERRADA,accion_inmediata:txt,cerrado_ts:ts,tiempo_gestion:tgMins});
-  invalidateCache('incidencias');
-  auditLog('INCIDENCIA_CERRADA','id: '+iid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
-  toast('Incidencia cerrada','ok'); await openValidarModal(validatingShiftId);
-}
+// valAdvanceInci, valShowCloseInciForm, valSaveCloseInci → incidencias.js
 
 async function openValidarModal(shiftId){
   validatingShiftId=shiftId;
@@ -1735,7 +1668,7 @@ async function openValidarModal(shiftId){
   info += '<div><span style="color:var(--text3)">Empleado: </span><strong>'+formatDisplayValue(s.nombre)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">Puesto: </span>'+formatDisplayValue(s.puesto)+'</div>';
   info += '<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(s.fecha)+'</strong></div>';
-  info += '<div><span style="color:var(--text3)">Turno: </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
+  info += '<div><span style="color:var(--text3)">'+(s.area==='Recepción'?'Turno':'Servicio')+': </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+s.horas+'h</strong></div>';
   if(s.area!=='Recepción') info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   if(s.observacion) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+formatDisplayValue(s.observacion)+'</div>';
@@ -2097,7 +2030,7 @@ async function renderDashboard(){
   inciKpiEl.innerHTML=`<div class="kpi k-red"><div class="kpi-lbl">Total (filtro)</div><div class="kpi-val">${inciF.length}</div></div><div class="kpi k-red"><div class="kpi-lbl">Abiertas</div><div class="kpi-val">${iAb}</div></div><div class="kpi k-red"><div class="kpi-lbl">Críticas</div><div class="kpi-val">${iCrit}</div></div><div class="kpi k-orange"><div class="kpi-lbl">Req. Formación</div><div class="kpi-val">${iForm}</div></div><div class="kpi k-orange"><div class="kpi-lbl">Req. Disciplina</div><div class="kpi-val">${iDisc}</div></div>`;
 
   const inciTbl=document.getElementById('dash-inci-table');
-  inciTbl.innerHTML=inciF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Turno</th><th>Categoría</th><th>Sev.</th><th>Descripción</th><th>Estado</th><th>Form.</th><th>Disc.</th></tr>
+  inciTbl.innerHTML=inciF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Servicio</th><th>Categoría</th><th>Sev.</th><th>Descripción</th><th>Estado</th><th>Form.</th><th>Disc.</th></tr>
   ${inciF.sort((a,b)=>{const s={Crítica:4,Alta:3,Media:2,Baja:1};return(s[b.severidad]||0)-(s[a.severidad]||0);}).map(i=>`<tr><td style="font-family:var(--font-mono);font-size:10px">${fmtDate(i.fecha)}</td><td>${i.nombre}</td><td>${i.servicio}</td><td style="font-size:11px">${i.categoria}</td><td>${bSev(i.severidad)}</td><td style="font-size:11px;color:var(--text2);max-width:200px">${i.descripcion}</td><td>${i.estado==='Abierta'?'<span class="badge b-red">Abierta</span>':'<span class="badge b-green">Gestionada</span>'}</td><td>${i.requiere_formacion==='Sí'?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td>${i.requiere_disciplina==='Sí'?'<span class="badge b-red">SÍ</span>':'—'}</td></tr>`).join('')}</table>`:'<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias con este filtro</div></div>';
 
   // MERMA filtrada
@@ -2115,7 +2048,7 @@ async function renderDashboard(){
   mKpi.innerHTML=`<div class="kpi k-orange"><div class="kpi-lbl">Líneas merma</div><div class="kpi-val">${totalMermaLineas}</div></div><div class="kpi k-orange"><div class="kpi-lbl">Coste total</div><div class="kpi-val">${totalMermaCosto.toFixed(0)}€</div></div><div class="kpi k-red"><div class="kpi-lbl">Sin coste</div><div class="kpi-val">${sinCosto}</div><div class="kpi-sub">Líneas pendientes de valorar</div></div><div class="kpi k-amber"><div class="kpi-lbl">Top causa</div><div class="kpi-val" style="font-size:15px;">${topCausa?.causa||'—'}</div><div class="kpi-sub">${topCausa?topCausa.coste.toFixed(2)+'€':''}</div></div>`;
 
   const mTbl=document.getElementById('dash-merma-table');
-  mTbl.innerHTML=mermaF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Turno</th><th>Producto</th><th>Cantidad</th><th>Causa</th><th>€/u</th><th>Total €</th></tr>
+  mTbl.innerHTML=mermaF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Servicio</th><th>Producto</th><th>Cantidad</th><th>Causa</th><th>€/u</th><th>Total €</th></tr>
   ${mermaF.map(m=>`<tr><td style="font-family:var(--font-mono);font-size:10px">${fmtDate(m.fecha)}</td><td>${m.nombre}</td><td>${m.servicio}</td><td style="font-weight:600">${m.producto}</td><td style="font-family:var(--font-mono)">${m.cantidad} ${m.unidad}</td><td style="font-size:11px">${m.causa}</td><td style="font-family:var(--font-mono)">${m.coste_unitario>0?m.coste_unitario+'€':'<span style="color:var(--text3)">—</span>'}</td><td style="font-family:var(--font-mono);color:var(--orange)">${m.coste_total>0?m.coste_total.toFixed(2)+'€':'<span style="color:var(--text3)">—</span>'}</td></tr>`).join('')}</table>`:'<div class="empty"><div class="empty-icon">🗑</div><div class="empty-text">Sin merma con este filtro</div></div>';
 
   // TAREAS POR DPTO
@@ -2163,7 +2096,7 @@ async function renderDashboard(){
       });
       fioEl2.innerHTML='<div style="overflow-x:auto"><table><tr>'
         +'<th>Fecha</th><th>Reporta</th><th>Responsable error</th><th>Staff implicado</th>'
-        +'<th>Turno</th><th>Tipo</th><th>Gravedad</th><th>Comentario</th><th>Informado resp.</th><th>Estado</th>'
+        +'<th>Servicio</th><th>Tipo</th><th>Gravedad</th><th>Comentario</th><th>Informado resp.</th><th>Estado</th>'
         +'</tr>'+fioRows2+'</table></div>';
     }
   }
@@ -2190,7 +2123,7 @@ async function renderDashboard(){
           +'</tr>';
       });
       inciEl2.innerHTML='<div style="overflow-x:auto"><table><tr>'
-        +'<th>Fecha</th><th>Reporta</th><th>Staff implicado</th><th>Turno</th><th>Descripción</th><th>Acción</th><th>Informado resp.</th><th>Estado</th>'
+        +'<th>Fecha</th><th>Reporta</th><th>Staff implicado</th><th>Servicio</th><th>Descripción</th><th>Acción</th><th>Informado resp.</th><th>Estado</th>'
         +'</tr>'+iRows2+'</table></div>';
     }
   }

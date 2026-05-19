@@ -100,10 +100,7 @@ function _dashRecordDept(record, shiftMap) {
 function _dashMatchesDept(record, deptSet, shiftMap) {
   return deptSet.indexOf(_dashRecordDept(record, shiftMap)) !== -1;
 }
-function _isOperationalIncident(i) {
-  var cat = normalizeDeptName(i && i.categoria);
-  return cat !== 'gestión pendiente' && cat !== 'gestion pendiente' && cat !== 'follow-up / gestión' && cat !== 'follow-up / gestion';
-}
+// _isOperationalIncident → incidencias.js
 function _isGestionTask(t) {
   if (!t) return false;
   var text = normalizeDeptName([t.origen, t.titulo, t.descripcion].join(' '));
@@ -440,76 +437,7 @@ function _renderAlertas(shifts, mermas, incis, tareas) {
   }).join('');
 }
 
-// ── INCIDENCIAS DETALLE ───────────────────────────────────────
-function _renderIncidencias(incis, shiftMap) {
-  var el = document.getElementById('dash-inci-table');
-  if (!el) return;
-
-  var diDept   = (document.getElementById('di-dept')   || {}).value || '';
-  var diCat    = (document.getElementById('di-cat')    || {}).value || '';
-  var diSev    = (document.getElementById('di-sev')    || {}).value || '';
-  var diEstado = (document.getElementById('di-estado') || {}).value || '';
-
-  var filtered = incis.slice();
-  if (diDept) filtered = filtered.filter(function(i) {
-    var s = shiftMap && shiftMap[i.shift_id];
-    return ((s && s.area) || i.area || '') === diDept;
-  });
-  if (diCat)    filtered = filtered.filter(function(i) { return i.categoria === diCat; });
-  if (diSev)    filtered = filtered.filter(function(i) { return i.severidad === diSev; });
-  if (diEstado) filtered = filtered.filter(function(i) { return normalizeIncidentState(i.estado) === diEstado; });
-
-  // KPI incidencias
-  var kpiEl = document.getElementById('kpi-incis');
-  if (kpiEl) {
-    var iAb = filtered.filter(function(i) { return isIncidentOpen(i); }).length;
-    var iCerr = filtered.filter(function(i) { return normalizeIncidentState(i.estado) === INCIDENT_STATES.CERRADA; }).length;
-    var iVal = filtered.filter(function(i) { return normalizeIncidentState(i.estado) === INCIDENT_STATES.VALIDADA; }).length;
-    var iCrit = filtered.filter(function(i) { return i.severidad === 'Crítica' || i.severidad === 'Alta'; }).length;
-    var resRows = filtered.filter(function(i) { return _resolutionMinutes(i) !== null; });
-    var avgRes = resRows.length ? Math.round(resRows.reduce(function(a, i) { return a + _resolutionMinutes(i); }, 0) / resRows.length) : null;
-    kpiEl.innerHTML = '<div class="kpi k-red"><div class="kpi-lbl">Total</div><div class="kpi-val">' + filtered.length + '</div></div>'
-      + '<div class="kpi k-red"><div class="kpi-lbl">Abiertas</div><div class="kpi-val">' + iAb + '</div></div>'
-      + '<div class="kpi k-green"><div class="kpi-lbl">Cerradas</div><div class="kpi-val">' + iCerr + '</div><div class="kpi-sub">' + iVal + ' validadas</div></div>'
-      + '<div class="kpi k-red"><div class="kpi-lbl">Alta / crítica</div><div class="kpi-val">' + iCrit + '</div></div>'
-      + '<div class="kpi k-blue"><div class="kpi-lbl">T. medio</div><div class="kpi-val">' + (avgRes === null ? '—' : avgRes + 'm') + '</div></div>';
-  }
-
-  if (!filtered.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-text">Sin incidencias en el periodo</div></div>';
-    return;
-  }
-
-  filtered.sort(function(a, b) { var ta=b.created_at||b.fecha||''; var tb=a.created_at||a.fecha||''; return ta.localeCompare(tb); });
-
-  var isAdmin = currentUser && currentUser.rol === 'admin';
-
-  el.innerHTML = '<div style="overflow-x:auto"><table>'
-    + '<tr><th>Fecha</th><th>Hora</th><th>Departamento</th><th>Tipo</th><th>Severidad</th><th>Descripción</th><th>Acción tomada</th><th>Estado</th><th>Acción</th></tr>'
-    + filtered.map(function(i) {
-      var sevColor = i.severidad === 'Crítica' ? 'b-red' : i.severidad === 'Alta' ? 'b-orange' : i.severidad === 'Media' ? 'b-yellow' : 'b-gray';
-      var normI = normalizeIncidentState(i.estado);
-      var estColor = normI === INCIDENT_STATES.ABIERTA ? 'b-red' : normI === INCIDENT_STATES.EN_PROCESO ? 'b-blue' : 'b-green';
-      var iShift = shiftMap && shiftMap[i.shift_id];
-      var iDept = (iShift && iShift.area) || i.area || '—';
-      var hora = _localHora(i.created_at);
-      var accionTomada = formatDisplayValue(i.accion_inmediata) || '—';
-      var acciones = '<button class="btn btn-secondary btn-sm" onclick="_dashShowDetail(\'' + i.id + '\',\'incidencias\')">Ver</button>';
-      if (isAdmin) acciones += ' <button class="btn btn-danger btn-sm" onclick="_dashDeleteRecord(\'' + i.id + '\',\'incidencias\')">Eliminar</button>';
-      return '<tr>'
-        + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(i.fecha) + '</td>'
-        + '<td style="font-family:var(--font-mono);font-size:11px">' + hora + '</td>'
-        + '<td>' + deptBadge(iDept) + '</td>'
-        + '<td style="font-size:12px">' + formatDisplayValue(i.categoria) + '</td>'
-        + '<td><span class="badge ' + sevColor + '">' + formatDisplayValue(i.severidad) + '</span></td>'
-        + '<td style="max-width:180px;font-size:12px">' + formatDisplayValue(i.descripcion) + '</td>'
-        + '<td style="max-width:160px;font-size:12px;color:var(--text3)">' + accionTomada + '</td>'
-        + '<td>' + bIncidentEstado(i.estado) + '</td>'
-        + '<td style="white-space:nowrap">' + acciones + '</td>'
-        + '</tr>';
-    }).join('')
-    + '</table></div>';
-}
+// ── INCIDENCIAS DETALLE → incidencias.js ──────────────────────
 
 // ── GESTIONES ────────────────────────────────────────────────
 function _renderGestiones(gestiones, shiftMap) {

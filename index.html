@@ -462,7 +462,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
           <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
         </div>
         <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Sala</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Caja · Incidencias · Turno</p>
+        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Caja · Incidencias · Servicio</p>
         <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#2ec4b6;">
           <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
         </div>
@@ -607,7 +607,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
               </label>
             </div>
           </div>
-          <div class="fg" id="servicio-fg-block"><label>Turno <span class="req">*</span></label>
+          <div class="fg" id="servicio-fg-block"><label>Servicio <span class="req">*</span></label>
             <div id="t-servicio-wrapper">
               <!-- Cocina: single select (default) -->
               <select id="t-servicio" style="display:none;">
@@ -633,7 +633,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
           <div class="fg"><label>Horas trabajadas <span class="req">*</span></label><input type="number" id="t-horas" min="0.5" max="16" step="0.5" placeholder="8"></div>
           <div class="fg"><label>Responsable de turno <span class="req">*</span></label><select id="t-responsable" style="color:#111827;background:#ffffff;border:1px solid #d1d5db;"><option value="">— Seleccionar —</option></select></div>
 
-          <div class="fg"><label>Observación</label><input type="text" id="t-obs" placeholder="Nota breve del turno"></div>
+          <div class="fg"><label>Observación</label><input type="text" id="t-obs" placeholder="Nota breve del servicio"></div>
         </div>
 
         
@@ -803,7 +803,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
           <select id="v-dept" onchange="onValDeptChange()">
             <option value="">Todos</option><option>Cocina</option><option>Sala</option><option>Recepción</option>
           </select></div>
-        <div class="fg"><label id="v-servicio-label">Turno</label>
+        <div class="fg"><label id="v-servicio-label">Servicio</label>
           <select id="v-servicio">
             <option value="">Todos</option><option>Desayuno</option><option>Comida</option><option>Cena</option><option>Evento</option><option>Otro</option><option>Mañana</option><option>Tarde</option><option>Noche</option>
           </select></div>
@@ -840,7 +840,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
           <div class="fg" id="dash-dept-wrapper" style="display:block;"><label>Departamento</label>
             <select id="dash-dept" onchange="onDashDeptChange()" style="color:#111827;background:#ffffff;"></select>
           </div>
-        <div class="fg"><label>Turno</label>
+        <div class="fg"><label>Servicio</label>
           <select id="dash-serv" onchange="renderDashboard()"><option value="">Todos</option><option>Desayuno</option><option>Comida</option><option>Cena</option><option>Evento</option></select></div>
         <div class="fg"><label>Empleado</label>
           <select id="dash-emp" onchange="renderDashboard()"><option value="">Todos</option></select></div>
@@ -1694,6 +1694,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <div class="ver-badge">v3.0 · Schema 3.0 · Migración Supabase lista</div>
 
 <script src="shared.js"></script>
+<script src="incidencias.js"></script>
 <script src="checklist.js"></script>
 <script src="sala.js"></script>
 <script src="caja.js"></script>
