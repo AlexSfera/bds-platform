@@ -1190,3 +1190,70 @@ function bGestionEstado(st){
   if(st==='Cerrada') return '<span class="badge b-green">Cerrada</span>';
   return '<span class="badge b-gray">'+st+'</span>';
 }
+// ═══════════════════════════════════════════════════════════════════════
+// RECEPCIÓN — Funciones auxiliares caja (extraídas de index.html · ARCH-01)
+// ═══════════════════════════════════════════════════════════════════════
+
+function setTransferDate() {
+  var el = document.getElementById('rec-trans-real');
+  var dateEl = document.getElementById('rec-trans-fecha');
+  if(!dateEl) return;
+  if(!el || !el.value || parseFloat(el.value) === 0) {
+    dateEl.style.display = 'none';
+    return;
+  }
+  var d = new Date();
+  var fmt = d.toLocaleDateString('es-ES') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  dateEl.textContent = '📅 Última actualización: ' + fmt;
+  dateEl.style.display = 'block';
+  window._recTransFecha = d.toISOString();
+}
+
+function calcRecDifs() {
+  function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  var mewsCash  = gv('rec-cash-mews');
+  var mewsTar   = gv('rec-tarjeta-mews');
+  var mewsStr   = gv('rec-stripe-mews');
+  var mewsTrans = gv('rec-trans-mews');
+  var realCash  = gv('rec-cash-real');
+  var realTpv   = gv('rec-tpv-real');
+  var realStr   = gv('rec-stripe-real');
+  var realTrans = gv('rec-trans-real');
+  var fondoRec  = parseFloat((document.getElementById('rec-fondo-recibido')||{}).value)||0;
+  var cfImporte = gv('rec-cf-importe');
+
+  var difCash  = mewsCash - (realCash - fondoRec);
+  var difTar   = mewsTar  - realTpv;
+  var difStr   = mewsStr  - realStr;
+  var difTrans = mewsTrans - realTrans;
+  var difTotal = difCash + difTar + difStr + difTrans;
+
+  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
+  function setColor(id, val){
+    var el=document.getElementById(id); if(!el) return;
+    el.textContent = fmt(val);
+    el.style.color = Math.abs(val)<0.01 ? 'var(--green)' : 'var(--red)';
+  }
+  setColor('rec-dif-cash',    difCash);
+  setColor('rec-dif-tarjeta', difTar);
+  setColor('rec-dif-stripe',  difStr);
+  setColor('rec-dif-trans',   difTrans);
+  setColor('rec-dif-total',   difTotal);
+
+  var fondoEsperado = fondoRec + mewsCash - cfImporte;
+  var feEl = document.getElementById('rec-fondo-esperado');
+  if(feEl){ feEl.textContent=fondoEsperado.toFixed(2)+' €'; feEl.style.color=fondoEsperado>=0?'var(--green)':'var(--red)'; }
+  var fondoReal2 = parseFloat((document.getElementById('rec-fondo-traspaso')||{}).value)||0;
+  var difFondo2 = fondoReal2 - fondoEsperado;
+  var fondoDifEl = document.getElementById('rec-fondo-dif');
+  if(fondoDifEl){
+    fondoDifEl.textContent = Math.abs(difFondo2)<0.01 ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: '+(difFondo2>=0?'+':'')+difFondo2.toFixed(2)+'€';
+    fondoDifEl.style.color = Math.abs(difFondo2)<0.01 ? 'var(--green)' : 'var(--red)';
+  }
+
+  var hasError = Math.abs(difTotal)>0.01;
+  var alertEl  = document.getElementById('rec-dif-alert');
+  var expBlock = document.getElementById('rec-dif-exp-block');
+  if(alertEl)  alertEl.style.display  = hasError?'block':'none';
+  if(expBlock) expBlock.style.display = hasError?'block':'none';
+}
