@@ -439,74 +439,7 @@ function _renderAlertas(shifts, mermas, incis, tareas) {
 
 // ── INCIDENCIAS DETALLE → incidencias.js ──────────────────────
 
-// ── GESTIONES ────────────────────────────────────────────────
-function _renderGestiones(gestiones, shiftMap) {
-  var gridEl = document.getElementById('dash-gestiones-kpi');
-  var tableEl = document.getElementById('dash-gestiones-table');
-  if (!gridEl && !tableEl) return;
-
-  var abiertas = gestiones.filter(function(t) { return normalizeTaskState(t.estado) === TASK_STATES.ABIERTA; });
-  var enProc = gestiones.filter(function(t) { return normalizeTaskState(t.estado) === TASK_STATES.EN_PROCESO; });
-  var cerradas = gestiones.filter(function(t) { return normalizeTaskState(t.estado) === TASK_STATES.CERRADA; });
-  var vencidas = gestiones.filter(function(t) { return isOverdue(t.deadline) && isTaskOpen(t); });
-
-  if (gridEl) {
-    gridEl.innerHTML = '<div class="kpi k-amber"><div class="kpi-lbl">Abiertas</div><div class="kpi-val">' + abiertas.length + '</div></div>'
-      + '<div class="kpi k-blue"><div class="kpi-lbl">En proceso</div><div class="kpi-val">' + enProc.length + '</div></div>'
-      + '<div class="kpi k-green"><div class="kpi-lbl">Cerradas</div><div class="kpi-val">' + cerradas.length + '</div></div>'
-      + '<div class="kpi k-red"><div class="kpi-lbl">Vencidas</div><div class="kpi-val">' + vencidas.length + '</div></div>';
-  }
-
-  if (!tableEl) return;
-
-  // Filtros del panel de gestiones
-  var dgDept   = (document.getElementById('dg-dept')   || {}).value || '';
-  var dgEstado = (document.getElementById('dg-estado') || {}).value || '';
-
-  var filtered = gestiones.slice();
-  if (dgDept)   filtered = filtered.filter(function(t) { return (t.departamento || t.area || '') === dgDept; });
-  if (dgEstado) filtered = filtered.filter(function(t) { return normalizeTaskState(t.estado) === dgEstado; });
-
-  if (!filtered.length) {
-    tableEl.innerHTML = '<div class="empty"><div class="empty-text">Sin gestiones en el periodo</div></div>';
-    return;
-  }
-
-  filtered.sort(function(a, b) {
-    if (isOverdue(a.deadline) && !isOverdue(b.deadline)) return -1;
-    if (!isOverdue(a.deadline) && isOverdue(b.deadline)) return 1;
-    var ta = (a.created_at || '').replace(' ', 'T');
-    var tb = (b.created_at || '').replace(' ', 'T');
-    return tb.localeCompare(ta);
-  });
-
-  var isAdmin = currentUser && currentUser.rol === 'admin';
-
-  tableEl.innerHTML = '<div style="overflow-x:auto"><table>'
-    + '<tr><th>Fecha</th><th>Hora</th><th>Departamento</th><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Acción tomada</th><th>Acción</th></tr>'
-    + filtered.map(function(t) {
-      var normSt = normalizeTaskState(t.estado);
-      var stColor = normSt === TASK_STATES.ABIERTA ? 'b-red' : normSt === TASK_STATES.EN_PROCESO ? 'b-blue' : 'b-green';
-      var vencida = isOverdue(t.deadline);
-      var hora = _localHora(t.created_at);
-      var fechaVal = t.fecha || (t.created_at ? t.created_at.replace(' ','T').slice(0,10) : '');
-      var tipo = formatDisplayValue(t.tipo_gestion || t.titulo || t.origen) || '—';
-      var accionTomada = formatDisplayValue(t.accion_tomada) || '—';
-      var acciones = '<button class="btn btn-secondary btn-sm" onclick="_dashShowDetail(\'' + t.id + '\',\'gestiones\')">Ver</button>';
-      if (isAdmin) acciones += ' <button class="btn btn-danger btn-sm" onclick="_dashDeleteRecord(\'' + t.id + '\',\'gestiones\')">Eliminar</button>';
-      return '<tr style="' + (vencida ? 'background:rgba(239,68,68,.05)' : '') + '">'
-        + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(fechaVal) + '</td>'
-        + '<td style="font-family:var(--font-mono);font-size:11px">' + hora + '</td>'
-        + '<td>' + deptBadge(t.departamento || t.area || '—') + '</td>'
-        + '<td style="font-size:12px">' + tipo + '</td>'
-        + '<td style="font-size:12px;max-width:200px">' + formatDisplayValue(t.descripcion) + '</td>'
-        + '<td><span class="badge ' + stColor + '">' + normSt + '</span></td>'
-        + '<td style="max-width:160px;font-size:12px;color:var(--text3)">' + accionTomada + '</td>'
-        + '<td style="white-space:nowrap">' + acciones + '</td>'
-        + '</tr>';
-    }).join('')
-    + '</table></div>';
-}
+// ── GESTIONES → gestiones.js ─────────────────────────────────
 
 // ── TAREAS POR DEPARTAMENTO ───────────────────────────────────
 function _renderTareas(tareas) {

@@ -1298,12 +1298,7 @@ async function createTask(data){
   toast(`Tarea creada → ${task.dept_destino}`,'ok');
   return task;
 }
-function bGestionEstado(st){
-  if(!st||st==='Abierta') return '<span class="badge b-red">Abierta</span>';
-  if(st==='En proceso') return '<span class="badge b-yellow">En proceso</span>';
-  if(st==='Cerrada') return '<span class="badge b-green">Cerrada</span>';
-  return '<span class="badge b-gray">'+st+'</span>';
-}
+// bGestionEstado → gestiones.js
 function openTaskModal(){
   setDeadlineLimits();
   document.getElementById('mt-title').textContent='Nueva Tarea Manual';
@@ -1564,78 +1559,8 @@ async function renderValidacion(){
   });
   el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
 }
-async function valAdvanceGestion(gid,isTask,newState){
-  if(isTask){
-    var tt=await getDB('tareas'); var t=tt.find(function(x){return x.id===gid;}); if(!t) return;
-    await dbUpdate('tareas',gid,{estado:TASK_STATES.EN_PROCESO,updated_at:localTs()});
-    invalidateCache('tareas');
-    auditLog('VAL_GESTION_ADVANCE',currentUser.nombre+' → En proceso: '+t.titulo+' (shift '+validatingShiftId+')');
-  } else {
-    await dbUpdate('incidencias',gid,{estado:INCIDENT_STATES.EN_PROCESO});
-    invalidateCache('incidencias');
-    auditLog('VAL_GESTION_ADVANCE',currentUser.nombre+' → En proceso (gestión-inci '+gid+', shift '+validatingShiftId+')');
-  }
-  toast('En proceso','ok'); await openValidarModal(validatingShiftId);
-}
-function valShowCloseGestionForm(gid,isTask){
-  var c=document.getElementById('g-btn-'+gid); if(!c) return;
-  var sid=validatingShiftId;
-  c.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;width:100%;">'
-    +'<label style="font-size:11px;color:var(--text3);">Acción para cerrar <span style="color:var(--red)">*</span></label>'
-    +'<textarea id="gclose-text-'+gid+'" rows="2" placeholder="Describe la acción tomada..." style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:6px 8px;resize:vertical;outline:none;width:100%;box-sizing:border-box;"></textarea>'
-    +'<div style="display:flex;gap:8px;">'
-    +'<button class="vbtn vbtn-warn" onclick="valSaveCloseGestion(\''+gid+'\','+isTask+')">💾 Guardar cierre</button>'
-    +'<button class="vbtn" onclick="openValidarModal(\''+sid+'\')">Cancelar</button>'
-    +'</div></div>';
-}
-async function valSaveCloseGestion(gid,isTask){
-  var txt=((document.getElementById('gclose-text-'+gid)||{}).value||'').trim();
-  if(!txt){toast('El campo "Acción para cerrar" es obligatorio','err');return;}
-  var ts=localTs();
-  if(isTask){
-    var tt=await getDB('tareas'); var t=tt.find(function(x){return x.id===gid;}); if(!t) return;
-    var tgMins=Math.round((Date.now()-new Date(t.created_at).getTime())/60000);
-    await dbUpdate('tareas',gid,{estado:TASK_STATES.CERRADA,notas_cierre:txt,completado_por:currentUser.nombre,completado_ts:ts,tiempo_gestion:tgMins,updated_at:ts});
-    invalidateCache('tareas');
-    auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
-  } else {
-    var ii=await getDB('incidencias'); var inc=ii.find(function(x){return x.id===gid;}); if(!inc) return;
-    var tgMinsI=Math.round((Date.now()-new Date(inc.created_at).getTime())/60000);
-    await dbUpdate('incidencias',gid,{estado:INCIDENT_STATES.CERRADA,accion_inmediata:txt,cerrado_ts:ts,tiempo_gestion:tgMinsI});
-    invalidateCache('incidencias');
-    auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMinsI+' min | accion: '+txt+' (shift '+validatingShiftId+')');
-  }
-  toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);
-}
-
-async function valAdvanceGestionNew(gid, newState){
-  var gg=await getDB('gestiones'); var g=gg.find(function(x){return x.id===gid;}); if(!g) return;
-  await dbUpdate('gestiones',gid,{estado:newState});
-  invalidateCache('gestiones');
-  auditLog('VAL_GESTION_ADVANCE',currentUser.nombre+' → '+newState+': gestión '+gid+' (shift '+validatingShiftId+')');
-  toast('Estado actualizado','ok'); await openValidarModal(validatingShiftId);
-}
-function valShowCloseGestionNewForm(gid, shiftId){
-  var c=document.getElementById('g-btn-'+gid); if(!c) return;
-  c.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;width:100%;">'
-    +'<label style="font-size:11px;color:var(--text3);">Acción tomada para cerrar <span style="color:var(--red)">*</span></label>'
-    +'<textarea id="gnew-close-'+gid+'" rows="2" placeholder="Describe la acción tomada..." style="background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:6px 8px;resize:vertical;width:100%;box-sizing:border-box;"></textarea>'
-    +'<div style="display:flex;gap:8px;">'
-    +'<button class="vbtn vbtn-warn" onclick="valSaveCloseGestionNew(\''+gid+'\')">💾 Guardar cierre</button>'
-    +'<button class="vbtn" onclick="openValidarModal(\''+shiftId+'\')">Cancelar</button>'
-    +'</div></div>';
-}
-async function valSaveCloseGestionNew(gid){
-  var txt=((document.getElementById('gnew-close-'+gid)||{}).value||'').trim();
-  if(!txt){toast('Acción tomada obligatoria','err');return;}
-  var gg=await getDB('gestiones'); var g=gg.find(function(x){return x.id===gid;}); if(!g) return;
-  var tgMins=Math.round((Date.now()-new Date(g.created_at).getTime())/60000);
-  var ts=localTs();
-  await dbUpdate('gestiones',gid,{estado:'Cerrada',accion_tomada:txt,cerrado_por:currentUser.nombre,cerrado_ts:ts,tiempo_gestion:tgMins,updated_at:ts});
-  invalidateCache('gestiones');
-  auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
-  toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);
-}
+// valAdvanceGestion, valShowCloseGestionForm, valSaveCloseGestion,
+// valAdvanceGestionNew, valShowCloseGestionNewForm, valSaveCloseGestionNew → gestiones.js
 
 // valAdvanceInci, valShowCloseInciForm, valSaveCloseInci → incidencias.js
 

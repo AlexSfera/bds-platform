@@ -949,37 +949,8 @@ async function renderFollowupList() {
   el.innerHTML = html;
 }
 
-// ── Gestiones en Mi Turno (BUG-39) ──────────────────────────
-async function advanceGestion(gid, newState){
-  await dbUpdate('gestiones', gid, {estado: newState, updated_at: localTs()});
-  invalidateCache('gestiones');
-  auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
-  toast('Estado actualizado', 'ok');
-  if(typeof renderFollowupList === 'function') renderFollowupList();
-}
-
-async function openCloseGestion(gid){
-  var txt = prompt('Acción tomada para cerrar esta gestión (obligatorio):');
-  if(txt === null) return;
-  if(!txt.trim()){ toast('Acción obligatoria', 'err'); return; }
-  var gg = await getDB('gestiones');
-  var g = gg.find(function(x){ return x.id === gid; });
-  if(!g){ toast('Gestión no encontrada', 'err'); return; }
-  var tgMins = Math.round((Date.now() - new Date(g.created_at).getTime()) / 60000);
-  var ts = localTs();
-  await dbUpdate('gestiones', gid, {
-    estado: 'Cerrada',
-    accion_tomada: txt.trim(),
-    cerrado_por: currentUser.nombre,
-    cerrado_ts: ts,
-    tiempo_gestion: tgMins,
-    updated_at: ts
-  });
-  invalidateCache('gestiones');
-  auditLog('GESTION_CERRADA', 'id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt.trim());
-  toast('Gestión cerrada', 'ok');
-  if(typeof renderFollowupList === 'function') renderFollowupList();
-}
+// ── Gestiones en Mi Turno (BUG-39) → gestiones.js ──────────────
+// advanceGestion, openCloseGestion → gestiones.js
 
 async function openNewFollowup() {
   ['fu-tipo','fu-desc','fu-mews-id','fu-objetivo','fu-responsable'].forEach(function(id){
@@ -1184,12 +1155,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }, 500);
 });
 
-function bGestionEstado(st){
-  if(!st||st==='Abierta') return '<span class="badge b-red">Abierta</span>';
-  if(st==='En proceso') return '<span class="badge b-yellow">En proceso</span>';
-  if(st==='Cerrada') return '<span class="badge b-green">Cerrada</span>';
-  return '<span class="badge b-gray">'+st+'</span>';
-}
+// bGestionEstado → gestiones.js (eliminado duplicado · ARCH-03)
 // ═══════════════════════════════════════════════════════════════════════
 // RECEPCIÓN — Funciones auxiliares caja (extraídas de index.html · ARCH-01)
 // ═══════════════════════════════════════════════════════════════════════
