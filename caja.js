@@ -453,6 +453,7 @@ async function saveCajaForm() {
     subtotal_neto: parseFloat((document.getElementById('caja-total-neto-manual')||{}).value)||0,
     total_bruto: parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0,
     total_medios_pago: mediosPago,
+    total_ajustes: ajustes,
     comentario: comentario,
     estado: 'Pendiente validación',
     created_at: localTs(),
@@ -741,11 +742,13 @@ async function renderValCajaList() {
       var difOp = c.diferencia_operativa_sala||0;
       var difColor = Math.abs(difOp)<0.01?'var(--green)':Math.abs(difOp)>5?'var(--red)':'var(--amber)';
       var isPendiente = c.estado!=='Validado final';
-      var canEdit = currentUser.rol==='admin'||currentUser.rol==='fb';
+      var isAdmin = currentUser.rol==='admin';
+      var canEdit = isAdmin||currentUser.rol==='fb';
       var canValidar = canEdit;
-      var canRevisar = currentUser.rol==='admin'||currentUser.rol==='fb'
-        ||currentUser.rol==='jefe_recepcion'||currentUser.rol==='coordinador_syncrolab';
       var totalPens = (parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0);
+      // BUG-CAJ-04: Total ajustes (desc+anulaciones+invitaciones) — nuevo campo guardado
+      var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2)+'€' : '—';
+      var ajColor = c.total_ajustes > 0 ? 'var(--amber)' : 'var(--text3)';
       return '<tr>'
         +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
@@ -763,18 +766,20 @@ async function renderValCajaList() {
           var breakdown='<div style="font-size:10px;color:var(--text3);margin-top:2px">Ef:'+(difEf>=0?'+':'')+difEf.toFixed(2)+'€ Tar:'+(difTar>=0?'+':'')+difTar.toFixed(2)+'€ Str:'+(difStr>=0?'+':'')+difStr.toFixed(2)+'€</div>';
           return '<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€'+breakdown+'</td>';
         })()
+        +'<td style="font-family:var(--font-mono);color:'+ajColor+'">'+totalAjustes+'</td>'
         +'<td style="text-align:center">'+totalPens+'p</td>'
         +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+'</td>'
         +'<td style="white-space:nowrap">'
         +'<div style="display:flex;flex-direction:column;gap:4px;">'
         +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
         +'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
-        +(canRevisar?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">↩ Revisar</button>':'')
+        +(isAdmin?'<button class="btn btn-warn btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">✏️ Corregir</button>':'')
+        +(isAdmin?'<button class="btn btn-danger btn-sm" data-cid="'+c.id+'" onclick="eliminarCierreCaja(this.dataset.cid)">🗑 Eliminar</button>':'')
         +'</div>'
         +'</td>'
         +'</tr>';
     }).join('');
-    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Efectivo</th><th>Retiro</th><th>Tarjeta</th><th>Stripe</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Pensiones</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
+    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Efectivo</th><th>Retiro</th><th>Tarjeta</th><th>Stripe</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Total ajustes</th><th>Pensiones</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">No se puede cargar — ejecuta primero el SQL de Sala Phase 1.</div>';
   }
@@ -954,6 +959,24 @@ function switchDept(newDept) {
   showScreen('turno');
   setTimeout(function(){ initTurnoForm(); }, 150);
   toast('Departamento: ' + newDept, 'ok');
+}
+
+// BUG-CAJ-06: Eliminar cierre — solo admin + audit_log previo
+async function eliminarCierreCaja(cajaId) {
+  if(currentUser.rol !== 'admin') { toast('Solo admin puede eliminar cierres','err'); return; }
+  var motivo = prompt('Motivo de eliminación (obligatorio para auditoría):');
+  if(!motivo || !motivo.trim()) { toast('Motivo obligatorio','err'); return; }
+  if(!confirm('¿Eliminar este cierre de caja? Acción irreversible — quedará registrada en auditoría.')) return;
+  await auditLog('DELETE_CIERRE_CAJA', 'Cierre '+cajaId+' eliminado por '+currentUser.nombre+' — '+motivo.trim());
+  var res = await fetch(
+    SUPABASE_URL + '/rest/v1/sala_cash_closures?id=eq.' + encodeURIComponent(cajaId),
+    { method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Prefer': 'return=minimal' } }
+  );
+  if(res.ok) {
+    invalidateCache('sala_cash_closures');
+    toast('Cierre eliminado y auditado','ok');
+    await renderCajaList();
+  } else { toast('Error al eliminar cierre','err'); }
 }
 
 function bCajaEstado(e){
