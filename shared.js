@@ -207,27 +207,9 @@ function getDateOnly(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDat
 function toYMD(date){
   return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
 }
-function getMinTaskDeadline(){ var d=getDateOnly(new Date()); d.setDate(d.getDate()+1); return toYMD(d); }
-function getMaxTaskDeadline(){ var d=getDateOnly(new Date()); d.setDate(d.getDate()+7); return toYMD(d); }
-function validateTaskDeadline(deadline){
-  if(!deadline) return {ok:false,msg:'El deadline es obligatorio.'};
-  if(deadline<getMinTaskDeadline() || deadline>getMaxTaskDeadline()){
-    return {ok:false,msg:'El deadline debe estar entre mañana y los próximos 7 días.'};
-  }
-  return {ok:true};
-}
-function normalizeTaskState(state){
-  if(state==='Pendiente') return TASK_STATES.ABIERTA;
-  if(state==='Completada') return TASK_STATES.CERRADA;
-  if(state==='Verificada') return TASK_STATES.VALIDADA;
-  if(state===TASK_STATES.EN_PROCESO) return TASK_STATES.EN_PROCESO;
-  if(state===TASK_STATES.CERRADA) return TASK_STATES.CERRADA;
-  if(state===TASK_STATES.VALIDADA) return TASK_STATES.VALIDADA;
-  return TASK_STATES.ABIERTA;
-}
-// normalizeIncidentState → incidencias.js
-function isTaskOpen(t){ var s=normalizeTaskState(t&&t.estado); return s===TASK_STATES.ABIERTA||s===TASK_STATES.EN_PROCESO; }
-// isIncidentOpen → incidencias.js
+// getMinTaskDeadline, getMaxTaskDeadline, validateTaskDeadline,
+// normalizeTaskState, isTaskOpen → tareas.js
+// normalizeIncidentState, isIncidentOpen → incidencias.js
 function normalizeDeptName(dept){ return String(dept||'').trim().toLowerCase(); }
 function isAdmin(user){ return !!user && user.rol==='admin'; }
 function isSupervisor(user){ return !!user && Object.prototype.hasOwnProperty.call(SUPERVISOR_DEPT_MAP,user.rol); }
@@ -262,12 +244,7 @@ function canEditRecord(user,record){
   if(isSupervisor(user)) return canViewDepartment(user,dept);
   return !!user && (record.employee_id===user.id || record.responsable_id===user.id || record.usuario_id===user.id);
 }
-function canValidateTask(user,task){ return isAdmin(user) && normalizeTaskState(task&&task.estado)===TASK_STATES.CERRADA; }
-function canCloseTask(user,task){
-  if(isAdmin(user)) return true;
-  if(isSupervisor(user)) return canViewDepartment(user,task&&task.dept_destino);
-  return false;
-}
+// canValidateTask, canCloseTask → tareas.js
 function canValidateShift(user,shift){ return canValidateDepartment(user,getRecordDepartment(shift)); }
 function canEditCashClosing(user,closing){ return isAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,getRecordDepartment(closing))) || (!!user&&(closing.responsable_id===user.id||closing.usuario_id===user.id)); }
 // canCloseIncident, canValidateIncident → incidencias.js
@@ -656,8 +633,7 @@ function resetToggles(){
   const blkI=document.getElementById('block-incidencia'); if(blkI) blkI.classList.remove('visible');
   hideTaskGen('inci'); hideTaskGen('merma');
 }
-function showTaskGen(type){ const el=document.getElementById('task-gen-'+type); if(!el) return; el.classList.add('visible'); setDeadlineLimits(); }
-function hideTaskGen(type){ const el=document.getElementById('task-gen-'+type); if(!el) return; el.classList.remove('visible'); }
+// showTaskGen, hideTaskGen → tareas.js
 
 // ═══════════════════════════════════════════════════════════════════════
 // MERMA ROWS
@@ -1280,174 +1256,13 @@ function bFU(v){if(v==='si')return'<span class="badge b-green">SÍ</span>';if(v=
 function bEstado(e){const m={'Validado':'b-green ✓ Validado','Pendiente':'b-red ● Pendiente','En corrección':'b-orange ↩ Corrección','Rechazado':'b-gray ✗ Rechazado'};const[cls,...r]=(m[e]||'b-gray '+e).split(' ');return`<span class="badge ${cls}">${r.join(' ')}</span>`;}
 function bSev(s){if(s==='Crítica')return'<span class="badge b-red">⛔ CRÍTICA</span>';if(s==='Alta')return'<span class="badge b-red">🔴 Alta</span>';if(s==='Media')return'<span class="badge b-orange">🟠 Media</span>';return'<span class="badge b-blue">🟡 Baja</span>';}
 function bPrio(p){if(p==='Alta')return'<span class="badge b-red">Alta</span>';if(p==='Media')return'<span class="badge b-orange">Media</span>';return'<span class="badge b-blue">Baja</span>';}
-function bTaskEstado(e){var s=normalizeTaskState(e);if(s===TASK_STATES.VALIDADA)return'<span class="badge b-green">✓ Validada</span>';if(s===TASK_STATES.CERRADA)return'<span class="badge b-orange">Cerrada</span>';if(s===TASK_STATES.EN_PROCESO)return'<span class="badge b-blue">En proceso</span>';return'<span class="badge b-red">Abierta</span>';}
+// bTaskEstado → tareas.js
 // bIncidentEstado → incidencias.js
 
 // ═══════════════════════════════════════════════════════════════════════
-// TASKS — CREATE
-async function createTask(data){
-  const ts=localTs();
-  if(data.origen && data.origen!=='manual' && !data.shift_id){ toast('No se pudo crear la tarea asociada al turno. Inténtalo de nuevo.','err'); return null; }
-  var dlCheck=validateTaskDeadline(data.deadline);
-  if(!dlCheck.ok){ toast(dlCheck.msg,'err'); return null; }
-  const task={id:genId(),titulo:data.titulo,dept_destino:data.dept_destino,dept_origen:data.dept_origen||currentUser.area||'Cocina',prioridad:data.prioridad,deadline:data.deadline,descripcion:data.descripcion||'',origen:data.origen||'manual',shift_id:data.shift_id||null,creado_por:data.creado_por||currentUser.nombre,estado:TASK_STATES.ABIERTA,completada_por:null,completada_ts:null,verificada_por:null,verificada_ts:null,notas_cierre:'',created_at:ts,updated_at:ts};
-  const saved=await dbInsert('tareas', task);
-  if(!saved){ console.error('Tarea insert failed',task); toast('No se pudo guardar la tarea. Inténtalo de nuevo.','err'); return null; }
-  invalidateCache('tareas');
-  auditLog('CREATE_TASK',`→ ${task.dept_destino}: ${task.titulo}`);
-  toast(`Tarea creada → ${task.dept_destino}`,'ok');
-  return task;
-}
+// TASKS (createTask, openTaskModal, saveTask, renderTareas, deleteTask,
+//        canProgressTask, advanceTask) → tareas.js
 // bGestionEstado → gestiones.js
-function openTaskModal(){
-  setDeadlineLimits();
-  document.getElementById('mt-title').textContent='Nueva Tarea Manual';
-  ['task-desc','task-deadline'].forEach(function(id){
-    var el=document.getElementById(id); if(el) el.value='';
-  });
-  var deptEl=document.getElementById('task-dept'); if(deptEl) deptEl.value='';
-  var prioEl=document.getElementById('task-prio'); if(prioEl) prioEl.value='';
-  var origenEl=document.getElementById('task-dept-origen'); if(origenEl) origenEl.value=currentUser.area||'Cocina';
-  document.getElementById('modal-tarea').classList.add('open');
-}
-async function saveTask(){
-  const dept=document.getElementById('task-dept').value;
-  const prio=document.getElementById('task-prio').value;
-  const dead=document.getElementById('task-deadline').value;
-  const desc=(document.getElementById('task-desc')||{}).value||'';
-  if(!dept||!prio){toast('Departamento y prioridad son obligatorios','err');return;}
-  var dlCheck=validateTaskDeadline(dead);
-  if(!dlCheck.ok){toast(dlCheck.msg,'err');return;}
-  const titulo='Tarea Manual — '+new Date().toLocaleDateString('es-ES')+' — '+dept;
-  var created=await createTask({titulo,dept_destino:dept,dept_origen:(document.getElementById('task-dept-origen')||{}).value||currentUser.area||'Cocina',prioridad:prio,deadline:dead,descripcion:desc,origen:'manual',creado_por:currentUser.nombre});
-  if(!created) return;
-  await renderTareas();
-  closeModal('modal-tarea'); renderTareas(); updateDots();
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// TASKS — RENDER
-async function renderTareas(){
-  let tareas=await getDB('tareas');
-  const estado=document.getElementById('tk-estado').value;
-  const dept=document.getElementById('tk-dept').value;
-  const prio=document.getElementById('tk-prio').value;
-  const origen=document.getElementById('tk-origen').value;
-  const desde=document.getElementById('tk-desde').value;
-  const hasta=document.getElementById('tk-hasta').value;
-  if(estado) tareas=tareas.filter(t=>normalizeTaskState(t.estado)===estado);
-  if(dept) tareas=tareas.filter(t=>t.dept_destino===dept);
-  if(prio) tareas=tareas.filter(t=>t.prioridad===prio);
-  if(origen) tareas=tareas.filter(t=>t.origen===origen);
-  if(desde) tareas=tareas.filter(t=>t.created_at.slice(0,10)>=desde);
-  if(hasta) tareas=tareas.filter(t=>t.created_at.slice(0,10)<=hasta);
-  tareas.sort((a,b)=>{ const ps={Alta:3,Media:2,Baja:1}; if(isTaskOpen(a)&&!isTaskOpen(b)) return -1; if(isTaskOpen(b)&&!isTaskOpen(a)) return 1; return (ps[b.prioridad]||0)-(ps[a.prioridad]||0); });
-
-  // KPIs tareas
-  const all=await getDB('tareas');
-  const kpiEl=document.getElementById('tareas-kpi');
-  const pend=all.filter(t=>normalizeTaskState(t.estado)===TASK_STATES.ABIERTA).length;
-  const enProc=all.filter(t=>normalizeTaskState(t.estado)===TASK_STATES.EN_PROCESO).length;
-  const comp=all.filter(t=>normalizeTaskState(t.estado)===TASK_STATES.CERRADA).length;
-  const verif=all.filter(t=>normalizeTaskState(t.estado)===TASK_STATES.VALIDADA).length;
-  const overdue=all.filter(t=>isOverdue(t.deadline)&&normalizeTaskState(t.estado)!==TASK_STATES.VALIDADA).length;
-  kpiEl.innerHTML=`<div class="kpi-grid">
-    <div class="kpi k-red"><div class="kpi-lbl">Abiertas</div><div class="kpi-val">${pend}</div></div>
-    <div class="kpi k-blue"><div class="kpi-lbl">En proceso</div><div class="kpi-val">${enProc}</div></div>
-    <div class="kpi k-orange"><div class="kpi-lbl">Cerradas</div><div class="kpi-val">${comp}</div><div class="kpi-sub">Pendientes de validar</div></div>
-    <div class="kpi k-green"><div class="kpi-lbl">Validadas</div><div class="kpi-val">${verif}</div></div>
-    <div class="kpi k-red"><div class="kpi-lbl">Vencidas</div><div class="kpi-val">${overdue}</div><div class="kpi-sub">Sin cerrar y deadline pasado</div></div>
-  </div>`;
-
-  const listEl=document.getElementById('tareas-list');
-  if(!tareas.length){listEl.innerHTML='<div class="empty"><div class="empty-icon">🔗</div><div class="empty-text">Sin tareas con este filtro</div></div>';return;}
-  listEl.innerHTML=tareas.map(t=>{
-    const normState=normalizeTaskState(t.estado);
-    const overdue=isOverdue(t.deadline)&&normState!==TASK_STATES.VALIDADA;
-    const prioClass=t.prioridad==='Alta'?'t-alta':t.prioridad==='Media'?'t-media':'t-baja';
-    const stateClass=normState===TASK_STATES.VALIDADA?'t-verificada':normState===TASK_STATES.CERRADA?'t-completada':'';
-    const canProgress=canProgressTask(t);
-    const canVerify=canValidateTask(currentUser,t);
-    const canClose=canCloseTask(currentUser,t);
-    return `<div class="task-card ${prioClass} ${stateClass}">
-      <div class="task-meta">
-        ${bPrio(t.prioridad)} ${deptBadge(t.dept_destino)}
-        <span class="task-origin">origen: ${t.origen}</span>
-        ${t.dept_origen?`<span class="task-origin">de: ${deptIcon(t.dept_origen)} ${t.dept_origen}</span>`:''}
-        ${overdue?'<span class="badge b-red">⚠ VENCIDA</span>':''}
-        ${bTaskEstado(t.estado)}
-      </div>
-      <div class="task-title">${t.titulo}</div>
-      ${t.descripcion?`<div class="task-desc">${t.descripcion}</div>`:''}
-      <div class="task-footer">
-        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">
-          📅 ${fmtDate(t.deadline)} &nbsp;·&nbsp; creada por ${t.creado_por} &nbsp;·&nbsp; ${fmtDate(t.created_at.slice(0,10))}
-          ${t.completada_por?`<br>✓ Cerrada por ${t.completada_por} · ${fmtTs(t.completada_ts)}`:''}
-          ${t.verificada_por?`<br>✅ Validada por ${t.verificada_por} · ${fmtTs(t.verificada_ts)}`:''}
-        </div>
-        <div class="task-actions">
-          ${canProgress&&normState===TASK_STATES.ABIERTA?`<button class="btn btn-blue-outline btn-sm" style="background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);" onclick="advanceTask('${t.id}','En proceso')">▶ Iniciar</button>`:''}
-          ${canClose&&normState===TASK_STATES.EN_PROCESO?`<button class="btn btn-success btn-sm" onclick="advanceTask('${t.id}','Cerrada')">✓ Cerrar</button>`:''}
-          ${canVerify?`<button class="btn btn-primary btn-sm" onclick="advanceTask('${t.id}','Validada')">✅ Validar</button>`:''}
-          ${currentUser.rol==='admin'?`<button class="btn btn-danger btn-sm" style="margin-left:8px;" onclick="deleteTask('${t.id}')" title="Solo Admin">🗑 Eliminar</button>`:''}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function deleteTask(taskId){
-  if(!currentUser || currentUser.rol !== 'admin'){
-    toast('Solo el Administrador puede eliminar tareas','err');
-    return;
-  }
-  if(!confirm('¿Eliminar esta tarea permanentemente?\nEsta acción no se puede deshacer.')) return;
-  try {
-    var delRes = await fetch(
-      SUPABASE_URL + '/rest/v1/tareas?id=eq.' + encodeURIComponent(taskId),
-      { method:'DELETE', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'} }
-    );
-    if(delRes.ok){
-      await auditLog('DELETE_TASK', 'Tarea '+taskId+' eliminada por '+currentUser.nombre);
-      invalidateCache('tareas');
-      toast('Tarea eliminada','ok');
-      await renderTareas();
-    } else {
-      toast('Error al eliminar: '+delRes.status,'err');
-    }
-  } catch(e){ toast('Error: '+e.message,'err'); }
-}
-
-function canProgressTask(t){
-  var state=normalizeTaskState(t&&t.estado);
-  if(state===TASK_STATES.VALIDADA || state===TASK_STATES.CERRADA) return false;
-  if(isAdmin(currentUser)) return true;
-  if(isSupervisor(currentUser)) return canViewDepartment(currentUser,t&&t.dept_destino);
-  return currentUser.area===t.dept_destino; // Empleado puede avanzar tarea de su dpto
-}
-
-async function advanceTask(taskId,newEstado){
-  const tareas=await getDB('tareas');
-  const idx=tareas.findIndex(t=>t.id===taskId); if(idx===-1) return;
-  var targetState=normalizeTaskState(newEstado);
-  if(targetState===TASK_STATES.VALIDADA && !canValidateTask(currentUser,tareas[idx])){toast('Solo Admin puede validar esta tarea.','err');return;}
-  if(targetState===TASK_STATES.CERRADA && !canCloseTask(currentUser,tareas[idx])){toast('No tienes permiso para cerrar esta tarea.','err');return;}
-  if(targetState===TASK_STATES.EN_PROCESO && !canProgressTask(tareas[idx])){toast('Solo el departamento destinatario puede avanzar esta tarea','err');return;}
-  const ts=localTs();
-  const tUpdate = {estado:targetState, updated_at:ts};
-  if(targetState===TASK_STATES.CERRADA){tUpdate.completada_por=currentUser.nombre;tUpdate.completada_ts=ts;}
-  if(targetState===TASK_STATES.VALIDADA){tUpdate.verificada_por=currentUser.nombre;tUpdate.verificada_ts=ts;}
-  await dbUpdate('tareas', taskId, tUpdate);
-  invalidateCache('tareas');
-  auditLog('TASK_ADVANCE',`${currentUser.nombre} → ${newEstado}: ${tareas[idx].titulo}`);
-  toast(`Tarea: ${newEstado}`,'ok');
-  // BUG-51: refresh context — modal validación o Mi Turno
-  if(typeof validatingShiftId !== 'undefined' && validatingShiftId){
-    openValidarModal(validatingShiftId);
-  } else {
-    try{ renderTareas(); updateDots(); } catch(e){}
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 // VALIDACIÓN

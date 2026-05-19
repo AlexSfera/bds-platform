@@ -53,9 +53,7 @@ function _localHora(ts) {
 function _isFio(s) {
   return s.fio === true || s.fio === 1 || s.fio === 'true' || s.fio === '1';
 }
-function _tareaActiva(t) {
-  return typeof isTaskOpen === 'function' ? isTaskOpen(t) : (t.estado === 'Abierta' || t.estado === 'En proceso');
-}
+// _tareaActiva → tareas.js
 function _resolutionMinutes(i) {
   var direct = parseInt(i && i.tiempo_solucion_minutos, 10);
   if (!isNaN(direct) && direct >= 0) return direct;
@@ -101,12 +99,7 @@ function _dashMatchesDept(record, deptSet, shiftMap) {
   return deptSet.indexOf(_dashRecordDept(record, shiftMap)) !== -1;
 }
 // _isOperationalIncident → incidencias.js
-function _isGestionTask(t) {
-  if (!t) return false;
-  var text = normalizeDeptName([t.origen, t.titulo, t.descripcion].join(' '));
-  if (text.indexOf('gestion') !== -1 || text.indexOf('gestión') !== -1) return true;
-  return !!t.dept_destino && (normalizeTaskState(t.estado) === TASK_STATES.ABIERTA || normalizeTaskState(t.estado) === TASK_STATES.EN_PROCESO);
-}
+// _isGestionTask → tareas.js
 
 // ── ESTADO ACTUAL DEL DASHBOARD ──────────────────────────────
 var _dashCurrentDept = null;
@@ -441,58 +434,7 @@ function _renderAlertas(shifts, mermas, incis, tareas) {
 
 // ── GESTIONES → gestiones.js ─────────────────────────────────
 
-// ── TAREAS POR DEPARTAMENTO ───────────────────────────────────
-function _renderTareas(tareas) {
-  var el = document.getElementById('dash-tasks-table');
-  if (!el) return;
-
-  var pend = tareas.filter(function(t) { return normalizeTaskState(t.estado) === TASK_STATES.ABIERTA; });
-  var enProc = tareas.filter(function(t) { return normalizeTaskState(t.estado) === TASK_STATES.EN_PROCESO; });
-  var comp = tareas.filter(function(t) { return normalizeTaskState(t.estado) === TASK_STATES.CERRADA; });
-  var val = tareas.filter(function(t) { return normalizeTaskState(t.estado) === TASK_STATES.VALIDADA; });
-  var venc = tareas.filter(function(t) { return isOverdue(t.deadline) && isTaskOpen(t); });
-
-  // Grid resumen
-  var gridEl = document.getElementById('dept-task-grid');
-  if (gridEl) {
-    gridEl.innerHTML = '<div class="kpi k-amber"><div class="kpi-lbl">Abiertas</div><div class="kpi-val">' + pend.length + '</div></div>'
-      + '<div class="kpi k-blue"><div class="kpi-lbl">En proceso</div><div class="kpi-val">' + enProc.length + '</div></div>'
-      + '<div class="kpi k-green"><div class="kpi-lbl">Cerradas</div><div class="kpi-val">' + comp.length + '</div></div>'
-      + '<div class="kpi k-green"><div class="kpi-lbl">Validadas</div><div class="kpi-val">' + val.length + '</div></div>'
-      + '<div class="kpi k-red"><div class="kpi-lbl">Vencidas</div><div class="kpi-val">' + venc.length + '</div></div>';
-  }
-
-  var abiertas = tareas.filter(function(t) { return isTaskOpen(t); });
-  abiertas.sort(function(a, b) {
-    if (isOverdue(a.deadline) && !isOverdue(b.deadline)) return -1;
-    if (!isOverdue(a.deadline) && isOverdue(b.deadline)) return 1;
-    return (a.deadline || '').localeCompare(b.deadline || '');
-  });
-
-  if (!abiertas.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-text">Sin tareas abiertas</div></div>';
-    return;
-  }
-
-  el.innerHTML = '<table>'
-    + '<tr><th>Creada</th><th>Prioridad</th><th>Descripción</th><th>Destino</th><th>Responsable</th><th>Deadline</th><th>Estado</th></tr>'
-    + abiertas.map(function(t) {
-      var vencida = isOverdue(t.deadline);
-      var prioColor = t.prioridad === 'Alta' ? 'b-red' : t.prioridad === 'Media' ? 'b-yellow' : 'b-gray';
-      var fechaCreada = t.created_at ? t.created_at.replace(' ','T').slice(0,10) : (t.deadline || '');
-      var horaCreada = _localHora(t.created_at);
-      return '<tr style="' + (vencida ? 'background:rgba(239,68,68,.05)' : '') + '">'
-        + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(fechaCreada) + (horaCreada !== '—' ? '<br><span style="color:var(--text3)">' + horaCreada + '</span>' : '') + '</td>'
-        + '<td><span class="badge ' + prioColor + '">' + (t.prioridad || '—') + '</span></td>'
-        + '<td style="font-size:12px;max-width:200px">' + formatDisplayValue(t.descripcion) + '</td>'
-        + '<td>' + deptBadge(t.dept_destino) + '</td>'
-        + '<td style="font-size:12px">' + formatDisplayValue(t.responsable_nombre) + '</td>'
-        + '<td style="font-family:var(--font-mono);font-size:11px;color:' + (vencida ? 'var(--red)' : 'var(--text)') + '">' + fmtDate(t.deadline) + (vencida ? ' ⚠' : '') + '</td>'
-        + '<td>' + bTaskEstado(t.estado) + '</td>'
-        + '</tr>';
-    }).join('')
-    + '</table>';
-}
+// ── TAREAS POR DEPARTAMENTO → tareas.js ───────────────────────
 
 // ── FIO DEL PERIODO ───────────────────────────────────────────
 function _renderFIO(shifts) {
