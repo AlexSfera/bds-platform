@@ -1004,8 +1004,10 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- ══ EXPORT ══ -->
     <!-- ══ CIERRE CAJA ══ -->
+<div id="caja-root"></div>
 
 <!-- MODAL: Cierre Caja -->
+
 
 <div class="screen" id="screen-export">
       <div class="page-header"><div class="page-title">⬇ Exportar</div><div class="page-sub">CSV + Backup JSON con versionado de schema</div></div>
@@ -1073,8 +1075,8 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <!-- ══ MODAL CIERRE CAJA OFFER ══ -->
 
 
+
 <!-- ══ MODAL KPI RECEPCIÓN ══ -->
-<div id="caja-root"></div>
 <div id="modal-rec-kpi" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
   <div style="background:var(--bg2);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:580px;margin:40px auto;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · KPI DE TURNO</div>
@@ -2109,459 +2111,6 @@ function clearSalaFields() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// CIERRE CAJA MODULE
-// ═══════════════════════════════════════════════════════════
-var _editingCajaId = null;
-
-}
-
-  var title = document.getElementById('caja-form-title');
-  if(title) title.textContent = existingId ? 'Editar Cierre de Caja' : 'Nuevo Cierre de Caja';
-  var fechaEl = document.getElementById('caja-fecha');
-  if(fechaEl) fechaEl.value = today();
-  var respEl = document.getElementById('caja-responsable');
-  if(respEl){
-    respEl.value = currentUser.nombre + ' — ' + currentUser.puesto;
-    respEl.readOnly = (currentUser.rol !== 'admin');
-  }
-  var lastShiftLink = document.getElementById('caja-shift-link');
-  if(lastShiftLink) lastShiftLink.value = window._lastSavedShiftId || '';
-  ['caja-efectivo','caja-tarjeta','caja-room','caja-alexander',
-   'caja-pension-d','caja-pension-m','caja-pension-c','caja-propinas',
-   'caja-desc-imp','caja-desc-num','caja-anul-imp','caja-anul-num',
-   'caja-inv-imp','caja-inv-num','caja-diferencia','caja-comentario',
-   'caja-ef-real','caja-ef-posmews','caja-fondo-fin','caja-retiro'].forEach(function(id){
-    var el = document.getElementById(id); if(el) el.value = '';
-  });
-  // BUG-29 SALA: fondo inicial = fondo_final del último cierre, readonly en HTML
-  var fondoIniEl = document.getElementById('caja-fondo-ini');
-  if(fondoIniEl) fondoIniEl.value = '';
-  if(!existingId){
-    dbGetAll('sala_cash_closures').then(function(rows){
-      var sorted = rows
-        .filter(function(r){ return r.fondo_real_sala != null || r.fondo_final != null; })
-        .sort(function(a,b){
-          return (b.fecha || '').localeCompare(a.fecha || '') ||
-                 (b.created_at || '').localeCompare(a.created_at || '');
-        });
-      var ultimo = sorted[0];
-      if(fondoIniEl && ultimo){
-        fondoIniEl.value = parseFloat(ultimo.fondo_real_sala || ultimo.fondo_final || 0).toFixed(2);
-        calcCajaDifs();
-      }
-    });
-  } else {
-    dbGetAll('sala_cash_closures').then(function(rows){
-      var row = rows.find(function(r){ return r.id === existingId; });
-      if(!row) return;
-      if(fondoIniEl && row.fondo_inicial != null) fondoIniEl.value = parseFloat(row.fondo_inicial).toFixed(2);
-      calcCajaDifs();
-      // Bloquear si el usuario no puede editar este cierre
-      var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb';
-      var isPendiente = row.estado === 'Pendiente validación';
-      var esPropio    = row.responsable_id === currentUser.id;
-      var canEdit     = canEditCaja || (isPendiente && esPropio);
-      if(!canEdit){
-        document.querySelectorAll('#modal-caja input, #modal-caja textarea, #modal-caja select').forEach(function(el){ el.readOnly=true; el.style.pointerEvents='none'; });
-        var btnGuardar = document.getElementById('caja-btn-guardar');
-        if(btnGuardar) btnGuardar.style.display = 'none';
-        var titleEl = document.getElementById('caja-form-title');
-        if(titleEl) titleEl.textContent = 'Ver Cierre de Caja (solo lectura)';
-      }
-    });
-  }
-  document.querySelectorAll('#caja-servicios-check input[type=checkbox]').forEach(function(cb){ cb.checked = false; });
-  calcCajaTotal();
-  document.getElementById('modal-caja').classList.add('open');
-}
-
-var _cajaInformado = false;
-  var si = document.getElementById('caja-informado-si');
-  var no = document.getElementById('caja-informado-no');
-  if(si) si.style.background = val ? 'var(--green)' : '';
-  if(no) no.style.background = !val ? 'var(--red)' : '';
-}
-
-  function setColor(el, val) {
-    if(!el) return;
-    var abs = Math.abs(val);
-    el.style.color = abs < 0.01 ? 'var(--green)' : abs > 5 ? 'var(--red)' : 'var(--amber)';
-  }
-  function fmt(val){ return (val >= 0 ? '+' : '') + val.toFixed(2) + ' €'; }
-  function setEl(id, val){
-    var el = document.getElementById(id);
-    if(el){ el.textContent = fmt(val); setColor(el, val); }
-  }
-
-  // EFECTIVO
-  // diferencia_efectivo = efectivo_real_contado - (fondo_inicial + cash_posmews)
-  var efReal   = getV('caja-ef-real');
-  var efPosmews= getV('caja-ef-posmews');
-  var fondoIni = getV('caja-fondo-ini');
-  var fondoFin = getV('caja-fondo-fin');
-  var retiro   = getV('caja-retiro');
-  var efEsperado = fondoIni + efPosmews;
-  var difEf = efReal - efEsperado;
-  // Control retiro: efectivo_real debe = fondo_final + retiro
-  var difRetiro = efReal - fondoFin - retiro;
-
-  var efEspEl = document.getElementById('caja-ef-esperado');
-  if(efEspEl) efEspEl.textContent = efEsperado.toFixed(2) + ' €';
-  setEl('caja-dif-ef', difEf);
-  setEl('dif-ef-disp', difEf);
-  var retiroEl = document.getElementById('caja-dif-retiro');
-  if(retiroEl){
-    retiroEl.textContent = Math.abs(difRetiro) < 0.01 ? '✓ OK retiro' : 'Δ retiro: '+fmt(difRetiro);
-    retiroEl.style.color = Math.abs(difRetiro) < 0.01 ? 'var(--green)' : 'var(--red)';
-  }
-
-  // TARJETA: diferencia = (TPV - Propinas_TPV) - POSMEWS
-  var tarPosmews = getV('caja-tar-posmews');
-  var tarTpv     = getV('caja-tar-tpv');
-  var propinasTpv= getV('caja-propinas-tpv');
-  var tarCuadrada = tarTpv - propinasTpv;
-  var difTar = tarCuadrada - tarPosmews;
-  setEl('caja-dif-tar', difTar);
-  setEl('dif-tar-disp', difTar);
-
-  // STRIPE
-  var strPosmews = getV('caja-str-posmews');
-  var strReal    = getV('caja-str-real');
-  var difStr = strReal - strPosmews;
-  setEl('caja-dif-str', difStr);
-  setEl('dif-str-disp', difStr);
-
-  // DIFERENCIA OPERATIVA SALA (efectivo + tarjeta + stripe only)
-  var difTotal = difEf + difTar + difStr;
-  var totalEl = document.getElementById('dif-sala-total');
-  if(totalEl){ totalEl.textContent = fmt(difTotal); setColor(totalEl, difTotal); }
-
-  // Alert
-  var alertEl = document.getElementById('caja-diferencia-alert');
-  if(alertEl) alertEl.style.display = Math.abs(difTotal) > 0.01 ? 'block' : 'none';
-  // Show * on comentario when diferencia exists
-  var reqEl = document.getElementById('caja-comentario-req');
-  if(reqEl) reqEl.style.display = Math.abs(difTotal) > 0.01 ? 'inline' : 'none';
-}
-
-  var posmewsTmp=parseFloat((document.getElementById('caja-posmews-bruto')||{}).value)||0;
-  var dif = posmewsTmp>0?mediosTmp-posmewsTmp:0;
-  var alert = document.getElementById('caja-diferencia-alert');
-  if(alert) alert.style.display = Math.abs(dif) > 5 ? 'block' : 'none';
-}
-
-  document.querySelectorAll('#caja-servicios-check input[type=checkbox]:checked').forEach(function(cb){ checked.push(cb.value); });
-  // If no services checked (hidden), use a default
-  if(checked.length === 0) checked = ['Servicio'];
-  return checked;
-}
-
-  var servicios = getCajaServicios();
-  // servicios auto-filled
-  // Calculate diferencia operativa from current form values
-  var _efR=parseFloat((document.getElementById('caja-ef-real')||{}).value)||0;
-  var _efP=parseFloat((document.getElementById('caja-ef-posmews')||{}).value)||0;
-  var _foI=parseFloat((document.getElementById('caja-fondo-ini')||{}).value)||0;
-  var _tTP=parseFloat((document.getElementById('caja-tar-tpv')||{}).value)||0;
-  var _tPS=parseFloat((document.getElementById('caja-tar-posmews')||{}).value)||0;
-  var _pTV=parseFloat((document.getElementById('caja-propinas-tpv')||{}).value)||0;
-  var _sR=parseFloat((document.getElementById('caja-str-real')||{}).value)||0;
-  var _sP=parseFloat((document.getElementById('caja-str-posmews')||{}).value)||0;
-  var _dEf = _efR - (_foI + _efP);
-  var _dTar = (_tTP - _pTV) - _tPS;
-  var _dStr = _sR - _sP;
-  var dif = _dEf + _dTar + _dStr;
-  var comentario = (document.getElementById('caja-comentario')||{}).value||'';
-  if(Math.abs(dif) > 0.01 && !comentario.trim()) {
-    toast('Hay diferencia en caja — el comentario es obligatorio','err');
-    document.getElementById('caja-comentario').focus();
-    return;
-  }
-
-  function getCV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
-  var efReal    = getCV('caja-ef-real');
-  var efPosmews = getCV('caja-ef-posmews');
-  var fondoIni  = getCV('caja-fondo-ini');
-  var fondoFin  = getCV('caja-fondo-fin');
-  var retiro    = getCV('caja-retiro');
-  var tarPosmews= getCV('caja-tar-posmews');
-  var tarTpv    = getCV('caja-tar-tpv');
-  var propinasTpv = getCV('caja-propinas-tpv');
-  var strPosmews= getCV('caja-str-posmews');
-  var strReal   = getCV('caja-str-real');
-  var difEf  = efReal - (fondoIni + efPosmews);
-  var difTar = (tarTpv - propinasTpv) - tarPosmews;
-  var difStr = strReal - strPosmews;
-  var difOperativa = difEf + difTar + difStr;
-  var mediosPago = efReal + tarTpv + strReal;
-  var bruto = parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0;
-  var ajustes=(parseFloat((document.getElementById('caja-desc-imp')||{}).value)||0)
-             +(parseFloat((document.getElementById('caja-anul-imp')||{}).value)||0)
-             +(parseFloat((document.getElementById('caja-inv-imp')||{}).value)||0);
-
-  var closure = {
-    id: _editingCajaId || genId(),
-    fecha: fecha,
-    servicios: JSON.stringify(servicios),
-    responsable_id: currentUser.id,
-    responsable_nombre: currentUser.nombre,
-    // Payment fields
-    efectivo_real: efReal,
-    efectivo_posmews: efPosmews,
-    fondo_inicial: fondoIni,
-    fondo_final: getCV('caja-fondo-real'),
-    fondo_real_sala: getCV('caja-fondo-real'),
-    retiro_caja_fuerte: retiro,
-    diferencia_efectivo: difEf,
-    tarjeta_posmews: tarPosmews,
-    tarjeta_tpv: tarTpv,
-    propinas_tpv: propinasTpv,
-    propinas: parseFloat((document.getElementById('caja-propinas')||{}).value)||0,
-    diferencia_tarjeta: difTar,
-    stripe_posmews: strPosmews,
-    stripe_real: strReal,
-    diferencia_stripe: difStr,
-    diferencia_operativa_sala: difOperativa,
-    diferencia_caja: difOperativa,
-    // PMS fields
-    room_charge: getCV('caja-room'),
-    cargo_alexander: getCV('caja-alexander'),
-    pension_desayuno: getCV('caja-pension-d'),
-    media_pension: getCV('caja-pension-m'),
-    pension_completa: getCV('caja-pension-c'),
-    // Totals (manual entry)
-    subtotal_neto: parseFloat((document.getElementById('caja-total-neto-manual')||{}).value)||0,
-    total_bruto: parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0,
-    total_medios_pago: mediosPago,
-    comentario: comentario,
-    estado: 'Pendiente validación',
-    created_at: localTs(),
-    updated_at: localTs()
-  };
-
-  try {
-    var cajaUrl = SUPABASE_URL + '/rest/v1/sala_cash_closures';
-    var cajaMethod = _editingCajaId ? 'PATCH' : 'POST';
-    var cajaFetchUrl = _editingCajaId ? cajaUrl + '?id=eq.' + encodeURIComponent(_editingCajaId) : cajaUrl;
-    var cajaRes = await fetch(cajaFetchUrl, {
-      method: cajaMethod,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify(closure)
-    });
-    console.log('[CAJA SAVE] status:', cajaRes.status, 'id:', closure.id);
-    if(!cajaRes.ok){
-      var errTxt = await cajaRes.text();
-      console.error('[CAJA ERROR]', errTxt);
-      toast('Error Supabase cierre caja: ' + cajaRes.status, 'err');
-      return;
-    }
-    invalidateCache('sala_cash_closures');
-    closeModal('modal-caja');
-    toast('Cierre de caja guardado ✓','ok');
-    await renderCajaList();
-    // Refresh validation tab if open
-    var valCajaEl = document.getElementById('val-caja-table');
-    if(valCajaEl) await renderValCajaList();
-  } catch(e) {
-    console.error('Caja save error:', e);
-    toast('Error al guardar cierre de caja: ' + e.message,'err');
-  }
-}
-
-  if(!el) return;
-  el.innerHTML = '<div style="color:var(--text3);font-family:var(--font-mono);font-size:12px;padding:20px;">Cargando...</div>';
-  try {
-    var data = await dbGetAll('sala_cash_closures');
-    // Permission: employees only see own closures
-    var canSeeAll = currentUser.rol==='admin'||currentUser.rol==='fb'||currentUser.rol==='chef'||(currentUser.validador==1||currentUser.validador===true);
-    if(!canSeeAll){
-      data = data.filter(function(c){ return c.responsable_id===currentUser.id||c.responsable_nombre===currentUser.nombre; });
-    }
-    var filter = (document.getElementById('caja-filter-date')||{}).value||'hoy';
-    var today2 = today();
-    data = data.filter(function(c){
-      if(filter==='hoy') return c.fecha === today2;
-      if(filter==='semana') return c.fecha >= startOfWeek();
-      if(filter==='mes') return c.fecha >= startOfMonth();
-      return true;
-    });
-    data.sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
-    if(!data.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo seleccionado</div></div>';
-      return;
-    }
-    var rows = data.map(function(c){
-      var servs = displayServicio(c.servicios||'');
-      var diffColor = Math.abs(c.diferencia_caja||0)>5?'var(--red)':'var(--green)';
-      return '<tr>'
-        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
-        +'<td>'+servs+'</td>'
-        +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
-        +'<td style="font-family:var(--font-mono);font-weight:700;color:#3b82f6">'+(c.subtotal_neto||0).toFixed(2)+' €</td>'
-        +'<td style="font-family:var(--font-mono);color:'+diffColor+'">'+(c.diferencia_caja>=0?'+':'')+((c.diferencia_caja||0).toFixed(2))+' €</td>'
-        +'<td>'+bEstado(c.estado)+'</td>'
-        +'<td><button class="btn btn-secondary btn-sm" onclick="openCajaForm(this.dataset.id)" data-id="'+c.id+'">✏️</button></td>'
-        +'</tr>';
-    }).join('');
-    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Total neto</th><th>Diferencia</th><th>Estado</th><th></th></tr>'+rows+'</table>';
-  } catch(e) {
-    el.innerHTML='<div class="alert a-warn">Tabla sala_cash_closures pendiente de crear en Supabase. Ejecuta el SQL de configuración.</div>';
-  }
-}
-
-  if(currentUser && currentUser.area === 'Recepción') return getRecTurnoValue();
-  var isSala = currentUser && currentUser.area === 'Sala';
-  if(isSala) {
-    var checked = [];
-    document.querySelectorAll('input[name="servicio-sala"]:checked').forEach(function(cb){ checked.push(cb.value); });
-    return checked.length > 0 ? JSON.stringify(checked) : '';
-  }
-  // Cocina also uses multiselect now
-  var checkedC = [];
-  document.querySelectorAll('input[name="servicio-cocina"]:checked').forEach(function(cb){ checkedC.push(cb.value); });
-  if(checkedC.length > 0) return JSON.stringify(checkedC);
-  // Fallback to single select
-  return (document.getElementById('t-servicio')||{}).value||'';
-}
-
-}
-
-// ═══════════════════════════════════════════════════════════
-// AJUSTES MODAL (Sala — before checklist)
-// ═══════════════════════════════════════════════════════════
-var _ajustesChoice = null;
-var _ajustesLines = [];
-
-  _ajustesLines = [];
-  // Reset UI
-  document.getElementById('ajustes-lines-block').style.display = 'none';
-  document.getElementById('ajustes-lines').innerHTML = '';
-  document.getElementById('ajustes-confirm-btn').disabled = true;
-  ['ajustes-no-btn','ajustes-si-btn'].forEach(function(id){
-    var el=document.getElementById(id); if(el){el.style.outline='none';el.style.boxShadow='none';}
-  });
-  document.getElementById('modal-ajustes').style.display = 'flex';
-}
-
-  var noBtn = document.getElementById('ajustes-no-btn');
-  var siBtn = document.getElementById('ajustes-si-btn');
-  var linesBlock = document.getElementById('ajustes-lines-block');
-  var confirmBtn = document.getElementById('ajustes-confirm-btn');
-  if(choice === 'no') {
-    if(noBtn) noBtn.style.boxShadow = '0 0 0 2px var(--green)';
-    if(siBtn) siBtn.style.boxShadow = 'none';
-    if(linesBlock) linesBlock.style.display = 'none';
-    if(confirmBtn) confirmBtn.disabled = false;
-  } else {
-    if(siBtn) siBtn.style.boxShadow = '0 0 0 2px #3b82f6';
-    if(noBtn) noBtn.style.boxShadow = 'none';
-    if(linesBlock) linesBlock.style.display = 'block';
-    if(!document.getElementById('ajustes-lines').children.length) addAjusteLine();
-    if(confirmBtn) confirmBtn.disabled = false;
-  }
-}
-
-  var idx = container.children.length;
-  var div = document.createElement('div');
-  div.className = 'card';
-  div.style.marginBottom = '8px';
-  div.style.padding = '10px';
-  div.style.borderLeft = '3px solid #3b82f6';
-  div.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
-    +'<div class="fg"><label>Tipo</label>'
-    +'<select id="aj-tipo-'+idx+'" style="font-size:13px;">'
-    +'<option>Descuento</option><option>Anulación</option><option>Invitación</option>'
-    +'<option>Devolución</option><option>Rehecho</option><option>Error de cobro</option>'
-    +'<option>Error TPV</option><option>Cargo habitación incorrecto</option>'
-    +'<option>Cargo Alexander</option><option>Otro</option>'
-    +'</select></div>'
-    +'<div class="fg"><label>Nº operaciones</label>'
-    +'<input type="number" id="aj-num-'+idx+'" min="1" value="1" style="font-size:13px;"></div>'
-    +'<div class="fg"><label>Importe estimado (€)</label>'
-    +'<input type="number" id="aj-imp-'+idx+'" min="0" step="0.01" placeholder="0.00" style="font-size:13px;"></div>'
-    +'<div class="fg"><label>¿Comunicado al responsable?</label>'
-    +'<div class="toggle-group">'    +'<button class="tbtn" id="aj-resp-si-'+idx+'" data-idx="'+idx+'" data-val="si" onclick="setAjToggleBtn(this)">SÍ</button>'    +'<button class="tbtn" id="aj-resp-no-'+idx+'" data-idx="'+idx+'" data-val="no" onclick="setAjToggleBtn(this)">NO</button>'    +'</div></div>'
-    +'<div class="fg sp2"><label>Motivo</label>'
-    +'<input type="text" id="aj-motivo-'+idx+'" placeholder="Describe brevemente" style="font-size:13px;"></div>'
-    +'</div>'
-    +'<button onclick="this.parentElement.remove()" style="margin-top:6px;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer;">✕ Eliminar línea</button>';
-  container.appendChild(div);
-}
-
-var _ajToggles = {};
-
-  var container = document.getElementById('ajustes-lines');
-  if(!container) return lines;
-  var count = container.children.length;
-  for(var i=0;i<count;i++){
-    var tipo = (document.getElementById('aj-tipo-'+i)||{}).value||'';
-    var num = parseInt((document.getElementById('aj-num-'+i)||{}).value)||1;
-    var imp = parseFloat((document.getElementById('aj-imp-'+i)||{}).value)||0;
-    var motivo = (document.getElementById('aj-motivo-'+i)||{}).value||'';
-    var comunicado = _ajToggles[i]||'';
-    if(tipo) lines.push({tipo,num,importe:imp,motivo,comunicado_responsable:comunicado});
-  }
-  return lines;
-}
-
-  document.getElementById('modal-ajustes').style.display = 'none';
-  // Open checklist
-  chkOpen({});
-}
-
-}
-
-// ═══════════════════════════════════════════════════════════
-// ── SEARCHABLE EMPLOYEE SELECT WIDGET ────────────────────────
-// Replaces a native <select> with a filterable list.
-// Native <select> is kept hidden + in sync so all existing save functions work unchanged.
-  if(!sel) return;
-  var wrapId = selectId + '-sw';
-  var old = document.getElementById(wrapId);
-  if(old) old.remove();
-  sel.style.display = 'none';
-  var opts = Array.from(sel.options);
-  var wrap = document.createElement('div');
-  wrap.id = wrapId;
-  wrap.innerHTML =
-    '<input type="search" id="'+wrapId+'-q" placeholder="'+(placeholder||'Buscar empleado...')+'" autocomplete="off" '
-    +'style="width:100%;border-radius:6px 6px 0 0;margin-bottom:0;">'
-    +'<div id="'+wrapId+'-res" style="background:var(--bg);border:1px solid var(--border);border-top:none;'
-    +'border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;"></div>';
-  sel.parentNode.insertBefore(wrap, sel.nextSibling);
-  var inp = document.getElementById(wrapId+'-q');
-  var res = document.getElementById(wrapId+'-res');
-  function render(q) {
-    q = (q||'').toLowerCase().trim();
-    var list = opts.filter(function(o) { return !q || o.textContent.toLowerCase().indexOf(q) !== -1; });
-    if(!list.length) { res.innerHTML='<div style="padding:10px;font-size:12px;color:var(--text3);">Sin resultados</div>'; return; }
-    res.innerHTML = list.map(function(o) {
-      var active = o.value && o.value === sel.value;
-      return '<div data-v="'+o.value+'" style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);'
-        +(active?'background:rgba(46,196,182,.12);color:#2ec4b6;font-weight:600;':'color:var(--text);')
-        +'">'+o.textContent+'</div>';
-    }).join('');
-    res.querySelectorAll('[data-v]').forEach(function(div) {
-      div.addEventListener('mousedown', function(e) {
-        e.preventDefault();
-        sel.value = div.getAttribute('data-v');
-        inp.value = sel.value ? div.textContent : '';
-        render('');
-      });
-    });
-  }
-  inp.addEventListener('input', function() { render(inp.value); });
-  if(sel.value && sel.selectedOptions[0]) inp.value = sel.selectedOptions[0].textContent;
-  render('');
-}
-
-// ADD POSTERIOR ERROR (FIO post-validation)
-// ═══════════════════════════════════════════════════════════
 async function openPostErrorModal(shiftId) {
   window._postErrorShiftId = shiftId;
   var shifts = await getDB('shifts');
@@ -2741,6 +2290,8 @@ function switchValTab(tab) {
   }
 }
 
+async function renderValCajaList() {
+  var el = document.getElementById('val-caja-table');
   if(!el) return;
   try {
     var data = await dbGetAll('sala_cash_closures');
@@ -2801,6 +2352,8 @@ function switchValTab(tab) {
   }
 }
 
+async function openCajaSummary(cajaId, showValidar) {
+  var data = await dbGetAll('sala_cash_closures');
   var c = data.find(function(x){ return x.id === cajaId; });
   if(!c){ toast('Cierre no encontrado','err'); return; }
 
@@ -2888,6 +2441,8 @@ function switchValTab(tab) {
   document.getElementById('modal-caja-summary-body').innerHTML = html;
 }
 
+async function validarCierre(cajaId) {
+  // Pick next state based on current state
   var data = await dbGetAll('sala_cash_closures');
   var c = data.find(function(x){return x.id===cajaId;});
   var currentEstado = c ? c.estado : 'Pendiente';
@@ -2916,8 +2471,12 @@ function setDeadlineLimits() {
 }
 
 // ── CIERRE CAJA OFFER (after checklist, for Sala responsables) ──
+function openCajaOfferModal() {
+  document.getElementById('modal-caja-offer').style.display = 'flex';
 }
 
+async function acceptCajaOffer() {
+  document.getElementById('modal-caja-offer').style.display = 'none';
   // Save follow-up shift
   await _doSaveTurno();
   // Navigate to caja and open form
@@ -2933,6 +2492,8 @@ function setDeadlineLimits() {
   }, 400);
 }
 
+async function declineCajaOffer() {
+  document.getElementById('modal-caja-offer').style.display = 'none';
   await _doSaveTurno();
 }
 
@@ -2967,6 +2528,8 @@ function switchDept(newDept) {
   toast('Departamento: ' + newDept, 'ok');
 }
 
+function bCajaEstado(e){
+  if(e==='Pendiente Sala'||e==='Pendiente validación'||e==='Pendiente') return '<span class="badge b-gray">● Pendiente Sala</span>';
   if(e==='Revisado Sala'||e==='Cuadrado Sala') return '<span class="badge b-blue">✓ Revisado Sala</span>';
   if(e==='Pendiente PMS') return '<span class="badge b-orange">⏳ Pendiente PMS</span>';
   if(e==='Confirmado PMS') return '<span class="badge b-green">✓ Confirmado PMS</span>';
@@ -2975,6 +2538,8 @@ function switchDept(newDept) {
   return '<span class="badge b-gray">'+e+'</span>';
 }
 
+async function reabrirCierre(cajaId) {
+  var motivo = prompt('Motivo para reabrir el cierre (obligatorio):');
   if(!motivo||!motivo.trim()){ toast('Motivo obligatorio para reabrir','err'); return; }
   var res = await fetch(
     SUPABASE_URL + '/rest/v1/sala_cash_closures?id=eq.' + encodeURIComponent(cajaId),
