@@ -1299,7 +1299,7 @@ async function renderMisTurnos(){
     if(i.categoria==='Gestión pendiente') gestionMap[i.shift_id]=true;
     else inciMap[i.shift_id]=true;
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Horas</th>'+(isSalaDept?'<th>Ajustes</th>':'<th>Mermas</th>')+'<th>Gestión</th><th>Incid.</th><th>Estado</th></tr>'
+  el.innerHTML='<table><tr><th>Fecha</th><th>Turno</th><th>Horas</th>'+(isSalaDept?'<th>Ajustes</th>':'<th>Mermas</th>')+'<th>Gestión</th><th>Incid.</th><th>Estado</th></tr>'
   +shifts.map(function(s){
     const mc=mermas.filter(m=>m.shift_id===s.id).length;
     return '<tr>'
@@ -1505,8 +1505,8 @@ function onValDeptChange(){
   var rec='<option value="">Todos</option><option>Mañana</option><option>Tarde</option><option>Noche</option>';
   var all='<option value="">Todos</option><option>Desayuno</option><option>Comida</option><option>Cena</option><option>Evento</option><option>Otro</option><option>Mañana</option><option>Tarde</option><option>Noche</option>';
   if(dept==='Recepción'){ if(label) label.textContent='Turno'; sel.innerHTML=rec; }
-  else if(dept==='Cocina'||dept==='Sala'){ if(label) label.textContent='Servicio'; sel.innerHTML=cocSala; }
-  else { if(label) label.textContent='Servicio'; sel.innerHTML=all; }
+  else if(dept==='Cocina'||dept==='Sala'){ if(label) label.textContent='Turno'; sel.innerHTML=cocSala; }
+  else { if(label) label.textContent='Turno'; sel.innerHTML=all; }
 }
 
 function initValDeptFilter(){
@@ -1602,7 +1602,7 @@ async function renderValidacion(){
       +'<td style="text-align:center;">'+(s.fio===true?'<span class="badge b-red">FIO</span>':s.estado!=='Pendiente'?'<span style="color:var(--green);">✓</span>':'<span style="color:var(--text3);">—</span>')+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Turno</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
 }
 async function valAdvanceGestion(gid,isTask,newState){
   if(isTask){
@@ -1735,7 +1735,7 @@ async function openValidarModal(shiftId){
   info += '<div><span style="color:var(--text3)">Empleado: </span><strong>'+formatDisplayValue(s.nombre)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">Puesto: </span>'+formatDisplayValue(s.puesto)+'</div>';
   info += '<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(s.fecha)+'</strong></div>';
-  info += '<div><span style="color:var(--text3)">'+(s.area==='Recepción'?'Turno':'Servicio')+': </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
+  info += '<div><span style="color:var(--text3)">Turno: </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+s.horas+'h</strong></div>';
   if(s.area!=='Recepción') info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   if(s.observacion) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+formatDisplayValue(s.observacion)+'</div>';
@@ -2097,7 +2097,7 @@ async function renderDashboard(){
   inciKpiEl.innerHTML=`<div class="kpi k-red"><div class="kpi-lbl">Total (filtro)</div><div class="kpi-val">${inciF.length}</div></div><div class="kpi k-red"><div class="kpi-lbl">Abiertas</div><div class="kpi-val">${iAb}</div></div><div class="kpi k-red"><div class="kpi-lbl">Críticas</div><div class="kpi-val">${iCrit}</div></div><div class="kpi k-orange"><div class="kpi-lbl">Req. Formación</div><div class="kpi-val">${iForm}</div></div><div class="kpi k-orange"><div class="kpi-lbl">Req. Disciplina</div><div class="kpi-val">${iDisc}</div></div>`;
 
   const inciTbl=document.getElementById('dash-inci-table');
-  inciTbl.innerHTML=inciF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Servicio</th><th>Categoría</th><th>Sev.</th><th>Descripción</th><th>Estado</th><th>Form.</th><th>Disc.</th></tr>
+  inciTbl.innerHTML=inciF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Turno</th><th>Categoría</th><th>Sev.</th><th>Descripción</th><th>Estado</th><th>Form.</th><th>Disc.</th></tr>
   ${inciF.sort((a,b)=>{const s={Crítica:4,Alta:3,Media:2,Baja:1};return(s[b.severidad]||0)-(s[a.severidad]||0);}).map(i=>`<tr><td style="font-family:var(--font-mono);font-size:10px">${fmtDate(i.fecha)}</td><td>${i.nombre}</td><td>${i.servicio}</td><td style="font-size:11px">${i.categoria}</td><td>${bSev(i.severidad)}</td><td style="font-size:11px;color:var(--text2);max-width:200px">${i.descripcion}</td><td>${i.estado==='Abierta'?'<span class="badge b-red">Abierta</span>':'<span class="badge b-green">Gestionada</span>'}</td><td>${i.requiere_formacion==='Sí'?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td>${i.requiere_disciplina==='Sí'?'<span class="badge b-red">SÍ</span>':'—'}</td></tr>`).join('')}</table>`:'<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias con este filtro</div></div>';
 
   // MERMA filtrada
@@ -2115,7 +2115,7 @@ async function renderDashboard(){
   mKpi.innerHTML=`<div class="kpi k-orange"><div class="kpi-lbl">Líneas merma</div><div class="kpi-val">${totalMermaLineas}</div></div><div class="kpi k-orange"><div class="kpi-lbl">Coste total</div><div class="kpi-val">${totalMermaCosto.toFixed(0)}€</div></div><div class="kpi k-red"><div class="kpi-lbl">Sin coste</div><div class="kpi-val">${sinCosto}</div><div class="kpi-sub">Líneas pendientes de valorar</div></div><div class="kpi k-amber"><div class="kpi-lbl">Top causa</div><div class="kpi-val" style="font-size:15px;">${topCausa?.causa||'—'}</div><div class="kpi-sub">${topCausa?topCausa.coste.toFixed(2)+'€':''}</div></div>`;
 
   const mTbl=document.getElementById('dash-merma-table');
-  mTbl.innerHTML=mermaF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Servicio</th><th>Producto</th><th>Cantidad</th><th>Causa</th><th>€/u</th><th>Total €</th></tr>
+  mTbl.innerHTML=mermaF.length?`<table><tr><th>Fecha</th><th>Declarante</th><th>Turno</th><th>Producto</th><th>Cantidad</th><th>Causa</th><th>€/u</th><th>Total €</th></tr>
   ${mermaF.map(m=>`<tr><td style="font-family:var(--font-mono);font-size:10px">${fmtDate(m.fecha)}</td><td>${m.nombre}</td><td>${m.servicio}</td><td style="font-weight:600">${m.producto}</td><td style="font-family:var(--font-mono)">${m.cantidad} ${m.unidad}</td><td style="font-size:11px">${m.causa}</td><td style="font-family:var(--font-mono)">${m.coste_unitario>0?m.coste_unitario+'€':'<span style="color:var(--text3)">—</span>'}</td><td style="font-family:var(--font-mono);color:var(--orange)">${m.coste_total>0?m.coste_total.toFixed(2)+'€':'<span style="color:var(--text3)">—</span>'}</td></tr>`).join('')}</table>`:'<div class="empty"><div class="empty-icon">🗑</div><div class="empty-text">Sin merma con este filtro</div></div>';
 
   // TAREAS POR DPTO
@@ -2163,7 +2163,7 @@ async function renderDashboard(){
       });
       fioEl2.innerHTML='<div style="overflow-x:auto"><table><tr>'
         +'<th>Fecha</th><th>Reporta</th><th>Responsable error</th><th>Staff implicado</th>'
-        +'<th>Servicio</th><th>Tipo</th><th>Gravedad</th><th>Comentario</th><th>Informado resp.</th><th>Estado</th>'
+        +'<th>Turno</th><th>Tipo</th><th>Gravedad</th><th>Comentario</th><th>Informado resp.</th><th>Estado</th>'
         +'</tr>'+fioRows2+'</table></div>';
     }
   }
@@ -2190,7 +2190,7 @@ async function renderDashboard(){
           +'</tr>';
       });
       inciEl2.innerHTML='<div style="overflow-x:auto"><table><tr>'
-        +'<th>Fecha</th><th>Reporta</th><th>Staff implicado</th><th>Servicio</th><th>Descripción</th><th>Acción</th><th>Informado resp.</th><th>Estado</th>'
+        +'<th>Fecha</th><th>Reporta</th><th>Staff implicado</th><th>Turno</th><th>Descripción</th><th>Acción</th><th>Informado resp.</th><th>Estado</th>'
         +'</tr>'+iRows2+'</table></div>';
     }
   }

@@ -370,7 +370,7 @@ function getCajaServicios() {
   var checked = [];
   document.querySelectorAll('#caja-servicios-check input[type=checkbox]:checked').forEach(function(cb){ checked.push(cb.value); });
   // If no services checked (hidden), use a default
-  if(checked.length === 0) checked = ['Servicio'];
+  if(checked.length === 0) checked = ['Turno'];
   return checked;
 }
 
@@ -531,7 +531,7 @@ async function renderCajaList() {
         +'<td><button class="btn btn-secondary btn-sm" onclick="openCajaForm(this.dataset.id)" data-id="'+c.id+'">✏️</button></td>'
         +'</tr>';
     }).join('');
-    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Total neto</th><th>Diferencia</th><th>Estado</th><th></th></tr>'+rows+'</table>';
+    el.innerHTML='<table><tr><th>Fecha</th><th>Turno</th><th>Responsable</th><th>Total neto</th><th>Diferencia</th><th>Estado</th><th></th></tr>'+rows+'</table>';
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">Tabla sala_cash_closures pendiente de crear en Supabase. Ejecuta el SQL de configuración.</div>';
   }
@@ -779,7 +779,7 @@ async function renderValCajaList() {
         +'</td>'
         +'</tr>';
     }).join('');
-    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Responsable</th><th>Efectivo</th><th>Retiro</th><th>Tarjeta</th><th>Stripe</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Total ajustes</th><th>Pensiones</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
+    el.innerHTML='<table><tr><th>Fecha</th><th>Turno</th><th>Responsable</th><th>Efectivo</th><th>Retiro</th><th>Tarjeta</th><th>Stripe</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Total ajustes</th><th>Pensiones</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">No se puede cargar — ejecuta primero el SQL de Sala Phase 1.</div>';
   }
@@ -807,7 +807,7 @@ async function openCajaSummary(cajaId, showValidar) {
   var html = '<div style="padding:4px 0">'
     + row('Fecha / Hora cierre', fmtDate(c.fecha) + (c.created_at ? ' · ' + c.created_at.slice(11,16) : ''))
     + row('Responsable', c.responsable_nombre, false)
-    + row('Servicio', displayServicio(c.servicios||''), false)
+    + row('Turno', displayServicio(c.servicios||''), false)
     + row('Estado', c.estado, false)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">EFECTIVO</div>'
     + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2)+'€', true)
