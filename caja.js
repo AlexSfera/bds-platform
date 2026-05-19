@@ -332,6 +332,15 @@ function calcCajaDifs() {
   var fondoEspEl = document.getElementById('caja-fondo-esperado');
   if(fondoEspEl) fondoEspEl.textContent = fondoEspV.toFixed(2) + ' €';
 
+  // FONDO DIF = Fondo real - Fondo esperado
+  var fondoRealInput = getV('caja-fondo-real');
+  var fondoDif = fondoRealInput - fondoEspV;
+  var fondoDifEl = document.getElementById('caja-fondo-dif');
+  if(fondoDifEl){
+    fondoDifEl.textContent = (Math.abs(fondoDif)<0.01 ? '✓ OK' : (fondoDif>=0?'+':'')+fondoDif.toFixed(2)+' €');
+    fondoDifEl.style.color = Math.abs(fondoDif)<0.01 ? 'var(--green)' : Math.abs(fondoDif)>5 ? 'var(--red)' : 'var(--amber)';
+  }
+
   // TOTAL BRUTO
   var totalBruto = getV('caja-ef-posmews') + getV('caja-tar-posmews') + getV('caja-str-posmews')
                  + getV('caja-room') + getV('caja-syncrolab') + getV('caja-alexander')
