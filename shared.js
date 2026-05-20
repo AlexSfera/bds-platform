@@ -2064,7 +2064,7 @@ function _itemEnsureOverlay(){
 async function openItemModal(type, id){
   var ov = _itemEnsureOverlay();
   var table = (type==='gestion') ? 'gestiones' : 'incidencias';
-  var list = await dbList(table);
+  var list = await dbGetAll(table);
   var rec = (list||[]).find(function(r){ return r.id===id; });
   if(!rec){ toast('Registro no encontrado','err'); return; }
   _itemModalCtx = {type:type, id:id, record:rec};
