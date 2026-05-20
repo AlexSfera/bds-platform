@@ -25,7 +25,7 @@ function bGestionEstado(st){
 
 // ── ACCIONES GENÉRICAS (Mi Turno / Followup) ──────────────────────────
 async function advanceGestion(gid, newState){
-  await dbUpdate('gestiones', gid, {estado: newState, updated_at: localTs()});
+  await dbUpdate('gestiones', gid, {estado: newState});
   invalidateCache('gestiones');
   auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
   toast('Estado actualizado', 'ok');
@@ -46,8 +46,7 @@ async function openCloseGestion(gid){
     accion_tomada: txt.trim(),
     cerrado_por: currentUser.nombre,
     cerrado_ts: ts,
-    tiempo_gestion: tgMins,
-    updated_at: ts
+    tiempo_gestion: tgMins
   });
   invalidateCache('gestiones');
   auditLog('GESTION_CERRADA', 'id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt.trim());
@@ -128,7 +127,7 @@ async function valSaveCloseGestionNew(gid){
   var gg=await getDB('gestiones'); var g=gg.find(function(x){return x.id===gid;}); if(!g) return;
   var tgMins=Math.round((Date.now()-new Date(g.created_at).getTime())/60000);
   var ts=localTs();
-  await dbUpdate('gestiones',gid,{estado:'Cerrada',accion_tomada:txt,cerrado_por:currentUser.nombre,cerrado_ts:ts,tiempo_gestion:tgMins,updated_at:ts});
+  await dbUpdate('gestiones',gid,{estado:'Cerrada',accion_tomada:txt,cerrado_por:currentUser.nombre,cerrado_ts:ts,tiempo_gestion:tgMins});
   invalidateCache('gestiones');
   auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
   toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);

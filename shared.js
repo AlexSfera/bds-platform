@@ -697,17 +697,46 @@ async function initTurnoForm(){
   const employees=await getDB('employees');
   const sel=document.getElementById('t-responsable');
   sel.innerHTML='<option value="">— Seleccionar —</option>';
-  // Responsable filter: Sala sees Sala responsables, Cocina sees Cocina responsables
-  var isSalaUser = currentUser && currentUser.area === 'Sala';
+  // ── BUG-RESP-01 · Filtro responsable por área del usuario + dpts hermanos ──
+  // Mapa: cada área puede ver responsables de su área + las hermanas.
+  // F&B Manager (rol fb / puesto contiene "F&B") es visible en Cocina, Friegue y Sala.
+  var RESP_AREA_MAP = {
+    'Cocina':              ['Cocina','Friegue'],
+    'Friegue':             ['Cocina','Friegue'],
+    'Sala':                ['Sala'],
+    'FnB':                 ['Sala','Cocina','Friegue','FnB','Food & Beverage'],
+    'Food & Beverage':     ['Sala','Cocina','Friegue','FnB','Food & Beverage'],
+    'Recepción':           ['Recepción','Recepción SFERA'],
+    'Recepción SFERA':     ['Recepción','Recepción SFERA'],
+    'Recepción SYNCROLAB': ['Recepción SYNCROLAB'],
+    'Housekeeping':        ['Housekeeping','Limpieza'],
+    'Limpieza':            ['Housekeeping','Limpieza'],
+    'SYNCROLAB':           ['SYNCROLAB','SyncroLab','Entrenadores'],
+    'SyncroLab':           ['SYNCROLAB','SyncroLab','Entrenadores'],
+    'Entrenadores':        ['SYNCROLAB','SyncroLab','Entrenadores'],
+    'Administración':      ['Administración']
+  };
+  var userArea = currentUser && currentUser.area;
+  var allowedAreas = RESP_AREA_MAP[userArea] || (userArea ? [userArea] : []);
+  function _isFnbManager(emp){
+    var p = String(emp.puesto||'').toLowerCase();
+    return emp.rol === 'fb' || p.indexOf('f&b') !== -1 || p.indexOf('fnb') !== -1 || p.indexOf('food') !== -1;
+  }
+  function _isJefeRecSyncrolab(emp){
+    // Jefe de Recepción SOLO en Recepción SFERA. Excluir si su área es SYNCROLAB.
+    return false; // ya filtrado vía allowedAreas, sin lógica extra
+  }
   var responsables = employees.filter(function(e) {
     var r = e.responsable;
     var isResp = r === 1 || r === true || r === '1' || r === 'true';
     var isActive = e.estado === 'Activo' || e.estado === 'activo';
     if(!isResp || !isActive) return false;
-    // Sala users: ONLY Sala area responsables
-    if(isSalaUser) return e.area === 'Sala';
-    // Cocina/Friegue users: ONLY non-Sala responsables
-    return e.area !== 'Sala';
+    if(!userArea) return true; // admin sin area → ver todos
+    if(allowedAreas.indexOf(e.area) !== -1) return true;
+    // F&B Manager visible en Cocina/Friegue/Sala
+    var fnbVisibleAreas = ['Cocina','Friegue','Sala','FnB','Food & Beverage'];
+    if(_isFnbManager(e) && fnbVisibleAreas.indexOf(userArea) !== -1) return true;
+    return false;
   });
   responsables.forEach(function(e) {
     var o = document.createElement('option');
@@ -716,9 +745,11 @@ async function initTurnoForm(){
     sel.appendChild(o);
   });
   if(responsables.length === 0) {
-    // Fallback: all active
-    employees.filter(function(e){return e.estado==='Activo';}).forEach(function(e){
-      var o=document.createElement('option'); o.value=e.id; o.textContent=e.nombre;
+    // Fallback: si no hay responsables válidos, ofrecer admin + supervisors activos del propio dept
+    employees.filter(function(e){
+      return (e.estado==='Activo'||e.estado==='activo') && (e.area===userArea || e.rol==='admin');
+    }).forEach(function(e){
+      var o=document.createElement('option'); o.value=e.id; o.textContent=e.nombre+' — '+(e.puesto||e.rol);
       o.style.background='#ffffff'; o.style.color='#111827';
       sel.appendChild(o);
     });
