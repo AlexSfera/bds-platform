@@ -23,9 +23,17 @@ function bGestionEstado(st){
   return '<span class="badge b-gray">'+st+'</span>';
 }
 
+// Badge clicable: abre modal unificado. Se usa en Mi Turno y Validación.
+function bGestionEstadoClick(st, gid){
+  var inner = bGestionEstado(st);
+  return inner.replace('<span class="badge',
+    '<span data-itemtype="gestion" data-itemid="'+gid+'" '
+    + 'style="cursor:pointer;" title="Clic para gestionar" class="badge estado-clickable');
+}
+
 // ── ACCIONES GENÉRICAS (Mi Turno / Followup) ──────────────────────────
 async function advanceGestion(gid, newState){
-  await dbUpdate('gestiones', gid, {estado: newState});
+  await dbUpdate('gestiones', gid, {estado: newState, updated_at: localTs()});
   invalidateCache('gestiones');
   auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': gestión '+gid);
   toast('Estado actualizado', 'ok');
@@ -46,7 +54,8 @@ async function openCloseGestion(gid){
     accion_tomada: txt.trim(),
     cerrado_por: currentUser.nombre,
     cerrado_ts: ts,
-    tiempo_gestion: tgMins
+    tiempo_gestion: tgMins,
+    updated_at: ts
   });
   invalidateCache('gestiones');
   auditLog('GESTION_CERRADA', 'id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt.trim());
@@ -127,7 +136,7 @@ async function valSaveCloseGestionNew(gid){
   var gg=await getDB('gestiones'); var g=gg.find(function(x){return x.id===gid;}); if(!g) return;
   var tgMins=Math.round((Date.now()-new Date(g.created_at).getTime())/60000);
   var ts=localTs();
-  await dbUpdate('gestiones',gid,{estado:'Cerrada',accion_tomada:txt,cerrado_por:currentUser.nombre,cerrado_ts:ts,tiempo_gestion:tgMins});
+  await dbUpdate('gestiones',gid,{estado:'Cerrada',accion_tomada:txt,cerrado_por:currentUser.nombre,cerrado_ts:ts,tiempo_gestion:tgMins,updated_at:ts});
   invalidateCache('gestiones');
   auditLog('GESTION_CERRADA','id: '+gid+' | tiempo: '+tgMins+' min | accion: '+txt+' (shift '+validatingShiftId+')');
   toast('Gestión cerrada','ok'); await openValidarModal(validatingShiftId);

@@ -2038,6 +2038,253 @@ async function importBackup(event){
 // MODAL HELPERS
 function closeModal(id){ var m=document.getElementById(id); if(!m) return; m.classList.remove('open'); if(id==='modal-caja'){ m.querySelectorAll('input,textarea,select').forEach(function(el){ el.readOnly=false; el.style.pointerEvents=''; }); var btn=document.getElementById('caja-btn-guardar'); if(btn) btn.style.display=''; } if(id==='modal-validar') validatingShiftId=null; if(id==='modal-empleado') _editEmpId=null; }
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(e.currentTarget.id); }));
+// ═══════════════════════════════════════════════════════════════════════
+// MODAL UNIFICADO ITEMS (gestión / incidencia) — empleado vs jefe/admin
+// Abierto desde badge clicable. UX: ver datos + comentario + botones rol.
+// ═══════════════════════════════════════════════════════════════════════
+var _itemModalCtx = null; // {type, id, record}
+
+function _itemEnsureOverlay(){
+  var ov = document.getElementById('modal-item');
+  if(ov) return ov;
+  ov = document.createElement('div');
+  ov.id = 'modal-item';
+  ov.className = 'modal-overlay';
+  ov.innerHTML = '<div class="modal" style="max-width:560px;">'
+    + '<div class="modal-h"><h3 id="mi-title">—</h3>'
+    + '<button class="modal-x" onclick="closeModal(\'modal-item\')">✕</button></div>'
+    + '<div class="modal-b" id="mi-body"></div>'
+    + '<div class="modal-f" id="mi-foot"></div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-item'); });
+  return ov;
+}
+
+async function openItemModal(type, id){
+  var ov = _itemEnsureOverlay();
+  var table = (type==='gestion') ? 'gestiones' : 'incidencias';
+  var list = await dbList(table);
+  var rec = (list||[]).find(function(r){ return r.id===id; });
+  if(!rec){ toast('Registro no encontrado','err'); return; }
+  _itemModalCtx = {type:type, id:id, record:rec};
+
+  var isAdminU = isAdmin(currentUser);
+  var isSup    = isSupervisor && isSupervisor(currentUser);
+  var isJefe   = isAdminU || isSup;
+
+  var estado = (type==='gestion')
+    ? (rec.estado || 'Abierta')
+    : normalizeIncidentState(rec.estado);
+
+  var badge = (type==='gestion') ? bGestionEstado(estado) : bIncidentEstado(estado);
+  var descripcion = rec.descripcion || rec.titulo || '—';
+  var tipo = rec.tipo_gestion || rec.tipo_incidencia || rec.categoria || '—';
+  var creador = rec.creado_por || rec.nombre || '—';
+  var fechaCre = rec.created_at ? new Date(rec.created_at).toLocaleString('es-ES') : '—';
+  var dpto = rec.departamento || rec.area || '—';
+  var comentarioPrev = rec.comentario || '';
+  var accionPrev = rec.accion_tomada || rec.accion_inmediata || '';
+
+  document.getElementById('mi-title').textContent =
+    (type==='gestion' ? 'Gestión' : 'Incidencia') + ' · ' + tipo;
+
+  var body = ''
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:10px;">'
+    + '<div><b>Estado:</b><br>'+badge+'</div>'
+    + '<div><b>Departamento:</b><br>'+formatDisplayValue(dpto)+'</div>'
+    + '<div><b>Creado por:</b><br>'+formatDisplayValue(creador)+'</div>'
+    + '<div><b>Fecha:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+fechaCre+'</span></div>'
+    + '</div>'
+    + '<div style="margin-bottom:10px;"><b style="font-size:12px;">Descripción</b>'
+    + '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">'+formatDisplayValue(descripcion)+'</div></div>';
+
+  if(accionPrev){
+    body += '<div style="margin-bottom:10px;"><b style="font-size:12px;color:var(--green);">Acción al cerrar</b>'
+      + '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">'+formatDisplayValue(accionPrev)+'</div></div>';
+  }
+
+  var puedeEditar = (estado !== 'Cerrada' && estado !== INCIDENT_STATES.VALIDADA);
+  body += '<div style="margin-bottom:6px;"><b style="font-size:12px;">Comentario / Seguimiento</b>'
+    + '<textarea id="mi-comentario" rows="3" style="width:100%;margin-top:4px;font-size:12px;" '
+    + (puedeEditar?'':'readonly')+' placeholder="Añadir o actualizar comentario...">'
+    + (comentarioPrev||'').replace(/</g,'&lt;') + '</textarea></div>';
+
+  if(rec.validado_por){
+    body += '<div style="font-size:11px;color:var(--green);margin-top:6px;">✓ Validado por '
+      + formatDisplayValue(rec.validado_por) + ' · ' + (rec.validado_ts ? new Date(rec.validado_ts).toLocaleString('es-ES') : '') + '</div>';
+  }
+
+  document.getElementById('mi-body').innerHTML = body;
+
+  // ── Botones según estado + rol ────────────────────────────────────
+  var btns = [];
+  var canActEmp = !rec.validado_por &&
+    (isJefe || normalizeDeptName(dpto) === normalizeDeptName(currentUser.area||''));
+
+  if(puedeEditar && canActEmp){
+    btns.push('<button class="btn btn-secondary" onclick="itemSaveComentario()">💬 Guardar comentario</button>');
+
+    if(type==='gestion'){
+      if(estado==='Abierta')
+        btns.push('<button class="btn btn-secondary" onclick="itemAdvance(\'En proceso\')">▶ En proceso</button>');
+      btns.push('<button class="btn btn-primary" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
+    } else {
+      if(estado===INCIDENT_STATES.ABIERTA)
+        btns.push('<button class="btn btn-secondary" onclick="itemAdvance(\'En proceso\')">▶ En proceso</button>');
+      btns.push('<button class="btn btn-primary" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
+    }
+  }
+
+  if(isJefe && estado==='Cerrada' && !rec.validado_por){
+    btns.push('<button class="btn btn-primary" onclick="itemValidate()">✅ Validar</button>');
+  }
+  if(isJefe && rec.validado_por){
+    btns.push('<button class="btn btn-secondary" onclick="itemUnvalidate()">↩️ Quitar validación</button>');
+  }
+
+  if(isAdminU){
+    btns.push('<button class="btn btn-danger" onclick="itemDelete()">🗑️ Eliminar</button>');
+  }
+
+  btns.push('<button class="btn btn-secondary" onclick="closeModal(\'modal-item\')">Cancelar</button>');
+  document.getElementById('mi-foot').innerHTML = btns.join(' ');
+
+  ov.classList.add('open');
+}
+window.openItemModal = openItemModal;
+
+// ── ACCIONES ──────────────────────────────────────────────────────────
+async function itemSaveComentario(){
+  if(!_itemModalCtx) return;
+  var txt = (document.getElementById('mi-comentario')||{}).value || '';
+  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
+  await dbUpdate(table, _itemModalCtx.id, {comentario: txt.trim()});
+  invalidateCache(table);
+  auditLog(table.toUpperCase()+'_COMENTARIO', _itemModalCtx.id+': '+txt.slice(0,80));
+  toast('Comentario guardado','ok');
+  closeModal('modal-item');
+  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+}
+window.itemSaveComentario = itemSaveComentario;
+
+async function itemAdvance(newState){
+  if(!_itemModalCtx) return;
+  var comentario = (document.getElementById('mi-comentario')||{}).value || '';
+  if(_itemModalCtx.type==='gestion'){
+    await dbUpdate('gestiones', _itemModalCtx.id, {estado: newState, comentario: comentario.trim()});
+    invalidateCache('gestiones');
+    auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': '+_itemModalCtx.id);
+  } else {
+    await dbUpdate('incidencias', _itemModalCtx.id, {estado: newState, comentario: comentario.trim()});
+    invalidateCache('incidencias');
+    auditLog('INCIDENCIA_ADVANCE', currentUser.nombre+' → '+newState+': '+_itemModalCtx.id);
+  }
+  toast('Estado actualizado','ok');
+  closeModal('modal-item');
+  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+}
+window.itemAdvance = itemAdvance;
+
+async function itemClose(){
+  if(!_itemModalCtx) return;
+  var comentario = (document.getElementById('mi-comentario')||{}).value || '';
+  var accion = prompt('Acción tomada (qué se hizo para resolver):', comentario||'');
+  if(!accion || !accion.trim()){ toast('Acción tomada obligatoria','err'); return; }
+  var ts = localTs();
+  var inicio = _itemModalCtx.record.created_at ? new Date(_itemModalCtx.record.created_at).getTime() : Date.now();
+  var tgMins = Math.round((Date.now()-inicio)/60000);
+
+  if(_itemModalCtx.type==='gestion'){
+    await dbUpdate('gestiones', _itemModalCtx.id, {
+      estado:'Cerrada', accion_tomada:accion.trim(),
+      cerrado_por:currentUser.nombre, cerrado_ts:ts,
+      tiempo_gestion:tgMins, comentario:comentario.trim()
+    });
+    invalidateCache('gestiones');
+    auditLog('GESTION_CERRADA', _itemModalCtx.id+' | '+tgMins+'min | '+accion.slice(0,80));
+  } else {
+    await dbUpdate('incidencias', _itemModalCtx.id, {
+      estado:INCIDENT_STATES.CERRADA, accion_inmediata:accion.trim(),
+      cerrado_ts:ts, tiempo_gestion:tgMins, comentario:comentario.trim()
+    });
+    invalidateCache('incidencias');
+    auditLog('INCIDENCIA_CERRADA', _itemModalCtx.id+' | '+tgMins+'min | '+accion.slice(0,80));
+  }
+  toast('Cerrada','ok');
+  closeModal('modal-item');
+  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+}
+window.itemClose = itemClose;
+
+async function itemValidate(){
+  if(!_itemModalCtx) return;
+  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
+  await dbUpdate(table, _itemModalCtx.id, {
+    validado_por: currentUser.nombre,
+    validado_ts: localTs()
+  });
+  invalidateCache(table);
+  auditLog(table.toUpperCase()+'_VALIDADA', _itemModalCtx.id+' por '+currentUser.nombre);
+  toast('Validado','ok');
+  closeModal('modal-item');
+  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+}
+window.itemValidate = itemValidate;
+
+async function itemUnvalidate(){
+  if(!_itemModalCtx) return;
+  if(!confirm('¿Quitar validación?')) return;
+  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
+  await dbUpdate(table, _itemModalCtx.id, {validado_por:null, validado_ts:null});
+  invalidateCache(table);
+  auditLog(table.toUpperCase()+'_UNVALIDADA', _itemModalCtx.id+' por '+currentUser.nombre);
+  toast('Validación retirada','ok');
+  closeModal('modal-item');
+  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+}
+window.itemUnvalidate = itemUnvalidate;
+
+async function itemDelete(){
+  if(!_itemModalCtx) return;
+  if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
+  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
+  var label = _itemModalCtx.type==='gestion' ? 'gestión' : 'incidencia';
+  if(!confirm('Eliminar '+label+' definitivamente?\n\nEsta acción no se puede deshacer.')) return;
+  await auditLog(table.toUpperCase()+'_DELETE', _itemModalCtx.id+' | '+JSON.stringify(_itemModalCtx.record).slice(0,200));
+  await dbDelete(table, _itemModalCtx.id);
+  invalidateCache(table);
+  toast(label.charAt(0).toUpperCase()+label.slice(1)+' eliminada','ok');
+  closeModal('modal-item');
+  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+}
+window.itemDelete = itemDelete;
+
+// ── Helper render: vuelve a pintar la pantalla activa sin tocar nada más
+function rerenderActiveScreen(){
+  try{
+    var fns = ['renderFollowupList','renderMisTurnos','renderValidacion','renderDashboard','renderRecepcionDashboard'];
+    for(var i=0;i<fns.length;i++){
+      var f = window[fns[i]];
+      if(typeof f === 'function'){ try{ f(); }catch(_){} }
+    }
+  }catch(_){}
+}
+window.rerenderActiveScreen = rerenderActiveScreen;
+
+// ── Listener delegado global para badges clicables ────────────────────
+document.addEventListener('click', function(e){
+  var el = e.target.closest && e.target.closest('.estado-clickable');
+  if(!el) return;
+  var type = el.getAttribute('data-itemtype');
+  var id   = el.getAttribute('data-itemid');
+  if(!type || !id) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openItemModal(type, id);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 function toast(msg,type='ok'){ const c=document.getElementById('toast-c'); const t=document.createElement('div'); t.className=`toast ${type}`; t.textContent=msg; c.appendChild(t); setTimeout(()=>{ t.style.animation='toastOut .3s ease forwards'; setTimeout(()=>{ if(c.contains(t)) c.removeChild(t); },300); },3200); }
 
 // ═══════════════════════════════════════════════════════════════════════

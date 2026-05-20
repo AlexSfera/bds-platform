@@ -58,6 +58,14 @@ function bIncidentEstado(e){
   return '<span class="badge b-red">Abierta</span>';
 }
 
+// Badge clicable: abre modal unificado.
+function bIncidentEstadoClick(e, iid){
+  var inner = bIncidentEstado(e);
+  return inner.replace('<span class="badge',
+    '<span data-itemtype="incidencia" data-itemid="'+iid+'" '
+    + 'style="cursor:pointer;" title="Clic para gestionar" class="badge estado-clickable');
+}
+
 // ── BUILD ─────────────────────────────────────────────────────────────
 function buildInciObj(shiftId,fecha,servicio,ts){
   var descEl=document.getElementById('i-desc');
