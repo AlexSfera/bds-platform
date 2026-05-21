@@ -370,32 +370,65 @@ async function startApp(){
   setTimeout(fixSelectColors, 200);
 }
 function getScreens(rol){
-  var isSala = currentUser && currentUser.area === 'Sala';
-  var isRecepcion = currentUser && currentUser.area === 'Recepción';
-  const base=[
-    {id:'readme',    label:'📋 Info'},
-    {id:'turno',     label:'🕐 Mi Turno'},
-    {id:'caja',      label:'💰 Cierre Caja'},
-    {id:'tareas',    label:'🔗 Tareas'},
-    {id:'validacion',label:'✅ Validación'},
-    {id:'dashboard', label:'📊 Dashboard'},
-    {id:'maestro',   label:'👥 Maestro'},
-    {id:'export',    label:'⬇ Exportar'},
-    {id:'rec-caja',  label:'🏦 Caja Recepción'},
-  ];
-  if(rol==='admin'){
-    // Admin: sin Mi Turno ni Cierre Caja — no pertenecen a ningún departamento
-    return [base[0],base[3],base[4],base[5],base[6],base[7],base[8]];
+  var isSala       = currentUser && currentUser.area === 'Sala';
+  var isRecepcion  = currentUser && currentUser.area === 'Recepción';
+  var isCocina     = currentUser && currentUser.area === 'Cocina';
+  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping');
+  var isMant       = currentUser && currentUser.area === 'Mantenimiento';
+  var isAdminU     = (rol === 'admin');
+  var isJefe       = isAdminU || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
+    || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
+
+  // ── Definiciones de pantallas ─────────────────────────────────────
+  var ITEMS = {
+    readme:      {id:'readme',      label:'📋 Info'},
+    turno:       {id:'turno',       label:'🕐 Mi Turno'},
+    gestiones:   {id:'gestiones',   label:'📌 Gestiones'},
+    tareas:      {id:'tareas',      label:'🔗 Tareas'},
+    incidencias: {id:'incidencias', label:'⚠ Incidencias'},
+    validacion:  {id:'validacion',  label:'✅ Validación'},
+    dashboard:   {id:'dashboard',   label:'📊 Dashboard'},
+    maestro:     {id:'maestro',     label:'👥 Maestro'},
+    export:      {id:'export',      label:'⬇ Exportar'},
+    // Módulos por dpto (placeholders)
+    merma:       {id:'merma-mod',   label:'📦 Merma',          pending:true},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes',         pending:true},
+    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        pending:true},
+    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true}
+  };
+
+  // ── ZONA 1: Navegación común (todos) ──────────────────────────────
+  var navComun = isAdminU
+    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
+    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias];
+
+  // ── ZONA 2: Módulo de departamento (varía) ────────────────────────
+  var dptoMod = [];
+  if(isCocina)    dptoMod.push(ITEMS.merma);
+  if(isSala)      dptoMod.push(ITEMS.ajustes);
+  if(isHK)        dptoMod.push(ITEMS.ruta);
+  if(isRecepcion) dptoMod.push(ITEMS.recmod);
+  if(isMant)      dptoMod.push(ITEMS.mantmod);
+
+  // ── ZONA 3: Gestión (solo jefe/admin) ─────────────────────────────
+  var gestion = [];
+  if(isJefe){
+    gestion.push(ITEMS.validacion);
+    gestion.push(ITEMS.dashboard);
   }
-  if(rol==='chef')  return [base[0],base[1],base[3],base[4],base[5],base[7]];
-  if(rol==='fb')    return [base[0],base[1],base[2],base[3],base[4],base[5],base[7]];
-  if(rol==='jefe_recepcion') return [base[0],base[1],base[3],base[4],base[5],base[8]];
-  if(rol==='supervisor') return [base[0],base[1],base[3],base[4],base[5],base[7]];
-  if(rol==='mantenimiento') return [base[0],base[1],base[3]];
-  if(isSupervisor(currentUser)) return [base[0],base[1],base[3],base[4],base[5],base[7]];
-  if(isSala)        return [base[0],base[1],base[3]];  // Cierre Caja solo via oferta post-turno
-  if(isRecepcion)   return [base[0],base[1],base[3],base[8]];
-  return [base[0],base[1],base[3]];
+  if(isAdminU){
+    gestion.push(ITEMS.maestro);
+    gestion.push(ITEMS.export);
+  }
+
+  // Devolvemos array plano con separadores marcados para buildNav
+  var out = [].concat(navComun);
+  if(dptoMod.length){ out.push({sep:true,label:'MI DEPARTAMENTO'}); out = out.concat(dptoMod); }
+  if(gestion.length){ out.push({sep:true,label:'GESTIÓN'});         out = out.concat(gestion); }
+  // Info siempre primero
+  out.unshift(ITEMS.readme);
+  return out;
 }
 
 function buildNav(){
@@ -414,26 +447,76 @@ function buildNav(){
     'validacion':_svg('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'),
     'dashboard': _svg('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'),
     'maestro':   _svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
-    'export':    _svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>')
+    'export':    _svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+    'gestiones': _svg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
+    'incidencias': _svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
+
+  // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
+  const sideb = document.getElementById('sidebar-nav');
+  if(sideb) sideb.innerHTML = '';
+
   screens.forEach(s=>{
-    // Desktop topbar
+    if(s.sep){
+      // Separador de grupo
+      if(sideb){
+        const sep = document.createElement('div');
+        sep.className = 'sidebar-group-label';
+        sep.textContent = s.label;
+        sideb.appendChild(sep);
+      }
+      return;
+    }
+    const isPending = !!s.pending;
+
+    // Sidebar (escritorio)
+    if(sideb){
+      const a = document.createElement('button');
+      a.className = 'sidebar-btn' + (isPending ? ' is-pending' : '');
+      a.id = 'side-' + s.id;
+      a.innerHTML = s.label + (isPending ? ' <span class="pill-pending">Pendiente</span>' : '')
+                  + '<span class="alert-dot" id="dotside-'+s.id+'"></span>';
+      if(isPending){
+        a.onclick = function(){ toast('Módulo en desarrollo','info'); };
+      } else {
+        a.onclick = function(){ showScreen(s.id); };
+      }
+      sideb.appendChild(a);
+    }
+
+    // Topbar legacy (lo dejamos oculto vía CSS pero seguimos poblándolo por compatibilidad de IDs)
     const b=document.createElement('button');
     b.className='nav-btn'; b.id='nav-'+s.id;
     b.innerHTML=s.label+'<span class="alert-dot" id="dot-'+s.id+'"></span>';
-    b.onclick=function(){showScreen(s.id);}; nav.appendChild(b);
-    // Mobile bottom nav
+    b.onclick=function(){
+      if(isPending){ toast('Módulo en desarrollo','info'); return; }
+      showScreen(s.id);
+    };
+    nav.appendChild(b);
+
+    // Bottom nav (móvil)
     if(bnav){
       const bb=document.createElement('button');
-      bb.className='bnav-btn'; bb.id='bnav-'+s.id;
+      bb.className='bnav-btn' + (isPending ? ' is-pending' : '');
+      bb.id='bnav-'+s.id;
       bb.innerHTML='<span class="bnav-icon">'+(ICONS[s.id]||'●')+'</span><span class="bnav-label">'+(SHORT[s.id]||s.id)+'</span><span class="bnav-dot" id="bdot-'+s.id+'"></span>';
-      bb.onclick=function(){showScreen(s.id);}; bnav.appendChild(bb);
+      bb.onclick=function(){
+        if(isPending){ toast('Módulo en desarrollo','info'); return; }
+        showScreen(s.id);
+      };
+      bnav.appendChild(bb);
     }
   });
   // Show bottom nav
   var bn=document.getElementById('bottom-nav');
   if(bn) bn.style.display='block';
+
+  // Rellenar bloque usuario topbar (dpto · nombre)
+  var deptEl = document.getElementById('topbar-dept');
+  var nameEl = document.getElementById('topbar-name');
+  if(deptEl) deptEl.textContent = currentUser && currentUser.area ? ('🏢 ' + currentUser.area) : '';
+  if(nameEl) nameEl.textContent = currentUser && currentUser.nombre ? ('👤 ' + currentUser.nombre) : '';
 }
 async function showScreen(id){
   // Reset topbar dept accent when leaving dashboard
@@ -444,9 +527,11 @@ async function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.sidebar-btn').forEach(b=>b.classList.remove('active'));
   const s=document.getElementById('screen-'+id); if(s) s.classList.add('active');
   const nb=document.getElementById('nav-'+id); if(nb) nb.classList.add('active');
   const bb=document.getElementById('bnav-'+id); if(bb) bb.classList.add('active');
+  const sb=document.getElementById('side-'+id); if(sb) sb.classList.add('active');
   window.scrollTo(0,0);
   if(id==='turno'){ initTurnoForm(); }
   if(id==='tareas'){ renderTareas(); }
@@ -459,6 +544,8 @@ async function showScreen(id){
   }
   if(id==='rec-caja'){ renderRecepcionCajaList(); }
   if(id==='maestro'){ renderMaestro(); }
+  if(id==='gestiones'){ renderGestionesScreen(); }
+  if(id==='incidencias'){ renderIncidenciasScreen(); }
   updateDots();
 }
 async function updateDots(){
@@ -2038,254 +2125,96 @@ async function importBackup(event){
 // MODAL HELPERS
 function closeModal(id){ var m=document.getElementById(id); if(!m) return; m.classList.remove('open'); if(id==='modal-caja'){ m.querySelectorAll('input,textarea,select').forEach(function(el){ el.readOnly=false; el.style.pointerEvents=''; }); var btn=document.getElementById('caja-btn-guardar'); if(btn) btn.style.display=''; } if(id==='modal-validar') validatingShiftId=null; if(id==='modal-empleado') _editEmpId=null; }
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(e.currentTarget.id); }));
-// ═══════════════════════════════════════════════════════════════════════
-// MODAL UNIFICADO ITEMS (gestión / incidencia) — empleado vs jefe/admin
-// Abierto desde badge clicable. UX: ver datos + comentario + botones rol.
-// ═══════════════════════════════════════════════════════════════════════
-var _itemModalCtx = null; // {type, id, record}
-
-function _itemEnsureOverlay(){
-  var ov = document.getElementById('modal-item');
-  if(ov) return ov;
-  ov = document.createElement('div');
-  ov.id = 'modal-item';
-  ov.className = 'modal-overlay';
-  ov.innerHTML = '<div class="modal" style="max-width:560px;">'
-    + '<div class="modal-h"><h3 id="mi-title">—</h3>'
-    + '<button class="modal-x" onclick="closeModal(\'modal-item\')">✕</button></div>'
-    + '<div class="modal-b" id="mi-body"></div>'
-    + '<div class="modal-f" id="mi-foot"></div>'
-    + '</div>';
-  document.body.appendChild(ov);
-  ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-item'); });
-  return ov;
-}
-
-async function openItemModal(type, id){
-  var ov = _itemEnsureOverlay();
-  var table = (type==='gestion') ? 'gestiones' : 'incidencias';
-  var list = await dbGetAll(table);
-  var rec = (list||[]).find(function(r){ return r.id===id; });
-  if(!rec){ toast('Registro no encontrado','err'); return; }
-  _itemModalCtx = {type:type, id:id, record:rec};
-
-  var isAdminU = isAdmin(currentUser);
-  var isSup    = isSupervisor && isSupervisor(currentUser);
-  var isJefe   = isAdminU || isSup;
-
-  var estado = (type==='gestion')
-    ? (rec.estado || 'Abierta')
-    : normalizeIncidentState(rec.estado);
-
-  var badge = (type==='gestion') ? bGestionEstado(estado) : bIncidentEstado(estado);
-  var descripcion = rec.descripcion || rec.titulo || '—';
-  var tipo = rec.tipo_gestion || rec.tipo_incidencia || rec.categoria || '—';
-  var creador = rec.creado_por || rec.nombre || '—';
-  var fechaCre = rec.created_at ? new Date(rec.created_at).toLocaleString('es-ES') : '—';
-  var dpto = rec.departamento || rec.area || '—';
-  var comentarioPrev = rec.comentario || '';
-  var accionPrev = rec.accion_tomada || rec.accion_inmediata || '';
-
-  document.getElementById('mi-title').textContent =
-    (type==='gestion' ? 'Gestión' : 'Incidencia') + ' · ' + tipo;
-
-  var body = ''
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:10px;">'
-    + '<div><b>Estado:</b><br>'+badge+'</div>'
-    + '<div><b>Departamento:</b><br>'+formatDisplayValue(dpto)+'</div>'
-    + '<div><b>Creado por:</b><br>'+formatDisplayValue(creador)+'</div>'
-    + '<div><b>Fecha:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+fechaCre+'</span></div>'
-    + '</div>'
-    + '<div style="margin-bottom:10px;"><b style="font-size:12px;">Descripción</b>'
-    + '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">'+formatDisplayValue(descripcion)+'</div></div>';
-
-  if(accionPrev){
-    body += '<div style="margin-bottom:10px;"><b style="font-size:12px;color:var(--green);">Acción al cerrar</b>'
-      + '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">'+formatDisplayValue(accionPrev)+'</div></div>';
-  }
-
-  var puedeEditar = (estado !== 'Cerrada' && estado !== INCIDENT_STATES.VALIDADA);
-  body += '<div style="margin-bottom:6px;"><b style="font-size:12px;">Comentario / Seguimiento</b>'
-    + '<textarea id="mi-comentario" rows="3" style="width:100%;margin-top:4px;font-size:12px;" '
-    + (puedeEditar?'':'readonly')+' placeholder="Añadir o actualizar comentario...">'
-    + (comentarioPrev||'').replace(/</g,'&lt;') + '</textarea></div>';
-
-  if(rec.validado_por){
-    body += '<div style="font-size:11px;color:var(--green);margin-top:6px;">✓ Validado por '
-      + formatDisplayValue(rec.validado_por) + ' · ' + (rec.validado_ts ? new Date(rec.validado_ts).toLocaleString('es-ES') : '') + '</div>';
-  }
-
-  document.getElementById('mi-body').innerHTML = body;
-
-  // ── Botones según estado + rol ────────────────────────────────────
-  var btns = [];
-  var canActEmp = !rec.validado_por &&
-    (isJefe || normalizeDeptName(dpto) === normalizeDeptName(currentUser.area||''));
-
-  if(puedeEditar && canActEmp){
-    btns.push('<button class="btn btn-secondary" onclick="itemSaveComentario()">💬 Guardar comentario</button>');
-
-    if(type==='gestion'){
-      if(estado==='Abierta')
-        btns.push('<button class="btn btn-secondary" onclick="itemAdvance(\'En proceso\')">▶ En proceso</button>');
-      btns.push('<button class="btn btn-primary" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
-    } else {
-      if(estado===INCIDENT_STATES.ABIERTA)
-        btns.push('<button class="btn btn-secondary" onclick="itemAdvance(\'En proceso\')">▶ En proceso</button>');
-      btns.push('<button class="btn btn-primary" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
-    }
-  }
-
-  if(isJefe && estado==='Cerrada' && !rec.validado_por){
-    btns.push('<button class="btn btn-primary" onclick="itemValidate()">✅ Validar</button>');
-  }
-  if(isJefe && rec.validado_por){
-    btns.push('<button class="btn btn-secondary" onclick="itemUnvalidate()">↩️ Quitar validación</button>');
-  }
-
-  if(isAdminU){
-    btns.push('<button class="btn btn-danger" onclick="itemDelete()">🗑️ Eliminar</button>');
-  }
-
-  btns.push('<button class="btn btn-secondary" onclick="closeModal(\'modal-item\')">Cancelar</button>');
-  document.getElementById('mi-foot').innerHTML = btns.join(' ');
-
-  ov.classList.add('open');
-}
-window.openItemModal = openItemModal;
-
-// ── ACCIONES ──────────────────────────────────────────────────────────
-async function itemSaveComentario(){
-  if(!_itemModalCtx) return;
-  var txt = (document.getElementById('mi-comentario')||{}).value || '';
-  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
-  await dbUpdate(table, _itemModalCtx.id, {comentario: txt.trim()});
-  invalidateCache(table);
-  auditLog(table.toUpperCase()+'_COMENTARIO', _itemModalCtx.id+': '+txt.slice(0,80));
-  toast('Comentario guardado','ok');
-  closeModal('modal-item');
-  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
-}
-window.itemSaveComentario = itemSaveComentario;
-
-async function itemAdvance(newState){
-  if(!_itemModalCtx) return;
-  var comentario = (document.getElementById('mi-comentario')||{}).value || '';
-  if(_itemModalCtx.type==='gestion'){
-    await dbUpdate('gestiones', _itemModalCtx.id, {estado: newState, comentario: comentario.trim()});
-    invalidateCache('gestiones');
-    auditLog('GESTION_ADVANCE', currentUser.nombre+' → '+newState+': '+_itemModalCtx.id);
-  } else {
-    await dbUpdate('incidencias', _itemModalCtx.id, {estado: newState, comentario: comentario.trim()});
-    invalidateCache('incidencias');
-    auditLog('INCIDENCIA_ADVANCE', currentUser.nombre+' → '+newState+': '+_itemModalCtx.id);
-  }
-  toast('Estado actualizado','ok');
-  closeModal('modal-item');
-  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
-}
-window.itemAdvance = itemAdvance;
-
-async function itemClose(){
-  if(!_itemModalCtx) return;
-  var comentario = (document.getElementById('mi-comentario')||{}).value || '';
-  var accion = prompt('Acción tomada (qué se hizo para resolver):', comentario||'');
-  if(!accion || !accion.trim()){ toast('Acción tomada obligatoria','err'); return; }
-  var ts = localTs();
-  var inicio = _itemModalCtx.record.created_at ? new Date(_itemModalCtx.record.created_at).getTime() : Date.now();
-  var tgMins = Math.round((Date.now()-inicio)/60000);
-
-  if(_itemModalCtx.type==='gestion'){
-    await dbUpdate('gestiones', _itemModalCtx.id, {
-      estado:'Cerrada', accion_tomada:accion.trim(),
-      cerrado_por:currentUser.nombre, cerrado_ts:ts,
-      tiempo_gestion:tgMins, comentario:comentario.trim()
-    });
-    invalidateCache('gestiones');
-    auditLog('GESTION_CERRADA', _itemModalCtx.id+' | '+tgMins+'min | '+accion.slice(0,80));
-  } else {
-    await dbUpdate('incidencias', _itemModalCtx.id, {
-      estado:INCIDENT_STATES.CERRADA, accion_inmediata:accion.trim(),
-      cerrado_ts:ts, tiempo_gestion:tgMins, comentario:comentario.trim()
-    });
-    invalidateCache('incidencias');
-    auditLog('INCIDENCIA_CERRADA', _itemModalCtx.id+' | '+tgMins+'min | '+accion.slice(0,80));
-  }
-  toast('Cerrada','ok');
-  closeModal('modal-item');
-  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
-}
-window.itemClose = itemClose;
-
-async function itemValidate(){
-  if(!_itemModalCtx) return;
-  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
-  await dbUpdate(table, _itemModalCtx.id, {
-    validado_por: currentUser.nombre,
-    validado_ts: localTs()
-  });
-  invalidateCache(table);
-  auditLog(table.toUpperCase()+'_VALIDADA', _itemModalCtx.id+' por '+currentUser.nombre);
-  toast('Validado','ok');
-  closeModal('modal-item');
-  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
-}
-window.itemValidate = itemValidate;
-
-async function itemUnvalidate(){
-  if(!_itemModalCtx) return;
-  if(!confirm('¿Quitar validación?')) return;
-  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
-  await dbUpdate(table, _itemModalCtx.id, {validado_por:null, validado_ts:null});
-  invalidateCache(table);
-  auditLog(table.toUpperCase()+'_UNVALIDADA', _itemModalCtx.id+' por '+currentUser.nombre);
-  toast('Validación retirada','ok');
-  closeModal('modal-item');
-  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
-}
-window.itemUnvalidate = itemUnvalidate;
-
-async function itemDelete(){
-  if(!_itemModalCtx) return;
-  if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
-  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
-  var label = _itemModalCtx.type==='gestion' ? 'gestión' : 'incidencia';
-  if(!confirm('Eliminar '+label+' definitivamente?\n\nEsta acción no se puede deshacer.')) return;
-  await auditLog(table.toUpperCase()+'_DELETE', _itemModalCtx.id+' | '+JSON.stringify(_itemModalCtx.record).slice(0,200));
-  await dbDelete(table, _itemModalCtx.id);
-  invalidateCache(table);
-  toast(label.charAt(0).toUpperCase()+label.slice(1)+' eliminada','ok');
-  closeModal('modal-item');
-  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
-}
-window.itemDelete = itemDelete;
-
-// ── Helper render: vuelve a pintar la pantalla activa sin tocar nada más
-function rerenderActiveScreen(){
-  try{
-    var fns = ['renderFollowupList','renderMisTurnos','renderValidacion','renderDashboard','renderRecepcionDashboard'];
-    for(var i=0;i<fns.length;i++){
-      var f = window[fns[i]];
-      if(typeof f === 'function'){ try{ f(); }catch(_){} }
-    }
-  }catch(_){}
-}
-window.rerenderActiveScreen = rerenderActiveScreen;
-
-// ── Listener delegado global para badges clicables ────────────────────
-document.addEventListener('click', function(e){
-  var el = e.target.closest && e.target.closest('.estado-clickable');
-  if(!el) return;
-  var type = el.getAttribute('data-itemtype');
-  var id   = el.getAttribute('data-itemid');
-  if(!type || !id) return;
-  e.preventDefault();
-  e.stopPropagation();
-  openItemModal(type, id);
-});
-
-// ═══════════════════════════════════════════════════════════════════════
 function toast(msg,type='ok'){ const c=document.getElementById('toast-c'); const t=document.createElement('div'); t.className=`toast ${type}`; t.textContent=msg; c.appendChild(t); setTimeout(()=>{ t.style.animation='toastOut .3s ease forwards'; setTimeout(()=>{ if(c.contains(t)) c.removeChild(t); },300); },3200); }
+
+// ═══════════════════════════════════════════════════════════════════════
+// PANTALLAS DEDICADAS — Gestiones e Incidencias (Paso 1 nav)
+// ═══════════════════════════════════════════════════════════════════════
+async function renderGestionesScreen(){
+  var el = document.getElementById('screen-gestiones');
+  if(!el) return;
+  var dept = currentUser ? (currentUser.area||'—') : '—';
+  var verTodos = isAdmin(currentUser);
+  var all = [];
+  try { all = await getDB('gestiones'); } catch(e){}
+  var list = verTodos ? all : all.filter(function(g){
+    return normalizeDeptName(g.departamento||g.area||'') === normalizeDeptName(dept);
+  });
+  list = list.filter(function(g){ return (g.estado||'Abierta') !== 'Cerrada'; });
+  list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  var rows = list.length
+    ? list.map(function(g){
+        var st = g.estado || 'Abierta';
+        var coment = g.comentario ? ' <span title="'+(g.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
+        var fecha = g.created_at ? new Date(g.created_at).toLocaleDateString('es-ES') : '—';
+        return '<tr>'
+          + '<td style="font-size:12px;">'+fecha+'</td>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(g.tipo_gestion)+'</td>'
+          + '<td style="font-size:12px;max-width:280px;">'+formatDisplayValue(g.descripcion)+'</td>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(g.departamento||g.area)+'</td>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(g.creado_por||g.nombre)+'</td>'
+          + '<td>'+bGestionEstadoClick(st, g.id)+coment+'</td>'
+          + '</tr>';
+      }).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:18px;">Sin gestiones pendientes</td></tr>';
+
+  el.innerHTML = '<div class="page-header"><div class="page-title">📌 Gestiones pendientes</div>'
+    + '<div class="page-sub">'+(verTodos?'Todos los departamentos':'Departamento: '+dept)+' · '+list.length+' activas</div></div>'
+    + '<div class="card"><table><thead><tr>'
+    + '<th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Departamento</th><th>Creada por</th><th>Estado</th>'
+    + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+window.renderGestionesScreen = renderGestionesScreen;
+
+async function renderIncidenciasScreen(){
+  var el = document.getElementById('screen-incidencias');
+  if(!el) return;
+  var dept = currentUser ? (currentUser.area||'—') : '—';
+  var verTodos = isAdmin(currentUser);
+  var all = [];
+  try { all = await getDB('incidencias'); } catch(e){}
+  var list = verTodos ? all : all.filter(function(i){
+    return normalizeDeptName(i.departamento||i.area||'') === normalizeDeptName(dept);
+  });
+  list = list.filter(function(i){
+    var s = normalizeIncidentState(i.estado);
+    return s !== INCIDENT_STATES.CERRADA && s !== INCIDENT_STATES.VALIDADA;
+  });
+  list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  var rows = list.length
+    ? list.map(function(i){
+        var coment = i.comentario ? ' <span title="'+(i.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
+        var fecha = i.created_at ? new Date(i.created_at).toLocaleDateString('es-ES') : '—';
+        return '<tr>'
+          + '<td style="font-size:12px;">'+fecha+'</td>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</td>'
+          + '<td style="font-size:12px;max-width:280px;">'+formatDisplayValue(i.descripcion).slice(0,120)+(i.descripcion&&i.descripcion.length>120?'...':'')+'</td>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(i.departamento||i.area)+'</td>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(i.nombre)+'</td>'
+          + '<td>'+bIncidentEstadoClick(i.estado, i.id)+coment+'</td>'
+          + '</tr>';
+      }).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:18px;">Sin incidencias pendientes</td></tr>';
+
+  el.innerHTML = '<div class="page-header"><div class="page-title">⚠ Incidencias pendientes</div>'
+    + '<div class="page-sub">'+(verTodos?'Todos los departamentos':'Departamento: '+dept)+' · '+list.length+' activas</div></div>'
+    + '<div class="card"><table><thead><tr>'
+    + '<th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Departamento</th><th>Empleado</th><th>Estado</th>'
+    + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+window.renderIncidenciasScreen = renderIncidenciasScreen;
+
+// Encadenar al helper de rerender existente
+(function(){
+  var prev = window.rerenderActiveScreen;
+  window.rerenderActiveScreen = function(){
+    try { if(typeof prev==='function') prev(); } catch(_){}
+    try { renderGestionesScreen(); } catch(_){}
+    try { renderIncidenciasScreen(); } catch(_){}
+  };
+})();
 
 // ═══════════════════════════════════════════════════════════════════════
 // INIT — portal controls display, NOT this script
