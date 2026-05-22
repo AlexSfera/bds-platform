@@ -1119,6 +1119,25 @@ async function _doSaveTurno(){
   }
   if(!skipMerma && mermaData.length) invalidateCache('merma');
 
+  // ── Asociar mermas pendientes (sin turno) del empleado al turno nuevo ──
+  // Solo aplica si Cocina/Friegue (skipMerma=false) y si NO estamos editando un turno existente
+  if(!skipMerma && !editingShiftId){
+    try {
+      var pendientes = (await getDB('merma')).filter(function(m){
+        return !m.shift_id && m.employee_id === currentUser.id;
+      });
+      for(const mp of pendientes){
+        await dbUpdate('merma', mp.id, {shift_id: shiftId, servicio: servicio});
+      }
+      if(pendientes.length){
+        invalidateCache('merma');
+        await auditLog('MERMA_ASSOC', pendientes.length+' mermas asociadas a turno '+shiftId);
+      }
+    } catch(eAssoc){
+      console.error('No se pudieron asociar mermas pendientes', eAssoc);
+    }
+  }
+
   // ── Save gestión pendiente → tabla gestiones ──
   if(toggleState.gestion==='si'){
     const gTipoEl = document.getElementById('g-tipo');
@@ -2666,14 +2685,18 @@ async function renderMermaMod(){
       : ['Cocina','Friegue'];
     if(['Cocina','Friegue'].indexOf(currentUser.area)>=0){ allowed = ['Cocina','Friegue']; }
     list = list.filter(function(m){
-      var d = m.departamento || m.area || '';
+      var d = m.area || m.departamento || '';
       return allowed.indexOf(d) >= 0;
     });
   }
   list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
 
   var totalQty = 0;
-  list.forEach(function(m){ totalQty += parseFloat(m.cantidad)||0; });
+  var pendientes = 0;
+  list.forEach(function(m){
+    totalQty += parseFloat(m.cantidad)||0;
+    if(!m.shift_id) pendientes++;
+  });
 
   var cards;
   if(!list.length){
@@ -2682,16 +2705,18 @@ async function renderMermaMod(){
     cards = list.map(function(m){
       var hora = m.created_at ? new Date(m.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
       var obs = m.obs ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">📝 '+formatDisplayValue(m.obs)+'</div>' : '';
-      var noShift = !m.shift_id ? '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">sin turno</span>' : '';
+      var statusTag = m.shift_id
+        ? '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">en turno</span>'
+        : '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">pendiente</span>';
       var delBtn = isAdminU ? ' <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteMermaItem(\''+m.id+'\')">🗑</button>' : '';
       return '<div class="task-card">'
         + '<div class="task-meta" style="align-items:center;">'
-        +   '<span class="dept-badge">'+formatDisplayValue(m.departamento||m.area)+'</span>'
+        +   '<span class="dept-badge">'+formatDisplayValue(m.area||m.departamento)+'</span>'
         +   '<span class="task-origin">'+hora+'</span>'
         +   '<span style="font-weight:600;font-size:13px;">'+formatDisplayValue(m.producto)+'</span>'
         +   '<span class="badge b-orange">'+(m.cantidad||0)+' '+formatDisplayValue(m.unidad||'uds')+'</span>'
         +   '<span class="badge b-gray">'+formatDisplayValue(m.causa)+'</span>'
-        +   noShift
+        +   statusTag
         +   delBtn
         + '</div>'
         + obs
@@ -2702,9 +2727,14 @@ async function renderMermaMod(){
     }).join('');
   }
 
+  var subText = list.length+' línea(s) hoy — total '+totalQty.toFixed(2)+' uds';
+  if(pendientes > 0){
+    subText += ' · <b style="color:var(--amber);">'+pendientes+' pendiente(s) de asociar a turno</b>';
+  }
+
   el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
     + '<div><div class="page-title">📦 Merma — hoy</div>'
-    + '<div class="page-sub">'+list.length+' línea(s) registrada(s) — total '+totalQty.toFixed(2)+' unidades</div></div>'
+    + '<div class="page-sub">'+subText+'</div></div>'
     + '<button class="btn btn-primary" onclick="openNewMermaMod()">+ Nueva línea</button>'
     + '</div>'
     + '<div>'+cards+'</div>';
@@ -2773,7 +2803,6 @@ async function saveNewMermaMod(){
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
     area: currentUser.area||'',
-    departamento: currentUser.area||'',
     fecha: today(),
     servicio: '',
     producto: producto,
