@@ -123,9 +123,11 @@ async function openShiftDetail(shiftId){
   }
 
   // ── BLOQUE 4: Merma (solo para dptos que generan merma: Cocina/Friegue/FnB) ──
-  var deptShift = (s.area || s.departamento || '').trim();
-  var aplicaMerma   = ['Cocina','Friegue','FnB','Food & Beverage'].indexOf(deptShift) >= 0;
-  var aplicaAjustes = ['Sala','Recepción','FnB'].indexOf(deptShift) >= 0;
+  var deptShift = (s.area || s.departamento || '').toLowerCase().trim();
+  function _matchDept(arr){ return arr.some(function(d){ return deptShift === d.toLowerCase(); }); }
+  var aplicaMerma   = _matchDept(['Cocina','Friegue','FnB','Food & Beverage']);
+  var aplicaAjustes = _matchDept(['Sala','Recepción','Recepcion','FnB']);
+  console.log('[VAL] dpto:', JSON.stringify(s.area), '| aplicaMerma:', aplicaMerma, '| aplicaAjustes:', aplicaAjustes);
 
   if(aplicaMerma){
     if(mermas.length>0){
