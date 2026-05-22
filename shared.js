@@ -1360,7 +1360,7 @@ function saveTurno(){
   if(_isRecepcion){
     if(!servicio) errs.push('Selecciona turno: Mañana, Tarde o Noche');
   } else {
-    if(!servicio||servicio==='[]'||servicio==='') errs.push('Servicio obligatorio');
+    if(!servicio||servicio==='[]'||servicio==='') errs.push('Turno obligatorio');
   }
   if(!horas||horas<=0) errs.push('Horas obligatorias');
   // Responsable: only required for Sala and Cocina, NOT Recepción
@@ -1588,8 +1588,6 @@ async function openValidarModal(shiftId){
   const allMerma=await dbGetAll('merma');
   const mermas=allMerma.filter(m=>recordMatchesShift(m,s));
   _validatingMermas=mermas;
-  var allAjustes = []; try { allAjustes = await getDB('ajustes'); } catch(e){}
-  var ajustes = allAjustes.filter(function(a){ return a.shift_id===shiftId; });
   const allIncis=await getDB('incidencias');
   const incis=allIncis.filter(function(i){return recordMatchesShift(i,s);});
   const allTareas=await getDB('tareas');
@@ -1714,15 +1712,7 @@ async function openValidarModal(shiftId){
     info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">Sin incidencias operativas declaradas</div>';
   }
 
-  // ── Departamento del turno: aplica MERMA vs AJUSTES ──
-  var _deptShift = (s.area || s.departamento || '').toLowerCase().trim();
-  function _matchDeptMV(arr){ return arr.some(function(d){ return _deptShift === d.toLowerCase(); }); }
-  var aplicaMerma   = _matchDeptMV(['Cocina','Friegue','FnB','Food & Beverage']);
-  var aplicaAjustes = _matchDeptMV(['Sala','Recepción','Recepcion','FnB']);
-  console.log('[MV] dpto:', JSON.stringify(s.area), '| aplicaMerma:', aplicaMerma, '| aplicaAjustes:', aplicaAjustes);
-
-  // Block 5: Merma (editable) — solo dptos que generan merma
-  if(aplicaMerma){
+  // Block 5: Merma (editable)
   info += '<div id="mv-merma-block" style="background:var(--bg);border:1px solid var(--amber);border-radius:8px;padding:12px;margin-bottom:10px;">';
   info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.15em;margin-bottom:10px;">MERMA</div>';
   if(mermas.length>0){
@@ -1750,31 +1740,6 @@ async function openValidarModal(shiftId){
     info += '<div style="font-size:12px;color:var(--text3);">'+sinMermaMsg+'</div>';
   }
   info += '</div>';
-  } // end aplicaMerma
-
-  // Block 5B: Ajustes — solo Sala/Recepción
-  if(aplicaAjustes){
-    info += '<div style="background:var(--bg);border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:10px;">';
-    info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">AJUSTES</div>';
-    if(ajustes.length>0){
-      var totAj = 0; ajustes.forEach(function(a){ totAj += parseFloat(a.importe)||0; });
-      ajustes.forEach(function(a){
-        var col = (parseFloat(a.importe)||0) < 0 ? 'var(--red)' : 'var(--green)';
-        info += '<div style="display:flex;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">';
-        info += '<strong>'+formatDisplayValue(a.tipo)+'</strong>';
-        info += '<span style="color:'+col+';font-family:var(--font-mono);font-weight:600;">'+(parseFloat(a.importe)||0).toFixed(2)+' €</span>';
-        if(a.motivo) info += '<span style="color:var(--text3);">'+formatDisplayValue(a.motivo)+'</span>';
-        if(a.obs) info += '<span style="color:var(--text3);font-size:11px;">📝 '+formatDisplayValue(a.obs)+'</span>';
-        info += '</div>';
-      });
-      var totCol = totAj < 0 ? 'var(--red)' : 'var(--green)';
-      info += '<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:13px;"><span style="font-weight:600;">TOTAL AJUSTES</span><span style="color:'+totCol+';font-family:var(--font-mono);font-weight:700;">'+totAj.toFixed(2)+' €</span></div>';
-    } else {
-      info += '<div style="font-size:12px;color:var(--text3);">Sin ajustes declarados</div>';
-    }
-    info += '</div>';
-  }
-
 
   document.getElementById('mv-info').innerHTML=info;
   // mv-costes is now unused for merma — clear it
