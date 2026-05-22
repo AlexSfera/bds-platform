@@ -129,7 +129,6 @@ async function renderFollowupList() {
     if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
     return '<table><tr><th>Tipo</th><th>Descripción</th><th>Empleado</th><th>Fecha</th><th>Estado</th></tr>'
       + list.map(function(i){
-        var coment = i.comentario ? ' <span title="'+(i.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
         var fechaObj = i.created_at ? new Date(i.created_at) : null;
         var fechaStr = fechaObj ? fechaObj.toLocaleDateString('es-ES')+' '+fechaObj.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
         return '<tr>'
@@ -137,7 +136,7 @@ async function renderFollowupList() {
           + '<td style="font-size:12px;max-width:200px;">'+formatDisplayValue(i.descripcion).slice(0,70)+(i.descripcion&&i.descripcion.length>70?'...':'')+'</td>'
           + '<td style="font-size:12px;">'+formatDisplayValue(i.nombre)+'</td>'
           + '<td style="font-size:11px;color:var(--text3);">'+fechaStr+'</td>'
-          + '<td>'+(typeof bIncidentEstadoClick==='function'?bIncidentEstadoClick(i.estado,i.id):bIncidentEstado(i.estado))+coment+'</td>'
+          + '<td>'+(typeof bIncidentEstadoClick==='function'?bIncidentEstadoClick(i.estado,i.id):bIncidentEstado(i.estado))+'</td>'
           + '</tr>';
       }).join('') + '</table>';
   }
@@ -147,11 +146,10 @@ async function renderFollowupList() {
     return '<table><tr><th>Tipo</th><th>Descripción</th><th>Estado</th></tr>'
       + list.map(function(g){
         var gState = g.estado || 'Abierta';
-        var coment = g.comentario ? ' <span title="'+(g.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
         return '<tr>'
           + '<td style="font-size:12px;">'+formatDisplayValue(g.tipo_gestion)+'</td>'
           + '<td style="font-size:12px;max-width:220px;">'+formatDisplayValue(g.descripcion)+'</td>'
-          + '<td>'+(typeof bGestionEstadoClick==='function'?bGestionEstadoClick(gState,g.id):bGestionEstado(gState))+coment+'</td>'
+          + '<td>'+(typeof bGestionEstadoClick==='function'?bGestionEstadoClick(gState,g.id):bGestionEstado(gState))+'</td>'
           + '</tr>';
       }).join('') + '</table>';
   }

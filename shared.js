@@ -2556,7 +2556,6 @@ async function renderGestionesScreen(){
   } else {
     cards = list.map(function(g){
       var st = g.estado || 'Abierta';
-      var coment = g.comentario ? '<div class="task-desc" style="background:var(--bg2);border-radius:6px;padding:6px 8px;margin-top:6px;font-size:12px;">💬 '+formatDisplayValue(g.comentario)+'</div>' : '';
       var fecha = g.created_at ? new Date(g.created_at) : null;
       var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
       return '<div class="task-card">'
@@ -2566,7 +2565,6 @@ async function renderGestionesScreen(){
         +   bGestionEstadoClick(st, g.id)
         + '</div>'
         + '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
-        + coment
         + '<div class="task-footer">'
         +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
         +     '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
@@ -2636,7 +2634,6 @@ async function saveNewGestionStandalone(){
     tipo_gestion: tipo || 'Otro',
     descripcion: desc,
     accion_tomada: '',
-    comentario: '',
     estado: 'Abierta',
     informado_responsable: 'no',
     created_at: localTs()
@@ -2693,7 +2690,6 @@ async function renderIncidenciasScreen(){
     cards = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-text">Sin incidencias pendientes</div></div>';
   } else {
     cards = list.map(function(i){
-      var coment = i.comentario ? '<div class="task-desc" style="background:var(--bg2);border-radius:6px;padding:6px 8px;margin-top:6px;font-size:12px;">💬 '+formatDisplayValue(i.comentario)+'</div>' : '';
       var fecha = i.created_at ? new Date(i.created_at) : null;
       var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
       return '<div class="task-card">'
@@ -2703,7 +2699,6 @@ async function renderIncidenciasScreen(){
         +   bIncidentEstadoClick(i.estado, i.id)
         + '</div>'
         + '<div class="task-title">'+formatDisplayValue(i.descripcion)+'</div>'
-        + coment
         + '<div class="task-footer">'
         +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
         +     '📅 '+fechaStr+' &nbsp;·&nbsp; reportada por '+formatDisplayValue(i.nombre)
@@ -3131,7 +3126,6 @@ async function saveNewIncidenciaStandalone(){
     categoria: tipo || 'Otro',
     descripcion: desc,
     accion_inmediata: accion,
-    comentario: '',
     estado: INCIDENT_STATES.ABIERTA,
     created_at: localTs()
   };
