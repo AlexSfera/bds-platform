@@ -1109,7 +1109,6 @@ async function _doSaveTurno(){
       id:genId(), shift_id:shiftId,
       employee_id:currentUser.id, nombre:currentUser.nombre,
       area: currentUser.area||'',
-      departamento: currentUser.area||'',
       fecha, servicio,
       producto:m.producto, cantidad:m.cantidad, unidad:m.unidad,
       causa:m.causa, obs:m.obs||'',
