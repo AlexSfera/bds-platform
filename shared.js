@@ -2154,12 +2154,23 @@ function _itemEnsureOverlay(){
 async function openItemModal(type, id){
   var ov = _itemEnsureOverlay();
   var table = (type==='gestion') ? 'gestiones' : 'incidencias';
-  // Forzar lectura fresca para no mostrar comentario viejo de la caché
+  // Forzar lectura fresca
   invalidateCache(table);
+  invalidateCache('item_comentarios');
   var list = await getDB(table);
   var rec = (list||[]).find(function(r){ return r.id===id; });
   if(!rec){ toast('Registro no encontrado','err'); return; }
-  _itemModalCtx = {type:type, id:id, record:rec};
+
+  // Cargar histórico de comentarios para este item
+  var allCom = [];
+  try { allCom = await getDB('item_comentarios'); } catch(e){}
+  var historico = (allCom||[]).filter(function(c){
+    return c.item_type===type && c.item_id===id;
+  }).sort(function(a,b){
+    return (b.created_at||'').localeCompare(a.created_at||'');  // reciente arriba
+  });
+
+  _itemModalCtx = {type:type, id:id, record:rec, historico:historico};
 
   var isAdminU = isAdmin(currentUser);
   var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
@@ -2175,7 +2186,6 @@ async function openItemModal(type, id){
   var creador = rec.creado_por || rec.nombre || '—';
   var fechaCre = rec.created_at ? new Date(rec.created_at).toLocaleString('es-ES') : '—';
   var dpto = rec.departamento || rec.area || '—';
-  var comentarioPrev = rec.comentario || '';
   var accionPrev = rec.accion_tomada || rec.accion_inmediata || '';
 
   document.getElementById('mi-title').textContent =
@@ -2196,12 +2206,36 @@ async function openItemModal(type, id){
       + '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">'+formatDisplayValue(accionPrev)+'</div></div>';
   }
 
+  // ── HISTÓRICO DE COMENTARIOS ──────────────────────────────────────
+  body += '<div style="margin-bottom:10px;"><b style="font-size:12px;">Historial de comentarios ('+historico.length+')</b>';
+  if(historico.length === 0){
+    body += '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:11px;color:var(--text3);margin-top:4px;">Sin comentarios aún.</div>';
+  } else {
+    body += '<div style="max-height:200px;overflow-y:auto;margin-top:4px;">';
+    historico.forEach(function(c){
+      var fc = c.created_at ? new Date(c.created_at).toLocaleString('es-ES') : '—';
+      var delBtn = isAdminU
+        ? ' <button style="font-size:10px;background:none;border:none;color:var(--red);cursor:pointer;padding:0 4px;" onclick="itemDeleteComentario(\''+c.id+'\')" title="Eliminar (admin)">🗑</button>'
+        : '';
+      body += '<div style="background:var(--bg2);padding:6px 8px;border-radius:6px;font-size:12px;margin-bottom:4px;border-left:2px solid var(--amber);">'
+        + '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:2px;">'
+        +   '👤 '+formatDisplayValue(c.autor)+' · '+fc + delBtn
+        + '</div>'
+        + '<div>'+formatDisplayValue(c.texto)+'</div>'
+        + '</div>';
+    });
+    body += '</div>';
+  }
+  body += '</div>';
+
+  // ── TEXTAREA NUEVO COMENTARIO ─────────────────────────────────────
   var estadoCerrado = (estado === 'Cerrada') || (estado === INCIDENT_STATES.CERRADA) || (estado === INCIDENT_STATES.VALIDADA);
   var puedeEditar = !estadoCerrado;
-  body += '<div style="margin-bottom:6px;"><b style="font-size:12px;">Comentario / Seguimiento</b>'
-    + '<textarea id="mi-comentario" rows="3" style="width:100%;margin-top:4px;font-size:12px;" '
-    + (puedeEditar?'':'readonly')+' placeholder="Añadir o actualizar comentario...">'
-    + (comentarioPrev||'').replace(/</g,'&lt;') + '</textarea></div>';
+  if(puedeEditar){
+    body += '<div style="margin-bottom:6px;"><b style="font-size:12px;">Añadir comentario nuevo</b>'
+      + '<textarea id="mi-comentario" rows="3" style="width:100%;margin-top:4px;font-size:12px;" '
+      + 'placeholder="Escribe un nuevo comentario..."></textarea></div>';
+  }
 
   if(rec.validado_por){
     body += '<div style="font-size:11px;color:var(--green);margin-top:6px;">✓ Validado por '
@@ -2216,7 +2250,7 @@ async function openItemModal(type, id){
   var canActEmp = !rec.validado_por && (isJefe || sameDept);
 
   if(puedeEditar && canActEmp){
-    btns.push('<button class="btn btn-secondary" onclick="itemSaveComentario()">💬 Guardar comentario</button>');
+    btns.push('<button class="btn btn-secondary" onclick="itemSaveComentario()">💬 Añadir comentario</button>');
     if(type==='gestion'){
       if(estado==='Abierta')
         btns.push('<button class="btn btn-secondary" onclick="itemAdvance(\'En proceso\')">▶ En proceso</button>');
@@ -2246,26 +2280,63 @@ window.openItemModal = openItemModal;
 
 async function itemSaveComentario(){
   if(!_itemModalCtx) return;
-  var txt = (document.getElementById('mi-comentario')||{}).value || '';
-  var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
-  var result = await dbUpdate(table, _itemModalCtx.id, {comentario: txt.trim()});
+  var txt = ((document.getElementById('mi-comentario')||{}).value || '').trim();
+  if(!txt){ toast('Comentario vacío','err'); return; }
+
+  var rec = {
+    id: genId(),
+    item_type: _itemModalCtx.type,
+    item_id: _itemModalCtx.id,
+    autor: currentUser.nombre,
+    texto: txt,
+    created_at: localTs()
+  };
+  var result = await dbInsert('item_comentarios', rec);
   if(result === null){
     toast('Error: comentario NO guardado (ver consola)','err');
     return;
   }
-  invalidateCache(table);
-  auditLog(table.toUpperCase()+'_COMENTARIO', _itemModalCtx.id+': '+txt.slice(0,80));
-  toast('Comentario guardado','ok');
-  closeModal('modal-item');
-  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+  invalidateCache('item_comentarios');
+  auditLog('COMENTARIO_NEW', _itemModalCtx.type+':'+_itemModalCtx.id+' por '+currentUser.nombre+': '+txt.slice(0,80));
+  toast('Comentario añadido','ok');
+  // Refrescar modal en vez de cerrarlo, para ver el comentario nuevo
+  await openItemModal(_itemModalCtx.type, _itemModalCtx.id);
 }
 window.itemSaveComentario = itemSaveComentario;
 
+// Eliminar comentario individual (solo admin)
+async function itemDeleteComentario(comId){
+  if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
+  if(!confirm('¿Eliminar este comentario?\n\nNo se puede deshacer.')) return;
+  var all = await getDB('item_comentarios');
+  var com = (all||[]).find(function(c){ return c.id===comId; });
+  await auditLog('COMENTARIO_DELETE', comId+' | '+JSON.stringify(com||{}).slice(0,200));
+  await dbDelete('item_comentarios', comId);
+  invalidateCache('item_comentarios');
+  toast('Comentario eliminado','ok');
+  if(_itemModalCtx){
+    await openItemModal(_itemModalCtx.type, _itemModalCtx.id);
+  }
+}
+window.itemDeleteComentario = itemDeleteComentario;
+
 async function itemAdvance(newState){
   if(!_itemModalCtx) return;
-  var comentario = (document.getElementById('mi-comentario')||{}).value || '';
+  // Si hay texto sin guardar en el textarea de comentario nuevo, guardarlo primero
+  var txt = ((document.getElementById('mi-comentario')||{}).value || '').trim();
+  if(txt){
+    await dbInsert('item_comentarios', {
+      id: genId(),
+      item_type: _itemModalCtx.type,
+      item_id: _itemModalCtx.id,
+      autor: currentUser.nombre,
+      texto: txt,
+      created_at: localTs()
+    });
+    invalidateCache('item_comentarios');
+  }
   var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
-  await dbUpdate(table, _itemModalCtx.id, {estado: newState, comentario: comentario.trim()});
+  await dbUpdate(table, _itemModalCtx.id, {estado: newState});
   invalidateCache(table);
   auditLog(table.toUpperCase()+'_ADVANCE', currentUser.nombre+' → '+newState+': '+_itemModalCtx.id);
   toast('Estado actualizado','ok');
@@ -2276,9 +2347,21 @@ window.itemAdvance = itemAdvance;
 
 async function itemClose(){
   if(!_itemModalCtx) return;
-  var comentario = (document.getElementById('mi-comentario')||{}).value || '';
-  var accion = prompt('Acción tomada (qué se hizo para resolver):', comentario||'');
+  var pendiente = ((document.getElementById('mi-comentario')||{}).value || '').trim();
+  var accion = prompt('Acción tomada (qué se hizo para resolver):', pendiente || '');
   if(!accion || !accion.trim()){ toast('Acción tomada obligatoria','err'); return; }
+  // Si había texto en el textarea de comentario nuevo, guardarlo como comentario
+  if(pendiente){
+    await dbInsert('item_comentarios', {
+      id: genId(),
+      item_type: _itemModalCtx.type,
+      item_id: _itemModalCtx.id,
+      autor: currentUser.nombre,
+      texto: pendiente,
+      created_at: localTs()
+    });
+    invalidateCache('item_comentarios');
+  }
   var ts = localTs();
   var inicio = _itemModalCtx.record.created_at ? new Date(_itemModalCtx.record.created_at).getTime() : Date.now();
   var tgMins = Math.round((Date.now()-inicio)/60000);
@@ -2287,14 +2370,14 @@ async function itemClose(){
     await dbUpdate('gestiones', _itemModalCtx.id, {
       estado:'Cerrada', accion_tomada:accion.trim(),
       cerrado_por:currentUser.nombre, cerrado_ts:ts,
-      tiempo_gestion:tgMins, comentario:comentario.trim()
+      tiempo_gestion:tgMins
     });
     invalidateCache('gestiones');
     auditLog('GESTION_CERRADA', _itemModalCtx.id+' | '+tgMins+'min | '+accion.slice(0,80));
   } else {
     await dbUpdate('incidencias', _itemModalCtx.id, {
       estado:INCIDENT_STATES.CERRADA, accion_inmediata:accion.trim(),
-      cerrado_ts:ts, tiempo_gestion:tgMins, comentario:comentario.trim()
+      cerrado_ts:ts, tiempo_gestion:tgMins
     });
     invalidateCache('incidencias');
     auditLog('INCIDENCIA_CERRADA', _itemModalCtx.id+' | '+tgMins+'min | '+accion.slice(0,80));
