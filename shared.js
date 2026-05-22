@@ -765,6 +765,7 @@ function toggleSinMerma(){
 // ═══════════════════════════════════════════════════════════════════════
 // TURNO FORM
 async function initTurnoForm(){
+  var isSalaUser = currentUser && currentUser.area === 'Sala';
   setDeadlineLimits();
   editingShiftId=null;
   document.getElementById('turno-form-mode').textContent='NUEVO';
@@ -2159,13 +2160,86 @@ async function renderGestionesScreen(){
       }).join('')
     : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:18px;">Sin gestiones pendientes</td></tr>';
 
-  el.innerHTML = '<div class="page-header"><div class="page-title">📌 Gestiones pendientes</div>'
+  el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
+    + '<div><div class="page-title">📌 Gestiones pendientes</div>'
     + '<div class="page-sub">'+(verTodos?'Todos los departamentos':'Departamento: '+dept)+' · '+list.length+' activas</div></div>'
+    + '<button class="btn btn-primary" onclick="openNewGestionStandalone()">+ Nueva gestión</button>'
+    + '</div>'
     + '<div class="card"><table><thead><tr>'
     + '<th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Departamento</th><th>Creada por</th><th>Estado</th>'
     + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 window.renderGestionesScreen = renderGestionesScreen;
+
+// ── Modal independiente para crear gestión fuera del flujo Mi Turno ──
+function openNewGestionStandalone(){
+  var ov = document.getElementById('modal-new-gestion');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-new-gestion';
+    ov.className = 'modal-overlay';
+    ov.innerHTML = '<div class="modal" style="max-width:520px;">'
+      + '<div class="modal-h"><h3>📌 Nueva gestión</h3>'
+      + '<button class="modal-x" onclick="closeModal(\'modal-new-gestion\')">✕</button></div>'
+      + '<div class="modal-b">'
+      + '<div class="fg"><label>Tipo</label><select id="ng-tipo"></select></div>'
+      + '<div class="fg"><label>Descripción</label><textarea id="ng-desc" rows="3" placeholder="Detalle de la gestión..."></textarea></div>'
+      + '</div>'
+      + '<div class="modal-f">'
+      + '<button class="btn btn-secondary" onclick="closeModal(\'modal-new-gestion\')">Cancelar</button>'
+      + '<button class="btn btn-primary" onclick="saveNewGestionStandalone()">💾 Guardar</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-new-gestion'); });
+  }
+  // Poblar selector de tipos según dpto
+  var sel = ov.querySelector('#ng-tipo');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>';
+  var dept = currentUser && currentUser.area || '';
+  if(typeof populateGestionTipoSelector === 'function'){
+    populateGestionTipoSelector('ng-tipo', dept);
+  } else {
+    ['Reposición / pedido de material','Reserva / grupo / evento pendiente','Otro'].forEach(function(t){
+      var o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o);
+    });
+  }
+  ov.querySelector('#ng-desc').value = '';
+  ov.classList.add('open');
+}
+window.openNewGestionStandalone = openNewGestionStandalone;
+
+async function saveNewGestionStandalone(){
+  var tipo = (document.getElementById('ng-tipo')||{}).value || '';
+  var desc = ((document.getElementById('ng-desc')||{}).value || '').trim();
+  if(!desc){ toast('Descripción obligatoria','err'); return; }
+  var rec = {
+    id: genId(),
+    employee_id: currentUser.id,
+    nombre: currentUser.nombre,
+    creado_por: currentUser.nombre,
+    area: currentUser.area||'',
+    departamento: currentUser.area||'',
+    fecha: today(),
+    tipo_gestion: tipo || 'Otro',
+    descripcion: desc,
+    accion_tomada: '',
+    comentario: '',
+    estado: 'Abierta',
+    informado_responsable: 'no',
+    created_at: localTs()
+  };
+  try {
+    await dbInsert('gestiones', rec);
+    invalidateCache('gestiones');
+    auditLog('GESTION_CREATE', rec.id+' | '+tipo+' | '+desc.slice(0,80));
+    toast('Gestión creada','ok');
+    closeModal('modal-new-gestion');
+    renderGestionesScreen();
+  } catch(e){
+    toast('Error: '+e.message,'err');
+  }
+}
+window.saveNewGestionStandalone = saveNewGestionStandalone;
 
 async function renderIncidenciasScreen(){
   var el = document.getElementById('screen-incidencias');
@@ -2198,13 +2272,86 @@ async function renderIncidenciasScreen(){
       }).join('')
     : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:18px;">Sin incidencias pendientes</td></tr>';
 
-  el.innerHTML = '<div class="page-header"><div class="page-title">⚠ Incidencias pendientes</div>'
+  el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
+    + '<div><div class="page-title">⚠ Incidencias pendientes</div>'
     + '<div class="page-sub">'+(verTodos?'Todos los departamentos':'Departamento: '+dept)+' · '+list.length+' activas</div></div>'
+    + '<button class="btn btn-primary" onclick="openNewIncidenciaStandalone()">+ Nueva incidencia</button>'
+    + '</div>'
     + '<div class="card"><table><thead><tr>'
     + '<th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Departamento</th><th>Empleado</th><th>Estado</th>'
     + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 window.renderIncidenciasScreen = renderIncidenciasScreen;
+
+function openNewIncidenciaStandalone(){
+  var ov = document.getElementById('modal-new-inci');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-new-inci';
+    ov.className = 'modal-overlay';
+    ov.innerHTML = '<div class="modal" style="max-width:520px;">'
+      + '<div class="modal-h"><h3>⚠ Nueva incidencia</h3>'
+      + '<button class="modal-x" onclick="closeModal(\'modal-new-inci\')">✕</button></div>'
+      + '<div class="modal-b">'
+      + '<div class="fg"><label>Tipo</label><select id="ni-tipo"></select></div>'
+      + '<div class="fg"><label>Descripción</label><textarea id="ni-desc" rows="3" placeholder="Detalle de la incidencia..."></textarea></div>'
+      + '<div class="fg"><label>Acción inmediata (opcional)</label><textarea id="ni-accion" rows="2" placeholder="¿Se hizo algo de inmediato?"></textarea></div>'
+      + '</div>'
+      + '<div class="modal-f">'
+      + '<button class="btn btn-secondary" onclick="closeModal(\'modal-new-inci\')">Cancelar</button>'
+      + '<button class="btn btn-primary" onclick="saveNewIncidenciaStandalone()">💾 Guardar</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-new-inci'); });
+  }
+  var sel = ov.querySelector('#ni-tipo');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>';
+  var dept = currentUser && currentUser.area || '';
+  if(typeof populateInciTipoSelector === 'function'){
+    populateInciTipoSelector('ni-tipo', dept);
+  } else {
+    ['Operativa','Cliente','Material','Otro'].forEach(function(t){
+      var o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o);
+    });
+  }
+  ov.querySelector('#ni-desc').value = '';
+  ov.querySelector('#ni-accion').value = '';
+  ov.classList.add('open');
+}
+window.openNewIncidenciaStandalone = openNewIncidenciaStandalone;
+
+async function saveNewIncidenciaStandalone(){
+  var tipo = (document.getElementById('ni-tipo')||{}).value || '';
+  var desc = ((document.getElementById('ni-desc')||{}).value || '').trim();
+  var accion = ((document.getElementById('ni-accion')||{}).value || '').trim();
+  if(!desc){ toast('Descripción obligatoria','err'); return; }
+  var rec = {
+    id: genId(),
+    employee_id: currentUser.id,
+    nombre: currentUser.nombre,
+    area: currentUser.area||'',
+    departamento: currentUser.area||'',
+    fecha: today(),
+    tipo_incidencia: tipo || 'Otro',
+    categoria: tipo || 'Otro',
+    descripcion: desc,
+    accion_inmediata: accion,
+    comentario: '',
+    estado: INCIDENT_STATES.ABIERTA,
+    created_at: localTs()
+  };
+  try {
+    await dbInsert('incidencias', rec);
+    invalidateCache('incidencias');
+    auditLog('INCIDENCIA_CREATE', rec.id+' | '+tipo+' | '+desc.slice(0,80));
+    toast('Incidencia creada','ok');
+    closeModal('modal-new-inci');
+    renderIncidenciasScreen();
+  } catch(e){
+    toast('Error: '+e.message,'err');
+  }
+}
+window.saveNewIncidenciaStandalone = saveNewIncidenciaStandalone;
 
 // Encadenar al helper de rerender existente
 (function(){
