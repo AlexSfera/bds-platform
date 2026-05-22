@@ -126,49 +126,31 @@ async function renderFollowupList() {
 
   function buildIncidentRows(list){
     if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
-    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Empleado</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr>'
+    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Empleado</th><th>Fecha</th><th>Estado</th></tr>'
       + list.map(function(i){
-        // Empleado: solo lectura (ve la incidencia hasta que se cierra, sin botones)
-        // Jefe/Admin: pueden gestionar y cerrar
-        var canManage = isAdminUser || (isSupervisorUser && canViewDepartment(currentUser, getRecordDepartment(i, shiftMap)));
-        var normI     = normalizeIncidentState(i.estado);
-        var acciones  = canManage
-          ? (normI === INCIDENT_STATES.ABIERTA
-              ? '<button class="btn btn-secondary btn-sm" onclick="advanceIncident(\''+i.id+'\',\'En proceso\')">▶ En proceso</button> '
-              : '')
-            + '<button class="btn btn-secondary btn-sm" onclick="openCloseFollowup(\''+i.id+'\')">✓ Cerrar</button>'
-          : '👁 Solo lectura';
+        var coment = i.comentario ? ' <span title="'+(i.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
+        var fechaObj = i.created_at ? new Date(i.created_at) : null;
+        var fechaStr = fechaObj ? fechaObj.toLocaleDateString('es-ES')+' '+fechaObj.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
         return '<tr>'
           + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</td>'
           + '<td style="font-size:12px;max-width:200px;">'+formatDisplayValue(i.descripcion).slice(0,70)+(i.descripcion&&i.descripcion.length>70?'...':'')+'</td>'
           + '<td style="font-size:12px;">'+formatDisplayValue(i.nombre)+'</td>'
-          + '<td style="font-size:11px;color:var(--text3);">'+(i.created_at?new Date(i.created_at).toLocaleDateString('es-ES'):'—')+'</td>'
-          + '<td>'+bIncidentEstado(i.estado)+'</td>'
-          + '<td>'+acciones+'</td>'
+          + '<td style="font-size:11px;color:var(--text3);">'+fechaStr+'</td>'
+          + '<td>'+(typeof bIncidentEstadoClick==='function'?bIncidentEstadoClick(i.estado,i.id):bIncidentEstado(i.estado))+coment+'</td>'
           + '</tr>';
       }).join('') + '</table>';
   }
 
     function buildGestionRows(list){
     if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
-    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Acciones</th></tr>'
+    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Estado</th></tr>'
       + list.map(function(g){
         var gState = g.estado || 'Abierta';
-        // Todos del mismo dpto pueden gestionar + cerrar
-        var canAct = isAdmin(currentUser) || isSupervisorUser
-          || normalizeDeptName(g.departamento||g.area||'') === normalizeDeptName(dept);
-        var acciones = '';
-        if(canAct){
-          if(gState === 'Abierta')
-            acciones = '<button class="btn btn-secondary btn-sm" onclick="advanceGestion(\''+g.id+'\',\'En proceso\')">▶ En proceso</button>';
-          else if(gState === 'En proceso')
-            acciones = '<button class="btn btn-secondary btn-sm" onclick="openCloseGestion(\''+g.id+'\')">✓ Cerrar</button>';
-        }
+        var coment = g.comentario ? ' <span title="'+(g.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
         return '<tr>'
           + '<td style="font-size:12px;">'+formatDisplayValue(g.tipo_gestion)+'</td>'
           + '<td style="font-size:12px;max-width:220px;">'+formatDisplayValue(g.descripcion)+'</td>'
-          + '<td>'+bGestionEstado(gState)+'</td>'
-          + '<td>'+(acciones||'—')+'</td>'
+          + '<td>'+(typeof bGestionEstadoClick==='function'?bGestionEstadoClick(gState,g.id):bGestionEstado(gState))+coment+'</td>'
           + '</tr>';
       }).join('') + '</table>';
   }

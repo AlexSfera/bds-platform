@@ -2135,7 +2135,9 @@ async function renderGestionesScreen(){
   var el = document.getElementById('screen-gestiones');
   if(!el) return;
   var dept = currentUser ? (currentUser.area||'—') : '—';
-  var verTodos = isAdmin(currentUser);
+  var isAdminU = isAdmin(currentUser);
+  var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
+  var verTodos = isAdminU;
   var all = [];
   try { all = await getDB('gestiones'); } catch(e){}
   var list = verTodos ? all : all.filter(function(g){
@@ -2144,30 +2146,38 @@ async function renderGestionesScreen(){
   list = list.filter(function(g){ return (g.estado||'Abierta') !== 'Cerrada'; });
   list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
 
-  var rows = list.length
-    ? list.map(function(g){
-        var st = g.estado || 'Abierta';
-        var coment = g.comentario ? ' <span title="'+(g.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
-        var fecha = g.created_at ? new Date(g.created_at).toLocaleDateString('es-ES') : '—';
-        return '<tr>'
-          + '<td style="font-size:12px;">'+fecha+'</td>'
-          + '<td style="font-size:12px;">'+formatDisplayValue(g.tipo_gestion)+'</td>'
-          + '<td style="font-size:12px;max-width:280px;">'+formatDisplayValue(g.descripcion)+'</td>'
-          + '<td style="font-size:12px;">'+formatDisplayValue(g.departamento||g.area)+'</td>'
-          + '<td style="font-size:12px;">'+formatDisplayValue(g.creado_por||g.nombre)+'</td>'
-          + '<td>'+bGestionEstadoClick(st, g.id)+coment+'</td>'
-          + '</tr>';
-      }).join('')
-    : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:18px;">Sin gestiones pendientes</td></tr>';
+  var cards;
+  if(!list.length){
+    cards = '<div class="empty"><div class="empty-icon">📌</div><div class="empty-text">Sin gestiones pendientes</div></div>';
+  } else {
+    cards = list.map(function(g){
+      var st = g.estado || 'Abierta';
+      var coment = g.comentario ? '<div class="task-desc" style="background:var(--bg2);border-radius:6px;padding:6px 8px;margin-top:6px;font-size:12px;">💬 '+formatDisplayValue(g.comentario)+'</div>' : '';
+      var fecha = g.created_at ? new Date(g.created_at) : null;
+      var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+      return '<div class="task-card">'
+        + '<div class="task-meta">'
+        +   '<span class="dept-badge">'+formatDisplayValue(g.departamento||g.area)+'</span>'
+        +   '<span class="task-origin">tipo: '+formatDisplayValue(g.tipo_gestion)+'</span>'
+        +   bGestionEstadoClick(st, g.id)
+        + '</div>'
+        + '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
+        + coment
+        + '<div class="task-footer">'
+        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
+        +     '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
+        +   '</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
 
   el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
     + '<div><div class="page-title">📌 Gestiones pendientes</div>'
     + '<div class="page-sub">'+(verTodos?'Todos los departamentos':'Departamento: '+dept)+' · '+list.length+' activas</div></div>'
     + '<button class="btn btn-primary" onclick="openNewGestionStandalone()">+ Nueva gestión</button>'
     + '</div>'
-    + '<div class="card"><table><thead><tr>'
-    + '<th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Departamento</th><th>Creada por</th><th>Estado</th>'
-    + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    + '<div>'+cards+'</div>';
 }
 window.renderGestionesScreen = renderGestionesScreen;
 
@@ -2245,7 +2255,25 @@ async function renderIncidenciasScreen(){
   var el = document.getElementById('screen-incidencias');
   if(!el) return;
   var dept = currentUser ? (currentUser.area||'—') : '—';
-  var verTodos = isAdmin(currentUser);
+  var isAdminU = isAdmin(currentUser);
+  var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
+  var canSeeList = isAdminU || isSup;
+
+  // ── Empleado: solo crear, sin lista ────────────────────────────────
+  if(!canSeeList){
+    el.innerHTML = '<div class="page-header"><div class="page-title">⚠ Incidencias</div>'
+      + '<div class="page-sub">Reporta una incidencia del turno. Tu jefe la revisará.</div></div>'
+      + '<div class="card" style="text-align:center;padding:32px;">'
+      + '<p style="color:var(--text2);font-size:13px;margin-bottom:18px;">'
+      + 'Las incidencias que reportes serán visibles solo por tu jefe de departamento.'
+      + '</p>'
+      + '<button class="btn btn-primary" style="font-size:14px;padding:12px 24px;" onclick="openNewIncidenciaStandalone()">+ Nueva incidencia</button>'
+      + '</div>';
+    return;
+  }
+
+  // ── Jefe / Admin: lista completa ───────────────────────────────────
+  var verTodos = isAdminU;
   var all = [];
   try { all = await getDB('incidencias'); } catch(e){}
   var list = verTodos ? all : all.filter(function(i){
@@ -2257,29 +2285,37 @@ async function renderIncidenciasScreen(){
   });
   list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
 
-  var rows = list.length
-    ? list.map(function(i){
-        var coment = i.comentario ? ' <span title="'+(i.comentario||'').replace(/"/g,'&quot;').slice(0,150)+'" style="cursor:help;">💬</span>' : '';
-        var fecha = i.created_at ? new Date(i.created_at).toLocaleDateString('es-ES') : '—';
-        return '<tr>'
-          + '<td style="font-size:12px;">'+fecha+'</td>'
-          + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</td>'
-          + '<td style="font-size:12px;max-width:280px;">'+formatDisplayValue(i.descripcion).slice(0,120)+(i.descripcion&&i.descripcion.length>120?'...':'')+'</td>'
-          + '<td style="font-size:12px;">'+formatDisplayValue(i.departamento||i.area)+'</td>'
-          + '<td style="font-size:12px;">'+formatDisplayValue(i.nombre)+'</td>'
-          + '<td>'+bIncidentEstadoClick(i.estado, i.id)+coment+'</td>'
-          + '</tr>';
-      }).join('')
-    : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:18px;">Sin incidencias pendientes</td></tr>';
+  var cards;
+  if(!list.length){
+    cards = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-text">Sin incidencias pendientes</div></div>';
+  } else {
+    cards = list.map(function(i){
+      var coment = i.comentario ? '<div class="task-desc" style="background:var(--bg2);border-radius:6px;padding:6px 8px;margin-top:6px;font-size:12px;">💬 '+formatDisplayValue(i.comentario)+'</div>' : '';
+      var fecha = i.created_at ? new Date(i.created_at) : null;
+      var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+      return '<div class="task-card">'
+        + '<div class="task-meta">'
+        +   '<span class="dept-badge">'+formatDisplayValue(i.departamento||i.area)+'</span>'
+        +   '<span class="task-origin">tipo: '+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</span>'
+        +   bIncidentEstadoClick(i.estado, i.id)
+        + '</div>'
+        + '<div class="task-title">'+formatDisplayValue(i.descripcion)+'</div>'
+        + coment
+        + '<div class="task-footer">'
+        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
+        +     '📅 '+fechaStr+' &nbsp;·&nbsp; reportada por '+formatDisplayValue(i.nombre)
+        +   '</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
 
   el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
     + '<div><div class="page-title">⚠ Incidencias pendientes</div>'
     + '<div class="page-sub">'+(verTodos?'Todos los departamentos':'Departamento: '+dept)+' · '+list.length+' activas</div></div>'
     + '<button class="btn btn-primary" onclick="openNewIncidenciaStandalone()">+ Nueva incidencia</button>'
     + '</div>'
-    + '<div class="card"><table><thead><tr>'
-    + '<th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Departamento</th><th>Empleado</th><th>Estado</th>'
-    + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    + '<div>'+cards+'</div>';
 }
 window.renderIncidenciasScreen = renderIncidenciasScreen;
 
