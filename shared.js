@@ -2154,6 +2154,8 @@ function _itemEnsureOverlay(){
 async function openItemModal(type, id){
   var ov = _itemEnsureOverlay();
   var table = (type==='gestion') ? 'gestiones' : 'incidencias';
+  // Forzar lectura fresca para no mostrar comentario viejo de la caché
+  invalidateCache(table);
   var list = await getDB(table);
   var rec = (list||[]).find(function(r){ return r.id===id; });
   if(!rec){ toast('Registro no encontrado','err'); return; }
@@ -2246,7 +2248,11 @@ async function itemSaveComentario(){
   if(!_itemModalCtx) return;
   var txt = (document.getElementById('mi-comentario')||{}).value || '';
   var table = _itemModalCtx.type==='gestion' ? 'gestiones' : 'incidencias';
-  await dbUpdate(table, _itemModalCtx.id, {comentario: txt.trim()});
+  var result = await dbUpdate(table, _itemModalCtx.id, {comentario: txt.trim()});
+  if(result === null){
+    toast('Error: comentario NO guardado (ver consola)','err');
+    return;
+  }
   invalidateCache(table);
   auditLog(table.toUpperCase()+'_COMENTARIO', _itemModalCtx.id+': '+txt.slice(0,80));
   toast('Comentario guardado','ok');
