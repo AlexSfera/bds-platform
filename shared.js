@@ -391,7 +391,7 @@ function getScreens(rol){
     maestro:     {id:'maestro',     label:'👥 Maestro'},
     export:      {id:'export',      label:'⬇ Exportar'},
     // Módulos por dpto (placeholders)
-    merma:       {id:'merma-mod',   label:'📦 Merma',          pending:true},
+    merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes',         pending:true},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        pending:true},
     recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
@@ -546,6 +546,7 @@ async function showScreen(id){
   if(id==='maestro'){ renderMaestro(); }
   if(id==='gestiones'){ renderGestionesScreen(); }
   if(id==='incidencias'){ renderIncidenciasScreen(); }
+  if(id==='merma-mod'){ renderMermaMod(); }
   updateDots();
 }
 async function updateDots(){
@@ -2640,6 +2641,176 @@ async function renderIncidenciasScreen(){
     + '<div>'+cards+'</div>';
 }
 window.renderIncidenciasScreen = renderIncidenciasScreen;
+
+// ═══════════════════════════════════════════════════════════════════════
+// MERMA — módulo Cocina desde sidebar
+// ═══════════════════════════════════════════════════════════════════════
+async function renderMermaMod(){
+  var el = document.getElementById('screen-merma-mod');
+  if(!el) return;
+  var dept = currentUser ? (currentUser.area||'—') : '—';
+  var isAdminU = isAdmin(currentUser);
+  var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
+
+  // Cocina/Friegue ven Cocina+Friegue. Admin ve todas. Jefe ve sus dptos.
+  var todayStr = today();
+  invalidateCache('merma');
+  var all = [];
+  try { all = await getDB('merma'); } catch(e){}
+  var list = (all||[]).filter(function(m){
+    return (m.fecha||'').slice(0,10) === todayStr;
+  });
+  if(!isAdminU){
+    var allowed = isSup
+      ? (SUPERVISOR_DEPT_MAP[currentUser.rol] || [])
+      : ['Cocina','Friegue'];
+    if(['Cocina','Friegue'].indexOf(currentUser.area)>=0){ allowed = ['Cocina','Friegue']; }
+    list = list.filter(function(m){
+      var d = m.departamento || m.area || '';
+      return allowed.indexOf(d) >= 0;
+    });
+  }
+  list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  var totalQty = 0;
+  list.forEach(function(m){ totalQty += parseFloat(m.cantidad)||0; });
+
+  var cards;
+  if(!list.length){
+    cards = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Sin merma registrada hoy</div></div>';
+  } else {
+    cards = list.map(function(m){
+      var hora = m.created_at ? new Date(m.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+      var obs = m.obs ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">📝 '+formatDisplayValue(m.obs)+'</div>' : '';
+      var noShift = !m.shift_id ? '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">sin turno</span>' : '';
+      var delBtn = isAdminU ? ' <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteMermaItem(\''+m.id+'\')">🗑</button>' : '';
+      return '<div class="task-card">'
+        + '<div class="task-meta" style="align-items:center;">'
+        +   '<span class="dept-badge">'+formatDisplayValue(m.departamento||m.area)+'</span>'
+        +   '<span class="task-origin">'+hora+'</span>'
+        +   '<span style="font-weight:600;font-size:13px;">'+formatDisplayValue(m.producto)+'</span>'
+        +   '<span class="badge b-orange">'+(m.cantidad||0)+' '+formatDisplayValue(m.unidad||'uds')+'</span>'
+        +   '<span class="badge b-gray">'+formatDisplayValue(m.causa)+'</span>'
+        +   noShift
+        +   delBtn
+        + '</div>'
+        + obs
+        + '<div class="task-footer">'
+        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">👤 '+formatDisplayValue(m.nombre)+'</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
+    + '<div><div class="page-title">📦 Merma — hoy</div>'
+    + '<div class="page-sub">'+list.length+' línea(s) registrada(s) — total '+totalQty.toFixed(2)+' unidades</div></div>'
+    + '<button class="btn btn-primary" onclick="openNewMermaMod()">+ Nueva línea</button>'
+    + '</div>'
+    + '<div>'+cards+'</div>';
+}
+window.renderMermaMod = renderMermaMod;
+
+// ── Modal nueva merma standalone ──────────────────────────────────────
+function openNewMermaMod(){
+  var ov = document.getElementById('modal-new-merma');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-new-merma';
+    ov.className = 'modal-overlay';
+    ov.innerHTML = '<div class="modal" style="max-width:520px;">'
+      + '<div class="modal-h"><h3>📦 Nueva línea de merma</h3>'
+      + '<button class="modal-x" onclick="closeModal(\'modal-new-merma\')">✕</button></div>'
+      + '<div class="modal-b">'
+      + '<div class="grid2">'
+      +   '<div class="fg"><label>Producto <span class="req">*</span></label><input type="text" id="nm-producto" placeholder="ej: Salmón"></div>'
+      +   '<div class="fg"><label>Cantidad <span class="req">*</span></label><input type="number" id="nm-cantidad" min="0" step="0.01" placeholder="0.00"></div>'
+      + '</div>'
+      + '<div class="grid2">'
+      +   '<div class="fg"><label>Unidad</label><select id="nm-unidad">'
+      +     '<option value="kg">kg</option><option value="g">g</option><option value="L">L</option>'
+      +     '<option value="uds" selected>uds</option><option value="raciones">raciones</option>'
+      +   '</select></div>'
+      +   '<div class="fg"><label>Causa <span class="req">*</span></label><select id="nm-causa">'
+      +     '<option value="">— Seleccionar —</option>'
+      +     '<option>Caducidad</option><option>Error de preparación</option><option>Accidente</option>'
+      +     '<option>Devolución sala</option><option>Exceso de producción</option><option>Otro</option>'
+      +   '</select></div>'
+      + '</div>'
+      + '<div class="fg"><label>Observación</label><input type="text" id="nm-obs" placeholder="Nota opcional"></div>'
+      + '</div>'
+      + '<div class="modal-f">'
+      + '<button class="btn btn-secondary" onclick="closeModal(\'modal-new-merma\')">Cancelar</button>'
+      + '<button class="btn btn-primary" onclick="saveNewMermaMod()">💾 Guardar</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-new-merma'); });
+  }
+  // Limpiar campos
+  ['nm-producto','nm-cantidad','nm-obs'].forEach(function(id){
+    var x=document.getElementById(id); if(x) x.value='';
+  });
+  var u = document.getElementById('nm-unidad'); if(u) u.value='uds';
+  var c = document.getElementById('nm-causa'); if(c) c.value='';
+  ov.classList.add('open');
+}
+window.openNewMermaMod = openNewMermaMod;
+
+async function saveNewMermaMod(){
+  var producto = ((document.getElementById('nm-producto')||{}).value || '').trim();
+  var cantidad = parseFloat((document.getElementById('nm-cantidad')||{}).value) || 0;
+  var unidad   = (document.getElementById('nm-unidad')||{}).value || 'uds';
+  var causa    = (document.getElementById('nm-causa')||{}).value || '';
+  var obs      = ((document.getElementById('nm-obs')||{}).value || '').trim();
+
+  if(!producto){ toast('Producto obligatorio','err'); return; }
+  if(!cantidad || cantidad<=0){ toast('Cantidad obligatoria (> 0)','err'); return; }
+  if(!causa){ toast('Causa obligatoria','err'); return; }
+
+  var rec = {
+    id: genId(),
+    shift_id: null,  // sin turno (independiente)
+    employee_id: currentUser.id,
+    nombre: currentUser.nombre,
+    area: currentUser.area||'',
+    departamento: currentUser.area||'',
+    fecha: today(),
+    servicio: '',
+    producto: producto,
+    cantidad: cantidad,
+    unidad: unidad,
+    causa: causa,
+    obs: obs,
+    coste_unitario: 0,
+    coste_total: 0,
+    created_at: localTs()
+  };
+  var result = await dbInsert('merma', rec);
+  if(result === null){
+    toast('Error: merma NO guardada (ver consola)','err');
+    return;
+  }
+  invalidateCache('merma');
+  auditLog('MERMA_NEW', producto+' '+cantidad+unidad+' / '+causa);
+  toast('Merma registrada','ok');
+  closeModal('modal-new-merma');
+  renderMermaMod();
+}
+window.saveNewMermaMod = saveNewMermaMod;
+
+async function deleteMermaItem(mid){
+  if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
+  if(!confirm('¿Eliminar esta línea de merma?\n\nNo se puede deshacer.')) return;
+  var all = await getDB('merma');
+  var m = (all||[]).find(function(x){ return x.id===mid; });
+  await auditLog('MERMA_DELETE', mid+' | '+JSON.stringify(m||{}).slice(0,200));
+  await dbDelete('merma', mid);
+  invalidateCache('merma');
+  toast('Merma eliminada','ok');
+  renderMermaMod();
+}
+window.deleteMermaItem = deleteMermaItem;
+
 
 function openNewIncidenciaStandalone(){
   var ov = document.getElementById('modal-new-inci');
