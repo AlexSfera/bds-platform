@@ -2466,7 +2466,6 @@ async function saveNewGestionStandalone(){
     id: genId(),
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
-    creado_por: currentUser.nombre,
     area: currentUser.area||'',
     departamento: currentUser.area||'',
     fecha: today(),
