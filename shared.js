@@ -1088,6 +1088,30 @@ async function _doSaveTurno(){
 
   // ── NEW SHIFT ──
   } else {
+    // GUARD: 1 turno pendiente activo por empleado/día (BUG-TURNO-03)
+    // Si ya hay un turno con estado 'Pendiente' o 'En corrección' del mismo
+    // empleado/fecha, no permitimos crear otro. Si están todos validados o
+    // rechazados (o han sido eliminados), sí se puede crear uno nuevo.
+    try {
+      var allShifts = await getDB('shifts');
+      var bloqueante = (allShifts||[]).find(function(s){
+        return s.employee_id === currentUser.id
+          && (s.fecha||'').slice(0,10) === (fecha||'').slice(0,10)
+          && (s.estado === 'Pendiente' || s.estado === 'En corrección');
+      });
+      if(bloqueante){
+        const alertArea = document.getElementById('turno-alert-area');
+        if(alertArea){
+          alertArea.innerHTML = '<div class="alert a-err">Ya tienes un turno PENDIENTE de hoy ('+formatDisplayValue(bloqueante.servicio)+'). '
+            + 'Espera a que tu jefe lo valide o pídele que lo rechace antes de crear otro.</div>';
+        }
+        toast('Ya hay turno pendiente hoy','err');
+        return;
+      }
+    } catch(eGuard){
+      console.error('Guard turno fallo, continuando', eGuard);
+    }
+
     const savedShift=await dbInsert('shifts', shift);
     if(!savedShift){
       console.error('Shift insert failed',shift);
