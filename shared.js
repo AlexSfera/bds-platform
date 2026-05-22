@@ -392,7 +392,7 @@ function getScreens(rol){
     export:      {id:'export',      label:'⬇ Exportar'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
-    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes',         pending:true},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        pending:true},
     recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
     mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true}
@@ -547,6 +547,7 @@ async function showScreen(id){
   if(id==='gestiones'){ renderGestionesScreen(); }
   if(id==='incidencias'){ renderIncidenciasScreen(); }
   if(id==='merma-mod'){ renderMermaMod(); }
+  if(id==='ajustes-mod'){ renderAjustesMod(); }
   updateDots();
 }
 async function updateDots(){
@@ -1158,6 +1159,25 @@ async function _doSaveTurno(){
       }
     } catch(eAssoc){
       console.error('No se pudieron asociar mermas pendientes', eAssoc);
+    }
+  }
+
+  // ── Asociar ajustes pendientes (sin turno) del empleado al turno nuevo ──
+  // Aplica a TODOS los empleados (no solo Sala). Solo si NO estamos editando.
+  if(!editingShiftId){
+    try {
+      var pendAjustes = (await getDB('ajustes')).filter(function(a){
+        return !a.shift_id && a.employee_id === currentUser.id;
+      });
+      for(const ap of pendAjustes){
+        await dbUpdate('ajustes', ap.id, {shift_id: shiftId});
+      }
+      if(pendAjustes.length){
+        invalidateCache('ajustes');
+        await auditLog('AJUSTE_ASSOC', pendAjustes.length+' ajustes asociados a turno '+shiftId);
+      }
+    } catch(eAj){
+      console.error('No se pudieron asociar ajustes pendientes', eAj);
     }
   }
 
@@ -2862,6 +2882,182 @@ async function deleteMermaItem(mid){
   renderMermaMod();
 }
 window.deleteMermaItem = deleteMermaItem;
+
+// ═══════════════════════════════════════════════════════════════════════
+// AJUSTES — módulo Sala desde sidebar (descuentos, errores, invitaciones)
+// Privado: empleado ve solo los suyos del día. Jefe/Admin ven todo del dpto.
+// ═══════════════════════════════════════════════════════════════════════
+async function renderAjustesMod(){
+  var el = document.getElementById('screen-ajustes-mod');
+  if(!el) return;
+  var isAdminU = isAdmin(currentUser);
+  var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
+  var todayStr = today();
+  invalidateCache('ajustes');
+  var all = [];
+  try { all = await getDB('ajustes'); } catch(e){}
+
+  // Filtrado por rol:
+  //  - empleado: SOLO los suyos del día
+  //  - jefe/admin: todos del día del dpto (o todos si admin)
+  var list = (all||[]).filter(function(a){
+    return (a.fecha||'').slice(0,10) === todayStr;
+  });
+  if(isAdminU){
+    // ve todo (sin filtro adicional)
+  } else if(isSup){
+    var allowed = SUPERVISOR_DEPT_MAP[currentUser.rol] || [currentUser.area];
+    list = list.filter(function(a){ return allowed.indexOf(a.area||'') >= 0; });
+  } else {
+    list = list.filter(function(a){ return a.employee_id === currentUser.id; });
+  }
+  list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  var totalImp = 0;
+  var pendientes = 0;
+  list.forEach(function(a){
+    totalImp += parseFloat(a.importe)||0;
+    if(!a.shift_id) pendientes++;
+  });
+
+  var cards;
+  if(!list.length){
+    cards = '<div class="empty"><div class="empty-icon">⚙</div><div class="empty-text">Sin ajustes hoy</div></div>';
+  } else {
+    cards = list.map(function(a){
+      var hora = a.created_at ? new Date(a.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+      var importeFmt = (parseFloat(a.importe)||0).toFixed(2)+' €';
+      var importeColor = (parseFloat(a.importe)||0) < 0 ? 'var(--red)' : 'var(--text)';
+      var statusTag = a.shift_id
+        ? '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">en turno</span>'
+        : '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">pendiente</span>';
+      var obs = a.obs ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">📝 '+formatDisplayValue(a.obs)+'</div>' : '';
+      var motivo = a.motivo ? '<div style="font-size:12px;margin-top:4px;">'+formatDisplayValue(a.motivo)+'</div>' : '';
+      var delBtn = isAdminU ? ' <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteAjusteItem(\''+a.id+'\')">🗑</button>' : '';
+      return '<div class="task-card">'
+        + '<div class="task-meta" style="align-items:center;">'
+        +   '<span class="dept-badge">'+formatDisplayValue(a.area)+'</span>'
+        +   '<span class="task-origin">'+hora+'</span>'
+        +   '<span style="font-weight:600;font-size:13px;">'+formatDisplayValue(a.tipo)+'</span>'
+        +   '<span class="badge" style="background:transparent;border:1px solid var(--border);color:'+importeColor+';font-weight:600;">'+importeFmt+'</span>'
+        +   statusTag
+        +   delBtn
+        + '</div>'
+        + motivo
+        + obs
+        + '<div class="task-footer">'
+        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">👤 '+formatDisplayValue(a.nombre)+'</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  var subText = list.length+' ajuste(s) hoy — total <b>'+totalImp.toFixed(2)+' €</b>';
+  if(pendientes > 0){
+    subText += ' · <b style="color:var(--amber);">'+pendientes+' pendiente(s) de asociar a turno</b>';
+  }
+
+  el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
+    + '<div><div class="page-title">⚙ Ajustes — hoy</div>'
+    + '<div class="page-sub">'+subText+'</div></div>'
+    + '<button class="btn btn-primary" onclick="openNewAjusteMod()">+ Nuevo ajuste</button>'
+    + '</div>'
+    + '<div>'+cards+'</div>';
+}
+window.renderAjustesMod = renderAjustesMod;
+
+// ── Modal nuevo ajuste ────────────────────────────────────────────────
+function openNewAjusteMod(){
+  var ov = document.getElementById('modal-new-ajuste');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-new-ajuste';
+    ov.className = 'modal-overlay';
+    ov.innerHTML = '<div class="modal" style="max-width:520px;">'
+      + '<div class="modal-h"><h3>⚙ Nuevo ajuste</h3>'
+      + '<button class="modal-x" onclick="closeModal(\'modal-new-ajuste\')">✕</button></div>'
+      + '<div class="modal-b">'
+      + '<div class="grid2">'
+      +   '<div class="fg"><label>Tipo <span class="req">*</span></label><select id="na-tipo">'
+      +     '<option value="">— Seleccionar —</option>'
+      +     '<option>Anulación</option>'
+      +     '<option>Devolución</option>'
+      +     '<option>Invitación</option>'
+      +     '<option>Error TPV</option>'
+      +     '<option>Error cobro</option>'
+      +     '<option>Cargo incorrecto</option>'
+      +     '<option>Otro</option>'
+      +   '</select></div>'
+      +   '<div class="fg"><label>Importe (€) <span class="req">*</span></label><input type="number" id="na-importe" step="0.01" placeholder="0.00"></div>'
+      + '</div>'
+      + '<div class="fg"><label>Motivo</label><input type="text" id="na-motivo" placeholder="ej: mesa 12, cliente insatisfecho"></div>'
+      + '<div class="fg"><label>Observación</label><input type="text" id="na-obs" placeholder="Nota opcional"></div>'
+      + '<div style="font-size:11px;color:var(--text3);margin-top:6px;">'
+      +   'ℹ Usa importe NEGATIVO para descuentos/devoluciones (-3.50), positivo para cargos extras.'
+      + '</div>'
+      + '</div>'
+      + '<div class="modal-f">'
+      + '<button class="btn btn-secondary" onclick="closeModal(\'modal-new-ajuste\')">Cancelar</button>'
+      + '<button class="btn btn-primary" onclick="saveNewAjusteMod()">💾 Guardar</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-new-ajuste'); });
+  }
+  ['na-importe','na-motivo','na-obs'].forEach(function(id){
+    var x=document.getElementById(id); if(x) x.value='';
+  });
+  var t = document.getElementById('na-tipo'); if(t) t.value='';
+  ov.classList.add('open');
+}
+window.openNewAjusteMod = openNewAjusteMod;
+
+async function saveNewAjusteMod(){
+  var tipo    = (document.getElementById('na-tipo')||{}).value || '';
+  var importe = parseFloat((document.getElementById('na-importe')||{}).value);
+  var motivo  = ((document.getElementById('na-motivo')||{}).value || '').trim();
+  var obs     = ((document.getElementById('na-obs')||{}).value || '').trim();
+
+  if(!tipo){ toast('Tipo obligatorio','err'); return; }
+  if(isNaN(importe)){ toast('Importe obligatorio (puede ser negativo)','err'); return; }
+
+  var rec = {
+    id: genId(),
+    shift_id: null,
+    employee_id: currentUser.id,
+    nombre: currentUser.nombre,
+    area: currentUser.area||'',
+    fecha: today(),
+    tipo: tipo,
+    importe: importe,
+    motivo: motivo,
+    obs: obs,
+    created_at: localTs()
+  };
+  var result = await dbInsert('ajustes', rec);
+  if(result === null){
+    toast('Error: ajuste NO guardado (ver consola)','err');
+    return;
+  }
+  invalidateCache('ajustes');
+  auditLog('AJUSTE_NEW', tipo+' '+importe+'€ / '+motivo);
+  toast('Ajuste registrado','ok');
+  closeModal('modal-new-ajuste');
+  renderAjustesMod();
+}
+window.saveNewAjusteMod = saveNewAjusteMod;
+
+async function deleteAjusteItem(aid){
+  if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
+  if(!confirm('¿Eliminar este ajuste?\n\nNo se puede deshacer.')) return;
+  var all = await getDB('ajustes');
+  var a = (all||[]).find(function(x){ return x.id===aid; });
+  await auditLog('AJUSTE_DELETE', aid+' | '+JSON.stringify(a||{}).slice(0,200));
+  await dbDelete('ajustes', aid);
+  invalidateCache('ajustes');
+  toast('Ajuste eliminado','ok');
+  renderAjustesMod();
+}
+window.deleteAjusteItem = deleteAjusteItem;
 
 
 function openNewIncidenciaStandalone(){
