@@ -1409,8 +1409,9 @@ async function renderMisTurnos(){
   if(!shifts.length){el.innerHTML='<div class="empty"><div class="empty-icon">📂</div><div class="empty-text">Sin registros</div></div>';return;}
   const mermas=await getDB('merma');
   const incidencias=await getDB('incidencias');
-  var isSalaDept = currentUser && currentUser.area === 'Sala';
-  // Build per-shift maps for gestión and incidencia
+  var ajustesAll = []; try { ajustesAll = await getDB('ajustes'); } catch(e){}
+  var isSalaDept = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Recepción');
+  // Build per-shift maps for gestión y incidencia
   var gestionMap={}, inciMap={};
   incidencias.forEach(function(i){
     if(!i.shift_id) return;
@@ -1420,11 +1421,20 @@ async function renderMisTurnos(){
   el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Horas</th>'+(isSalaDept?'<th>Ajustes</th>':'<th>Mermas</th>')+'<th>Gestión</th><th>Incid.</th><th>Estado</th></tr>'
   +shifts.map(function(s){
     const mc=mermas.filter(m=>m.shift_id===s.id).length;
+    var ajustesS = ajustesAll.filter(function(a){ return a.shift_id===s.id; });
+    var ajustesCell;
+    if(ajustesS.length>0){
+      var totAj = 0; ajustesS.forEach(function(a){ totAj += parseFloat(a.importe)||0; });
+      var col = totAj < 0 ? 'b-red' : 'b-blue';
+      ajustesCell = '<span class="badge '+col+'" title="'+ajustesS.length+' ajuste(s)">'+totAj.toFixed(2)+' €</span>';
+    } else {
+      ajustesCell = '—';
+    }
     return '<tr>'
       +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(s.fecha)+'</td>'
       +'<td style="font-size:13px;">'+displayServicio(s.servicio)+'</td>'
       +'<td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
-      +'<td style="text-align:center">'+(isSalaDept?(function(){try{var aj=JSON.parse(s.ajustes_sala||'[]');return aj.length>0?'<span class="badge b-blue">'+aj.length+'</span>':'—';}catch(e){return '—';}})():(mc>0?'<span class="badge b-yellow">'+mc+'</span>':'—'))+'</td>'
+      +'<td style="text-align:center">'+(isSalaDept?ajustesCell:(mc>0?'<span class="badge b-yellow">'+mc+'</span>':'—'))+'</td>'
       +'<td style="text-align:center">'+(gestionMap[s.id]?'<span class="badge b-yellow">Sí</span>':'—')+'</td>'
       +'<td style="text-align:center">'+(inciMap[s.id]?'<span class="badge b-red">Sí</span>':'—')+'</td>'
       +'<td>'+bEstado(s.estado)+'</td>'
@@ -1502,6 +1512,7 @@ async function renderValidacion(){
   const pend=shifts.filter(s=>s.estado==='Pendiente').length;
   document.getElementById('val-alerts').innerHTML=pend>0?`<div class="alert a-warn">⚠ ${pend} registro(s) pendiente(s)</div>`:'';
   const mermas=await getDB('merma'); const incis=await getDB('incidencias');
+  var ajustesAll = []; try { ajustesAll = await getDB('ajustes'); } catch(e){}
   const el=document.getElementById('validacion-table');
   if(!shifts.length){el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin registros</div></div>';return;}
   // Build validation table without nested template literals
@@ -1509,12 +1520,19 @@ async function renderValidacion(){
   shifts.forEach(function(s){
     var sm=mermas.filter(function(m){return recordMatchesShift(m,s);});
     var si=incis.filter(function(i){return recordMatchesShift(i,s);});
+    var sa=ajustesAll.filter(function(a){return a.shift_id===s.id;});
     var mCP=sm.some(function(m){return !m.coste_unitario||m.coste_unitario===0;});
-    // For Sala: show ajustes count. For Cocina: show merma count
-    var isSalaShift = s.area === 'Sala';
+    // For Sala/Recepción: show ajustes total. For Cocina/etc: show merma count
+    var isSalaShift = s.area === 'Sala' || s.area === 'Recepción';
     var mCell;
     if(isSalaShift){
-      try{ var aj=JSON.parse(s.ajustes_sala||'[]'); mCell=aj.length>0?'<span class="badge b-blue">'+aj.length+'</span>':'<span class="badge b-gray">—</span>'; }catch(e){ mCell='<span class="badge b-gray">—</span>'; }
+      if(sa.length>0){
+        var totAj = 0; sa.forEach(function(a){ totAj += parseFloat(a.importe)||0; });
+        var col = totAj < 0 ? 'b-red' : 'b-blue';
+        mCell = '<span class="badge '+col+'" title="'+sa.length+' ajuste(s)">'+totAj.toFixed(2)+' €</span>';
+      } else {
+        mCell = '<span class="badge b-gray">—</span>';
+      }
     } else {
       mCell=sm.length>0?'<span class="badge b-yellow">'+sm.length+'</span>'+(mCP?'<span class="badge b-orange" style="margin-left:4px">€?</span>':''):'<span class="badge b-gray">—</span>';
     }

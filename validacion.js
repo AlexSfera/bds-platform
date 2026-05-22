@@ -122,43 +122,51 @@ async function openShiftDetail(shiftId){
     html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);">Sin incidencias operativas declaradas</div>';
   }
 
-  // ── BLOQUE 5: Merma ──
-  if(mermas.length>0){
-    html += '<div style="background:var(--bg2);border:1px solid var(--amber);border-radius:8px;padding:14px;margin-bottom:12px;">';
-    html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.15em;margin-bottom:10px;">4 · MERMA ('+mermas.length+' líneas)</div>';
-    mermas.forEach(function(m){
-      html += '<div style="font-size:13px;display:flex;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">';
-      html += '<strong>'+m.producto+'</strong>';
-      html += '<span style="color:var(--text3)">'+m.cantidad+' '+m.unidad+'</span>';
-      html += '<span class="badge b-yellow">'+m.causa+'</span>';
-      if(m.coste_total>0) html += '<span style="color:var(--orange);font-family:var(--font-mono);">'+m.coste_total.toFixed(2)+'€</span>';
-      if(m.obs) html += '<span style="color:var(--text3);font-size:11px;">'+m.obs+'</span>';
+  // ── BLOQUE 4: Merma (solo para dptos que generan merma: Cocina/Friegue/FnB) ──
+  var deptShift = (s.area || s.departamento || '').trim();
+  var aplicaMerma   = ['Cocina','Friegue','FnB','Food & Beverage'].indexOf(deptShift) >= 0;
+  var aplicaAjustes = ['Sala','Recepción','FnB'].indexOf(deptShift) >= 0;
+
+  if(aplicaMerma){
+    if(mermas.length>0){
+      html += '<div style="background:var(--bg2);border:1px solid var(--amber);border-radius:8px;padding:14px;margin-bottom:12px;">';
+      html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.15em;margin-bottom:10px;">4 · MERMA ('+mermas.length+' líneas)</div>';
+      mermas.forEach(function(m){
+        html += '<div style="font-size:13px;display:flex;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">';
+        html += '<strong>'+m.producto+'</strong>';
+        html += '<span style="color:var(--text3)">'+m.cantidad+' '+m.unidad+'</span>';
+        html += '<span class="badge b-yellow">'+m.causa+'</span>';
+        if(m.coste_total>0) html += '<span style="color:var(--orange);font-family:var(--font-mono);">'+m.coste_total.toFixed(2)+'€</span>';
+        if(m.obs) html += '<span style="color:var(--text3);font-size:11px;">'+m.obs+'</span>';
+        html += '</div>';
+      });
       html += '</div>';
-    });
-    html += '</div>';
-  } else {
-    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);">4 · Sin merma declarada</div>';
+    } else {
+      html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);">4 · Sin merma declarada</div>';
+    }
   }
 
-  // ── BLOQUE 5: Ajustes ──
-  if(ajustes.length>0){
-    var totAj = 0;
-    ajustes.forEach(function(a){ totAj += parseFloat(a.importe)||0; });
-    html += '<div style="background:var(--bg2);border:1px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">';
-    html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">4B · AJUSTES ('+ajustes.length+' líneas · total '+totAj.toFixed(2)+' €)</div>';
-    ajustes.forEach(function(a){
-      var col = (parseFloat(a.importe)||0) < 0 ? 'var(--red)' : 'var(--green)';
-      html += '<div style="font-size:13px;display:flex;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">';
-      html += '<strong>'+formatDisplayValue(a.tipo)+'</strong>';
-      html += '<span style="color:'+col+';font-family:var(--font-mono);font-weight:600;">'+(parseFloat(a.importe)||0).toFixed(2)+' €</span>';
-      if(a.motivo) html += '<span style="color:var(--text3);">'+formatDisplayValue(a.motivo)+'</span>';
-      if(a.obs) html += '<span style="color:var(--text3);font-size:11px;">📝 '+formatDisplayValue(a.obs)+'</span>';
+  // ── BLOQUE 4B: Ajustes (solo Sala/Recepción) ──
+  if(aplicaAjustes){
+    if(ajustes.length>0){
+      var totAj = 0;
+      ajustes.forEach(function(a){ totAj += parseFloat(a.importe)||0; });
+      html += '<div style="background:var(--bg2);border:1px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">';
+      html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">4 · AJUSTES ('+ajustes.length+' líneas · total '+totAj.toFixed(2)+' €)</div>';
+      ajustes.forEach(function(a){
+        var col = (parseFloat(a.importe)||0) < 0 ? 'var(--red)' : 'var(--green)';
+        html += '<div style="font-size:13px;display:flex;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">';
+        html += '<strong>'+formatDisplayValue(a.tipo)+'</strong>';
+        html += '<span style="color:'+col+';font-family:var(--font-mono);font-weight:600;">'+(parseFloat(a.importe)||0).toFixed(2)+' €</span>';
+        if(a.motivo) html += '<span style="color:var(--text3);">'+formatDisplayValue(a.motivo)+'</span>';
+        if(a.obs) html += '<span style="color:var(--text3);font-size:11px;">📝 '+formatDisplayValue(a.obs)+'</span>';
+        html += '</div>';
+      });
       html += '</div>';
-    });
-    html += '</div>';
+    } else {
+      html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);">4 · Sin ajustes declarados</div>';
+    }
   }
-  // (si no hay ajustes no mostramos nada — solo aplica realmente a Sala)
-
   // ── BLOQUE 6: Tarea generada ──
   if(allTareas.length>0){
     html += '<div style="background:var(--bg2);border:1px solid var(--purple);border-radius:8px;padding:14px;margin-bottom:12px;">';
