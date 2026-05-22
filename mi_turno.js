@@ -35,11 +35,12 @@ async function renderFollowupList() {
     ? 'Gestiones pendientes, tareas e incidencias operativas del departamento.'
     : 'Gestiones pendientes y tareas visibles para tu departamento.';
 
-  var allIncis = [], allTareas = [], allShifts = [], allGestiones = [];
+  var allIncis = [], allTareas = [], allShifts = [], allGestiones = [], allAjustes = [];
   try { allIncis     = await getDB('incidencias'); } catch(e){}
   try { allTareas    = await getDB('tareas');      } catch(e){}
   try { allShifts    = await getDB('shifts');      } catch(e){}
   try { allGestiones = await getDB('gestiones');   } catch(e){}
+  try { allAjustes   = await getDB('ajustes');     } catch(e){}
 
   var shiftMap = {};
   allShifts.forEach(function(s){ if(s.id) shiftMap[s.id] = s; });
@@ -164,6 +165,42 @@ async function renderFollowupList() {
     + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--purple);letter-spacing:.12em;margin-bottom:6px;">TAREAS ('+tareas.length+')</div>'
     + buildTaskRows(tareas)
     + '</div>';
+
+  // ── AJUSTES DEL DÍA (solo Sala y Recepción) ──
+  var showAjustes = (dept === 'Sala' || dept === 'Recepción' || isAdminUser);
+  if(showAjustes){
+    var todayStr = today();
+    var ajustesHoy = (allAjustes||[]).filter(function(a){
+      return a.employee_id === currentUser.id
+        && (a.fecha||'').slice(0,10) === todayStr;
+    });
+    ajustesHoy.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+    var totalAj = 0;
+    ajustesHoy.forEach(function(a){ totalAj += parseFloat(a.importe)||0; });
+
+    var ajustesHtml;
+    if(ajustesHoy.length === 0){
+      ajustesHtml = '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguno hoy. Usa el botón <b>⚙ Ajustes</b> del menú para añadir.</div>';
+    } else {
+      ajustesHtml = '<table><tr><th>Hora</th><th>Tipo</th><th>Importe</th><th>Motivo</th></tr>'
+        + ajustesHoy.map(function(a){
+          var hora = a.created_at ? new Date(a.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+          var imp = parseFloat(a.importe)||0;
+          var col = imp < 0 ? 'var(--red)' : 'var(--green)';
+          return '<tr>'
+            + '<td style="font-size:11px;color:var(--text3);">'+hora+'</td>'
+            + '<td style="font-size:12px;">'+formatDisplayValue(a.tipo)+'</td>'
+            + '<td style="font-size:12px;color:'+col+';font-weight:600;font-family:var(--font-mono);">'+imp.toFixed(2)+' €</td>'
+            + '<td style="font-size:12px;color:var(--text3);">'+formatDisplayValue(a.motivo||a.obs||'—')+'</td>'
+            + '</tr>';
+        }).join('') + '</table>';
+    }
+
+    html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.12em;margin-bottom:6px;">AJUSTES DEL DÍA ('+ajustesHoy.length+') · TOTAL '+totalAj.toFixed(2)+' €</div>'
+      + ajustesHtml
+      + '</div>';
+  }
 
   if(isSupervisorUser){
     html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">'

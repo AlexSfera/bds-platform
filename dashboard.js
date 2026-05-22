@@ -199,6 +199,7 @@ async function renderDashboard() {
   var allIncis    = await getDB('incidencias');
   var allTareas   = await getDB('tareas');
   var allGestiones = await getDB('gestiones');
+  var allAjustes  = []; try { allAjustes = await getDB('ajustes'); } catch(e){}
 
   var shiftMap = {};
   allShifts.forEach(function(s) { if (s.id) shiftMap[s.id] = s; });
@@ -227,6 +228,12 @@ async function renderDashboard() {
     if(!g || !g.id) return false;
     return _dashMatchesDept(g, validAreas, shiftMap);
   });
+  var ajustes = (allAjustes||[]).filter(function(a){
+    var s = shiftMap[a.shift_id];
+    if(s) return validAreas.indexOf(_dashCanonicalDept(s.area)) !== -1;
+    if(a.area) return validAreas.indexOf(_dashCanonicalDept(a.area)) !== -1;
+    return false;
+  });
 
   // Filtrar por periodo
   if (desde) {
@@ -239,6 +246,7 @@ async function renderDashboard() {
     incis = incis.filter(function(i) { return i.fecha >= desde; });
     tareas = tareas.filter(function(t) { return (t.created_at || t.deadline || '') >= desde; });
     gestiones = gestiones.filter(function(g) { return (g.fecha || g.created_at || '') >= desde; });
+    ajustes = ajustes.filter(function(a){ return (a.fecha || '') >= desde; });
   }
   if (empFilt) shifts = shifts.filter(function(s) { return s.nombre === empFilt; });
   if (sevFilt) shifts = shifts.filter(function(s) { return s.gravedad_error === sevFilt; });
@@ -255,6 +263,7 @@ async function renderDashboard() {
 
   // Renderizar secciones
   _renderKpiCards(shifts, mermas, incis, tareas, gestiones, deptCfg);
+  _renderAjustesKpi(ajustes);
   _renderActividadEmpleado(shifts, allShifts);
   _renderAlertas(shifts, mermas, incis, tareas);
   _renderIncidencias(incis, shiftMap);
@@ -293,6 +302,44 @@ function _buildDeptSelector(depts, el) {
 }
 
 // ── KPI CARDS PRINCIPALES ─────────────────────────────────────
+function _renderAjustesKpi(ajustes){
+  // Inyecta o reemplaza un contenedor con resumen de ajustes
+  var host = document.getElementById('dash-kpi-cards');
+  if(!host) return;
+  var prev = document.getElementById('dash-kpi-ajustes');
+  if(prev) prev.parentNode.removeChild(prev);
+
+  if(!ajustes || ajustes.length === 0) return;
+
+  var total = 0;
+  var byTipo = {};
+  ajustes.forEach(function(a){
+    var imp = parseFloat(a.importe)||0;
+    total += imp;
+    var t = a.tipo || 'Otro';
+    if(!byTipo[t]) byTipo[t] = {count:0, sum:0};
+    byTipo[t].count++;
+    byTipo[t].sum += imp;
+  });
+
+  var col = total < 0 ? 'var(--red)' : 'var(--green)';
+  var tipoChips = Object.keys(byTipo).map(function(t){
+    return '<span class="badge b-gray" style="margin:2px;">'+formatDisplayValue(t)+': '+byTipo[t].count+' · '+byTipo[t].sum.toFixed(2)+'€</span>';
+  }).join(' ');
+
+  var box = document.createElement('div');
+  box.id = 'dash-kpi-ajustes';
+  box.style.cssText = 'background:var(--bg2);border:1px solid #3b82f6;border-radius:8px;padding:14px;margin-top:12px;';
+  box.innerHTML = '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:8px;">⚙ AJUSTES (Sala)</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+    +   '<div><span style="color:var(--text3);font-size:12px;">Total ajustes en periodo: </span><strong style="font-size:18px;color:'+col+';font-family:var(--font-mono);">'+total.toFixed(2)+' €</strong></div>'
+    +   '<div style="color:var(--text3);font-size:11px;">'+ajustes.length+' línea(s)</div>'
+    + '</div>'
+    + '<div style="margin-top:8px;font-size:11px;">'+tipoChips+'</div>';
+
+  host.parentNode.insertBefore(box, host.nextSibling);
+}
+
 function _renderKpiCards(shifts, mermas, incis, tareas, gestiones, deptCfg) {
   var el = document.getElementById('kpi-grid');
   if (!el) return;
