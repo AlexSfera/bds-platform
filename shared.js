@@ -1510,9 +1510,17 @@ async function renderValidacion(){
   });
   shifts.sort((a,b)=>b.created_at.localeCompare(a.created_at));
   const pend=shifts.filter(s=>s.estado==='Pendiente').length;
-  document.getElementById('val-alerts').innerHTML=pend>0?`<div class="alert a-warn">⚠ ${pend} registro(s) pendiente(s)</div>`:'';
-  const mermas=await getDB('merma'); const incis=await getDB('incidencias');
   var ajustesAll = []; try { ajustesAll = await getDB('ajustes'); } catch(e){}
+  const _shiftIds = shifts.map(function(s){ return s.id; });
+  const _ajF = ajustesAll.filter(function(a){ return _shiftIds.indexOf(a.shift_id) >= 0; });
+  const _totAj = _ajF.reduce(function(acc,a){ return acc + (parseFloat(a.importe)||0); }, 0);
+  var _alertsHtml = '';
+  if(pend > 0) _alertsHtml += '<div class="alert a-warn">⚠ '+pend+' registro(s) pendiente(s)</div>';
+  _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
+    + '<div class="kpi k-blue"><div class="kpi-lbl">Total ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
+    + '</div>';
+  document.getElementById('val-alerts').innerHTML = _alertsHtml;
+  const mermas=await getDB('merma'); const incis=await getDB('incidencias');
   const el=document.getElementById('validacion-table');
   if(!shifts.length){el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin registros</div></div>';return;}
   // Build validation table without nested template literals
