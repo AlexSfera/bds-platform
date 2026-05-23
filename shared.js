@@ -3001,7 +3001,7 @@ function openNewAjusteMod(){
       + '<button class="modal-x" onclick="closeModal(\'modal-new-ajuste\')">✕</button></div>'
       + '<div class="modal-b">'
       + '<div class="grid2">'
-      +   '<div class="fg"><label>Tipo <span class="req">*</span></label><select id="na-tipo">'
+      +   '<div class="fg"><label>Tipo <span class="req">*</span></label><select id="na-tipo" onchange="onAjusteTipoChange()">'
       +     '<option value="">— Seleccionar —</option>'
       +     '<option>Anulación</option>'
       +     '<option>Devolución</option>'
@@ -3010,13 +3010,17 @@ function openNewAjusteMod(){
       +     '<option>Error cobro</option>'
       +     '<option>Cargo incorrecto</option>'
       +     '<option>Otro</option>'
-      +   '</select></div>'
+      +   '</select>'
+      +   '<div id="na-tipo-hint" style="font-size:11px;color:var(--text3);margin-top:4px;min-height:14px;"></div>'
+      +   '</div>'
       +   '<div class="fg"><label>Importe (€) <span class="req">*</span></label><input type="number" id="na-importe" step="0.01" placeholder="0.00"></div>'
       + '</div>'
       + '<div class="fg"><label>Motivo</label><input type="text" id="na-motivo" placeholder="ej: mesa 12, cliente insatisfecho"></div>'
       + '<div class="fg"><label>Observación</label><input type="text" id="na-obs" placeholder="Nota opcional"></div>'
-      + '<div style="font-size:11px;color:var(--text3);margin-top:6px;">'
-      +   'ℹ Usa importe NEGATIVO para descuentos/devoluciones (-3.50), positivo para cargos extras.'
+      + '<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;">'
+      +   '<b>Regla:</b> Importe = (lo que hay en caja) − (lo que marca el TPV).<br>'
+      +   'Anulación / Devolución / Invitación → se guarda automáticamente como <b>negativo</b>.<br>'
+      +   'Error TPV / Error cobro / Cargo incorrecto / Otro → manual: <b>+</b> si sobra en caja, <b>−</b> si falta.'
       + '</div>'
       + '</div>'
       + '<div class="modal-f">'
@@ -3030,9 +3034,27 @@ function openNewAjusteMod(){
     var x=document.getElementById(id); if(x) x.value='';
   });
   var t = document.getElementById('na-tipo'); if(t) t.value='';
+  var h = document.getElementById('na-tipo-hint'); if(h) h.innerHTML='';
   ov.classList.add('open');
 }
 window.openNewAjusteMod = openNewAjusteMod;
+
+// Tipos que fuerzan signo negativo (sale dinero de caja)
+var AJUSTE_TIPOS_NEGATIVOS = ['Anulación','Devolución','Invitación'];
+
+function onAjusteTipoChange(){
+  var tipo = (document.getElementById('na-tipo')||{}).value || '';
+  var h = document.getElementById('na-tipo-hint');
+  if(!h) return;
+  if(AJUSTE_TIPOS_NEGATIVOS.indexOf(tipo) >= 0){
+    h.innerHTML = '<span style="color:var(--red);">→ se guardará como <b>negativo</b> (–)</span>';
+  } else if(tipo){
+    h.innerHTML = '<span style="color:var(--text3);">signo manual: + si sobra, − si falta</span>';
+  } else {
+    h.innerHTML = '';
+  }
+}
+window.onAjusteTipoChange = onAjusteTipoChange;
 
 async function saveNewAjusteMod(){
   var tipo    = (document.getElementById('na-tipo')||{}).value || '';
@@ -3042,6 +3064,11 @@ async function saveNewAjusteMod(){
 
   if(!tipo){ toast('Tipo obligatorio','err'); return; }
   if(isNaN(importe)){ toast('Importe obligatorio (puede ser negativo)','err'); return; }
+
+  // Auto-signo: tipos de salida de caja siempre negativos
+  if(AJUSTE_TIPOS_NEGATIVOS.indexOf(tipo) >= 0){
+    importe = -Math.abs(importe);
+  }
 
   var rec = {
     id: genId(),
