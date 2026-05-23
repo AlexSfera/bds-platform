@@ -2335,11 +2335,11 @@ async function openItemModal(type, id){
     if(type==='gestion'){
       if(estado==='Abierta')
         btns.push('<button class="btn btn-secondary" onclick="itemAdvance(\'En proceso\')">▶ En proceso</button>');
-      btns.push('<button class="btn btn-primary" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
+      btns.push('<button class="btn btn-primary" style="margin-left:auto" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
     } else {
       if(estado===INCIDENT_STATES.ABIERTA)
         btns.push('<button class="btn btn-secondary" onclick="itemAdvance(\'En proceso\')">▶ En proceso</button>');
-      btns.push('<button class="btn btn-primary" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
+      btns.push('<button class="btn btn-primary" style="margin-left:auto" onclick="itemClose()">✓ Cerrar (con acción tomada)</button>');
     }
   }
 
@@ -2353,7 +2353,9 @@ async function openItemModal(type, id){
     btns.push('<button class="btn btn-danger" onclick="itemDelete()">🗑️ Eliminar</button>');
   }
   btns.push('<button class="btn btn-secondary" onclick="closeModal(\'modal-item\')">Cancelar</button>');
-  document.getElementById('mi-foot').innerHTML = btns.join(' ');
+  var foot = document.getElementById('mi-foot');
+  foot.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;';
+  foot.innerHTML = btns.join(' ');
 
   ov.classList.add('open');
 }
