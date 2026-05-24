@@ -1728,7 +1728,10 @@ async function openValidarModal(shiftId){
     info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">Sin incidencias operativas declaradas</div>';
   }
 
-  // Block 5: Merma (editable)
+  // Block 5: Merma (editable) — solo dptos que generan merma
+  var _deptMerma = (s.area||'').toLowerCase().trim();
+  var _aplicaMerma = ['cocina','friegue','fnb','food & beverage'].indexOf(_deptMerma) !== -1;
+  if(_aplicaMerma){
   info += '<div id="mv-merma-block" style="background:var(--bg);border:1px solid var(--amber);border-radius:8px;padding:12px;margin-bottom:10px;">';
   info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.15em;margin-bottom:10px;">MERMA</div>';
   if(mermas.length>0){
@@ -1756,6 +1759,7 @@ async function openValidarModal(shiftId){
     info += '<div style="font-size:12px;color:var(--text3);">'+sinMermaMsg+'</div>';
   }
   info += '</div>';
+  } // end _aplicaMerma
 
   document.getElementById('mv-info').innerHTML=info;
   // mv-costes is now unused for merma — clear it
