@@ -2330,7 +2330,7 @@ async function openItemModal(type, id){
   body += '</div>';
 
   // ── TEXTAREA NUEVO COMENTARIO ─────────────────────────────────────
-  var estadoCerrado = (estado === 'Cerrada') || (estado === INCIDENT_STATES.CERRADA) || (estado === INCIDENT_STATES.VALIDADA);
+  var estadoCerrado = (estado === 'Cerrada') || (estado === INCIDENT_STATES.CERRADA);
   var puedeEditar = !estadoCerrado;
   if(puedeEditar){
     body += '<div style="margin-bottom:6px;"><b style="font-size:12px;">Añadir comentario nuevo</b>'
@@ -2338,17 +2338,22 @@ async function openItemModal(type, id){
       + 'placeholder="Escribe un nuevo comentario..."></textarea></div>';
   }
 
-  if(rec.validado_por){
-    body += '<div style="font-size:11px;color:var(--green);margin-top:6px;">✓ Validado por '
-      + formatDisplayValue(rec.validado_por) + ' · ' + (rec.validado_ts ? new Date(rec.validado_ts).toLocaleString('es-ES') : '') + '</div>';
-  }
-
   document.getElementById('mi-body').innerHTML = body;
 
-  // Botones según estado + rol
+  // Botones según tipo + rol + dpto
+  // Reglas operativas:
+  //   - Gestión: cualquier miembro del dpto + admin/jefe pueden actuar
+  //   - Incidencia: SOLO jefe del dpto + admin pueden actuar
   var btns = [];
   var sameDept = normalizeDeptName(dpto) === normalizeDeptName(currentUser.area||'');
-  var canActEmp = !rec.validado_por && (isJefe || sameDept);
+  var canActOnDept = isAdminU || (isJefe && canViewDepartment(currentUser, dpto));
+  var canActEmp;
+  if(type==='gestion'){
+    canActEmp = canActOnDept || sameDept;
+  } else {
+    // incidencia: solo jefe del dpto correspondiente + admin
+    canActEmp = canActOnDept;
+  }
 
   if(puedeEditar && canActEmp){
     btns.push('<button class="btn btn-secondary" onclick="itemSaveComentario()">💬 Añadir comentario</button>');
@@ -2363,12 +2368,6 @@ async function openItemModal(type, id){
     }
   }
 
-  if(isJefe && estadoCerrado && !rec.validado_por){
-    btns.push('<button class="btn btn-primary" onclick="itemValidate()">✅ Validar</button>');
-  }
-  if(isJefe && rec.validado_por){
-    btns.push('<button class="btn btn-secondary" onclick="itemUnvalidate()">↩️ Quitar validación</button>');
-  }
   if(isAdminU){
     btns.push('<button class="btn btn-danger" onclick="itemDelete()">🗑️ Eliminar</button>');
   }
