@@ -526,7 +526,7 @@ async function submitRecCaja() {
   var errEl2 = document.getElementById('rec-caja-err');
   if(errEl2) errEl2.textContent = '';
 
-  var ts    = new Date().toISOString();
+  var ts    = localTs();
   var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : today();
 
   // BUG-16 FIX: nombres de columnas reales de recepcion_cash
@@ -721,7 +721,7 @@ async function reabrirCajaRec(cajaId) {
       estado: 'reabierto',
       reabierto_por: currentUser.nombre,
       comentario: motivo.trim(),
-      updated_at: new Date().toISOString()
+      updated_at: localTs()
     });
     await auditLog('REC_CAJA_REABRIR', 'Caja '+cajaId+' reabierta por '+currentUser.nombre+' — '+motivo.trim());
     invalidateCache(REC_TABLE);
@@ -760,7 +760,7 @@ async function reabrirTurnoValidado(shiftId) {
       estado: 'En corrección',
       comentario_validador: 'Reabierto por '+currentUser.nombre+': '+motivo.trim(),
       validado_por: null, validado_ts: null,
-      updated_at: new Date().toISOString()
+      updated_at: localTs()
     });
     await auditLog('REOPEN_SHIFT', currentUser.nombre+' reabrió turno '+shiftId+' — '+motivo.trim());
     invalidateCache('shifts');
@@ -839,7 +839,7 @@ function setTransferDate() {
   var fmt = d.toLocaleDateString('es-ES') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
   dateEl.textContent = '📅 Última actualización: ' + fmt;
   dateEl.style.display = 'block';
-  window._recTransFecha = d.toISOString();
+  window._recTransFecha = localTs();
 }
 
 function calcRecDifs() {

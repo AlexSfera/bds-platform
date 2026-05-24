@@ -185,7 +185,15 @@ function genId(){ return Date.now().toString(36)+Math.random().toString(36).slic
 
 // ── DATE & FORMAT HELPERS ──
 function today(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function localTs(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); }
+function localTs(){
+  var d=new Date();
+  var pad=function(n){return String(Math.floor(Math.abs(n))).padStart(2,'0');};
+  var tz=-d.getTimezoneOffset();
+  var sign=tz>=0?'+':'-';
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())
+    +'T'+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())
+    +sign+pad(tz/60)+':'+pad(tz%60);
+}
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){
   if(!ts) return '—';
@@ -200,7 +208,7 @@ function fmtDateTs(fecha,ts){
   return fmtDate(fecha)+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 }
 function fmtTiempoGestion(mins){ if(!mins||mins<=0) return '—'; var h=Math.floor(mins/60),m=mins%60; return h>0?(h+'h'+(m>0?' '+m+'min':'')):(m+'min'); }
-function startOfWeek(){ var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); return d.toISOString().split('T')[0]; }
+function startOfWeek(){ var d=new Date(); d.setHours(0,0,0,0); var day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1); d.setDate(diff); return toYMD(d); }
 function startOfMonth(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; }
 function isOverdue(dl){ return dl && dl < today(); }
 function getDateOnly(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
@@ -275,7 +283,7 @@ function recordMatchesShift(record, shift){
 async function auditLog(action,detail){
   const row={
     id:genId(),
-    ts:new Date().toISOString(),
+    ts:localTs(),
     usuario:(currentUser&&currentUser.nombre)||'?',
     rol:(currentUser&&currentUser.rol)||'?',
     action:action,

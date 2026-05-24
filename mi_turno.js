@@ -263,7 +263,7 @@ async function saveFollowup() {
     } catch(e){}
   }
 
-  var ts = new Date().toISOString();
+  var ts = localTs();
   var record = {
     id: genId(),
     shift_id: resolvedShiftId,
@@ -317,7 +317,7 @@ async function submitCloseFollowup() {
   if(!accion){    if(errEl) errEl.textContent='La acción realizada es obligatoria'; return; }
   if(!resultado){ if(errEl) errEl.textContent='El resultado es obligatorio'; return; }
 
-  var ts = new Date().toISOString();
+  var ts = localTs();
   try {
     var allIncis = await getDB('incidencias');
     var inci = allIncis.find(function(i){ return i.id === _fuCloseId; });
