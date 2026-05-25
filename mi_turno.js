@@ -127,29 +127,33 @@ async function renderFollowupList() {
 
   function buildIncidentRows(list){
     if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
-    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Empleado</th><th>Fecha</th><th>Estado</th></tr>'
+    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Empleado</th><th>Fecha</th><th>Estado</th><th>Acción tomada</th></tr>'
       + list.map(function(i){
         var fechaObj = i.created_at ? new Date(i.created_at) : null;
         var fechaStr = fechaObj ? fechaObj.toLocaleDateString('es-ES')+' '+fechaObj.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+        var accion = formatDisplayValue(i.accion_inmediata) || '—';
         return '<tr>'
           + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</td>'
           + '<td style="font-size:12px;max-width:200px;">'+formatDisplayValue(i.descripcion).slice(0,70)+(i.descripcion&&i.descripcion.length>70?'...':'')+'</td>'
           + '<td style="font-size:12px;">'+formatDisplayValue(i.nombre)+'</td>'
           + '<td style="font-size:11px;color:var(--text3);">'+fechaStr+'</td>'
           + '<td>'+(typeof bIncidentEstadoClick==='function'?bIncidentEstadoClick(i.estado,i.id):bIncidentEstado(i.estado))+'</td>'
+          + '<td style="font-size:12px;max-width:160px;color:var(--text3);">'+accion+'</td>'
           + '</tr>';
       }).join('') + '</table>';
   }
 
     function buildGestionRows(list){
     if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
-    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Estado</th></tr>'
+    return '<table><tr><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Acción tomada</th></tr>'
       + list.map(function(g){
         var gState = g.estado || 'Abierta';
+        var accion = formatDisplayValue(g.accion_tomada) || '—';
         return '<tr>'
           + '<td style="font-size:12px;">'+formatDisplayValue(g.tipo_gestion)+'</td>'
           + '<td style="font-size:12px;max-width:220px;">'+formatDisplayValue(g.descripcion)+'</td>'
           + '<td>'+(typeof bGestionEstadoClick==='function'?bGestionEstadoClick(gState,g.id):bGestionEstado(gState))+'</td>'
+          + '<td style="font-size:12px;max-width:160px;color:var(--text3);">'+accion+'</td>'
           + '</tr>';
       }).join('') + '</table>';
   }
