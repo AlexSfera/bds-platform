@@ -400,7 +400,7 @@ function getScreens(rol){
     export:      {id:'export',      label:'⬇ Exportar'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
-    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes/Correcciones'},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        pending:true},
     recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
     mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true}
@@ -1840,6 +1840,44 @@ async function openValidarModal(shiftId){
   info += '</div>';
   } // end _aplicaMerma
 
+  // Block 6: Ajustes/Correcciones (Sala / Recepción)
+  const allAjustes = await getDB('ajustes');
+  const shiftAjustes = allAjustes.filter(function(a){ return a.shift_id === shiftId; });
+  _validatingAjustesPendientes = shiftAjustes.filter(function(a){ return (a.estado_aprobacion||'Aprobado') === 'Pendiente'; });
+  var _deptAjustes = (s.area||'').toLowerCase().trim();
+  var _aplicaAjustes = ['sala','recepción','recepcion'].indexOf(_deptAjustes) !== -1;
+  if(_aplicaAjustes){
+    var ajPendCount = _validatingAjustesPendientes.length;
+    var ajBorderColor = ajPendCount>0 ? 'var(--amber)' : '#3b82f6';
+    info += '<div style="background:var(--bg);border:1px solid '+ajBorderColor+';border-radius:8px;padding:12px;margin-bottom:10px;">';
+    info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+ajBorderColor+';letter-spacing:.15em;margin-bottom:10px;">AJUSTES / CORRECCIONES ('+shiftAjustes.length+(ajPendCount>0?' · '+ajPendCount+' PENDIENTES':'')+')</div>';
+    if(shiftAjustes.length>0){
+      shiftAjustes.forEach(function(a){
+        var estApr = a.estado_aprobacion || 'Aprobado';
+        var isPend = estApr === 'Pendiente';
+        var imp = parseFloat(a.importe)||0;
+        var sgn = imp>=0?'+':'';
+        var impColor = imp<0?'var(--red)':'var(--green)';
+        info += '<div style="border-top:1px solid var(--border);padding:10px 0;">';
+        info += '<div style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
+        info += '<div><span style="color:var(--text3)">Tipo: </span><strong>'+formatDisplayValue(a.tipo)+'</strong></div>';
+        info += '<div><span style="color:var(--text3)">Importe: </span><strong style="font-family:var(--font-mono);color:'+impColor+'">'+sgn+imp.toFixed(2)+'€</strong></div>';
+        if(a.motivo) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Motivo: </span>'+formatDisplayValue(a.motivo)+'</div>';
+        if(a.obs) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Obs: </span>'+formatDisplayValue(a.obs)+'</div>';
+        info += '<div><span style="color:var(--text3)">Estado: </span>'+(isPend?'<span class="badge b-amber">⏳ Pendiente</span>':'<span class="badge b-green">✓ Aprobado</span>')+'</div>';
+        if(!isPend && a.aprobado_por) info += '<div><span style="color:var(--text3)">Aprobado por: </span>'+formatDisplayValue(a.aprobado_por)+(a.aprobado_ts?' · '+fmtTs(a.aprobado_ts):'')+'</div>';
+        info += '</div>';
+        if(isPend && canActOnStates){
+          info += '<div id="aj-btn-'+a.id+'" style="margin-top:8px;"><button class="vbtn vbtn-primary" onclick="aprobarAjuste(\''+a.id+'\')">✓ Aprobar</button></div>';
+        }
+        info += '</div>';
+      });
+    } else {
+      info += '<div style="font-size:12px;color:var(--text3);">Sin ajustes en este turno</div>';
+    }
+    info += '</div>';
+  }
+
   document.getElementById('mv-info').innerHTML=info;
   // mv-costes is now unused for merma — clear it
   var mvCostes=document.getElementById('mv-costes');
@@ -1891,6 +1929,17 @@ async function doValidacion(newEstado){
       var mermaBlock=document.getElementById('mv-merma-block');
       if(mermaBlock) mermaBlock.scrollIntoView({behavior:'smooth',block:'nearest'});
       toast('⚠️ Completa el coste de todas las líneas de merma antes de validar.','err');
+      return;
+    }
+  }
+  // ── Ajustes pendientes check — block validation if any ajuste pending approval ──
+  if(newEstado==='Validado'){
+    var allAjForCheck = await getDB('ajustes');
+    var shiftAjPend = allAjForCheck.filter(function(a){
+      return a.shift_id === validatingShiftId && (a.estado_aprobacion||'Aprobado') === 'Pendiente';
+    });
+    if(shiftAjPend.length > 0){
+      toast('⚠️ No se puede validar: '+shiftAjPend.length+' ajuste(s) pendiente(s) de aprobar.','err');
       return;
     }
   }
@@ -3028,9 +3077,11 @@ async function renderAjustesMod(){
 
   var totalImp = 0;
   var pendientes = 0;
+  var pendAprobacion = 0;
   list.forEach(function(a){
     totalImp += parseFloat(a.importe)||0;
     if(!a.shift_id) pendientes++;
+    if((a.estado_aprobacion||'Aprobado') === 'Pendiente') pendAprobacion++;
   });
 
   var cards;
@@ -3044,6 +3095,13 @@ async function renderAjustesMod(){
       var statusTag = a.shift_id
         ? '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">en turno</span>'
         : '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">pendiente</span>';
+      var aprEst = a.estado_aprobacion || 'Aprobado';
+      var aprTag = aprEst === 'Pendiente'
+        ? '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">⏳ por aprobar</span>'
+        : '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">✓ aprobado</span>';
+      var aprBtn = (aprEst==='Pendiente' && (isAdminU||isSup))
+        ? ' <button class="btn btn-secondary btn-sm" style="margin-left:6px;" onclick="aprobarAjuste(\''+a.id+'\')">✓ Aprobar</button>'
+        : '';
       var obs = a.obs ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">📝 '+formatDisplayValue(a.obs)+'</div>' : '';
       var motivo = a.motivo ? '<div style="font-size:12px;margin-top:4px;">'+formatDisplayValue(a.motivo)+'</div>' : '';
       var delBtn = isAdminU ? ' <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteAjusteItem(\''+a.id+'\')">🗑</button>' : '';
@@ -3054,6 +3112,8 @@ async function renderAjustesMod(){
         +   '<span style="font-weight:600;font-size:13px;">'+formatDisplayValue(a.tipo)+'</span>'
         +   '<span class="badge" style="background:transparent;border:1px solid var(--border);color:'+importeColor+';font-weight:600;">'+importeFmt+'</span>'
         +   statusTag
+        +   aprTag
+        +   aprBtn
         +   delBtn
         + '</div>'
         + motivo
@@ -3069,9 +3129,12 @@ async function renderAjustesMod(){
   if(pendientes > 0){
     subText += ' · <b style="color:var(--amber);">'+pendientes+' pendiente(s) de asociar a turno</b>';
   }
+  if(pendAprobacion > 0){
+    subText += ' · <b style="color:var(--amber);">'+pendAprobacion+' por aprobar</b>';
+  }
 
   el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
-    + '<div><div class="page-title">⚙ Ajustes — hoy</div>'
+    + '<div><div class="page-title">⚙ Ajustes/Correcciones — hoy</div>'
     + '<div class="page-sub">'+subText+'</div></div>'
     + '<button class="btn btn-primary" onclick="openNewAjusteMod()">+ Nuevo ajuste</button>'
     + '</div>'
@@ -3171,6 +3234,7 @@ async function saveNewAjusteMod(){
     importe: importe,
     motivo: motivo,
     obs: obs,
+    estado_aprobacion: 'Pendiente',
     created_at: localTs()
   };
   var result = await dbInsert('ajustes', rec);
@@ -3185,6 +3249,34 @@ async function saveNewAjusteMod(){
   renderAjustesMod();
 }
 window.saveNewAjusteMod = saveNewAjusteMod;
+
+async function aprobarAjuste(ajusteId){
+  if(!isAdmin(currentUser) && !isSupervisor(currentUser)){
+    toast('Solo jefe de departamento o admin pueden aprobar','err');
+    return;
+  }
+  var payload = {
+    estado_aprobacion: 'Aprobado',
+    aprobado_por: currentUser.nombre,
+    aprobado_ts: localTs()
+  };
+  var result = await dbUpdate('ajustes', ajusteId, payload);
+  if(!result){
+    toast('Error al aprobar ajuste','err');
+    return;
+  }
+  invalidateCache('ajustes');
+  await auditLog('AJUSTE_APROBADO', 'ajuste_id: '+ajusteId+' por '+currentUser.nombre);
+  toast('Ajuste aprobado','ok');
+  // Refresh validar modal in-place
+  if(validatingShiftId){
+    openValidarModal(validatingShiftId);
+  } else if(typeof renderAjustesMod === 'function'){
+    renderAjustesMod();
+  }
+}
+window.aprobarAjuste = aprobarAjuste;
+var _validatingAjustesPendientes = [];
 
 async function deleteAjusteItem(aid){
   if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
