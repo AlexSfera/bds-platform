@@ -404,6 +404,13 @@ function switchValTab(tab) {
 async function renderValCajaList() {
   var el = document.getElementById('val-caja-table');
   if(!el) return;
+
+  // Filtrar por dept seleccionado: hoy solo Sala tiene cierres reales
+  var dept = (typeof _currentValDept !== 'undefined' && _currentValDept) || '';
+  if(dept === 'Recepción'){
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🛎</div><div class="empty-text">Cierre Caja Recepción · Próximamente (FEAT-01)</div></div>';
+    return;
+  }
   try {
     var data = await dbGetAll('sala_cash_closures');
     var periodo = (document.getElementById('val-caja-periodo')||{}).value||'hoy';

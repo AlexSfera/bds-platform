@@ -1480,16 +1480,95 @@ function onValDeptChange(){
 }
 
 function initValDeptFilter(){
-  var sel=document.getElementById('v-dept');
-  if(!sel||!currentUser) return;
-  if(currentUser.rol==='chef'){
-    sel.value='Cocina'; sel.disabled=true;
-  } else if(currentUser.rol==='jefe_recepcion'){
-    sel.value='Recepción'; sel.disabled=true;
-  } else {
-    sel.disabled=false;
-  }
+  var buttons = document.querySelectorAll('.val-dept-btn');
+  if(!buttons.length || !currentUser) return;
+
+  // Role-based locking: chef → Cocina, jefe_recepcion → Recepción
+  var allowedDept = null;
+  if(currentUser.rol==='chef'){ allowedDept = 'Cocina'; }
+  else if(currentUser.rol==='jefe_recepcion'){ allowedDept = 'Recepción'; }
+
+  buttons.forEach(function(b){
+    var d = b.dataset.dept;
+    // Deshabilitar todos los que no son el dept permitido (incluido "Todos")
+    b.disabled = allowedDept ? (d !== allowedDept) : false;
+  });
+
+  // Auto-select dept inicial
+  var defaultDept = allowedDept !== null ? allowedDept : (_currentValDept || '');
+  selectValDept(defaultDept);
+
+  // Init Flatpickr range picker
+  initValRangePicker();
+}
+
+var _currentValDept = '';
+
+function initValRangePicker(){
+  var el = document.getElementById('v-rango');
+  if(!el || el._flatpickr || typeof flatpickr === 'undefined') return;
+  flatpickr(el, {
+    mode: 'range',
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'd/m/Y',
+    locale: (flatpickr.l10ns && flatpickr.l10ns.es) ? 'es' : 'default',
+    onChange: function(selectedDates){
+      var desde = document.getElementById('v-desde');
+      var hasta = document.getElementById('v-hasta');
+      if(selectedDates.length === 2){
+        if(desde) desde.value = selectedDates[0].toISOString().slice(0,10);
+        if(hasta) hasta.value = selectedDates[1].toISOString().slice(0,10);
+      } else if(selectedDates.length === 0){
+        if(desde) desde.value = '';
+        if(hasta) hasta.value = '';
+      }
+    },
+    onClose: function(selectedDates){
+      if(selectedDates.length === 2 || selectedDates.length === 0){
+        renderValidacion();
+        var cajaContent = document.getElementById('val-content-caja');
+        if(cajaContent && cajaContent.style.display !== 'none' && typeof renderValCajaList === 'function'){
+          renderValCajaList();
+        }
+      }
+    }
+  });
+}
+
+function selectValDept(dept){
+  // Bloqueo por rol
+  var btn = document.querySelector('.val-dept-btn[data-dept="'+dept+'"]');
+  if(btn && btn.disabled) return;
+
+  _currentValDept = dept;
+  var dh = document.getElementById('v-dept');
+  if(dh) dh.value = dept;
+
+  // Resaltar botón activo
+  document.querySelectorAll('.val-dept-btn').forEach(function(b){
+    if(b.dataset.dept === dept){ b.classList.add('active'); }
+    else { b.classList.remove('active'); }
+  });
+
+  // Mostrar/ocultar tab Caja según dept
+  var cajaTab = document.getElementById('val-tab-caja');
+  var showsCaja = (dept === 'Sala' || dept === 'Recepción');
+  if(cajaTab) cajaTab.style.display = showsCaja ? '' : 'none';
+
+  // Recalcular opciones de servicio
   onValDeptChange();
+
+  // Si estaba en Caja pero el nuevo dept no la soporta → volver a follow-up
+  var cajaContent = document.getElementById('val-content-caja');
+  if(!showsCaja && cajaContent && cajaContent.style.display !== 'none'){
+    switchValTab('followup');
+  } else {
+    renderValidacion();
+    if(showsCaja && cajaContent && cajaContent.style.display !== 'none' && typeof renderValCajaList === 'function'){
+      renderValCajaList();
+    }
+  }
 }
 
 async function renderValidacion(){
