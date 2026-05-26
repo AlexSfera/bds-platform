@@ -18,7 +18,7 @@
 var _hypoxicLines = [];
 
 var HYPOXIC_ROOMS = ['104','105','106','107','108','109','202','203','204','205','206','207','208','209'];
-var HYPOXIC_TYPES = ['Hipoxia no enciende','Hipoxia está por debajo','Hipoxia está por encima','Valores de sensores raros','Otro'];
+var HYPOXIC_TYPES = ['Hipoxia está por debajo','Valores de sensores raros','Hipoxia está por encima','Hipoxia no enciende','Otro'];
 
 function isRecepcionUserHyp(){
   return currentUser && currentUser.area === 'Recepción';
@@ -99,10 +99,10 @@ function renderHypoxicLine(i, data){
       + '</label>';
   }).join('');
   var obsReq = (d.incident_types && d.incident_types.indexOf('Otro')>=0) ? ' <span class="req">*</span>' : '';
-  var doorSi = d.door_open===true ? ' on' : '';
-  var doorNo = d.door_open===false ? ' on' : '';
-  var cliSi  = d.client_notified===true ? ' on' : '';
-  var cliNo  = d.client_notified===false ? ' on' : '';
+  var doorSiCls = d.door_open===true  ? ' t-si' : '';
+  var doorNoCls = d.door_open===false ? ' t-no' : '';
+  var cliSiCls  = d.client_notified===true  ? ' t-si' : '';
+  var cliNoCls  = d.client_notified===false ? ' t-no' : '';
   var inpStyle = 'color:#111827;background:#ffffff;border:1px solid #d1d5db;padding:8px 10px;border-radius:6px;font-size:14px;width:100%;box-sizing:border-box;';
   // Hora de anotación
   var horaTxt = '';
@@ -126,38 +126,38 @@ function renderHypoxicLine(i, data){
     +   '<select id="hyp-room-'+i+'" style="'+inpStyle+'"><option value="">— Seleccionar —</option>'+roomsOpts+'</select></div>'
     // Tipos (grid 2 cols)
     + '<div class="fg" style="margin-bottom:14px;"><label>Tipo de incidencia <span class="req">*</span> <span style="color:var(--text3);font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;">(selecciona uno o varios)</span></label>'
-    +   '<div id="hyp-types-grp-'+i+'" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;">'+typesHtml+'</div>'
+    +   '<div id="hyp-types-grp-'+i+'" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;">'+typesHtml+'</div>'
     + '</div>'
-    // Mediciones (3 cols)
-    + '<div style="margin-bottom:14px;">'
-    +   '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-bottom:8px;">📊 MEDICIONES</div>'
-    +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
-    +     '<div class="fg" style="margin:0;"><label style="font-size:11px;">Nivel CO2 <span class="req">*</span></label>'
-    +       '<input type="number" id="hyp-co2-'+i+'" min="100" max="9999" step="1" placeholder="ej: 1200" value="'+(d.co2_level||'')+'" style="'+inpStyle+'">'
-    +       '<div style="font-size:10px;color:var(--text3);margin-top:2px;text-transform:none;letter-spacing:0;">3-4 cifras (ppm)</div>'
-    +     '</div>'
+    // Mediciones (3 cols) — orden: Valor actual, Set point, CO2
+    + '<div style="margin-bottom:14px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;">'
+    +   '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.12em;margin-bottom:10px;">📊 MEDICIONES</div>'
+    +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">'
     +     '<div class="fg" style="margin:0;"><label style="font-size:11px;">Valor actual (m) <span class="req">*</span></label>'
     +       '<input type="number" id="hyp-curralt-'+i+'" min="100" max="9999" step="1" placeholder="ej: 1850" value="'+(d.current_altitude_m||'')+'" style="'+inpStyle+'">'
-    +       '<div style="font-size:10px;color:var(--text3);margin-top:2px;text-transform:none;letter-spacing:0;">3-4 cifras · altitud real</div>'
+    +       '<div style="font-size:10px;color:var(--text3);margin-top:4px;text-transform:none;letter-spacing:0;">3-4 cifras · altitud real</div>'
     +     '</div>'
     +     '<div class="fg" style="margin:0;"><label style="font-size:11px;">Set point (m) <span class="req">*</span></label>'
     +       '<input type="number" id="hyp-setpt-'+i+'" min="1000" max="9999" step="1" placeholder="ej: 2500" value="'+(d.set_point_altitude_m||'')+'" style="'+inpStyle+'">'
-    +       '<div style="font-size:10px;color:var(--text3);margin-top:2px;text-transform:none;letter-spacing:0;">4 cifras · altitud objetivo</div>'
+    +       '<div style="font-size:10px;color:var(--text3);margin-top:4px;text-transform:none;letter-spacing:0;">4 cifras · altitud objetivo</div>'
+    +     '</div>'
+    +     '<div class="fg" style="margin:0;"><label style="font-size:11px;">Nivel CO2 <span class="req">*</span></label>'
+    +       '<input type="number" id="hyp-co2-'+i+'" min="100" max="9999" step="1" placeholder="ej: 1200" value="'+(d.co2_level||'')+'" style="'+inpStyle+'">'
+    +       '<div style="font-size:10px;color:var(--text3);margin-top:4px;text-transform:none;letter-spacing:0;">3-4 cifras (ppm)</div>'
     +     '</div>'
     +   '</div>'
     + '</div>'
     // Toggles SI/NO (grid 2 cols)
-    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:14px;">'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px;">'
     +   '<div class="fg" style="margin:0;"><label style="font-size:11px;">Apertura múltiple puerta +1min (última hora) <span class="req">*</span></label>'
-    +     '<div class="toggle-group" id="hyp-door-grp-'+i+'" style="margin-top:4px;">'
-    +       '<button type="button" class="tbtn'+doorSi+'" onclick="setHypoxicToggle('+i+',\'door\',true)">SÍ</button>'
-    +       '<button type="button" class="tbtn'+doorNo+'" onclick="setHypoxicToggle('+i+',\'door\',false)">NO</button>'
+    +     '<div class="toggle-group" id="hyp-door-grp-'+i+'" style="display:flex;gap:6px;margin-top:4px;">'
+    +       '<button type="button" class="tbtn'+doorSiCls+'" onclick="setHypoxicToggle('+i+',\'door\',true)">SÍ</button>'
+    +       '<button type="button" class="tbtn'+doorNoCls+'" onclick="setHypoxicToggle('+i+',\'door\',false)">NO</button>'
     +     '</div>'
     +     '<input type="hidden" id="hyp-door-'+i+'" value="'+(d.door_open===true?'si':d.door_open===false?'no':'')+'"></div>'
     +   '<div class="fg" style="margin:0;"><label style="font-size:11px;">Cliente notificó a recepción <span class="req">*</span></label>'
-    +     '<div class="toggle-group" id="hyp-client-grp-'+i+'" style="margin-top:4px;">'
-    +       '<button type="button" class="tbtn'+cliSi+'" onclick="setHypoxicToggle('+i+',\'client\',true)">SÍ</button>'
-    +       '<button type="button" class="tbtn'+cliNo+'" onclick="setHypoxicToggle('+i+',\'client\',false)">NO</button>'
+    +     '<div class="toggle-group" id="hyp-client-grp-'+i+'" style="display:flex;gap:6px;margin-top:4px;">'
+    +       '<button type="button" class="tbtn'+cliSiCls+'" onclick="setHypoxicToggle('+i+',\'client\',true)">SÍ</button>'
+    +       '<button type="button" class="tbtn'+cliNoCls+'" onclick="setHypoxicToggle('+i+',\'client\',false)">NO</button>'
     +     '</div>'
     +     '<input type="hidden" id="hyp-client-'+i+'" value="'+(d.client_notified===true?'si':d.client_notified===false?'no':'')+'"></div>'
     + '</div>'
@@ -188,9 +188,12 @@ function setHypoxicToggle(i, field, val){
   if(!grp) return;
   var btns = grp.querySelectorAll('button');
   btns.forEach(function(b){
-    b.classList.remove('on');
+    b.classList.remove('t-si');
+    b.classList.remove('t-no');
     var btnIsSi = b.textContent.trim().indexOf('SÍ') >= 0;
-    if(btnIsSi === val) b.classList.add('on');
+    if(btnIsSi === val){
+      b.classList.add(val ? 't-si' : 't-no');
+    }
   });
 }
 window.setHypoxicToggle = setHypoxicToggle;
