@@ -36,7 +36,14 @@ function refreshHypoxicBlock(){
     summary.innerHTML = '<strong style="color:#3b82f6;">'+_hypoxicLines.length+' habitación(es) con incidencia:</strong>'
       + _hypoxicLines.map(function(l){
           var types = (l.incident_types||[]).join(', ');
-          return '<div style="margin-top:4px;font-size:12px;">• Habitación <strong>'+l.room_number+'</strong> — '+types+' — CO2: <strong>'+l.co2_level+'</strong></div>';
+          var horaTxt = '';
+          if(l.created_at){
+            try {
+              var d = new Date(l.created_at);
+              horaTxt = ' <span style="color:var(--text3);font-size:11px;">(anotado '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+')</span>';
+            } catch(e){}
+          }
+          return '<div style="margin-top:4px;font-size:12px;">• Habitación <strong>'+l.room_number+'</strong> — '+types+' — CO2: <strong>'+l.co2_level+'</strong>'+horaTxt+'</div>';
         }).join('');
   }
 }
@@ -51,14 +58,11 @@ window.resetHypoxicLines = resetHypoxicLines;
 function openHypoxicModal(){
   var modal = document.getElementById('modal-hypoxic');
   if(!modal) return;
+  // Cada apertura del modal es una sesión independiente: empezar limpio
+  _hypoxicLines = [];
   var container = document.getElementById('hypoxic-lines');
   if(container) container.innerHTML = '';
-  // Restaurar líneas previas o iniciar con 1 vacía
-  if(_hypoxicLines.length === 0){
-    renderHypoxicLine(0, null);
-  } else {
-    _hypoxicLines.forEach(function(line, i){ renderHypoxicLine(i, line); });
-  }
+  renderHypoxicLine(0, { created_at: (typeof localTs === 'function' ? localTs() : new Date().toISOString()) });
   modal.style.display = 'flex';
 }
 window.openHypoxicModal = openHypoxicModal;
@@ -73,7 +77,8 @@ function addHypoxicLine(){
   var container = document.getElementById('hypoxic-lines');
   if(!container) return;
   var i = container.children.length;
-  renderHypoxicLine(i, null);
+  // Asignar timestamp local en el momento de añadir la línea
+  renderHypoxicLine(i, { created_at: (typeof localTs === 'function' ? localTs() : new Date().toISOString()) });
 }
 window.addHypoxicLine = addHypoxicLine;
 
@@ -96,13 +101,22 @@ function renderHypoxicLine(i, data){
   var cliSi  = d.client_notified===true ? ' on' : '';
   var cliNo  = d.client_notified===false ? ' on' : '';
   var inpStyle = 'color:#111827;background:#ffffff;border:1px solid #d1d5db;';
+  // Hora de anotación
+  var horaTxt = '';
+  if(d.created_at){
+    try {
+      var dt = new Date(d.created_at);
+      horaTxt = ' · <span style="color:var(--text3);font-size:10px;font-weight:400;">anotado '+dt.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+'</span>';
+    } catch(e){}
+  }
 
   var html = ''
-    + '<div class="hypoxic-line" data-idx="'+i+'" style="background:var(--bg);border:1px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">'
+    + '<div class="hypoxic-line" data-idx="'+i+'" data-created="'+(d.created_at||'')+'" style="background:var(--bg);border:1px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
-    +   '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#3b82f6;letter-spacing:.15em;">HABITACIÓN #'+(i+1)+'</div>'
+    +   '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#3b82f6;letter-spacing:.15em;">HABITACIÓN #'+(i+1)+horaTxt+'</div>'
     +   '<button onclick="removeHypoxicLine('+i+')" title="Eliminar" style="background:none;border:0;cursor:pointer;color:var(--red);font-size:16px;padding:4px 8px;">🗑</button>'
     + '</div>'
+    + '<input type="hidden" id="hyp-created-'+i+'" value="'+(d.created_at||'')+'">'
     + '<div class="fg"><label>Habitación <span class="req">*</span></label>'
     +   '<select id="hyp-room-'+i+'" style="'+inpStyle+'"><option value="">— Seleccionar —</option>'+roomsOpts+'</select></div>'
     + '<div class="fg"><label>Tipo de incidencia <span class="req">*</span> <span style="color:var(--text3);font-weight:400;font-size:11px;">(uno o varios)</span></label>'
@@ -183,6 +197,10 @@ function collectHypoxicFromUI(){
     var doorRaw = (document.getElementById('hyp-door-'+i)||{}).value || '';
     var clientRaw = (document.getElementById('hyp-client-'+i)||{}).value || '';
     var obs = (document.getElementById('hyp-obs-'+i)||{}).value || '';
+    var createdAt = (document.getElementById('hyp-created-'+i)||{}).value || '';
+    if(!createdAt){
+      createdAt = (typeof localTs === 'function' ? localTs() : new Date().toISOString());
+    }
     lines.push({
       room_number: room,
       incident_types: types,
@@ -190,7 +208,8 @@ function collectHypoxicFromUI(){
       co2_raw: co2Raw,
       door_open: doorRaw === 'si' ? true : (doorRaw === 'no' ? false : null),
       client_notified: clientRaw === 'si' ? true : (clientRaw === 'no' ? false : null),
-      observaciones: obs.trim()
+      observaciones: obs.trim(),
+      created_at: createdAt
     });
   }
   return lines;
@@ -213,7 +232,7 @@ function validateHypoxicLine(line, idx){
   return null;
 }
 
-function confirmHypoxic(){
+async function confirmHypoxic(){
   var lines = collectHypoxicFromUI();
   if(lines.length === 0){
     toast('No hay habitaciones para guardar','err');
@@ -223,19 +242,130 @@ function confirmHypoxic(){
     var err = validateHypoxicLine(lines[i], i);
     if(err){ toast(err,'err'); return; }
   }
-  // Limpiar campo co2_raw antes de guardar en memoria
-  _hypoxicLines = lines.map(function(l){
-    return {
-      room_number: l.room_number,
-      incident_types: l.incident_types,
-      co2_level: l.co2_level,
-      door_open: l.door_open,
-      client_notified: l.client_notified,
-      observaciones: l.observaciones
-    };
-  });
-  closeHypoxicModal();
-  refreshHypoxicBlock();
-  toast('✓ '+lines.length+' incidencia(s) Hypoxic Room preparada(s) — se guardarán al cerrar el turno','ok');
+  // Guardar directo en BBDD (sin esperar al cierre del turno)
+  var saved = 0;
+  try {
+    for(var j=0;j<lines.length;j++){
+      var l = lines[j];
+      var rec = {
+        id: genId(),
+        shift_id: null,  // se asocia cuando se cierre el turno (patrón ajustes)
+        employee_id: currentUser.id,
+        employee_nombre: currentUser.nombre,
+        department_code: currentUser.area || 'Recepción',
+        fecha: (typeof today === 'function' ? today() : new Date().toISOString().slice(0,10)),
+        turno: '',
+        room_number: l.room_number,
+        incident_types: JSON.stringify(l.incident_types || []),
+        co2_level: l.co2_level,
+        door_open_multiple_over_1min_last_hour: l.door_open,
+        client_notified_reception: l.client_notified,
+        observaciones: l.observaciones || '',
+        estado: 'Pendiente',
+        created_at: l.created_at || (typeof localTs === 'function' ? localTs() : new Date().toISOString())
+      };
+      var result = await dbInsert('hypoxic_room_incidencias', rec);
+      if(result === null){
+        toast('Error guardando habitación '+l.room_number+' (ver consola)','err');
+        return;
+      }
+      saved++;
+    }
+    invalidateCache('hypoxic_room_incidencias');
+    if(typeof auditLog === 'function'){
+      await auditLog('HYPOXIC_NEW', saved+' incidencia(s) Hypoxic Room registradas');
+    }
+    _hypoxicLines = [];
+    closeHypoxicModal();
+    toast('✓ '+saved+' incidencia(s) Hypoxic Room guardada(s) correctamente','ok');
+    if(typeof renderHypoxicMod === 'function') renderHypoxicMod();
+  } catch(eHyp){
+    console.error('Error guardando Hypoxic Room:', eHyp);
+    toast('Error guardando incidencias (ver consola)','err');
+  }
 }
 window.confirmHypoxic = confirmHypoxic;
+
+// ── Módulo sidebar: pantalla con lista del día + botón añadir ──
+async function renderHypoxicMod(){
+  var el = document.getElementById('screen-hypoxic-mod');
+  if(!el) return;
+  var isAdminU = (typeof isAdmin === 'function') && isAdmin(currentUser);
+  var isSup    = (typeof isSupervisor === 'function') && isSupervisor(currentUser);
+  var todayStr = (typeof today === 'function') ? today() : new Date().toISOString().slice(0,10);
+  invalidateCache('hypoxic_room_incidencias');
+  var all = [];
+  try { all = await getDB('hypoxic_room_incidencias'); } catch(e){}
+
+  // Filtro por rol:
+  //  - empleado: SOLO los suyos del día
+  //  - jefe_recepcion / admin: todos del día
+  var list = (all||[]).filter(function(h){ return (h.fecha||'').slice(0,10) === todayStr; });
+  if(!isAdminU && !(currentUser && currentUser.rol === 'jefe_recepcion')){
+    list = list.filter(function(h){ return h.employee_id === currentUser.id; });
+  }
+  list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  var pendAssoc = list.filter(function(h){ return !h.shift_id; }).length;
+
+  var cards;
+  if(!list.length){
+    cards = '<div class="empty"><div class="empty-icon">🌬</div><div class="empty-text">Sin incidencias Hypoxic Room hoy</div></div>';
+  } else {
+    cards = list.map(function(h){
+      var hora = h.created_at ? new Date(h.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+      var types = '';
+      try { var arr = JSON.parse(h.incident_types||'[]'); types = Array.isArray(arr) ? arr.join(', ') : (h.incident_types||''); }
+      catch(e){ types = h.incident_types||''; }
+      var co2 = h.co2_level;
+      var co2Class = (co2>=1000) ? 'b-red' : (co2>=700 ? 'b-amber' : 'b-green');
+      var puerta = h.door_open_multiple_over_1min_last_hour ? '<span class="badge b-red">Puerta SÍ</span>' : '<span class="badge b-gray">Puerta NO</span>';
+      var cliente = h.client_notified_reception ? '<span class="badge b-yellow">Cliente avisó</span>' : '';
+      var assocTag = h.shift_id
+        ? '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">en turno</span>'
+        : '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">pendiente turno</span>';
+      var obs = h.observaciones ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">📝 '+formatDisplayValue(h.observaciones)+'</div>' : '';
+      var delBtn = isAdminU ? ' <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteHypoxicItem(\''+h.id+'\')">🗑</button>' : '';
+      return '<div class="task-card">'
+        + '<div class="task-meta" style="align-items:center;flex-wrap:wrap;gap:6px;">'
+        +   '<span class="dept-badge" style="background:#3b82f6;color:#fff;">Hab '+formatDisplayValue(h.room_number)+'</span>'
+        +   '<span class="task-origin">'+hora+'</span>'
+        +   '<span class="badge '+co2Class+'">CO2: '+formatDisplayValue(co2)+'</span>'
+        +   puerta + (cliente?' '+cliente:'')
+        +   assocTag
+        +   delBtn
+        + '</div>'
+        + '<div style="font-size:13px;margin-top:6px;"><strong>'+formatDisplayValue(types)+'</strong></div>'
+        + obs
+        + '<div class="task-footer">'
+        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">👤 '+formatDisplayValue(h.employee_nombre||'')+'</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  var subText = list.length+' incidencia(s) hoy';
+  if(pendAssoc > 0) subText += ' · <b style="color:var(--amber);">'+pendAssoc+' pendiente(s) de asociar a turno</b>';
+
+  el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
+    + '<div><div class="page-title">🌬 Hypoxic Room — hoy</div>'
+    + '<div class="page-sub">'+subText+'</div></div>'
+    + '<button class="btn btn-primary" onclick="openHypoxicModal()">+ Nueva incidencia</button>'
+    + '</div>'
+    + '<div>'+cards+'</div>';
+}
+window.renderHypoxicMod = renderHypoxicMod;
+
+async function deleteHypoxicItem(hid){
+  if(typeof isAdmin === 'function' && !isAdmin(currentUser)){ toast('Solo admin','err'); return; }
+  if(!confirm('¿Eliminar esta incidencia Hypoxic Room?\n\nNo se puede deshacer.')) return;
+  var all = [];
+  try { all = await getDB('hypoxic_room_incidencias'); } catch(e){}
+  var h = (all||[]).find(function(x){ return x.id===hid; });
+  if(typeof auditLog === 'function') await auditLog('HYPOXIC_DELETE', hid+' | '+JSON.stringify(h||{}).slice(0,200));
+  await dbDelete('hypoxic_room_incidencias', hid);
+  invalidateCache('hypoxic_room_incidencias');
+  toast('Incidencia eliminada','ok');
+  renderHypoxicMod();
+}
+window.deleteHypoxicItem = deleteHypoxicItem;

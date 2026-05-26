@@ -750,17 +750,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
             </div>
         </div>
 
-        <!-- HYPOXIC ROOM BLOCK (sólo Recepción) -->
-        <div id="hypoxic-block" style="display:none;margin-top:14px;">
-          <div class="sec-div">🌬 Hypoxic Room</div>
-          <div class="fg">
-            <button type="button" class="btn btn-secondary" onclick="openHypoxicModal()" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">🌬 Hypoxic Room — Añadir / editar incidencia</button>
-            <div id="hypoxic-summary" style="margin-top:8px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;">
-              <span style="color:var(--text3);">Sin incidencias Hypoxic Room registradas en este turno</span>
-            </div>
-          </div>
-        </div>
-
         <!-- MERMA BLOCK -->
         <div id="merma-section" style="margin-top:14px;">
           <div class="sec-div">Merma</div>
@@ -858,10 +847,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <button class="val-dept-btn" data-dept="Recepción" onclick="selectValDept('Recepción')">🛎 Recepción</button>
       </div>
 
-      <!-- Sub-tabs Follow-up / Cierre Caja -->
+      <!-- Sub-tabs Follow-up / Cierre Caja / Hypoxic Room -->
       <div style="display:flex;gap:8px;margin-bottom:14px;">
         <button id="val-tab-followup" onclick="switchValTab('followup')" style="padding:8px 18px;border-radius:6px;border:2px solid #2ec4b6;background:rgba(46,196,182,.15);color:#2ec4b6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">FOLLOW-UP</button>
         <button id="val-tab-caja" onclick="switchValTab('caja')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">CIERRE CAJA</button>
+        <button id="val-tab-hypoxic" onclick="switchValTab('hypoxic')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">🌬 HYPOXIC ROOM</button>
       </div>
 
       <div class="filter-bar">
@@ -912,6 +902,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
           </div>
         </div>
         <div class="card"><div class="tbl-wrap" id="val-caja-table"></div></div>
+      </div>
+
+      <!-- HYPOXIC ROOM TAB -->
+      <div id="val-content-hypoxic" style="display:none;">
+        <div class="card"><div class="tbl-wrap" id="val-hypoxic-table"></div></div>
       </div>
     </div>
 
@@ -1142,6 +1137,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <!-- ══ AJUSTES (módulo Sala) ══ -->
     <div class="screen" id="screen-ajustes-mod">
       <div class="page-header"><div class="page-title">⚙ Ajustes/Correcciones</div><div class="page-sub">Cargando...</div></div>
+    </div>
+
+    <!-- ══ HYPOXIC ROOM (módulo Recepción) ══ -->
+    <div class="screen" id="screen-hypoxic-mod">
+      <div class="page-header"><div class="page-title">🌬 Hypoxic Room</div><div class="page-sub">Cargando...</div></div>
     </div>
 
   </div><!-- /main -->

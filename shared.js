@@ -402,7 +402,7 @@ function getScreens(rol){
     merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes/Correcciones'},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        pending:true},
-    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
+    recmod:      {id:'hypoxic-mod', label:'🌬 Hypoxic Room'},
     mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true}
   };
 
@@ -459,7 +459,7 @@ function buildNav(){
     'gestiones': _svg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
     'incidencias': _svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','hypoxic-mod':'Hypoxic','mant-mod':'Mant.'};
 
   // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
   const sideb = document.getElementById('sidebar-nav');
@@ -556,6 +556,7 @@ async function showScreen(id){
   if(id==='incidencias'){ renderIncidenciasScreen(); }
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
+  if(id==='hypoxic-mod'){ if(typeof renderHypoxicMod === 'function') renderHypoxicMod(); }
   updateDots();
 }
 async function updateDots(){
@@ -885,7 +886,6 @@ async function initTurnoForm(){
     if(tResp && tResp.closest('.fg')) tResp.closest('.fg').style.display='none';
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
-    if(typeof refreshHypoxicBlock === 'function') refreshHypoxicBlock();
   } else if(isSalaUser) {
     if(salaBlock) salaBlock.style.display = 'none'; // removed - using ajustes popup
     var mermaSecEl = document.getElementById('merma-section');
@@ -1222,35 +1222,23 @@ async function _doSaveTurno(){
     }
   }
 
-  // ── Guardar incidencias Hypoxic Room (Recepción) → tabla hypoxic_room_incidencias ──
-  if(!editingShiftId && typeof _hypoxicLines !== 'undefined' && _hypoxicLines && _hypoxicLines.length > 0){
+  // ── Asociar incidencias Hypoxic Room sin shift_id del empleado al turno nuevo ──
+  // Mismo patrón que ajustes: el empleado las crea durante el turno desde el
+  // módulo sidebar (shift_id=null) y aquí se vinculan al turno recién cerrado.
+  if(!editingShiftId){
     try {
-      for(const hl of _hypoxicLines){
-        var hRec = {
-          id: genId(),
-          shift_id: shiftId,
-          employee_id: currentUser.id,
-          employee_nombre: currentUser.nombre,
-          department_code: currentUser.area || 'Recepción',
-          fecha: fecha,
-          turno: servicio,
-          room_number: hl.room_number,
-          incident_types: JSON.stringify(hl.incident_types || []),
-          co2_level: hl.co2_level,
-          door_open_multiple_over_1min_last_hour: hl.door_open,
-          client_notified_reception: hl.client_notified,
-          observaciones: hl.observaciones || '',
-          estado: 'Pendiente',
-          created_at: ts
-        };
-        await dbInsert('hypoxic_room_incidencias', hRec);
+      var pendHyp = (await getDB('hypoxic_room_incidencias')).filter(function(h){
+        return !h.shift_id && h.employee_id === currentUser.id;
+      });
+      for(const hp of pendHyp){
+        await dbUpdate('hypoxic_room_incidencias', hp.id, {shift_id: shiftId, turno: servicio});
       }
-      invalidateCache('hypoxic_room_incidencias');
-      await auditLog('HYPOXIC_NEW', _hypoxicLines.length + ' incidencia(s) Hypoxic Room del turno ' + shiftId);
-      _hypoxicLines = [];
-      if(typeof refreshHypoxicBlock === 'function') refreshHypoxicBlock();
-    } catch(eHyp){
-      console.error('No se pudieron guardar incidencias Hypoxic Room', eHyp);
+      if(pendHyp.length){
+        invalidateCache('hypoxic_room_incidencias');
+        await auditLog('HYPOXIC_ASSOC', pendHyp.length+' incidencias Hypoxic Room asociadas a turno '+shiftId);
+      }
+    } catch(eHypAssoc){
+      console.error('No se pudieron asociar incidencias Hypoxic Room pendientes', eHypAssoc);
     }
   }
 
@@ -1628,18 +1616,25 @@ function selectValDept(dept){
   var showsCaja = (dept === 'Sala' || dept === 'Recepción');
   if(cajaTab) cajaTab.style.display = showsCaja ? '' : 'none';
 
+  // Mostrar/ocultar tab Hypoxic Room: sólo si dept = Recepción y usuario tiene permiso
+  var hypoxicTab = document.getElementById('val-tab-hypoxic');
+  var showsHypoxic = (dept === 'Recepción') && (typeof canSeeHypoxicTab === 'function' && canSeeHypoxicTab(currentUser));
+  if(hypoxicTab) hypoxicTab.style.display = showsHypoxic ? '' : 'none';
+
   // Recalcular opciones de servicio
   onValDeptChange();
 
   // Si estaba en Caja pero el nuevo dept no la soporta → volver a follow-up
   var cajaContent = document.getElementById('val-content-caja');
-  if(!showsCaja && cajaContent && cajaContent.style.display !== 'none'){
+  var hypoxicContent = document.getElementById('val-content-hypoxic');
+  var inCaja = cajaContent && cajaContent.style.display !== 'none';
+  var inHypoxic = hypoxicContent && hypoxicContent.style.display !== 'none';
+  if((inCaja && !showsCaja) || (inHypoxic && !showsHypoxic)){
     switchValTab('followup');
   } else {
     renderValidacion();
-    if(showsCaja && cajaContent && cajaContent.style.display !== 'none' && typeof renderValCajaList === 'function'){
-      renderValCajaList();
-    }
+    if(inCaja && showsCaja && typeof renderValCajaList === 'function') renderValCajaList();
+    if(inHypoxic && showsHypoxic && typeof renderValHypoxicList === 'function') renderValHypoxicList();
   }
 }
 

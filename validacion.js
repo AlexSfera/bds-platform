@@ -379,26 +379,113 @@ async function saveReopenShift() {
 }
 
 // ── VALIDACIÓN TABS ──
+function canSeeHypoxicTab(user){
+  if(!user) return false;
+  if(typeof isAdmin === 'function' && isAdmin(user)) return true;
+  if(user.rol === 'jefe_recepcion') return true;
+  if((user.area||'').toLowerCase() === 'mantenimiento') return true;
+  return false;
+}
+
+function _valTabStyleActive(btn, color){
+  if(!btn) return;
+  btn.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid '+color+';background:'+(color==='#2ec4b6'?'rgba(46,196,182,.15)':color==='#3b82f6'?'rgba(59,130,246,.15)':'rgba(168,85,247,.15)')+';color:'+color+';font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;';
+}
+function _valTabStyleInactive(btn){
+  if(!btn) return;
+  btn.style.cssText='padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;';
+}
+
 function switchValTab(tab) {
   var followupDiv = document.getElementById('val-content-followup');
-  var cajaDiv = document.getElementById('val-content-caja');
+  var cajaDiv     = document.getElementById('val-content-caja');
+  var hypoxicDiv  = document.getElementById('val-content-hypoxic');
   var btnF = document.getElementById('val-tab-followup');
   var btnC = document.getElementById('val-tab-caja');
+  var btnH = document.getElementById('val-tab-hypoxic');
   if(!followupDiv||!cajaDiv) { console.warn('Tab divs not found'); return; }
-  if(tab === 'followup') {
-    followupDiv.style.display = 'block';
-    cajaDiv.style.display = 'none';
-    if(btnF){ btnF.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid #2ec4b6;background:rgba(46,196,182,.15);color:#2ec4b6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;'; }
-    if(btnC){ btnC.style.cssText='padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;'; }
-    renderValidacion();
-  } else {
-    followupDiv.style.display = 'none';
+
+  // Hide all
+  followupDiv.style.display = 'none';
+  cajaDiv.style.display = 'none';
+  if(hypoxicDiv) hypoxicDiv.style.display = 'none';
+
+  // Reset all buttons inactive
+  _valTabStyleInactive(btnF);
+  _valTabStyleInactive(btnC);
+  _valTabStyleInactive(btnH);
+
+  if(tab === 'caja'){
     cajaDiv.style.display = 'block';
-    if(btnC){ btnC.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid #3b82f6;background:rgba(59,130,246,.15);color:#3b82f6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;'; }
-    if(btnF){ btnF.style.cssText='padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;'; }
+    _valTabStyleActive(btnC, '#3b82f6');
     renderValCajaList();
+  } else if(tab === 'hypoxic'){
+    if(hypoxicDiv) hypoxicDiv.style.display = 'block';
+    _valTabStyleActive(btnH, '#a855f7');
+    if(typeof renderValHypoxicList === 'function') renderValHypoxicList();
+  } else {
+    followupDiv.style.display = 'block';
+    _valTabStyleActive(btnF, '#2ec4b6');
+    renderValidacion();
   }
 }
+
+// ── HYPOXIC ROOM TAB CONTENT ──
+async function renderValHypoxicList(){
+  var el = document.getElementById('val-hypoxic-table');
+  if(!el) return;
+
+  var desde = (document.getElementById('v-desde')||{}).value || '';
+  var hasta = (document.getElementById('v-hasta')||{}).value || '';
+
+  var all = [];
+  try { all = await getDB('hypoxic_room_incidencias'); } catch(e){ console.error('Error cargando hypoxic_room_incidencias', e); }
+
+  if(desde) all = all.filter(function(h){ return (h.fecha||'') >= desde; });
+  if(hasta) all = all.filter(function(h){ return (h.fecha||'') <= hasta; });
+
+  all.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  if(!all.length){
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🌬</div><div class="empty-text">Sin incidencias Hypoxic Room en el rango seleccionado</div></div>';
+    return;
+  }
+
+  var rows = all.map(function(h){
+    var types = '';
+    try { var arr = JSON.parse(h.incident_types||'[]'); types = Array.isArray(arr) ? arr.join(', ') : (h.incident_types||''); }
+    catch(e){ types = h.incident_types||''; }
+    var fechaHora = (typeof fmtDateTs === 'function') ? fmtDateTs(h.fecha, h.created_at) : (h.fecha+' · '+(h.created_at||''));
+    var puerta = h.door_open_multiple_over_1min_last_hour
+      ? '<span class="badge b-red">SÍ</span>'
+      : '<span class="badge b-green">NO</span>';
+    var cliente = h.client_notified_reception
+      ? '<span class="badge b-yellow">SÍ</span>'
+      : '<span class="badge b-gray">NO</span>';
+    var estado = h.estado || 'Pendiente';
+    var obs = h.observaciones || '—';
+    var co2 = h.co2_level;
+    var co2Class = (co2>=1000) ? 'b-red' : (co2>=700 ? 'b-amber' : 'b-green');
+    return '<tr>'
+      + '<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fechaHora+'</td>'
+      + '<td style="font-weight:700;font-family:var(--font-mono);text-align:center;">'+formatDisplayValue(h.room_number)+'</td>'
+      + '<td>'+formatDisplayValue(types)+'</td>'
+      + '<td style="text-align:center;"><span class="badge '+co2Class+'">'+formatDisplayValue(co2)+'</span></td>'
+      + '<td style="text-align:center;">'+puerta+'</td>'
+      + '<td style="text-align:center;">'+cliente+'</td>'
+      + '<td style="font-size:12px;">'+formatDisplayValue(h.employee_nombre)+'</td>'
+      + '<td style="font-size:11px;">'+formatDisplayValue(h.turno||'')+'</td>'
+      + '<td><span class="badge b-amber">'+formatDisplayValue(estado)+'</span></td>'
+      + '<td style="font-size:11px;color:var(--text3);max-width:200px;">'+formatDisplayValue(obs)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  el.innerHTML = '<table>'
+    + '<tr><th>Fecha · Hora</th><th>Hab</th><th>Tipos</th><th>CO2</th><th>Puerta</th><th>Cliente avisó</th><th>Empleado</th><th>Turno</th><th>Estado</th><th>Observaciones</th></tr>'
+    + rows
+    + '</table>';
+}
+window.renderValHypoxicList = renderValHypoxicList;
 
 // ── VALIDACIÓN CAJA ──
 async function renderValCajaList() {
