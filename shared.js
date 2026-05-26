@@ -1577,6 +1577,13 @@ function selectValDept(dept){
   var dh = document.getElementById('v-dept');
   if(dh) dh.value = dept;
 
+  // Reset selección masiva al cambiar dept
+  _valSelected.clear();
+  updateValMasivoHeader();
+
+  // Repoblar filtro empleado según dept
+  populateValEmpleadoFilter();
+
   // Resaltar botón activo
   document.querySelectorAll('.val-dept-btn').forEach(function(b){
     if(b.dataset.dept === dept){ b.classList.add('active'); }
@@ -1603,6 +1610,168 @@ function selectValDept(dept){
   }
 }
 
+// ── B6 Fase 2: estado validación masiva + filtros ───────────────────
+var _valSelected = new Set();
+var _valSoloPendientes = false;
+
+function toggleValSelect(sid, checked){
+  if(checked) _valSelected.add(sid);
+  else _valSelected.delete(sid);
+  updateValMasivoHeader();
+}
+window.toggleValSelect = toggleValSelect;
+
+function updateValMasivoHeader(){
+  var h = document.getElementById('val-masivo-header');
+  var c = document.getElementById('val-masivo-count');
+  if(!h) return;
+  if(_valSelected.size > 0){
+    h.style.display = 'flex';
+    if(c) c.textContent = _valSelected.size;
+  } else {
+    h.style.display = 'none';
+  }
+}
+
+function clearValSelection(){
+  _valSelected.clear();
+  document.querySelectorAll('.val-row-cb').forEach(function(cb){ cb.checked=false; });
+  var hcb = document.getElementById('val-selectall-cb');
+  if(hcb) hcb.checked = false;
+  updateValMasivoHeader();
+}
+window.clearValSelection = clearValSelection;
+
+function toggleValSelectAll(checked){
+  document.querySelectorAll('.val-row-cb').forEach(function(cb){
+    if(cb.disabled) return;
+    cb.checked = checked;
+    var sid = cb.dataset.sid;
+    if(!sid) return;
+    if(checked) _valSelected.add(sid);
+    else _valSelected.delete(sid);
+  });
+  updateValMasivoHeader();
+}
+window.toggleValSelectAll = toggleValSelectAll;
+
+function toggleValSoloPendientes(){
+  _valSoloPendientes = !_valSoloPendientes;
+  var btn = document.getElementById('v-solo-pend');
+  if(btn){
+    if(_valSoloPendientes){
+      btn.style.background = '#2ec4b6';
+      btn.style.color = '#fff';
+      btn.style.borderColor = '#2ec4b6';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }
+  }
+  renderValidacion();
+}
+window.toggleValSoloPendientes = toggleValSoloPendientes;
+
+function getShiftBlockers(s, allAj, allMer){
+  var blockers = [];
+  var ajPend = (allAj||[]).filter(function(a){
+    return a.shift_id === s.id && (a.estado_aprobacion||'Aprobado') === 'Pendiente';
+  });
+  if(ajPend.length > 0) blockers.push(ajPend.length+' ajuste(s) pendiente(s)');
+  var mermSinC = (allMer||[]).filter(function(m){
+    return recordMatchesShift(m, s) && !(parseFloat(m.coste_total)>0);
+  });
+  if(mermSinC.length > 0) blockers.push(mermSinC.length+' merma(s) sin coste');
+  return blockers;
+}
+
+async function validarMasivo(){
+  if(!isAdmin(currentUser) && !isSupervisor(currentUser)){
+    toast('Solo jefe de departamento o admin pueden validar masivamente','err');
+    return;
+  }
+  if(_valSelected.size === 0){
+    toast('No hay turnos seleccionados','err');
+    return;
+  }
+  if(!confirm('¿Validar '+_valSelected.size+' turno(s)?\n\nLos turnos con ajustes pendientes o merma sin coste se omitirán automáticamente.')) return;
+
+  var allShifts = await getDB('shifts');
+  var allAj = await getDB('ajustes');
+  var allMer = await getDB('merma');
+
+  var validated = 0;
+  var blocked = 0;
+  var blockedDetails = [];
+  var ids = Array.from(_valSelected);
+
+  for(var i=0;i<ids.length;i++){
+    var sid = ids[i];
+    var s = allShifts.find(function(x){ return x.id===sid; });
+    if(!s){ continue; }
+    if(!canValidateShift(currentUser, s)){
+      blocked++;
+      blockedDetails.push(s.nombre+' — sin permiso');
+      continue;
+    }
+    var blockers = getShiftBlockers(s, allAj, allMer);
+    if(blockers.length > 0){
+      blocked++;
+      blockedDetails.push(s.nombre+' — '+blockers.join(', '));
+      continue;
+    }
+    await dbUpdate('shifts', sid, {
+      estado: 'Validado',
+      validado_por: currentUser.nombre,
+      validado_ts: localTs(),
+      comentario_validador: 'Validación masiva'
+    });
+    await auditLog('VALIDACION_MASIVA', currentUser.nombre+' → '+s.nombre+' ('+sid+')');
+    validated++;
+  }
+
+  invalidateCache('shifts');
+  _valSelected.clear();
+  renderValidacion();
+
+  var msg = '✓ '+validated+' validado(s)';
+  if(blocked > 0) msg += ', ⚠ '+blocked+' omitido(s)';
+  toast(msg, validated>0 ? 'ok' : 'warn');
+
+  if(blocked > 0){
+    console.log('[VALIDACION_MASIVA] Omitidos (ver razón):');
+    blockedDetails.forEach(function(d){ console.log('  - '+d); });
+  }
+}
+window.validarMasivo = validarMasivo;
+
+async function populateValEmpleadoFilter(){
+  var sel = document.getElementById('v-empleado');
+  if(!sel) return;
+  var current = sel.value;
+  var allEmps = [];
+  try { allEmps = await getDB('employees'); } catch(e){}
+  var dept = (typeof _currentValDept !== 'undefined' && _currentValDept) || '';
+  if(dept){
+    allEmps = allEmps.filter(function(e){ return e.area === dept; });
+  }
+  allEmps.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
+  var html = '<option value="">Todos</option>';
+  allEmps.forEach(function(e){
+    var n = formatDisplayValue(e.nombre);
+    html += '<option value="'+n+'">'+n+'</option>';
+  });
+  sel.innerHTML = html;
+  // Restaurar selección si sigue siendo válida
+  if(current){
+    var found = false;
+    for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===current){ found=true; break; } }
+    sel.value = found ? current : '';
+  }
+}
+window.populateValEmpleadoFilter = populateValEmpleadoFilter;
+
 async function renderValidacion(){
   let shifts=await getDB('shifts');
   // jefe_recepcion: only see Recepción shifts
@@ -1618,6 +1787,8 @@ async function renderValidacion(){
   const estado=document.getElementById('v-estado').value;
   const serv=document.getElementById('v-servicio').value;
   const dept=(document.getElementById('v-dept')||{}).value||'';
+  const empleado=(document.getElementById('v-empleado')||{}).value||'';
+  const fioFilt=(document.getElementById('v-fio')||{}).value||'';
   if(desde) shifts=shifts.filter(s=>s.fecha>=desde);
   if(hasta) shifts=shifts.filter(s=>s.fecha<=hasta);
   if(estado) shifts=shifts.filter(s=>s.estado===estado);
@@ -1627,17 +1798,41 @@ async function renderValidacion(){
     if(s.area==='Recepción') return s.servicio===serv;
     try{ var arr=Array.isArray(s.servicio)?s.servicio:JSON.parse(s.servicio); return Array.isArray(arr)?arr.includes(serv):s.servicio===serv; }catch(e){ return s.servicio===serv; }
   });
+  if(empleado) shifts=shifts.filter(function(s){ return s.nombre===empleado; });
+  if(fioFilt==='si') shifts=shifts.filter(function(s){ return s.fio===true; });
+  else if(fioFilt==='no') shifts=shifts.filter(function(s){ return s.fio!==true; });
+  if(_valSoloPendientes) shifts=shifts.filter(function(s){ return s.estado==='Pendiente'; });
   shifts.sort((a,b)=>b.created_at.localeCompare(a.created_at));
   const pend=shifts.filter(s=>s.estado==='Pendiente').length;
   var ajustesAll = []; try { ajustesAll = await getDB('ajustes'); } catch(e){}
   const _shiftIds = shifts.map(function(s){ return s.id; });
   const _ajF = ajustesAll.filter(function(a){ return _shiftIds.indexOf(a.shift_id) >= 0; });
   const _totAj = _ajF.reduce(function(acc,a){ return acc + (parseFloat(a.importe)||0); }, 0);
+  // KPIs jefe (solo admin/supervisor)
+  const _isJefe = isAdmin(currentUser) || isSupervisor(currentUser);
+  const _kValidados = shifts.filter(function(s){ return s.estado==='Validado' || s.estado==='Validado con FIO'; }).length;
+  const _kFIO = shifts.filter(function(s){ return s.fio===true; }).length;
+  const _kHoras = shifts.reduce(function(a,s){ return a + (parseFloat(s.horas)||0); }, 0);
+  var _mermasPreview = [];
+  try { _mermasPreview = await getDB('merma'); } catch(e){}
+  const _kMermaCoste = _mermasPreview.filter(function(m){
+    return shifts.some(function(s){ return recordMatchesShift(m,s); });
+  }).reduce(function(a,m){ return a + (parseFloat(m.coste_total)||0); }, 0);
   var _alertsHtml = '';
   if(pend > 0) _alertsHtml += '<div class="alert a-warn">⚠ '+pend+' registro(s) pendiente(s)</div>';
-  _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
-    + '<div class="kpi k-blue"><div class="kpi-lbl">Total ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
-    + '</div>';
+  if(_isJefe){
+    _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
+      + '<div class="kpi"><div class="kpi-lbl">Turnos</div><div class="kpi-val">'+shifts.length+'</div><div class="kpi-sub">'+_kValidados+' validados · '+pend+' pendientes</div></div>'
+      + '<div class="kpi"><div class="kpi-lbl">Horas</div><div class="kpi-val">'+_kHoras.toFixed(1)+'h</div><div class="kpi-sub">en filtro</div></div>'
+      + '<div class="kpi k-red"><div class="kpi-lbl">FIO</div><div class="kpi-val">'+_kFIO+'</div><div class="kpi-sub">fallo individual</div></div>'
+      + '<div class="kpi k-blue"><div class="kpi-lbl">Ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
+      + '<div class="kpi k-orange"><div class="kpi-lbl">Coste merma</div><div class="kpi-val">'+_kMermaCoste.toFixed(2)+' €</div><div class="kpi-sub">en filtro</div></div>'
+      + '</div>';
+  } else {
+    _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
+      + '<div class="kpi k-blue"><div class="kpi-lbl">Total ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
+      + '</div>';
+  }
   document.getElementById('val-alerts').innerHTML = _alertsHtml;
   const mermas=await getDB('merma'); const incis=await getDB('incidencias');
   const el=document.getElementById('validacion-table');
@@ -1691,7 +1886,17 @@ async function renderValidacion(){
     var btnDel = isAdmin(currentUser)
       ? '<button class="vbtn vbtn-del" onclick="deleteShift(\''+sid+'\')">🗑</button>' : '';
     aCell = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">'+btnRevisar+btnVer+btnArevisar+btnReabrir+btnDel+'</div>';
-    valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
+    // Checkbox masiva: solo jefes/admin, solo turnos validables (no read-only, con permiso)
+    var cbCell = '';
+    if(_isJefe){
+      var cbEnabled = !isReadOnly && canSupervise;
+      cbCell = '<td style="text-align:center;width:32px;">'
+        + (cbEnabled
+            ? '<input type="checkbox" class="val-row-cb" data-sid="'+sid+'" onchange="toggleValSelect(\''+sid+'\', this.checked)"'+(_valSelected.has(sid)?' checked':'')+' style="cursor:pointer;width:16px;height:16px;">'
+            : '<span style="color:var(--text3);font-size:11px;">—</span>')
+        + '</td>';
+    }
+    valRows+='<tr>'+cbCell+'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
       +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
@@ -1699,7 +1904,11 @@ async function renderValidacion(){
       +'<td style="text-align:center;">'+(s.fio===true?'<span class="badge b-red">FIO</span>':s.estado!=='Pendiente'?'<span style="color:var(--green);">✓</span>':'<span style="color:var(--text3);">—</span>')+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  var _headerCb = _isJefe
+    ? '<th style="text-align:center;width:32px;"><input type="checkbox" id="val-selectall-cb" onchange="toggleValSelectAll(this.checked)" style="cursor:pointer;width:16px;height:16px;" title="Seleccionar todos"></th>'
+    : '';
+  el.innerHTML='<table><tr>'+_headerCb+'<th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  updateValMasivoHeader();
 }
 // valAdvanceGestion, valShowCloseGestionForm, valSaveCloseGestion,
 // valAdvanceGestionNew, valShowCloseGestionNewForm, valSaveCloseGestionNew → gestiones.js

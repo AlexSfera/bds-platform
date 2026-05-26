@@ -866,7 +866,21 @@ tr:hover td{background:rgba(255,255,255,.018);}
           <select id="v-servicio">
             <option value="">Todos</option><option>Desayuno</option><option>Comida</option><option>Cena</option><option>Evento</option><option>Otro</option><option>Mañana</option><option>Tarde</option><option>Noche</option>
           </select></div>
+        <div class="fg"><label>Empleado</label>
+          <select id="v-empleado"><option value="">Todos</option></select></div>
+        <div class="fg"><label>FIO</label>
+          <select id="v-fio"><option value="">Todos</option><option value="si">Sí</option><option value="no">No</option></select></div>
+        <div class="fg"><label>&nbsp;</label>
+          <button id="v-solo-pend" onclick="toggleValSoloPendientes()" class="btn btn-secondary" style="white-space:nowrap;">⏳ Solo pendientes</button></div>
         <div><button class="btn btn-secondary" style="margin-top:20px" onclick="renderValidacion()">🔍 Filtrar</button></div>
+      </div>
+      <!-- Header validación masiva (oculto si 0 seleccionados) -->
+      <div id="val-masivo-header" style="display:none;background:rgba(46,196,182,.1);border:1px solid #2ec4b6;border-radius:8px;padding:10px 14px;margin-bottom:12px;align-items:center;justify-content:space-between;gap:10px;">
+        <div><strong id="val-masivo-count">0</strong> turno(s) seleccionado(s)</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="clearValSelection()">Deseleccionar</button>
+          <button class="btn btn-primary" onclick="validarMasivo()">✓ Validar seleccionados</button>
+        </div>
       </div>
       <!-- FOLLOW-UP TAB -->
       <div id="val-content-followup">
