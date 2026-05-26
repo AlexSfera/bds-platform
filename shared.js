@@ -1189,6 +1189,38 @@ async function _doSaveTurno(){
     }
   }
 
+  // ── Guardar líneas de ajustes del flujo cierre turno (Sala) → tabla ajustes ──
+  // Unifica almacenamiento: las líneas del popup ajustes-del-turno crean filas
+  // en la tabla `ajustes` con shift_id asignado y estado_aprobacion='Pendiente'.
+  if(!editingShiftId && typeof _ajustesLines !== 'undefined' && _ajustesLines && _ajustesLines.length > 0){
+    try {
+      for(const line of _ajustesLines){
+        var obsTxt = [];
+        if(line.num && line.num > 1) obsTxt.push('Cantidad: ' + line.num);
+        if(line.comunicado_responsable) obsTxt.push('Comunicado responsable: ' + line.comunicado_responsable);
+        var ajRec = {
+          id: genId(),
+          shift_id: shiftId,
+          employee_id: currentUser.id,
+          nombre: currentUser.nombre,
+          area: currentUser.area || '',
+          fecha: fecha,
+          tipo: line.tipo,
+          importe: parseFloat(line.importe) || 0,
+          motivo: line.motivo || '',
+          obs: obsTxt.join(' · '),
+          estado_aprobacion: 'Pendiente',
+          created_at: ts
+        };
+        await dbInsert('ajustes', ajRec);
+      }
+      invalidateCache('ajustes');
+      await auditLog('AJUSTE_TURNO_NEW', _ajustesLines.length + ' ajuste(s) del turno ' + shiftId);
+    } catch(eAjLines){
+      console.error('No se pudieron guardar ajustes del turno', eAjLines);
+    }
+  }
+
   // ── Save gestión pendiente → tabla gestiones ──
   if(toggleState.gestion==='si'){
     const gTipoEl = document.getElementById('g-tipo');
