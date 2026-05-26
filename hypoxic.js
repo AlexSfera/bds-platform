@@ -377,6 +377,10 @@ async function confirmHypoxic(){
       closeHypoxicModal();
       toast('✓ Incidencia rectificada','ok');
       if(typeof renderHypoxicMod === 'function') renderHypoxicMod();
+      var hypTab = document.getElementById('val-content-hypoxic');
+      if(hypTab && hypTab.style.display !== 'none' && typeof renderValHypoxicList === 'function'){
+        renderValHypoxicList();
+      }
     } catch(eEdit){
       console.error('Error rectificando Hypoxic:', eEdit);
       toast('Error al rectificar (ver consola)','err');
@@ -521,6 +525,10 @@ async function deleteHypoxicItem(hid){
   await dbDelete('hypoxic_room_incidencias', hid);
   invalidateCache('hypoxic_room_incidencias');
   toast('Incidencia eliminada','ok');
-  renderHypoxicMod();
+  if(typeof renderHypoxicMod === 'function') renderHypoxicMod();
+  var hypTabD = document.getElementById('val-content-hypoxic');
+  if(hypTabD && hypTabD.style.display !== 'none' && typeof renderValHypoxicList === 'function'){
+    renderValHypoxicList();
+  }
 }
 window.deleteHypoxicItem = deleteHypoxicItem;

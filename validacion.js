@@ -451,6 +451,10 @@ async function renderValHypoxicList(){
     return;
   }
 
+  var isAdminU = (typeof isAdmin === 'function') && isAdmin(currentUser);
+  var isJefeRec = currentUser && currentUser.rol === 'jefe_recepcion';
+  var canEdit = isAdminU || isJefeRec;
+
   var rows = all.map(function(h){
     var types = '';
     try { var arr = JSON.parse(h.incident_types||'[]'); types = Array.isArray(arr) ? arr.join(', ') : (h.incident_types||''); }
@@ -476,6 +480,15 @@ async function renderValHypoxicList(){
       else if(Math.abs(diff) >= 100) altClass = 'b-amber';
       else altClass = 'b-green';
     }
+    // Acciones según rol
+    var actBtns = '';
+    if(canEdit){
+      actBtns += '<button class="vbtn vbtn-sec" onclick="editHypoxicItem(\''+h.id+'\')" title="Rectificar">✏️</button>';
+    }
+    if(isAdminU){
+      actBtns += ' <button class="vbtn vbtn-del" onclick="deleteHypoxicItem(\''+h.id+'\')" title="Eliminar">🗑</button>';
+    }
+    var actCell = canEdit ? '<td style="white-space:nowrap;"><div style="display:flex;gap:4px;flex-wrap:nowrap;">'+actBtns+'</div></td>' : '';
     return '<tr>'
       + '<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fechaHora+'</td>'
       + '<td style="font-weight:700;font-family:var(--font-mono);text-align:center;">'+formatDisplayValue(h.room_number)+'</td>'
@@ -489,11 +502,13 @@ async function renderValHypoxicList(){
       + '<td style="font-size:11px;">'+formatDisplayValue(h.turno||'')+'</td>'
       + '<td><span class="badge b-amber">'+formatDisplayValue(estado)+'</span></td>'
       + '<td style="font-size:11px;color:var(--text3);max-width:200px;">'+formatDisplayValue(obs)+'</td>'
+      + actCell
       + '</tr>';
   }).join('');
 
+  var accionTh = canEdit ? '<th>Acción</th>' : '';
   el.innerHTML = '<table>'
-    + '<tr><th>Fecha · Hora</th><th>Hab</th><th>Tipos</th><th>CO2</th><th>Val. actual (m)</th><th>Set point (m)</th><th>Puerta</th><th>Cliente avisó</th><th>Empleado</th><th>Turno</th><th>Estado</th><th>Observaciones</th></tr>'
+    + '<tr><th>Fecha · Hora</th><th>Hab</th><th>Tipos</th><th>CO2</th><th>Val. actual (m)</th><th>Set point (m)</th><th>Puerta</th><th>Cliente avisó</th><th>Empleado</th><th>Turno</th><th>Estado</th><th>Observaciones</th>'+accionTh+'</tr>'
     + rows
     + '</table>';
 }
