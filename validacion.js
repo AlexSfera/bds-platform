@@ -466,11 +466,23 @@ async function renderValHypoxicList(){
     var obs = h.observaciones || '—';
     var co2 = h.co2_level;
     var co2Class = (co2>=1000) ? 'b-red' : (co2>=700 ? 'b-amber' : 'b-green');
+    var curAlt = h.current_altitude_m != null ? h.current_altitude_m : '—';
+    var setPt  = h.set_point_altitude_m != null ? h.set_point_altitude_m : '—';
+    // Comparar: si valor actual está por debajo del set point, marca rojo
+    var altClass = 'b-gray';
+    if(h.current_altitude_m != null && h.set_point_altitude_m != null){
+      var diff = h.set_point_altitude_m - h.current_altitude_m;
+      if(Math.abs(diff) >= 300) altClass = 'b-red';
+      else if(Math.abs(diff) >= 100) altClass = 'b-amber';
+      else altClass = 'b-green';
+    }
     return '<tr>'
       + '<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fechaHora+'</td>'
       + '<td style="font-weight:700;font-family:var(--font-mono);text-align:center;">'+formatDisplayValue(h.room_number)+'</td>'
       + '<td>'+formatDisplayValue(types)+'</td>'
       + '<td style="text-align:center;"><span class="badge '+co2Class+'">'+formatDisplayValue(co2)+'</span></td>'
+      + '<td style="text-align:center;"><span class="badge '+altClass+'">'+formatDisplayValue(curAlt)+'</span></td>'
+      + '<td style="text-align:center;font-family:var(--font-mono);">'+formatDisplayValue(setPt)+'</td>'
       + '<td style="text-align:center;">'+puerta+'</td>'
       + '<td style="text-align:center;">'+cliente+'</td>'
       + '<td style="font-size:12px;">'+formatDisplayValue(h.employee_nombre)+'</td>'
@@ -481,7 +493,7 @@ async function renderValHypoxicList(){
   }).join('');
 
   el.innerHTML = '<table>'
-    + '<tr><th>Fecha · Hora</th><th>Hab</th><th>Tipos</th><th>CO2</th><th>Puerta</th><th>Cliente avisó</th><th>Empleado</th><th>Turno</th><th>Estado</th><th>Observaciones</th></tr>'
+    + '<tr><th>Fecha · Hora</th><th>Hab</th><th>Tipos</th><th>CO2</th><th>Val. actual (m)</th><th>Set point (m)</th><th>Puerta</th><th>Cliente avisó</th><th>Empleado</th><th>Turno</th><th>Estado</th><th>Observaciones</th></tr>'
     + rows
     + '</table>';
 }

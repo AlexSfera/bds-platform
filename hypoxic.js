@@ -89,10 +89,13 @@ function renderHypoxicLine(i, data){
   var roomsOpts = HYPOXIC_ROOMS.map(function(r){
     return '<option value="'+r+'"'+(d.room_number===r?' selected':'')+'>'+r+'</option>';
   }).join('');
+  // Checkboxes en grid 2 columnas, texto en case normal (sobrescribir uppercase global)
   var typesHtml = HYPOXIC_TYPES.map(function(t){
     var checked = (d.incident_types && d.incident_types.indexOf(t)>=0) ? ' checked' : '';
-    return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:4px 6px;background:#fff;border:1px solid #d1d5db;border-radius:4px;color:#111827;">'
-      + '<input type="checkbox" name="hyp-type-'+i+'" value="'+t+'"'+checked+' onchange="onHypoxicTypeChange('+i+')" style="width:14px;height:14px;cursor:pointer;"> '+t
+    var bgChecked = checked ? 'background:rgba(59,130,246,.08);border-color:#3b82f6;color:#1e3a8a;' : 'background:#fff;border:1px solid #d1d5db;color:#111827;';
+    return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;padding:8px 10px;border-radius:6px;text-transform:none;letter-spacing:0;'+bgChecked+'transition:all .12s;">'
+      + '<input type="checkbox" name="hyp-type-'+i+'" value="'+t+'"'+checked+' onchange="onHypoxicTypeChange('+i+')" style="width:16px;height:16px;cursor:pointer;accent-color:#3b82f6;">'
+      + '<span style="text-transform:none;">'+t+'</span>'
       + '</label>';
   }).join('');
   var obsReq = (d.incident_types && d.incident_types.indexOf('Otro')>=0) ? ' <span class="req">*</span>' : '';
@@ -100,43 +103,66 @@ function renderHypoxicLine(i, data){
   var doorNo = d.door_open===false ? ' on' : '';
   var cliSi  = d.client_notified===true ? ' on' : '';
   var cliNo  = d.client_notified===false ? ' on' : '';
-  var inpStyle = 'color:#111827;background:#ffffff;border:1px solid #d1d5db;';
+  var inpStyle = 'color:#111827;background:#ffffff;border:1px solid #d1d5db;padding:8px 10px;border-radius:6px;font-size:14px;width:100%;box-sizing:border-box;';
   // Hora de anotación
   var horaTxt = '';
   if(d.created_at){
     try {
       var dt = new Date(d.created_at);
-      horaTxt = ' · <span style="color:var(--text3);font-size:10px;font-weight:400;">anotado '+dt.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+'</span>';
+      horaTxt = ' <span style="color:var(--text3);font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;">· anotado '+dt.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})+'</span>';
     } catch(e){}
   }
 
   var html = ''
-    + '<div class="hypoxic-line" data-idx="'+i+'" data-created="'+(d.created_at||'')+'" style="background:var(--bg);border:1px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
-    +   '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#3b82f6;letter-spacing:.15em;">HABITACIÓN #'+(i+1)+horaTxt+'</div>'
-    +   '<button onclick="removeHypoxicLine('+i+')" title="Eliminar" style="background:none;border:0;cursor:pointer;color:var(--red);font-size:16px;padding:4px 8px;">🗑</button>'
+    + '<div class="hypoxic-line" data-idx="'+i+'" data-created="'+(d.created_at||'')+'" style="background:var(--bg);border:1px solid #3b82f6;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04);">'
+    // Header
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);">'
+    +   '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#3b82f6;letter-spacing:.12em;">HABITACIÓN #'+(i+1)+horaTxt+'</div>'
+    +   '<button onclick="removeHypoxicLine('+i+')" title="Eliminar" style="background:none;border:1px solid var(--border);cursor:pointer;color:var(--red);font-size:14px;padding:4px 10px;border-radius:6px;">🗑</button>'
     + '</div>'
     + '<input type="hidden" id="hyp-created-'+i+'" value="'+(d.created_at||'')+'">'
-    + '<div class="fg"><label>Habitación <span class="req">*</span></label>'
+    // Habitación
+    + '<div class="fg" style="margin-bottom:14px;"><label>Habitación <span class="req">*</span></label>'
     +   '<select id="hyp-room-'+i+'" style="'+inpStyle+'"><option value="">— Seleccionar —</option>'+roomsOpts+'</select></div>'
-    + '<div class="fg"><label>Tipo de incidencia <span class="req">*</span> <span style="color:var(--text3);font-weight:400;font-size:11px;">(uno o varios)</span></label>'
-    +   '<div id="hyp-types-grp-'+i+'" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">'+typesHtml+'</div>'
+    // Tipos (grid 2 cols)
+    + '<div class="fg" style="margin-bottom:14px;"><label>Tipo de incidencia <span class="req">*</span> <span style="color:var(--text3);font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;">(selecciona uno o varios)</span></label>'
+    +   '<div id="hyp-types-grp-'+i+'" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;">'+typesHtml+'</div>'
     + '</div>'
-    + '<div class="fg"><label>Nivel CO2 <span class="req">*</span> <span style="color:var(--text3);font-weight:400;font-size:11px;">(3 o 4 cifras, sólo enteros)</span></label>'
-    +   '<input type="number" id="hyp-co2-'+i+'" min="100" max="9999" step="1" placeholder="ej: 1200" value="'+(d.co2_level||'')+'" style="'+inpStyle+'"></div>'
-    + '<div class="fg"><label>¿Apertura múltiple de puerta +1 min en la última hora? <span class="req">*</span></label>'
-    +   '<div class="toggle-group" id="hyp-door-grp-'+i+'">'
-    +     '<button type="button" class="tbtn'+doorSi+'" onclick="setHypoxicToggle('+i+',\'door\',true)">SÍ</button>'
-    +     '<button type="button" class="tbtn'+doorNo+'" onclick="setHypoxicToggle('+i+',\'door\',false)">NO</button>'
+    // Mediciones (3 cols)
+    + '<div style="margin-bottom:14px;">'
+    +   '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-bottom:8px;">📊 MEDICIONES</div>'
+    +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
+    +     '<div class="fg" style="margin:0;"><label style="font-size:11px;">Nivel CO2 <span class="req">*</span></label>'
+    +       '<input type="number" id="hyp-co2-'+i+'" min="100" max="9999" step="1" placeholder="ej: 1200" value="'+(d.co2_level||'')+'" style="'+inpStyle+'">'
+    +       '<div style="font-size:10px;color:var(--text3);margin-top:2px;text-transform:none;letter-spacing:0;">3-4 cifras (ppm)</div>'
+    +     '</div>'
+    +     '<div class="fg" style="margin:0;"><label style="font-size:11px;">Valor actual (m) <span class="req">*</span></label>'
+    +       '<input type="number" id="hyp-curralt-'+i+'" min="100" max="9999" step="1" placeholder="ej: 1850" value="'+(d.current_altitude_m||'')+'" style="'+inpStyle+'">'
+    +       '<div style="font-size:10px;color:var(--text3);margin-top:2px;text-transform:none;letter-spacing:0;">3-4 cifras · altitud real</div>'
+    +     '</div>'
+    +     '<div class="fg" style="margin:0;"><label style="font-size:11px;">Set point (m) <span class="req">*</span></label>'
+    +       '<input type="number" id="hyp-setpt-'+i+'" min="1000" max="9999" step="1" placeholder="ej: 2500" value="'+(d.set_point_altitude_m||'')+'" style="'+inpStyle+'">'
+    +       '<div style="font-size:10px;color:var(--text3);margin-top:2px;text-transform:none;letter-spacing:0;">4 cifras · altitud objetivo</div>'
+    +     '</div>'
     +   '</div>'
-    +   '<input type="hidden" id="hyp-door-'+i+'" value="'+(d.door_open===true?'si':d.door_open===false?'no':'')+'"></div>'
-    + '<div class="fg"><label>¿Cliente notificó a recepción el problema? <span class="req">*</span></label>'
-    +   '<div class="toggle-group" id="hyp-client-grp-'+i+'">'
-    +     '<button type="button" class="tbtn'+cliSi+'" onclick="setHypoxicToggle('+i+',\'client\',true)">SÍ</button>'
-    +     '<button type="button" class="tbtn'+cliNo+'" onclick="setHypoxicToggle('+i+',\'client\',false)">NO</button>'
-    +   '</div>'
-    +   '<input type="hidden" id="hyp-client-'+i+'" value="'+(d.client_notified===true?'si':d.client_notified===false?'no':'')+'"></div>'
-    + '<div class="fg"><label id="hyp-obs-lbl-'+i+'">Observaciones'+obsReq+'</label>'
+    + '</div>'
+    // Toggles SI/NO (grid 2 cols)
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:14px;">'
+    +   '<div class="fg" style="margin:0;"><label style="font-size:11px;">Apertura múltiple puerta +1min (última hora) <span class="req">*</span></label>'
+    +     '<div class="toggle-group" id="hyp-door-grp-'+i+'" style="margin-top:4px;">'
+    +       '<button type="button" class="tbtn'+doorSi+'" onclick="setHypoxicToggle('+i+',\'door\',true)">SÍ</button>'
+    +       '<button type="button" class="tbtn'+doorNo+'" onclick="setHypoxicToggle('+i+',\'door\',false)">NO</button>'
+    +     '</div>'
+    +     '<input type="hidden" id="hyp-door-'+i+'" value="'+(d.door_open===true?'si':d.door_open===false?'no':'')+'"></div>'
+    +   '<div class="fg" style="margin:0;"><label style="font-size:11px;">Cliente notificó a recepción <span class="req">*</span></label>'
+    +     '<div class="toggle-group" id="hyp-client-grp-'+i+'" style="margin-top:4px;">'
+    +       '<button type="button" class="tbtn'+cliSi+'" onclick="setHypoxicToggle('+i+',\'client\',true)">SÍ</button>'
+    +       '<button type="button" class="tbtn'+cliNo+'" onclick="setHypoxicToggle('+i+',\'client\',false)">NO</button>'
+    +     '</div>'
+    +     '<input type="hidden" id="hyp-client-'+i+'" value="'+(d.client_notified===true?'si':d.client_notified===false?'no':'')+'"></div>'
+    + '</div>'
+    // Observaciones
+    + '<div class="fg" style="margin:0;"><label id="hyp-obs-lbl-'+i+'" style="font-size:11px;">Observaciones'+obsReq+'</label>'
     +   '<textarea id="hyp-obs-'+i+'" rows="2" placeholder="Detalle adicional..." style="'+inpStyle+'">'+(d.observaciones||'')+'</textarea></div>'
     + '</div>';
 
@@ -194,6 +220,10 @@ function collectHypoxicFromUI(){
     document.querySelectorAll('input[name="hyp-type-'+i+'"]:checked').forEach(function(cb){ types.push(cb.value); });
     var co2Raw = (document.getElementById('hyp-co2-'+i)||{}).value || '';
     var co2 = co2Raw === '' ? null : parseInt(co2Raw, 10);
+    var currAltRaw = (document.getElementById('hyp-curralt-'+i)||{}).value || '';
+    var currAlt = currAltRaw === '' ? null : parseInt(currAltRaw, 10);
+    var setPtRaw = (document.getElementById('hyp-setpt-'+i)||{}).value || '';
+    var setPt = setPtRaw === '' ? null : parseInt(setPtRaw, 10);
     var doorRaw = (document.getElementById('hyp-door-'+i)||{}).value || '';
     var clientRaw = (document.getElementById('hyp-client-'+i)||{}).value || '';
     var obs = (document.getElementById('hyp-obs-'+i)||{}).value || '';
@@ -206,6 +236,10 @@ function collectHypoxicFromUI(){
       incident_types: types,
       co2_level: co2,
       co2_raw: co2Raw,
+      current_altitude_m: currAlt,
+      current_altitude_raw: currAltRaw,
+      set_point_altitude_m: setPt,
+      set_point_raw: setPtRaw,
       door_open: doorRaw === 'si' ? true : (doorRaw === 'no' ? false : null),
       client_notified: clientRaw === 'si' ? true : (clientRaw === 'no' ? false : null),
       observaciones: obs.trim(),
@@ -226,8 +260,21 @@ function validateHypoxicLine(line, idx){
   var co2Str = String(line.co2_level);
   if(co2Str.length < 3 || co2Str.length > 4) return prefix+'Nivel CO2 debe tener 3 o 4 cifras (ej: 450 o 1200)';
   if(line.co2_level < 100 || line.co2_level > 9999) return prefix+'Nivel CO2 fuera de rango (100-9999)';
+  // Valor actual (m): 3-4 cifras
+  if(line.current_altitude_raw === '' || line.current_altitude_raw === null || line.current_altitude_raw === undefined) return prefix+'Introduce Valor actual (m)';
+  if(!/^\d+$/.test(String(line.current_altitude_raw).trim())) return prefix+'Valor actual (m) sólo acepta enteros';
+  var currStr = String(line.current_altitude_m);
+  if(currStr.length < 3 || currStr.length > 4) return prefix+'Valor actual (m) debe tener 3 o 4 cifras (ej: 850 o 1850)';
+  // Set point (m): exactamente 4 cifras
+  if(line.set_point_raw === '' || line.set_point_raw === null || line.set_point_raw === undefined) return prefix+'Introduce Set point (m)';
+  if(!/^\d+$/.test(String(line.set_point_raw).trim())) return prefix+'Set point (m) sólo acepta enteros';
+  var setStr = String(line.set_point_altitude_m);
+  if(setStr.length !== 4) return prefix+'Set point (m) debe tener exactamente 4 cifras (ej: 2500)';
+  if(line.set_point_altitude_m < 1000 || line.set_point_altitude_m > 9999) return prefix+'Set point (m) fuera de rango (1000-9999)';
+  // Toggles obligatorios
   if(line.door_open !== true && line.door_open !== false) return prefix+'Indica si hubo apertura múltiple de puerta';
   if(line.client_notified !== true && line.client_notified !== false) return prefix+'Indica si el cliente notificó el problema';
+  // Observaciones obligatorias si "Otro"
   if(line.incident_types.indexOf('Otro') >= 0 && !line.observaciones) return prefix+'Observaciones obligatorias cuando seleccionas "Otro"';
   return null;
 }
@@ -258,6 +305,8 @@ async function confirmHypoxic(){
         room_number: l.room_number,
         incident_types: JSON.stringify(l.incident_types || []),
         co2_level: l.co2_level,
+        current_altitude_m: l.current_altitude_m,
+        set_point_altitude_m: l.set_point_altitude_m,
         door_open_multiple_over_1min_last_hour: l.door_open,
         client_notified_reception: l.client_notified,
         observaciones: l.observaciones || '',
