@@ -885,6 +885,7 @@ async function initTurnoForm(){
     if(tResp && tResp.closest('.fg')) tResp.closest('.fg').style.display='none';
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
+    if(typeof refreshHypoxicBlock === 'function') refreshHypoxicBlock();
   } else if(isSalaUser) {
     if(salaBlock) salaBlock.style.display = 'none'; // removed - using ajustes popup
     var mermaSecEl = document.getElementById('merma-section');
@@ -1218,6 +1219,38 @@ async function _doSaveTurno(){
       await auditLog('AJUSTE_TURNO_NEW', _ajustesLines.length + ' ajuste(s) del turno ' + shiftId);
     } catch(eAjLines){
       console.error('No se pudieron guardar ajustes del turno', eAjLines);
+    }
+  }
+
+  // ── Guardar incidencias Hypoxic Room (Recepción) → tabla hypoxic_room_incidencias ──
+  if(!editingShiftId && typeof _hypoxicLines !== 'undefined' && _hypoxicLines && _hypoxicLines.length > 0){
+    try {
+      for(const hl of _hypoxicLines){
+        var hRec = {
+          id: genId(),
+          shift_id: shiftId,
+          employee_id: currentUser.id,
+          employee_nombre: currentUser.nombre,
+          department_code: currentUser.area || 'Recepción',
+          fecha: fecha,
+          turno: servicio,
+          room_number: hl.room_number,
+          incident_types: JSON.stringify(hl.incident_types || []),
+          co2_level: hl.co2_level,
+          door_open_multiple_over_1min_last_hour: hl.door_open,
+          client_notified_reception: hl.client_notified,
+          observaciones: hl.observaciones || '',
+          estado: 'Pendiente',
+          created_at: ts
+        };
+        await dbInsert('hypoxic_room_incidencias', hRec);
+      }
+      invalidateCache('hypoxic_room_incidencias');
+      await auditLog('HYPOXIC_NEW', _hypoxicLines.length + ' incidencia(s) Hypoxic Room del turno ' + shiftId);
+      _hypoxicLines = [];
+      if(typeof refreshHypoxicBlock === 'function') refreshHypoxicBlock();
+    } catch(eHyp){
+      console.error('No se pudieron guardar incidencias Hypoxic Room', eHyp);
     }
   }
 

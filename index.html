@@ -750,6 +750,17 @@ tr:hover td{background:rgba(255,255,255,.018);}
             </div>
         </div>
 
+        <!-- HYPOXIC ROOM BLOCK (sólo Recepción) -->
+        <div id="hypoxic-block" style="display:none;margin-top:14px;">
+          <div class="sec-div">🌬 Hypoxic Room</div>
+          <div class="fg">
+            <button type="button" class="btn btn-secondary" onclick="openHypoxicModal()" style="background:#3b82f6;color:#fff;border-color:#3b82f6;">🌬 Hypoxic Room — Añadir / editar incidencia</button>
+            <div id="hypoxic-summary" style="margin-top:8px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;">
+              <span style="color:var(--text3);">Sin incidencias Hypoxic Room registradas en este turno</span>
+            </div>
+          </div>
+        </div>
+
         <!-- MERMA BLOCK -->
         <div id="merma-section" style="margin-top:14px;">
           <div class="sec-div">Merma</div>
@@ -1787,6 +1798,28 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <div id="toast-c"></div>
 <div class="ver-badge">v3.0 · Schema 3.0 · Migración Supabase lista</div>
 
+<!-- ══ MODAL HYPOXIC ROOM ══ -->
+<div id="modal-hypoxic" class="modal-overlay" style="display:none;">
+  <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-h">
+      <h3>🌬 Incidencias Hypoxic Room</h3>
+      <button class="modal-x" onclick="closeHypoxicModal()">✕</button>
+    </div>
+    <div class="modal-b">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.4;">
+        Registra una o varias habitaciones con incidencia de hipoxia durante este turno.<br>
+        Habitaciones permitidas: 104-109 y 202-209.
+      </div>
+      <div id="hypoxic-lines"></div>
+      <button type="button" class="btn btn-secondary" onclick="addHypoxicLine()" style="margin-top:6px;">+ Añadir otra habitación</button>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-secondary" onclick="closeHypoxicModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmHypoxic()">✓ Guardar incidencias Hypoxic Room</button>
+    </div>
+  </div>
+</div>
+
 <script src="shared.js"></script>
 <script src="tareas.js"></script>
 <script src="incidencias.js"></script>
@@ -1799,5 +1832,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <script src="incidencia_tipos.js"></script>
     <script src="dashboard.js"></script>
 <script src="validacion.js"></script>
+<script src="hypoxic.js"></script>
 </body>
 </html>
