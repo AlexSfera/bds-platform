@@ -3201,7 +3201,6 @@ function openNewAjusteMod(){
       +   '<div class="fg"><label>Importe (€) <span class="req">*</span></label><input type="number" id="na-importe" step="0.01" placeholder="0.00"></div>'
       + '</div>'
       + '<div class="fg"><label>Motivo</label><input type="text" id="na-motivo" placeholder="ej: mesa 12, cliente insatisfecho"></div>'
-      + '<div class="fg"><label>Observación</label><input type="text" id="na-obs" placeholder="Nota opcional"></div>'
       + '<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;">'
       +   '<b>Regla:</b> Importe = (lo que hay en caja) − (lo que marca el TPV).<br>'
       +   'Anulación / Devolución / Invitación → se guarda automáticamente como <b>negativo</b>.<br>'
@@ -3215,7 +3214,7 @@ function openNewAjusteMod(){
     document.body.appendChild(ov);
     ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-new-ajuste'); });
   }
-  ['na-importe','na-motivo','na-obs'].forEach(function(id){
+  ['na-importe','na-motivo'].forEach(function(id){
     var x=document.getElementById(id); if(x) x.value='';
   });
   var t = document.getElementById('na-tipo'); if(t) t.value='';
@@ -3245,7 +3244,7 @@ async function saveNewAjusteMod(){
   var tipo    = (document.getElementById('na-tipo')||{}).value || '';
   var importe = parseFloat((document.getElementById('na-importe')||{}).value);
   var motivo  = ((document.getElementById('na-motivo')||{}).value || '').trim();
-  var obs     = ((document.getElementById('na-obs')||{}).value || '').trim();
+  var obs     = '';
 
   if(!tipo){ toast('Tipo obligatorio','err'); return; }
   if(isNaN(importe)){ toast('Importe obligatorio (puede ser negativo)','err'); return; }
