@@ -16,6 +16,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 var _hypoxicLines = [];
+var _editingHypoxicId = null;
 
 var HYPOXIC_ROOMS = ['104','105','106','107','108','109','202','203','204','205','206','207','208','209'];
 var HYPOXIC_TYPES = ['Hipoxia está por debajo','Valores de sensores raros','Hipoxia está por encima','Hipoxia no enciende','Otro'];
@@ -58,18 +59,74 @@ window.resetHypoxicLines = resetHypoxicLines;
 function openHypoxicModal(){
   var modal = document.getElementById('modal-hypoxic');
   if(!modal) return;
-  // Cada apertura del modal es una sesión independiente: empezar limpio
+  // Cada apertura del modal es una sesión independiente: empezar limpio (modo creación)
   _hypoxicLines = [];
+  _editingHypoxicId = null;
   var container = document.getElementById('hypoxic-lines');
   if(container) container.innerHTML = '';
   renderHypoxicLine(0, { created_at: (typeof localTs === 'function' ? localTs() : new Date().toISOString()) });
+  // Restaurar UI modo creación
+  setHypoxicModalMode('create');
   modal.style.display = 'flex';
 }
 window.openHypoxicModal = openHypoxicModal;
 
+async function editHypoxicItem(hid){
+  var isAdminU = (typeof isAdmin === 'function') && isAdmin(currentUser);
+  var isJefeRec = currentUser && currentUser.rol === 'jefe_recepcion';
+  if(!isAdminU && !isJefeRec){ toast('Sin permiso para rectificar','err'); return; }
+
+  var all = [];
+  try { all = await getDB('hypoxic_room_incidencias'); } catch(e){}
+  var h = (all||[]).find(function(x){ return x.id===hid; });
+  if(!h){ toast('Incidencia no encontrada','err'); return; }
+
+  var types = [];
+  try { types = JSON.parse(h.incident_types||'[]'); } catch(e){ types = []; }
+
+  _editingHypoxicId = hid;
+  _hypoxicLines = [];
+
+  var modal = document.getElementById('modal-hypoxic');
+  var container = document.getElementById('hypoxic-lines');
+  if(container) container.innerHTML = '';
+  renderHypoxicLine(0, {
+    room_number: h.room_number,
+    incident_types: types,
+    co2_level: h.co2_level,
+    current_altitude_m: h.current_altitude_m,
+    set_point_altitude_m: h.set_point_altitude_m,
+    door_open: h.door_open_multiple_over_1min_last_hour,
+    client_notified: h.client_notified_reception,
+    observaciones: h.observaciones,
+    created_at: h.created_at
+  });
+  setHypoxicModalMode('edit');
+  modal.style.display = 'flex';
+}
+window.editHypoxicItem = editHypoxicItem;
+
+function setHypoxicModalMode(mode){
+  var titleEl  = document.getElementById('modal-hypoxic-title');
+  var addBtn   = document.getElementById('hypoxic-add-btn');
+  var confBtn  = document.getElementById('hypoxic-confirm-btn');
+  if(mode === 'edit'){
+    if(titleEl)  titleEl.textContent  = '✏️ Rectificar incidencia Hypoxic Room';
+    if(addBtn)   addBtn.style.display = 'none';
+    if(confBtn)  confBtn.innerHTML    = '✓ Guardar cambios';
+  } else {
+    if(titleEl)  titleEl.textContent  = '🌬 Incidencias Hypoxic Room';
+    if(addBtn)   addBtn.style.display = '';
+    if(confBtn)  confBtn.innerHTML    = '✓ Guardar incidencias Hypoxic Room';
+  }
+}
+window.setHypoxicModalMode = setHypoxicModalMode;
+
 function closeHypoxicModal(){
   var modal = document.getElementById('modal-hypoxic');
   if(modal) modal.style.display = 'none';
+  _editingHypoxicId = null;
+  if(typeof setHypoxicModalMode === 'function') setHypoxicModalMode('create');
 }
 window.closeHypoxicModal = closeHypoxicModal;
 
@@ -292,11 +349,46 @@ async function confirmHypoxic(){
     var err = validateHypoxicLine(lines[i], i);
     if(err){ toast(err,'err'); return; }
   }
-  // Guardar directo en BBDD (sin esperar al cierre del turno)
+
+  // Modo edición: actualizar una sola incidencia
+  if(_editingHypoxicId){
+    var l = lines[0];
+    var nowTs = (typeof localTs === 'function' ? localTs() : new Date().toISOString());
+    var payload = {
+      room_number: l.room_number,
+      incident_types: JSON.stringify(l.incident_types || []),
+      co2_level: l.co2_level,
+      current_altitude_m: l.current_altitude_m,
+      set_point_altitude_m: l.set_point_altitude_m,
+      door_open_multiple_over_1min_last_hour: l.door_open,
+      client_notified_reception: l.client_notified,
+      observaciones: l.observaciones || '',
+      updated_at: nowTs,
+      updated_by: currentUser.nombre || currentUser.id
+    };
+    try {
+      var upd = await dbUpdate('hypoxic_room_incidencias', _editingHypoxicId, payload);
+      if(!upd){ toast('Error al rectificar (ver consola)','err'); return; }
+      invalidateCache('hypoxic_room_incidencias');
+      if(typeof auditLog === 'function'){
+        await auditLog('HYPOXIC_EDIT', _editingHypoxicId+' rectificada por '+currentUser.nombre);
+      }
+      _editingHypoxicId = null;
+      closeHypoxicModal();
+      toast('✓ Incidencia rectificada','ok');
+      if(typeof renderHypoxicMod === 'function') renderHypoxicMod();
+    } catch(eEdit){
+      console.error('Error rectificando Hypoxic:', eEdit);
+      toast('Error al rectificar (ver consola)','err');
+    }
+    return;
+  }
+
+  // Modo creación: insertar líneas nuevas
   var saved = 0;
   try {
     for(var j=0;j<lines.length;j++){
-      var l = lines[j];
+      var ln = lines[j];
       var rec = {
         id: genId(),
         shift_id: null,  // se asocia cuando se cierre el turno (patrón ajustes)
@@ -305,20 +397,20 @@ async function confirmHypoxic(){
         department_code: currentUser.area || 'Recepción',
         fecha: (typeof today === 'function' ? today() : new Date().toISOString().slice(0,10)),
         turno: '',
-        room_number: l.room_number,
-        incident_types: JSON.stringify(l.incident_types || []),
-        co2_level: l.co2_level,
-        current_altitude_m: l.current_altitude_m,
-        set_point_altitude_m: l.set_point_altitude_m,
-        door_open_multiple_over_1min_last_hour: l.door_open,
-        client_notified_reception: l.client_notified,
-        observaciones: l.observaciones || '',
+        room_number: ln.room_number,
+        incident_types: JSON.stringify(ln.incident_types || []),
+        co2_level: ln.co2_level,
+        current_altitude_m: ln.current_altitude_m,
+        set_point_altitude_m: ln.set_point_altitude_m,
+        door_open_multiple_over_1min_last_hour: ln.door_open,
+        client_notified_reception: ln.client_notified,
+        observaciones: ln.observaciones || '',
         estado: 'Pendiente',
-        created_at: l.created_at || (typeof localTs === 'function' ? localTs() : new Date().toISOString())
+        created_at: ln.created_at || (typeof localTs === 'function' ? localTs() : new Date().toISOString())
       };
       var result = await dbInsert('hypoxic_room_incidencias', rec);
       if(result === null){
-        toast('Error guardando habitación '+l.room_number+' (ver consola)','err');
+        toast('Error guardando habitación '+ln.room_number+' (ver consola)','err');
         return;
       }
       saved++;
@@ -377,20 +469,31 @@ async function renderHypoxicMod(){
         ? '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">en turno</span>'
         : '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">pendiente turno</span>';
       var obs = h.observaciones ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">📝 '+formatDisplayValue(h.observaciones)+'</div>' : '';
-      var delBtn = isAdminU ? ' <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteHypoxicItem(\''+h.id+'\')">🗑</button>' : '';
+      var altInfo = '';
+      if(h.current_altitude_m != null || h.set_point_altitude_m != null){
+        altInfo = '<span class="badge b-blue" style="margin-left:6px;">Actual: '+(h.current_altitude_m!=null?h.current_altitude_m+'m':'—')+' / Set: '+(h.set_point_altitude_m!=null?h.set_point_altitude_m+'m':'—')+'</span>';
+      }
+      // Permisos: admin = editar + borrar; jefe_recepcion = editar; resto = nada
+      var isJefeRec = currentUser && currentUser.rol === 'jefe_recepcion';
+      var canEdit = isAdminU || isJefeRec;
+      var editBtn = canEdit ? ' <button class="btn btn-secondary btn-sm" onclick="editHypoxicItem(\''+h.id+'\')">✏️ Rectificar</button>' : '';
+      var delBtn  = isAdminU ? ' <button class="btn btn-danger btn-sm" onclick="deleteHypoxicItem(\''+h.id+'\')">🗑</button>' : '';
+      var updTag = h.updated_at ? '<div style="font-size:10px;color:var(--text3);margin-top:2px;text-transform:none;">Rectificado: '+(typeof fmtTs==='function' ? fmtTs(h.updated_at) : h.updated_at)+(h.updated_by?' · '+h.updated_by:'')+'</div>' : '';
       return '<div class="task-card">'
         + '<div class="task-meta" style="align-items:center;flex-wrap:wrap;gap:6px;">'
         +   '<span class="dept-badge" style="background:#3b82f6;color:#fff;">Hab '+formatDisplayValue(h.room_number)+'</span>'
         +   '<span class="task-origin">'+hora+'</span>'
         +   '<span class="badge '+co2Class+'">CO2: '+formatDisplayValue(co2)+'</span>'
+        +   altInfo
         +   puerta + (cliente?' '+cliente:'')
         +   assocTag
-        +   delBtn
+        +   '<div style="margin-left:auto;display:flex;gap:6px;">'+editBtn+delBtn+'</div>'
         + '</div>'
         + '<div style="font-size:13px;margin-top:6px;"><strong>'+formatDisplayValue(types)+'</strong></div>'
         + obs
         + '<div class="task-footer">'
         +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">👤 '+formatDisplayValue(h.employee_nombre||'')+'</div>'
+        +   updTag
         + '</div>'
         + '</div>';
     }).join('');

@@ -1802,7 +1802,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <div id="modal-hypoxic" class="modal-overlay" style="display:none;">
   <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
     <div class="modal-h">
-      <h3>🌬 Incidencias Hypoxic Room</h3>
+      <h3 id="modal-hypoxic-title">🌬 Incidencias Hypoxic Room</h3>
       <button class="modal-x" onclick="closeHypoxicModal()">✕</button>
     </div>
     <div class="modal-b">
@@ -1811,11 +1811,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
         Habitaciones permitidas: 104-109 y 202-209.
       </div>
       <div id="hypoxic-lines"></div>
-      <button type="button" class="btn btn-secondary" onclick="addHypoxicLine()" style="margin-top:6px;">+ Añadir otra habitación</button>
+      <button type="button" id="hypoxic-add-btn" class="btn btn-secondary" onclick="addHypoxicLine()" style="margin-top:6px;">+ Añadir otra habitación</button>
     </div>
     <div class="modal-f">
       <button class="btn btn-secondary" onclick="closeHypoxicModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmHypoxic()">✓ Guardar incidencias Hypoxic Room</button>
+      <button class="btn btn-primary" id="hypoxic-confirm-btn" onclick="confirmHypoxic()">✓ Guardar incidencias Hypoxic Room</button>
     </div>
   </div>
 </div>
