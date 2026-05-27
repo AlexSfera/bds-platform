@@ -403,9 +403,15 @@ function getScreens(rol){
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
-    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        pending:true},
+    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
     recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
-    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true}
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true},
+    // ── HOUSEKEEPING ─────────────────────────────────────────────────
+    hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
+    hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
+    hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
+    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
+    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'}
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
@@ -420,9 +426,29 @@ function getScreens(rol){
   var dptoMod = [];
   if(isCocina)    dptoMod.push(ITEMS.merma);
   if(isSala)      dptoMod.push(ITEMS.ajustes);
-  if(isHK)        dptoMod.push(ITEMS.ruta);
+  if(isHK)        {
+    dptoMod.push(ITEMS.ruta);
+    // Gobernanta/Subgobernanta ven planificación + zonas + revisión + dashboard + config
+    var _isGob = typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
+    if(_isGob){
+      dptoMod.push(ITEMS.hkPlan);
+      dptoMod.push(ITEMS.hkZonas);
+      dptoMod.push(ITEMS.hkRevision);
+      dptoMod.push(ITEMS.hkDash);
+      dptoMod.push(ITEMS.hkConfig);
+    }
+  }
   if(isRecepcion) dptoMod.push(ITEMS.recmod);
   if(isMant)      dptoMod.push(ITEMS.mantmod);
+  // Admin ve también todas las pantallas HK
+  if(isAdminU && !isHK){
+    dptoMod.push({sep:true,label:'HOUSEKEEPING'});
+    dptoMod.push(ITEMS.hkPlan);
+    dptoMod.push(ITEMS.hkZonas);
+    dptoMod.push(ITEMS.hkRevision);
+    dptoMod.push(ITEMS.hkDash);
+    dptoMod.push(ITEMS.hkConfig);
+  }
 
   // ── ZONA 3: Gestión (solo jefe/admin) ─────────────────────────────
   var gestion = [];
@@ -563,6 +589,13 @@ async function showScreen(id){
   if(id==='hypoxic'){ renderHypoxicScreen(); }
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
+  // ── Housekeeping ──
+  if(id==='ruta-mod'    && typeof renderHKMiRuta==='function')         renderHKMiRuta();
+  if(id==='hk-plan'     && typeof renderHKPlanificacion==='function')  renderHKPlanificacion();
+  if(id==='hk-zonas'    && typeof renderHKZonasPublicas==='function')  renderHKZonasPublicas();
+  if(id==='hk-config'   && typeof renderHKConfig==='function')         renderHKConfig();
+  if(id==='hk-revision' && typeof renderHKRevision==='function')       renderHKRevision();
+  if(id==='hk-dash'     && typeof renderHKDashboard==='function')      renderHKDashboard();
   updateDots();
 }
 async function updateDots(){

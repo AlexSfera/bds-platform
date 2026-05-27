@@ -1,0 +1,6 @@
+-- Después de CREATE TABLE nombre_tabla (...);
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.nombre_tabla TO anon, authenticated;
+-- Si usas secuencias (id serial/bigserial):
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+-- Y siempre activa RLS + política:
+ALTER TABLE public.nombre_tabla ENABLE ROW LEVEL SECURITY;
