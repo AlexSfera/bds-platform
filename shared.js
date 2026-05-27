@@ -381,7 +381,7 @@ function getScreens(rol){
   var isSala       = currentUser && currentUser.area === 'Sala';
   var isRecepcion  = currentUser && currentUser.area === 'Recepción';
   var isCocina     = currentUser && currentUser.area === 'Cocina';
-  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping');
+  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
   var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
@@ -946,6 +946,40 @@ async function initTurnoForm(){
     document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){ cb.checked=false; });
   document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
     // Default gestion/incidencia to 'no' for clean start
+    if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
+    if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
+  } else if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')) {
+    // ── HOUSEKEEPING ────────────────────────────────────────────
+    if(salaBlock) salaBlock.style.display = 'none';
+    if(sub) sub.textContent = 'Housekeeping · Balcón de la Sella';
+    // Ocultar merma
+    var mermaSecHK = document.getElementById('merma-section');
+    if(mermaSecHK) mermaSecHK.style.display = 'none';
+    var sinMermaHK = document.getElementById('sin-merma-block');
+    if(sinMermaHK) sinMermaHK.style.display = 'none';
+    // Ocultar selects de Cocina/Sala
+    var tservSingleHK = document.getElementById('t-servicio');
+    var tservCocinaHK = document.getElementById('t-servicio-cocina');
+    var tservSalaHK = document.getElementById('t-servicio-multi');
+    var tservHK = document.getElementById('t-servicio-hk');
+    if(tservSingleHK) tservSingleHK.style.display = 'none';
+    if(tservCocinaHK) tservCocinaHK.style.display = 'none';
+    if(tservSalaHK) tservSalaHK.style.display = 'none';
+    if(tservHK) { tservHK.style.display = 'flex'; tservHK.style.flexWrap = 'wrap'; }
+    // Label "Turno" en lugar de "Servicio"
+    var lblHK = document.getElementById('t-servicio-label');
+    if(lblHK) lblHK.innerHTML = 'Turno <span class="req">*</span>';
+    // Mostrar servicio block
+    var servBlockHK = document.getElementById('servicio-fg-block');
+    if(servBlockHK) servBlockHK.style.display = 'block';
+    // Reset radios
+    document.querySelectorAll('input[name="servicio-hk"]').forEach(function(r){ r.checked = false; });
+    // Mostrar responsable
+    var tRespHK = document.getElementById('t-responsable');
+    if(tRespHK && tRespHK.parentElement) tRespHK.parentElement.style.display = 'block';
+    // Ocultar rec-turno-block
+    var recTurnoHK = document.getElementById('rec-turno-block');
+    if(recTurnoHK) recTurnoHK.style.display = 'none';
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   } else {

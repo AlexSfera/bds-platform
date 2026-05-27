@@ -540,6 +540,11 @@ async function renderCajaList() {
 function getServicioValue() {
   // Recepción: return turno (Mañana/Tarde/Noche)
   if(currentUser && currentUser.area === 'Recepción') return getRecTurnoValue();
+  // Housekeeping: return turno (Mañana/Tarde) desde radio
+  if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')){
+    var hkChecked = document.querySelector('input[name="servicio-hk"]:checked');
+    return hkChecked ? hkChecked.value : '';
+  }
   var isSala = currentUser && currentUser.area === 'Sala';
   if(isSala) {
     var checked = [];

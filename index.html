@@ -672,6 +672,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''"><input type="checkbox" name="servicio-sala" value="Evento" style="width:16px;height:16px;accent-color:#3b82f6;"> Evento</label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''"><input type="checkbox" name="servicio-sala" value="Otro" style="width:16px;height:16px;accent-color:#3b82f6;"> Otro</label>
               </div>
+              <!-- Housekeeping: Mañana / Tarde -->
+              <div id="t-servicio-hk" style="display:none;flex-wrap:wrap;gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background=''"><input type="radio" name="servicio-hk" value="Mañana" style="width:16px;height:16px;accent-color:#f97316;"> 🌅 Mañana</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background=''"><input type="radio" name="servicio-hk" value="Tarde" style="width:16px;height:16px;accent-color:#f97316;"> 🌆 Tarde</label>
+              </div>
             </div></div>
           <div class="fg"><label>Horas trabajadas <span class="req">*</span></label><input type="number" id="t-horas" min="0.5" max="16" step="0.5" placeholder="8"></div>
           <div class="fg"><label>Responsable de turno <span class="req">*</span></label><select id="t-responsable" style="color:#111827;background:#ffffff;border:1px solid #d1d5db;"><option value="">— Seleccionar —</option></select></div>
