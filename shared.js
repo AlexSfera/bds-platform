@@ -413,8 +413,8 @@ function getScreens(rol){
     ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
     : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias];
 
-  // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB
-  if(isAdminU || isSyncrolab) navComun.push(ITEMS.hypoxic);
+  // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
+  if(isAdminU || isSyncrolab || isRecepcion) navComun.push(ITEMS.hypoxic);
 
   // ── ZONA 2: Módulo de departamento (varía) ────────────────────────
   var dptoMod = [];

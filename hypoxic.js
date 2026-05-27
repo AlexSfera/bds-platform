@@ -76,11 +76,10 @@ async function _renderHypoxicList(){
   var all = [];
   try { all = await getDB('hypoxic_room_incidencias'); } catch(e){}
 
-  // Poblar select de habitaciones (1ª vez)
+  // Poblar select de habitaciones con lista fija (1ª vez)
   var roomSel = document.getElementById('hypoxic-f-room');
   if(roomSel && roomSel.options.length <= 1){
-    var rooms = Array.from(new Set(all.map(function(h){return h.room_number;}).filter(Boolean))).sort();
-    rooms.forEach(function(r){
+    HYPOXIC_ROOMS.forEach(function(r){
       var o = document.createElement('option'); o.value = r; o.textContent = 'Hab. '+r;
       roomSel.appendChild(o);
     });
@@ -141,7 +140,7 @@ async function _renderHypoxicList(){
       + (h.current_altitude_m!=null?'<div>Altitud: <strong>'+h.current_altitude_m+'</strong> m</div>':'')
       + (h.set_point_altitude_m!=null?'<div>Set point: <strong>'+h.set_point_altitude_m+'</strong> m</div>':'')
       + (h.door_open_multiple_over_1min_last_hour?'<div>⚠ Puerta abierta &gt;1min</div>':'')
-      + (h.client_notified_reception?'<div>✓ Recepción avisada</div>':'')
+      + (h.client_notified_reception?'<div>✓ Recepción notificada por cliente</div>':'')
       + '    </div>'
       + (h.observaciones?'<div style="margin-top:6px;font-size:12px;color:var(--text2);white-space:pre-wrap;">'+formatDisplayValue(h.observaciones)+'</div>':'')
       + (s===HYPOXIC_STATES.CERRADA?'<div style="margin-top:6px;font-size:11px;color:var(--text3);">Cerrado por <strong>'+formatDisplayValue(h.closed_by||'?')+'</strong> · '+resolTxt+'</div>':'')
@@ -166,7 +165,10 @@ async function openHypoxicForm() {
       + '  <button onclick="closeHypoxicForm()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;">×</button>'
       + '</div>'
       + '<div style="margin-bottom:10px;"><label style="font-size:12px;color:var(--text2);">Habitación *</label>'
-      + '  <input id="hyp-room" class="input" placeholder="Ej. 201" style="margin-top:4px;" /></div>'
+      + '  <select id="hyp-room" class="input" style="margin-top:4px;">'
+      + '    <option value="">— Selecciona habitación —</option>'
+      +      HYPOXIC_ROOMS.map(function(r){return '<option value="'+r+'">Hab. '+r+'</option>';}).join('')
+      + '  </select></div>'
       + '<div style="margin-bottom:10px;"><label style="font-size:12px;color:var(--text2);">Tipo de incidencia *</label>'
       + '  <div id="hyp-tipos" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">'
       +    HYPOXIC_TIPOS.map(function(t){return '<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;"><input type="checkbox" value="'+t+'"> '+t+'</label>';}).join('')
@@ -178,14 +180,14 @@ async function openHypoxicForm() {
       + '</div>'
       + '<div style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px;">'
       + '  <label style="font-size:13px;color:var(--text2);"><input type="checkbox" id="hyp-door"> Puerta abierta varias veces &gt;1min en la última hora</label>'
-      + '  <label style="font-size:13px;color:var(--text2);"><input type="checkbox" id="hyp-notif"> Recepción avisada al cliente</label>'
+      + '  <label style="font-size:13px;color:var(--text2);"><input type="checkbox" id="hyp-notif"> Recepción notificada por cliente</label>'
       + '</div>'
-      + '<div style="margin-bottom:10px;"><label style="font-size:12px;color:var(--text2);">Notas iniciales</label>'
-      + '  <textarea id="hyp-obs" class="input" rows="2" placeholder="Descripción opcional" style="margin-top:4px;"></textarea></div>'
+      + '<div style="margin-bottom:10px;"><label style="font-size:12px;color:var(--text2);">Anotaciones</label>'
+      + '  <textarea id="hyp-obs" class="input" rows="2" placeholder="Anotaciones opcionales" style="margin-top:4px;"></textarea></div>'
       + '<div id="hyp-err" style="color:var(--red);font-size:12px;margin-bottom:10px;"></div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
       + '  <button class="btn btn-secondary" onclick="closeHypoxicForm()">Cancelar</button>'
-      + '  <button class="btn btn-primary" onclick="saveHypoxicNew()">Guardar</button>'
+      + '  <button class="btn" style="background:var(--blue);color:#fff;border:1px solid var(--blue);" onclick="saveHypoxicNew()">Guardar</button>'
       + '</div>'
       + '</div>';
     document.body.appendChild(modal);
