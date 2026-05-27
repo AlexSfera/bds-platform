@@ -405,17 +405,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 .vbtn-sec{background:#f3f4f6;color:#374151;border-color:#d1d5db;}
 .vbtn-warn{background:#fffbeb;color:#d97706;border-color:#fcd34d;}
 .vbtn-del{background:#fef2f2;color:#dc2626;border-color:#fca5a5;}
-
-/* Validación: botones departamento */
-.val-dept-btn{padding:10px 16px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;transition:all .15s;}
-.val-dept-btn:hover:not(:disabled){border-color:#2ec4b6;color:#2ec4b6;}
-.val-dept-btn.active{background:#2ec4b6;color:#fff;border-color:#2ec4b6;}
-.val-dept-btn:disabled{opacity:.35;cursor:not-allowed;}
-.flatpickr-input[readonly]{background:#fff;color:#111827;}
 </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/es.js"></script>
 </head>
 <body>
 <div id="portal-screen" style="position:fixed;inset:0;z-index:1000;overflow-y:auto;background:#0B1F33;display:flex;flex-direction:column;">
@@ -835,53 +825,26 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- ══ VALIDACIÓN ══ -->
     <div class="screen" id="screen-validacion">
-      <div class="page-header"><div class="page-title">✅ Validación</div><div class="page-sub">Validar · Pedir corrección · Costes de merma</div></div>
-
-      <!-- Departamento (botones) -->
-      <div id="val-dept-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-        <button class="val-dept-btn" data-dept="" onclick="selectValDept('')">Todos</button>
-        <button class="val-dept-btn" data-dept="Cocina" onclick="selectValDept('Cocina')">🍳 Cocina</button>
-        <button class="val-dept-btn" data-dept="Friegue" onclick="selectValDept('Friegue')">🧽 Friegue</button>
-        <button class="val-dept-btn" data-dept="Sala" onclick="selectValDept('Sala')">🍷 Sala</button>
-        <button class="val-dept-btn" data-dept="FnB" onclick="selectValDept('FnB')">🍴 FnB</button>
-        <button class="val-dept-btn" data-dept="Recepción" onclick="selectValDept('Recepción')">🛎 Recepción</button>
-      </div>
-
-      <!-- Sub-tabs Follow-up / Cierre Caja / Hypoxic Room -->
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <div class="page-header"><div class="page-title">✅ Validación</div><div class="page-sub">Validar · Pedir corrección · Costes de merma</div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
         <button id="val-tab-followup" onclick="switchValTab('followup')" style="padding:8px 18px;border-radius:6px;border:2px solid #2ec4b6;background:rgba(46,196,182,.15);color:#2ec4b6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">FOLLOW-UP</button>
-        <button id="val-tab-caja" onclick="switchValTab('caja')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">CIERRE CAJA</button>
-        <button id="val-tab-hypoxic" onclick="switchValTab('hypoxic')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">🌬 HYPOXIC ROOM</button>
+        <button id="val-tab-caja" onclick="switchValTab('caja')" style="padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">CIERRE CAJA</button>
       </div>
-
+      </div>
       <div class="filter-bar">
-        <div class="fg"><label>Rango de fechas</label>
-          <input type="text" id="v-rango" placeholder="dd/mm/aaaa → dd/mm/aaaa" readonly style="cursor:pointer;background:#fff;color:#111827;padding:8px 10px;border-radius:6px;border:1px solid var(--border);min-width:240px;">
-        </div>
-        <input type="hidden" id="v-desde">
-        <input type="hidden" id="v-hasta">
-        <input type="hidden" id="v-dept" value="">
+        <div class="fg"><label>Desde</label><input type="date" id="v-desde"></div>
+        <div class="fg"><label>Hasta</label><input type="date" id="v-hasta"></div>
         <div class="fg"><label>Estado</label>
           <select id="v-estado"><option value="">Todos</option><option>Pendiente</option><option>En corrección</option><option>Validado</option></select></div>
+        <div class="fg"><label>Departamento</label>
+          <select id="v-dept" onchange="onValDeptChange()">
+            <option value="">Todos</option><option>Cocina</option><option>Sala</option><option>Recepción</option>
+          </select></div>
         <div class="fg"><label id="v-servicio-label">Servicio</label>
           <select id="v-servicio">
             <option value="">Todos</option><option>Desayuno</option><option>Comida</option><option>Cena</option><option>Evento</option><option>Otro</option><option>Mañana</option><option>Tarde</option><option>Noche</option>
           </select></div>
-        <div class="fg"><label>Empleado</label>
-          <select id="v-empleado"><option value="">Todos</option></select></div>
-        <div class="fg"><label>FIO</label>
-          <select id="v-fio"><option value="">Todos</option><option value="si">Sí</option><option value="no">No</option></select></div>
-        <div class="fg"><label>&nbsp;</label>
-          <button id="v-solo-pend" onclick="toggleValSoloPendientes()" class="btn btn-secondary" style="white-space:nowrap;">⏳ Solo pendientes</button></div>
         <div><button class="btn btn-secondary" style="margin-top:20px" onclick="renderValidacion()">🔍 Filtrar</button></div>
-      </div>
-      <!-- Header validación masiva (oculto si 0 seleccionados) -->
-      <div id="val-masivo-header" style="display:none;background:rgba(46,196,182,.1);border:1px solid #2ec4b6;border-radius:8px;padding:10px 14px;margin-bottom:12px;align-items:center;justify-content:space-between;gap:10px;">
-        <div><strong id="val-masivo-count">0</strong> turno(s) seleccionado(s)</div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-secondary" onclick="clearValSelection()">Deseleccionar</button>
-          <button class="btn btn-primary" onclick="validarMasivo()">✓ Validar seleccionados</button>
-        </div>
       </div>
       <!-- FOLLOW-UP TAB -->
       <div id="val-content-followup">
@@ -902,11 +865,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
           </div>
         </div>
         <div class="card"><div class="tbl-wrap" id="val-caja-table"></div></div>
-      </div>
-
-      <!-- HYPOXIC ROOM TAB -->
-      <div id="val-content-hypoxic" style="display:none;">
-        <div class="card"><div class="tbl-wrap" id="val-hypoxic-table"></div></div>
       </div>
     </div>
 
@@ -1129,6 +1087,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="page-header"><div class="page-title">⚠ Incidencias pendientes</div><div class="page-sub">Cargando...</div></div>
     </div>
 
+    <!-- ══ HYPOXIC ROOM (módulo SYNCROLAB) ══ -->
+    <div class="screen" id="screen-hypoxic">
+      <div class="page-header"><div class="page-title">🫁 Hypoxic Room</div><div class="page-sub">Cargando...</div></div>
+    </div>
+
     <!-- ══ MERMA (módulo Cocina) ══ -->
     <div class="screen" id="screen-merma-mod">
       <div class="page-header"><div class="page-title">📦 Merma</div><div class="page-sub">Cargando...</div></div>
@@ -1136,12 +1099,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- ══ AJUSTES (módulo Sala) ══ -->
     <div class="screen" id="screen-ajustes-mod">
-      <div class="page-header"><div class="page-title">⚙ Ajustes/Correcciones</div><div class="page-sub">Cargando...</div></div>
-    </div>
-
-    <!-- ══ HYPOXIC ROOM (módulo Recepción) ══ -->
-    <div class="screen" id="screen-hypoxic-mod">
-      <div class="page-header"><div class="page-title">🌬 Hypoxic Room</div><div class="page-sub">Cargando...</div></div>
+      <div class="page-header"><div class="page-title">⚙ Ajustes</div><div class="page-sub">Cargando...</div></div>
     </div>
 
   </div><!-- /main -->
@@ -1798,31 +1756,10 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <div id="toast-c"></div>
 <div class="ver-badge">v3.0 · Schema 3.0 · Migración Supabase lista</div>
 
-<!-- ══ MODAL HYPOXIC ROOM ══ -->
-<div id="modal-hypoxic" class="modal-overlay" style="display:none;">
-  <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
-    <div class="modal-h">
-      <h3 id="modal-hypoxic-title">🌬 Incidencias Hypoxic Room</h3>
-      <button class="modal-x" onclick="closeHypoxicModal()">✕</button>
-    </div>
-    <div class="modal-b">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.4;">
-        Registra una o varias habitaciones con incidencia de hipoxia durante este turno.<br>
-        Habitaciones permitidas: 104-109 y 202-209.
-      </div>
-      <div id="hypoxic-lines"></div>
-      <button type="button" id="hypoxic-add-btn" class="btn btn-secondary" onclick="addHypoxicLine()" style="margin-top:6px;">+ Añadir otra habitación</button>
-    </div>
-    <div class="modal-f">
-      <button class="btn btn-secondary" onclick="closeHypoxicModal()">Cancelar</button>
-      <button class="btn btn-primary" id="hypoxic-confirm-btn" onclick="confirmHypoxic()">✓ Guardar incidencias Hypoxic Room</button>
-    </div>
-  </div>
-</div>
-
 <script src="shared.js"></script>
 <script src="tareas.js"></script>
 <script src="incidencias.js"></script>
+<script src="hypoxic.js"></script>
 <script src="gestiones.js"></script>
 <script src="checklist.js"></script>
 <script src="sala.js"></script>
@@ -1832,6 +1769,5 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <script src="incidencia_tipos.js"></script>
     <script src="dashboard.js"></script>
 <script src="validacion.js"></script>
-<script src="hypoxic.js"></script>
 </body>
 </html>

@@ -383,6 +383,7 @@ function getScreens(rol){
   var isCocina     = currentUser && currentUser.area === 'Cocina';
   var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping');
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
+  var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
   var isJefe       = isAdminU || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
     || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
@@ -394,6 +395,7 @@ function getScreens(rol){
     gestiones:   {id:'gestiones',   label:'📌 Gestiones'},
     tareas:      {id:'tareas',      label:'🔗 Tareas'},
     incidencias: {id:'incidencias', label:'⚠ Incidencias'},
+    hypoxic:     {id:'hypoxic',     label:'🫁 Hypoxic Room'},
     validacion:  {id:'validacion',  label:'✅ Validación'},
     dashboard:   {id:'dashboard',   label:'📊 Dashboard'},
     maestro:     {id:'maestro',     label:'👥 Maestro'},
@@ -410,6 +412,9 @@ function getScreens(rol){
   var navComun = isAdminU
     ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
     : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias];
+
+  // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB
+  if(isAdminU || isSyncrolab) navComun.push(ITEMS.hypoxic);
 
   // ── ZONA 2: Módulo de departamento (varía) ────────────────────────
   var dptoMod = [];
@@ -457,9 +462,10 @@ function buildNav(){
     'maestro':   _svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
     'export':    _svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
     'gestiones': _svg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
-    'incidencias': _svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>')
+    'incidencias': _svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    'hypoxic':   _svg('<path d="M12 2a3 3 0 0 0-3 3c0 1.5 1 2.5 1 4v3a4 4 0 0 1-2 3.5L7 16a3 3 0 0 0 0 4.5 3 3 0 0 0 4 0l1-1 1 1a3 3 0 0 0 4 0 3 3 0 0 0 0-4.5l-1-.5a4 4 0 0 1-2-3.5V9c0-1.5 1-2.5 1-4a3 3 0 0 0-3-3z"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
 
   // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
   const sideb = document.getElementById('sidebar-nav');
@@ -554,6 +560,7 @@ async function showScreen(id){
   if(id==='maestro'){ renderMaestro(); }
   if(id==='gestiones'){ renderGestionesScreen(); }
   if(id==='incidencias'){ renderIncidenciasScreen(); }
+  if(id==='hypoxic'){ renderHypoxicScreen(); }
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
   updateDots();
