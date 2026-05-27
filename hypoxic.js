@@ -10,7 +10,9 @@ const HYPOXIC_STATES = {
   CERRADA: 'Cerrada'
 };
 
-const HYPOXIC_TIPOS = ['CO2 alto', 'Puerta abierta', 'Sin oxígeno', 'Sensor sin datos', 'Otro'];
+const HYPOXIC_TIPOS = ['Hipoxia está por debajo', 'CO2 alto', 'Puerta abierta', 'Sensor sin datos', 'Otro'];
+
+const HYPOXIC_ROOMS = ['104','105','106','107','108','109','202','203','204','205','206','207','208','209'];
 
 function normalizeHypoxicState(state){
   if(state===HYPOXIC_STATES.ABIERTA || state==='abierta' || state==='Pendiente') return HYPOXIC_STATES.ABIERTA;
@@ -62,7 +64,7 @@ async function renderHypoxicScreen() {
     + '  <select id="hypoxic-f-room" class="input" style="max-width:160px;" onchange="_renderHypoxicList()">'
     + '    <option value="">Todas habitaciones</option>'
     + '  </select>'
-    + '  <button class="btn btn-primary" style="margin-left:auto;" onclick="openHypoxicForm()">+ Nueva incidencia</button>'
+    + '  <button type="button" id="hypoxic-btn-new" style="margin-left:auto;background:#3b82f6;color:#fff;border:1px solid #3b82f6;padding:8px 16px;border-radius:6px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;" onclick="openHypoxicForm()">+ Nueva incidencia</button>'
     + '</div>'
     + '<div id="hypoxic-list"></div>';
   await _renderHypoxicList();
