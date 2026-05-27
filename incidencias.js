@@ -22,7 +22,7 @@ function normalizeIncidentState(state){
   if(state===INCIDENT_STATES.ABIERTA || state==='abierta') return INCIDENT_STATES.ABIERTA;
   if(state===INCIDENT_STATES.EN_PROCESO || state==='en proceso') return INCIDENT_STATES.EN_PROCESO;
   if(state===INCIDENT_STATES.CERRADA) return INCIDENT_STATES.CERRADA;
-  if(state===INCIDENT_STATES.VALIDADA) return INCIDENT_STATES.VALIDADA;
+  if(state==='Validada') return INCIDENT_STATES.CERRADA;
   return INCIDENT_STATES.ABIERTA;
 }
 
@@ -52,8 +52,7 @@ function canValidateIncident(user,incident){
 // ── BADGE ─────────────────────────────────────────────────────────────
 function bIncidentEstado(e){
   var s=normalizeIncidentState(e);
-  if(s===INCIDENT_STATES.VALIDADA) return '<span class="badge b-green">✓ Validada</span>';
-  if(s===INCIDENT_STATES.CERRADA)  return '<span class="badge b-orange">Cerrada</span>';
+  if(s===INCIDENT_STATES.CERRADA)  return '<span class="badge b-green">Cerrada</span>';
   if(s===INCIDENT_STATES.EN_PROCESO) return '<span class="badge b-blue">En proceso</span>';
   return '<span class="badge b-red">Abierta</span>';
 }
@@ -96,9 +95,6 @@ async function advanceIncident(incidentId,newEstado){
   var target=normalizeIncidentState(newEstado);
   if(target===INCIDENT_STATES.EN_PROCESO && !canCloseIncident(currentUser,inci)){
     toast('No tienes permiso para gestionar incidencias de este departamento.','err'); return;
-  }
-  if(target===INCIDENT_STATES.VALIDADA && !canValidateIncident(currentUser,inci)){
-    toast('Solo Admin puede validar incidencias.','err'); return;
   }
   const saved=await dbUpdate('incidencias',incidentId,{estado: target});
   if(!saved){ toast('No se pudo actualizar la incidencia. Inténtalo de nuevo.','err'); return; }
@@ -174,13 +170,12 @@ function _renderIncidencias(incis, shiftMap) {
   if (kpiEl) {
     var iAb = filtered.filter(function(i) { return isIncidentOpen(i); }).length;
     var iCerr = filtered.filter(function(i) { return normalizeIncidentState(i.estado) === INCIDENT_STATES.CERRADA; }).length;
-    var iVal = filtered.filter(function(i) { return normalizeIncidentState(i.estado) === INCIDENT_STATES.VALIDADA; }).length;
     var iCrit = filtered.filter(function(i) { return i.severidad === 'Crítica' || i.severidad === 'Alta'; }).length;
     var resRows = filtered.filter(function(i) { return _resolutionMinutes(i) !== null; });
     var avgRes = resRows.length ? Math.round(resRows.reduce(function(a, i) { return a + _resolutionMinutes(i); }, 0) / resRows.length) : null;
     kpiEl.innerHTML = '<div class="kpi k-red"><div class="kpi-lbl">Total</div><div class="kpi-val">' + filtered.length + '</div></div>'
       + '<div class="kpi k-red"><div class="kpi-lbl">Abiertas</div><div class="kpi-val">' + iAb + '</div></div>'
-      + '<div class="kpi k-green"><div class="kpi-lbl">Cerradas</div><div class="kpi-val">' + iCerr + '</div><div class="kpi-sub">' + iVal + ' validadas</div></div>'
+      + '<div class="kpi k-green"><div class="kpi-lbl">Cerradas</div><div class="kpi-val">' + iCerr + '</div></div>'
       + '<div class="kpi k-red"><div class="kpi-lbl">Alta / crítica</div><div class="kpi-val">' + iCrit + '</div></div>'
       + '<div class="kpi k-blue"><div class="kpi-lbl">T. medio</div><div class="kpi-val">' + (avgRes === null ? '—' : avgRes + 'm') + '</div></div>';
   }

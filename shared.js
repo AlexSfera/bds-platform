@@ -400,9 +400,9 @@ function getScreens(rol){
     export:      {id:'export',      label:'⬇ Exportar'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
-    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes/Correcciones'},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        pending:true},
-    recmod:      {id:'hypoxic-mod', label:'🌬 Hypoxic Room'},
+    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
     mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true}
   };
 
@@ -459,7 +459,7 @@ function buildNav(){
     'gestiones': _svg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
     'incidencias': _svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','hypoxic-mod':'Hypoxic','mant-mod':'Mant.'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
 
   // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
   const sideb = document.getElementById('sidebar-nav');
@@ -556,7 +556,6 @@ async function showScreen(id){
   if(id==='incidencias'){ renderIncidenciasScreen(); }
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
-  if(id==='hypoxic-mod'){ if(typeof renderHypoxicMod === 'function') renderHypoxicMod(); }
   updateDots();
 }
 async function updateDots(){
@@ -1190,58 +1189,6 @@ async function _doSaveTurno(){
     }
   }
 
-  // ── Guardar líneas de ajustes del flujo cierre turno (Sala) → tabla ajustes ──
-  // Unifica almacenamiento: las líneas del popup ajustes-del-turno crean filas
-  // en la tabla `ajustes` con shift_id asignado y estado_aprobacion='Pendiente'.
-  if(!editingShiftId && typeof _ajustesLines !== 'undefined' && _ajustesLines && _ajustesLines.length > 0){
-    try {
-      for(const line of _ajustesLines){
-        var obsTxt = [];
-        if(line.num && line.num > 1) obsTxt.push('Cantidad: ' + line.num);
-        if(line.comunicado_responsable) obsTxt.push('Comunicado responsable: ' + line.comunicado_responsable);
-        var ajRec = {
-          id: genId(),
-          shift_id: shiftId,
-          employee_id: currentUser.id,
-          nombre: currentUser.nombre,
-          area: currentUser.area || '',
-          fecha: fecha,
-          tipo: line.tipo,
-          importe: parseFloat(line.importe) || 0,
-          motivo: line.motivo || '',
-          obs: obsTxt.join(' · '),
-          estado_aprobacion: 'Pendiente',
-          created_at: ts
-        };
-        await dbInsert('ajustes', ajRec);
-      }
-      invalidateCache('ajustes');
-      await auditLog('AJUSTE_TURNO_NEW', _ajustesLines.length + ' ajuste(s) del turno ' + shiftId);
-    } catch(eAjLines){
-      console.error('No se pudieron guardar ajustes del turno', eAjLines);
-    }
-  }
-
-  // ── Asociar incidencias Hypoxic Room sin shift_id del empleado al turno nuevo ──
-  // Mismo patrón que ajustes: el empleado las crea durante el turno desde el
-  // módulo sidebar (shift_id=null) y aquí se vinculan al turno recién cerrado.
-  if(!editingShiftId){
-    try {
-      var pendHyp = (await getDB('hypoxic_room_incidencias')).filter(function(h){
-        return !h.shift_id && h.employee_id === currentUser.id;
-      });
-      for(const hp of pendHyp){
-        await dbUpdate('hypoxic_room_incidencias', hp.id, {shift_id: shiftId, turno: servicio});
-      }
-      if(pendHyp.length){
-        invalidateCache('hypoxic_room_incidencias');
-        await auditLog('HYPOXIC_ASSOC', pendHyp.length+' incidencias Hypoxic Room asociadas a turno '+shiftId);
-      }
-    } catch(eHypAssoc){
-      console.error('No se pudieron asociar incidencias Hypoxic Room pendientes', eHypAssoc);
-    }
-  }
-
   // ── Save gestión pendiente → tabla gestiones ──
   if(toggleState.gestion==='si'){
     const gTipoEl = document.getElementById('g-tipo');
@@ -1533,272 +1480,17 @@ function onValDeptChange(){
 }
 
 function initValDeptFilter(){
-  var buttons = document.querySelectorAll('.val-dept-btn');
-  if(!buttons.length || !currentUser) return;
-
-  // Role-based locking: chef → Cocina, jefe_recepcion → Recepción
-  var allowedDept = null;
-  if(currentUser.rol==='chef'){ allowedDept = 'Cocina'; }
-  else if(currentUser.rol==='jefe_recepcion'){ allowedDept = 'Recepción'; }
-
-  buttons.forEach(function(b){
-    var d = b.dataset.dept;
-    // Deshabilitar todos los que no son el dept permitido (incluido "Todos")
-    b.disabled = allowedDept ? (d !== allowedDept) : false;
-  });
-
-  // Auto-select dept inicial
-  var defaultDept = allowedDept !== null ? allowedDept : (_currentValDept || '');
-  selectValDept(defaultDept);
-
-  // Init Flatpickr range picker
-  initValRangePicker();
-}
-
-var _currentValDept = '';
-
-function initValRangePicker(){
-  var el = document.getElementById('v-rango');
-  if(!el || el._flatpickr || typeof flatpickr === 'undefined') return;
-  flatpickr(el, {
-    mode: 'range',
-    dateFormat: 'Y-m-d',
-    altInput: true,
-    altFormat: 'd/m/Y',
-    locale: (flatpickr.l10ns && flatpickr.l10ns.es) ? 'es' : 'default',
-    onChange: function(selectedDates){
-      var desde = document.getElementById('v-desde');
-      var hasta = document.getElementById('v-hasta');
-      if(selectedDates.length === 2){
-        if(desde) desde.value = selectedDates[0].toISOString().slice(0,10);
-        if(hasta) hasta.value = selectedDates[1].toISOString().slice(0,10);
-      } else if(selectedDates.length === 0){
-        if(desde) desde.value = '';
-        if(hasta) hasta.value = '';
-      }
-    },
-    onClose: function(selectedDates){
-      if(selectedDates.length === 2 || selectedDates.length === 0){
-        renderValidacion();
-        var cajaContent = document.getElementById('val-content-caja');
-        if(cajaContent && cajaContent.style.display !== 'none' && typeof renderValCajaList === 'function'){
-          renderValCajaList();
-        }
-      }
-    }
-  });
-}
-
-function selectValDept(dept){
-  // Bloqueo por rol
-  var btn = document.querySelector('.val-dept-btn[data-dept="'+dept+'"]');
-  if(btn && btn.disabled) return;
-
-  _currentValDept = dept;
-  var dh = document.getElementById('v-dept');
-  if(dh) dh.value = dept;
-
-  // Reset selección masiva al cambiar dept
-  _valSelected.clear();
-  updateValMasivoHeader();
-
-  // Repoblar filtro empleado según dept
-  populateValEmpleadoFilter();
-
-  // Resaltar botón activo
-  document.querySelectorAll('.val-dept-btn').forEach(function(b){
-    if(b.dataset.dept === dept){ b.classList.add('active'); }
-    else { b.classList.remove('active'); }
-  });
-
-  // Mostrar/ocultar tab Caja según dept
-  var cajaTab = document.getElementById('val-tab-caja');
-  var showsCaja = (dept === 'Sala' || dept === 'Recepción');
-  if(cajaTab) cajaTab.style.display = showsCaja ? '' : 'none';
-
-  // Mostrar/ocultar tab Hypoxic Room: sólo si dept = Recepción y usuario tiene permiso
-  var hypoxicTab = document.getElementById('val-tab-hypoxic');
-  var showsHypoxic = (dept === 'Recepción') && (typeof canSeeHypoxicTab === 'function' && canSeeHypoxicTab(currentUser));
-  if(hypoxicTab) hypoxicTab.style.display = showsHypoxic ? '' : 'none';
-
-  // Recalcular opciones de servicio
+  var sel=document.getElementById('v-dept');
+  if(!sel||!currentUser) return;
+  if(currentUser.rol==='chef'){
+    sel.value='Cocina'; sel.disabled=true;
+  } else if(currentUser.rol==='jefe_recepcion'){
+    sel.value='Recepción'; sel.disabled=true;
+  } else {
+    sel.disabled=false;
+  }
   onValDeptChange();
-
-  // Si estaba en Caja pero el nuevo dept no la soporta → volver a follow-up
-  var cajaContent = document.getElementById('val-content-caja');
-  var hypoxicContent = document.getElementById('val-content-hypoxic');
-  var inCaja = cajaContent && cajaContent.style.display !== 'none';
-  var inHypoxic = hypoxicContent && hypoxicContent.style.display !== 'none';
-  if((inCaja && !showsCaja) || (inHypoxic && !showsHypoxic)){
-    switchValTab('followup');
-  } else {
-    renderValidacion();
-    if(inCaja && showsCaja && typeof renderValCajaList === 'function') renderValCajaList();
-    if(inHypoxic && showsHypoxic && typeof renderValHypoxicList === 'function') renderValHypoxicList();
-  }
 }
-
-// ── B6 Fase 2: estado validación masiva + filtros ───────────────────
-var _valSelected = new Set();
-var _valSoloPendientes = false;
-
-function toggleValSelect(sid, checked){
-  if(checked) _valSelected.add(sid);
-  else _valSelected.delete(sid);
-  updateValMasivoHeader();
-}
-window.toggleValSelect = toggleValSelect;
-
-function updateValMasivoHeader(){
-  var h = document.getElementById('val-masivo-header');
-  var c = document.getElementById('val-masivo-count');
-  if(!h) return;
-  if(_valSelected.size > 0){
-    h.style.display = 'flex';
-    if(c) c.textContent = _valSelected.size;
-  } else {
-    h.style.display = 'none';
-  }
-}
-
-function clearValSelection(){
-  _valSelected.clear();
-  document.querySelectorAll('.val-row-cb').forEach(function(cb){ cb.checked=false; });
-  var hcb = document.getElementById('val-selectall-cb');
-  if(hcb) hcb.checked = false;
-  updateValMasivoHeader();
-}
-window.clearValSelection = clearValSelection;
-
-function toggleValSelectAll(checked){
-  document.querySelectorAll('.val-row-cb').forEach(function(cb){
-    if(cb.disabled) return;
-    cb.checked = checked;
-    var sid = cb.dataset.sid;
-    if(!sid) return;
-    if(checked) _valSelected.add(sid);
-    else _valSelected.delete(sid);
-  });
-  updateValMasivoHeader();
-}
-window.toggleValSelectAll = toggleValSelectAll;
-
-function toggleValSoloPendientes(){
-  _valSoloPendientes = !_valSoloPendientes;
-  var btn = document.getElementById('v-solo-pend');
-  if(btn){
-    if(_valSoloPendientes){
-      btn.style.background = '#2ec4b6';
-      btn.style.color = '#fff';
-      btn.style.borderColor = '#2ec4b6';
-    } else {
-      btn.style.background = '';
-      btn.style.color = '';
-      btn.style.borderColor = '';
-    }
-  }
-  renderValidacion();
-}
-window.toggleValSoloPendientes = toggleValSoloPendientes;
-
-function getShiftBlockers(s, allAj, allMer){
-  var blockers = [];
-  var ajPend = (allAj||[]).filter(function(a){
-    return a.shift_id === s.id && (a.estado_aprobacion||'Aprobado') === 'Pendiente';
-  });
-  if(ajPend.length > 0) blockers.push(ajPend.length+' ajuste(s) pendiente(s)');
-  var mermSinC = (allMer||[]).filter(function(m){
-    return recordMatchesShift(m, s) && !(parseFloat(m.coste_total)>0);
-  });
-  if(mermSinC.length > 0) blockers.push(mermSinC.length+' merma(s) sin coste');
-  return blockers;
-}
-
-async function validarMasivo(){
-  if(!isAdmin(currentUser) && !isSupervisor(currentUser)){
-    toast('Solo jefe de departamento o admin pueden validar masivamente','err');
-    return;
-  }
-  if(_valSelected.size === 0){
-    toast('No hay turnos seleccionados','err');
-    return;
-  }
-  if(!confirm('¿Validar '+_valSelected.size+' turno(s)?\n\nLos turnos con ajustes pendientes o merma sin coste se omitirán automáticamente.')) return;
-
-  var allShifts = await getDB('shifts');
-  var allAj = await getDB('ajustes');
-  var allMer = await getDB('merma');
-
-  var validated = 0;
-  var blocked = 0;
-  var blockedDetails = [];
-  var ids = Array.from(_valSelected);
-
-  for(var i=0;i<ids.length;i++){
-    var sid = ids[i];
-    var s = allShifts.find(function(x){ return x.id===sid; });
-    if(!s){ continue; }
-    if(!canValidateShift(currentUser, s)){
-      blocked++;
-      blockedDetails.push(s.nombre+' — sin permiso');
-      continue;
-    }
-    var blockers = getShiftBlockers(s, allAj, allMer);
-    if(blockers.length > 0){
-      blocked++;
-      blockedDetails.push(s.nombre+' — '+blockers.join(', '));
-      continue;
-    }
-    await dbUpdate('shifts', sid, {
-      estado: 'Validado',
-      validado_por: currentUser.nombre,
-      validado_ts: localTs(),
-      comentario_validador: 'Validación masiva'
-    });
-    await auditLog('VALIDACION_MASIVA', currentUser.nombre+' → '+s.nombre+' ('+sid+')');
-    validated++;
-  }
-
-  invalidateCache('shifts');
-  _valSelected.clear();
-  renderValidacion();
-
-  var msg = '✓ '+validated+' validado(s)';
-  if(blocked > 0) msg += ', ⚠ '+blocked+' omitido(s)';
-  toast(msg, validated>0 ? 'ok' : 'warn');
-
-  if(blocked > 0){
-    console.log('[VALIDACION_MASIVA] Omitidos (ver razón):');
-    blockedDetails.forEach(function(d){ console.log('  - '+d); });
-  }
-}
-window.validarMasivo = validarMasivo;
-
-async function populateValEmpleadoFilter(){
-  var sel = document.getElementById('v-empleado');
-  if(!sel) return;
-  var current = sel.value;
-  var allEmps = [];
-  try { allEmps = await getDB('employees'); } catch(e){}
-  var dept = (typeof _currentValDept !== 'undefined' && _currentValDept) || '';
-  if(dept){
-    allEmps = allEmps.filter(function(e){ return e.area === dept; });
-  }
-  allEmps.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
-  var html = '<option value="">Todos</option>';
-  allEmps.forEach(function(e){
-    var n = formatDisplayValue(e.nombre);
-    html += '<option value="'+n+'">'+n+'</option>';
-  });
-  sel.innerHTML = html;
-  // Restaurar selección si sigue siendo válida
-  if(current){
-    var found = false;
-    for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===current){ found=true; break; } }
-    sel.value = found ? current : '';
-  }
-}
-window.populateValEmpleadoFilter = populateValEmpleadoFilter;
 
 async function renderValidacion(){
   let shifts=await getDB('shifts');
@@ -1815,8 +1507,6 @@ async function renderValidacion(){
   const estado=document.getElementById('v-estado').value;
   const serv=document.getElementById('v-servicio').value;
   const dept=(document.getElementById('v-dept')||{}).value||'';
-  const empleado=(document.getElementById('v-empleado')||{}).value||'';
-  const fioFilt=(document.getElementById('v-fio')||{}).value||'';
   if(desde) shifts=shifts.filter(s=>s.fecha>=desde);
   if(hasta) shifts=shifts.filter(s=>s.fecha<=hasta);
   if(estado) shifts=shifts.filter(s=>s.estado===estado);
@@ -1826,41 +1516,17 @@ async function renderValidacion(){
     if(s.area==='Recepción') return s.servicio===serv;
     try{ var arr=Array.isArray(s.servicio)?s.servicio:JSON.parse(s.servicio); return Array.isArray(arr)?arr.includes(serv):s.servicio===serv; }catch(e){ return s.servicio===serv; }
   });
-  if(empleado) shifts=shifts.filter(function(s){ return s.nombre===empleado; });
-  if(fioFilt==='si') shifts=shifts.filter(function(s){ return s.fio===true; });
-  else if(fioFilt==='no') shifts=shifts.filter(function(s){ return s.fio!==true; });
-  if(_valSoloPendientes) shifts=shifts.filter(function(s){ return s.estado==='Pendiente'; });
   shifts.sort((a,b)=>b.created_at.localeCompare(a.created_at));
   const pend=shifts.filter(s=>s.estado==='Pendiente').length;
   var ajustesAll = []; try { ajustesAll = await getDB('ajustes'); } catch(e){}
   const _shiftIds = shifts.map(function(s){ return s.id; });
   const _ajF = ajustesAll.filter(function(a){ return _shiftIds.indexOf(a.shift_id) >= 0; });
   const _totAj = _ajF.reduce(function(acc,a){ return acc + (parseFloat(a.importe)||0); }, 0);
-  // KPIs jefe (solo admin/supervisor)
-  const _isJefe = isAdmin(currentUser) || isSupervisor(currentUser);
-  const _kValidados = shifts.filter(function(s){ return s.estado==='Validado' || s.estado==='Validado con FIO'; }).length;
-  const _kFIO = shifts.filter(function(s){ return s.fio===true; }).length;
-  const _kHoras = shifts.reduce(function(a,s){ return a + (parseFloat(s.horas)||0); }, 0);
-  var _mermasPreview = [];
-  try { _mermasPreview = await getDB('merma'); } catch(e){}
-  const _kMermaCoste = _mermasPreview.filter(function(m){
-    return shifts.some(function(s){ return recordMatchesShift(m,s); });
-  }).reduce(function(a,m){ return a + (parseFloat(m.coste_total)||0); }, 0);
   var _alertsHtml = '';
   if(pend > 0) _alertsHtml += '<div class="alert a-warn">⚠ '+pend+' registro(s) pendiente(s)</div>';
-  if(_isJefe){
-    _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
-      + '<div class="kpi"><div class="kpi-lbl">Turnos</div><div class="kpi-val">'+shifts.length+'</div><div class="kpi-sub">'+_kValidados+' validados · '+pend+' pendientes</div></div>'
-      + '<div class="kpi"><div class="kpi-lbl">Horas</div><div class="kpi-val">'+_kHoras.toFixed(1)+'h</div><div class="kpi-sub">en filtro</div></div>'
-      + '<div class="kpi k-red"><div class="kpi-lbl">FIO</div><div class="kpi-val">'+_kFIO+'</div><div class="kpi-sub">fallo individual</div></div>'
-      + '<div class="kpi k-blue"><div class="kpi-lbl">Ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
-      + '<div class="kpi k-orange"><div class="kpi-lbl">Coste merma</div><div class="kpi-val">'+_kMermaCoste.toFixed(2)+' €</div><div class="kpi-sub">en filtro</div></div>'
-      + '</div>';
-  } else {
-    _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
-      + '<div class="kpi k-blue"><div class="kpi-lbl">Total ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
-      + '</div>';
-  }
+  _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
+    + '<div class="kpi k-blue"><div class="kpi-lbl">Total ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
+    + '</div>';
   document.getElementById('val-alerts').innerHTML = _alertsHtml;
   const mermas=await getDB('merma'); const incis=await getDB('incidencias');
   const el=document.getElementById('validacion-table');
@@ -1914,17 +1580,7 @@ async function renderValidacion(){
     var btnDel = isAdmin(currentUser)
       ? '<button class="vbtn vbtn-del" onclick="deleteShift(\''+sid+'\')">🗑</button>' : '';
     aCell = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">'+btnRevisar+btnVer+btnArevisar+btnReabrir+btnDel+'</div>';
-    // Checkbox masiva: solo jefes/admin, solo turnos validables (no read-only, con permiso)
-    var cbCell = '';
-    if(_isJefe){
-      var cbEnabled = !isReadOnly && canSupervise;
-      cbCell = '<td style="text-align:center;width:32px;">'
-        + (cbEnabled
-            ? '<input type="checkbox" class="val-row-cb" data-sid="'+sid+'" onchange="toggleValSelect(\''+sid+'\', this.checked)"'+(_valSelected.has(sid)?' checked':'')+' style="cursor:pointer;width:16px;height:16px;">'
-            : '<span style="color:var(--text3);font-size:11px;">—</span>')
-        + '</td>';
-    }
-    valRows+='<tr>'+cbCell+'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
+    valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
       +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
@@ -1932,11 +1588,7 @@ async function renderValidacion(){
       +'<td style="text-align:center;">'+(s.fio===true?'<span class="badge b-red">FIO</span>':s.estado!=='Pendiente'?'<span style="color:var(--green);">✓</span>':'<span style="color:var(--text3);">—</span>')+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
-  var _headerCb = _isJefe
-    ? '<th style="text-align:center;width:32px;"><input type="checkbox" id="val-selectall-cb" onchange="toggleValSelectAll(this.checked)" style="cursor:pointer;width:16px;height:16px;" title="Seleccionar todos"></th>'
-    : '';
-  el.innerHTML='<table><tr>'+_headerCb+'<th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
-  updateValMasivoHeader();
+  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
 }
 // valAdvanceGestion, valShowCloseGestionForm, valSaveCloseGestion,
 // valAdvanceGestionNew, valShowCloseGestionNewForm, valSaveCloseGestionNew → gestiones.js
@@ -2058,7 +1710,7 @@ async function openValidarModal(shiftId){
         }catch(e){}
       }
       info += '</div>';
-      var iClosedNow = iState===INCIDENT_STATES.CERRADA||iState===INCIDENT_STATES.VALIDADA;
+      var iClosedNow = iState===INCIDENT_STATES.CERRADA;
       if(iClosedNow){
         info += '<div style="margin-top:6px;font-size:11px;color:var(--text3);">'
           +(inci.cerrado_ts?'Cerrado: <strong>'+fmtTs(inci.cerrado_ts)+'</strong>':'')
@@ -2108,44 +1760,6 @@ async function openValidarModal(shiftId){
   }
   info += '</div>';
   } // end _aplicaMerma
-
-  // Block 6: Ajustes/Correcciones (Sala / Recepción)
-  const allAjustes = await getDB('ajustes');
-  const shiftAjustes = allAjustes.filter(function(a){ return a.shift_id === shiftId; });
-  _validatingAjustesPendientes = shiftAjustes.filter(function(a){ return (a.estado_aprobacion||'Aprobado') === 'Pendiente'; });
-  var _deptAjustes = (s.area||'').toLowerCase().trim();
-  var _aplicaAjustes = ['sala','recepción','recepcion'].indexOf(_deptAjustes) !== -1;
-  if(_aplicaAjustes){
-    var ajPendCount = _validatingAjustesPendientes.length;
-    var ajBorderColor = ajPendCount>0 ? 'var(--amber)' : '#3b82f6';
-    info += '<div style="background:var(--bg);border:1px solid '+ajBorderColor+';border-radius:8px;padding:12px;margin-bottom:10px;">';
-    info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+ajBorderColor+';letter-spacing:.15em;margin-bottom:10px;">AJUSTES / CORRECCIONES ('+shiftAjustes.length+(ajPendCount>0?' · '+ajPendCount+' PENDIENTES':'')+')</div>';
-    if(shiftAjustes.length>0){
-      shiftAjustes.forEach(function(a){
-        var estApr = a.estado_aprobacion || 'Aprobado';
-        var isPend = estApr === 'Pendiente';
-        var imp = parseFloat(a.importe)||0;
-        var sgn = imp>=0?'+':'';
-        var impColor = imp<0?'var(--red)':'var(--green)';
-        info += '<div style="border-top:1px solid var(--border);padding:10px 0;">';
-        info += '<div style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
-        info += '<div><span style="color:var(--text3)">Tipo: </span><strong>'+formatDisplayValue(a.tipo)+'</strong></div>';
-        info += '<div><span style="color:var(--text3)">Importe: </span><strong style="font-family:var(--font-mono);color:'+impColor+'">'+sgn+imp.toFixed(2)+'€</strong></div>';
-        if(a.motivo) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Motivo: </span>'+formatDisplayValue(a.motivo)+'</div>';
-        if(a.obs) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Obs: </span>'+formatDisplayValue(a.obs)+'</div>';
-        info += '<div><span style="color:var(--text3)">Estado: </span>'+(isPend?'<span class="badge b-amber">⏳ Pendiente</span>':'<span class="badge b-green">✓ Aprobado</span>')+'</div>';
-        if(!isPend && a.aprobado_por) info += '<div><span style="color:var(--text3)">Aprobado por: </span>'+formatDisplayValue(a.aprobado_por)+(a.aprobado_ts?' · '+fmtTs(a.aprobado_ts):'')+'</div>';
-        info += '</div>';
-        if(isPend && canActOnStates){
-          info += '<div id="aj-btn-'+a.id+'" style="margin-top:8px;"><button class="vbtn vbtn-primary" onclick="aprobarAjuste(\''+a.id+'\')">✓ Aprobar</button></div>';
-        }
-        info += '</div>';
-      });
-    } else {
-      info += '<div style="font-size:12px;color:var(--text3);">Sin ajustes en este turno</div>';
-    }
-    info += '</div>';
-  }
 
   document.getElementById('mv-info').innerHTML=info;
   // mv-costes is now unused for merma — clear it
@@ -2198,17 +1812,6 @@ async function doValidacion(newEstado){
       var mermaBlock=document.getElementById('mv-merma-block');
       if(mermaBlock) mermaBlock.scrollIntoView({behavior:'smooth',block:'nearest'});
       toast('⚠️ Completa el coste de todas las líneas de merma antes de validar.','err');
-      return;
-    }
-  }
-  // ── Ajustes pendientes check — block validation if any ajuste pending approval ──
-  if(newEstado==='Validado'){
-    var allAjForCheck = await getDB('ajustes');
-    var shiftAjPend = allAjForCheck.filter(function(a){
-      return a.shift_id === validatingShiftId && (a.estado_aprobacion||'Aprobado') === 'Pendiente';
-    });
-    if(shiftAjPend.length > 0){
-      toast('⚠️ No se puede validar: '+shiftAjPend.length+' ajuste(s) pendiente(s) de aprobar.','err');
       return;
     }
   }
@@ -3099,7 +2702,7 @@ async function renderIncidenciasScreen(){
   });
   list = list.filter(function(i){
     var s = normalizeIncidentState(i.estado);
-    return s !== INCIDENT_STATES.CERRADA && s !== INCIDENT_STATES.VALIDADA;
+    return s !== INCIDENT_STATES.CERRADA;
   });
   list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
 
@@ -3346,11 +2949,9 @@ async function renderAjustesMod(){
 
   var totalImp = 0;
   var pendientes = 0;
-  var pendAprobacion = 0;
   list.forEach(function(a){
     totalImp += parseFloat(a.importe)||0;
     if(!a.shift_id) pendientes++;
-    if((a.estado_aprobacion||'Aprobado') === 'Pendiente') pendAprobacion++;
   });
 
   var cards;
@@ -3364,13 +2965,6 @@ async function renderAjustesMod(){
       var statusTag = a.shift_id
         ? '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">en turno</span>'
         : '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">pendiente</span>';
-      var aprEst = a.estado_aprobacion || 'Aprobado';
-      var aprTag = aprEst === 'Pendiente'
-        ? '<span style="font-size:10px;background:var(--amber-dim);color:var(--amber);padding:2px 6px;border-radius:6px;margin-left:6px;">⏳ por aprobar</span>'
-        : '<span style="font-size:10px;background:var(--green-dim);color:var(--green);padding:2px 6px;border-radius:6px;margin-left:6px;">✓ aprobado</span>';
-      var aprBtn = (aprEst==='Pendiente' && (isAdminU||isSup))
-        ? ' <button class="btn btn-secondary btn-sm" style="margin-left:6px;" onclick="aprobarAjuste(\''+a.id+'\')">✓ Aprobar</button>'
-        : '';
       var obs = a.obs ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">📝 '+formatDisplayValue(a.obs)+'</div>' : '';
       var motivo = a.motivo ? '<div style="font-size:12px;margin-top:4px;">'+formatDisplayValue(a.motivo)+'</div>' : '';
       var delBtn = isAdminU ? ' <button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteAjusteItem(\''+a.id+'\')">🗑</button>' : '';
@@ -3381,8 +2975,6 @@ async function renderAjustesMod(){
         +   '<span style="font-weight:600;font-size:13px;">'+formatDisplayValue(a.tipo)+'</span>'
         +   '<span class="badge" style="background:transparent;border:1px solid var(--border);color:'+importeColor+';font-weight:600;">'+importeFmt+'</span>'
         +   statusTag
-        +   aprTag
-        +   aprBtn
         +   delBtn
         + '</div>'
         + motivo
@@ -3398,12 +2990,9 @@ async function renderAjustesMod(){
   if(pendientes > 0){
     subText += ' · <b style="color:var(--amber);">'+pendientes+' pendiente(s) de asociar a turno</b>';
   }
-  if(pendAprobacion > 0){
-    subText += ' · <b style="color:var(--amber);">'+pendAprobacion+' por aprobar</b>';
-  }
 
   el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
-    + '<div><div class="page-title">⚙ Ajustes/Correcciones — hoy</div>'
+    + '<div><div class="page-title">⚙ Ajustes — hoy</div>'
     + '<div class="page-sub">'+subText+'</div></div>'
     + '<button class="btn btn-primary" onclick="openNewAjusteMod()">+ Nuevo ajuste</button>'
     + '</div>'
@@ -3438,6 +3027,7 @@ function openNewAjusteMod(){
       +   '<div class="fg"><label>Importe (€) <span class="req">*</span></label><input type="number" id="na-importe" step="0.01" placeholder="0.00"></div>'
       + '</div>'
       + '<div class="fg"><label>Motivo</label><input type="text" id="na-motivo" placeholder="ej: mesa 12, cliente insatisfecho"></div>'
+      + '<div class="fg"><label>Observación</label><input type="text" id="na-obs" placeholder="Nota opcional"></div>'
       + '<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;">'
       +   '<b>Regla:</b> Importe = (lo que hay en caja) − (lo que marca el TPV).<br>'
       +   'Anulación / Devolución / Invitación → se guarda automáticamente como <b>negativo</b>.<br>'
@@ -3451,7 +3041,7 @@ function openNewAjusteMod(){
     document.body.appendChild(ov);
     ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-new-ajuste'); });
   }
-  ['na-importe','na-motivo'].forEach(function(id){
+  ['na-importe','na-motivo','na-obs'].forEach(function(id){
     var x=document.getElementById(id); if(x) x.value='';
   });
   var t = document.getElementById('na-tipo'); if(t) t.value='';
@@ -3481,7 +3071,7 @@ async function saveNewAjusteMod(){
   var tipo    = (document.getElementById('na-tipo')||{}).value || '';
   var importe = parseFloat((document.getElementById('na-importe')||{}).value);
   var motivo  = ((document.getElementById('na-motivo')||{}).value || '').trim();
-  var obs     = '';
+  var obs     = ((document.getElementById('na-obs')||{}).value || '').trim();
 
   if(!tipo){ toast('Tipo obligatorio','err'); return; }
   if(isNaN(importe)){ toast('Importe obligatorio (puede ser negativo)','err'); return; }
@@ -3502,7 +3092,6 @@ async function saveNewAjusteMod(){
     importe: importe,
     motivo: motivo,
     obs: obs,
-    estado_aprobacion: 'Pendiente',
     created_at: localTs()
   };
   var result = await dbInsert('ajustes', rec);
@@ -3517,34 +3106,6 @@ async function saveNewAjusteMod(){
   renderAjustesMod();
 }
 window.saveNewAjusteMod = saveNewAjusteMod;
-
-async function aprobarAjuste(ajusteId){
-  if(!isAdmin(currentUser) && !isSupervisor(currentUser)){
-    toast('Solo jefe de departamento o admin pueden aprobar','err');
-    return;
-  }
-  var payload = {
-    estado_aprobacion: 'Aprobado',
-    aprobado_por: currentUser.nombre,
-    aprobado_ts: localTs()
-  };
-  var result = await dbUpdate('ajustes', ajusteId, payload);
-  if(!result){
-    toast('Error al aprobar ajuste','err');
-    return;
-  }
-  invalidateCache('ajustes');
-  await auditLog('AJUSTE_APROBADO', 'ajuste_id: '+ajusteId+' por '+currentUser.nombre);
-  toast('Ajuste aprobado','ok');
-  // Refresh validar modal in-place
-  if(validatingShiftId){
-    openValidarModal(validatingShiftId);
-  } else if(typeof renderAjustesMod === 'function'){
-    renderAjustesMod();
-  }
-}
-window.aprobarAjuste = aprobarAjuste;
-var _validatingAjustesPendientes = [];
 
 async function deleteAjusteItem(aid){
   if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
