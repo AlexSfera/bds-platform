@@ -587,56 +587,13 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- ══ INSTRUCCIONES ══ -->
     <div class="screen" id="screen-readme">
-      <div class="page-header"><div class="page-title">📋 Instrucciones</div><div class="page-sub">v3.0 — Flujo inter-departamento activo</div></div>
-      <div class="card">
-        <div class="card-title">FLUJO COMPLETO v3</div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:var(--font-mono);font-size:10px;padding:8px 0;margin-bottom:12px;">
-          <span style="background:var(--bg4);border:1px solid var(--border);padding:5px 10px;border-radius:var(--radius);">Empleado registra turno</span><span style="color:var(--text3)">→</span>
-          <span class="badge b-red">PENDIENTE</span><span style="color:var(--text3)">→</span>
-          <span style="background:var(--bg4);border:1px solid var(--border);padding:5px 10px;border-radius:var(--radius);">Supervisor revisa y valida turno</span><span style="color:var(--text3)">→</span>
-          <span class="badge b-green">VALIDADO</span><span style="color:var(--text3)">ó</span>
-          <span class="badge b-orange">↩ CORRECCIÓN</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:var(--font-mono);font-size:10px;padding:8px 0;border-top:1px solid var(--border);">
-          <span style="background:var(--bg4);border:1px solid var(--border);padding:5px 10px;border-radius:var(--radius);">Incidencia u operativa → genera tarea</span><span style="color:var(--text3)">→</span>
-          <span class="badge b-red">PENDIENTE</span><span style="color:var(--text3)">→</span>
-          <span class="badge b-blue">EN PROCESO</span><span style="color:var(--text3)">→</span>
-          <span class="badge b-orange">COMPLETADA</span><span style="color:var(--text3)">→</span>
-          <span class="badge b-green">VERIFICADA</span>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">DEPARTAMENTOS</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          <span class="badge" style="background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b;font-size:10px;">🍳 Cocina</span>
-          <span class="badge" style="background:#3b82f622;color:#3b82f6;border:1px solid #3b82f6;font-size:10px;">🍽 Sala</span>
-          <span class="badge" style="background:#ef444422;color:#ef4444;border:1px solid #ef4444;font-size:10px;">🔧 Mantenimiento</span>
-          <span class="badge" style="background:#10b98122;color:#10b981;border:1px solid #10b981;font-size:10px;">🏨 Recepción</span>
-          <span class="badge" style="background:#a855f722;color:#a855f7;border:1px solid #a855f7;font-size:10px;">📋 Administración</span>
-          <span class="badge" style="background:#06b6d422;color:#06b6d4;border:1px solid #06b6d4;font-size:10px;">📦 Economato</span>
-          <span class="badge" style="background:#f9731622;color:#f97316;border:1px solid #f97316;font-size:10px;">🧹 Limpieza</span>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">ESTADOS DE TAREA</div>
-        <table><tr><th>Estado</th><th>Quién actúa</th><th>Siguiente</th></tr>
-          <tr><td><span class="badge b-red">Abierta</span></td><td>Dpto. destinatario</td><td>Iniciar → En proceso</td></tr>
-          <tr><td><span class="badge b-blue">En proceso</span></td><td>Dpto. destinatario</td><td>Cerrar</td></tr>
-          <tr><td><span class="badge b-orange">Cerrada</span></td><td>Supervisor / Admin</td><td>Admin puede validar</td></tr>
-          <tr><td><span class="badge b-green">Validada</span></td><td>Admin</td><td>Cerrado</td></tr>
-        </table>
-      </div>
+      <div class="page-header" id="info-screen-header"><div class="page-title">📋 Instrucciones</div><div class="page-sub">Cargando...</div></div>
+      <div id="info-screen-body"></div>
     </div>
 
     <!-- ══ MI TURNO ══ -->
     <div class="screen" id="screen-turno">
-      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <div><div class="page-title">🕐 Mi Turno</div><div class="page-sub" id="turno-sub"></div></div>
-        <button onclick="openInfoModal()" title="Cómo rellenar tu turno"
-          style="flex-shrink:0;background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
-          ℹ Info
-        </button>
-      </div>
+      <div class="page-header"><div class="page-title">🕐 Mi Turno</div><div class="page-sub" id="turno-sub"></div></div>
       <div id="correcciones-area"></div>
       <div class="card" id="turno-form-card">
         <div class="card-title">REGISTRO — <span id="turno-form-mode" class="accent">NUEVO</span></div>
@@ -1737,7 +1694,9 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <option>Jefe de Sala</option>
     <option>Jefe de Sector</option>
     <option>Camarero</option>
+    <option>Camarera</option>
     <option>Ayudante camarero</option>
+    <option>Ayudante camarera</option>
   </optgroup>
   <optgroup label="Dirección / F&amp;B">
     <option>F&amp;B Manager</option>
@@ -1754,7 +1713,9 @@ tr:hover td{background:rgba(255,255,255,.018);}
   <optgroup label="Housekeeping">
     <option>Gobernanta</option>
     <option>Subgobernanta</option>
+    <option>Camarero de pisos</option>
     <option>Camarera de pisos</option>
+    <option>Ayudante camarero de pisos</option>
     <option>Ayudante camarera de pisos</option>
     <option>Lavandería</option>
   </optgroup>
@@ -1770,23 +1731,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-empleado')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveEmpleado()">💾 Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ MODAL INFO POR DEPARTAMENTO ══ -->
-<div id="modal-info-dept" class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:flex-start;justify-content:center;z-index:900;padding:16px;overflow-y:auto;">
-  <div class="modal" style="max-width:820px;width:100%;margin:24px auto;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:0;overflow:hidden;">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:2;">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:var(--text);" id="info-modal-title">ℹ Instrucciones</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="info-modal-sub">Cómo rellenar correctamente tu turno</div>
-      </div>
-      <button onclick="closeModal('modal-info-dept')" style="background:transparent;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 8px;">✕</button>
-    </div>
-    <div id="info-modal-body" style="padding:20px;max-height:70vh;overflow-y:auto;"></div>
-    <div style="padding:12px 20px;border-top:1px solid var(--border);background:var(--bg);text-align:right;">
-      <button onclick="closeModal('modal-info-dept')" class="btn btn-secondary" style="padding:8px 18px;">Entendido</button>
     </div>
   </div>
 </div>

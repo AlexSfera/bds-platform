@@ -573,6 +573,7 @@ async function showScreen(id){
   const bb=document.getElementById('bnav-'+id); if(bb) bb.classList.add('active');
   const sb=document.getElementById('side-'+id); if(sb) sb.classList.add('active');
   window.scrollTo(0,0);
+  if(id==='readme' && typeof renderInfoScreen==='function'){ renderInfoScreen(); }
   if(id==='turno'){ initTurnoForm(); }
   if(id==='tareas'){ renderTareas(); }
   if(id==='validacion'){ initValDeptFilter(); switchValTab('followup'); }

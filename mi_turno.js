@@ -374,17 +374,18 @@ async function submitCloseFollowup() {
 // Cada dpto tiene su lógica: campos obligatorios distintos, módulos distintos.
 // ═══════════════════════════════════════════════════════════════════════
 
-function openInfoModal(){
+function renderInfoScreen(){
   if(!currentUser){ return; }
   var area = currentUser.area || 'Empleado';
-  var t = document.getElementById('info-modal-title');
-  var s = document.getElementById('info-modal-sub');
-  var b = document.getElementById('info-modal-body');
-  if(t) t.textContent = 'ℹ Instrucciones — ' + area;
-  if(s) s.textContent = 'Cómo rellenar tu turno · Lo que aplica a ti';
-  if(b) b.innerHTML = buildInfoContent(area);
-  var m = document.getElementById('modal-info-dept');
-  if(m){ m.style.display = 'flex'; m.classList.add('open'); }
+  var headerEl = document.getElementById('info-screen-header');
+  var bodyEl   = document.getElementById('info-screen-body');
+  if(headerEl){
+    headerEl.innerHTML = '<div class="page-title">📋 Instrucciones · '+area+'</div>'
+      + '<div class="page-sub">Cómo rellenar tu turno · Lo que aplica a ti</div>';
+  }
+  if(bodyEl){
+    bodyEl.innerHTML = buildInfoContent(area);
+  }
 }
 
 function _infoCard(title, body, color){
@@ -670,5 +671,5 @@ function buildInfoContent(area){
 }
 
 // Exponer globalmente
-window.openInfoModal    = openInfoModal;
+window.renderInfoScreen = renderInfoScreen;
 window.buildInfoContent = buildInfoContent;
