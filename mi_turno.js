@@ -640,8 +640,8 @@ function buildInfoContent(area){
   if(area === 'Sala'){
     return ''
     + _infoCard('🍽 Sala — ¿Para qué rellenas tu turno?',
-        'Para registrar qué servicios cubriste, cierre de caja (POSMEWS) y cualquier incidencia con cliente. '
-      + 'Caja descuadrada o queja sin gestionar = turno no validado.',
+        'Para registrar qué servicios cubriste, ajustes en POSMEWS, cierre de caja y cualquier incidencia con cliente. '
+      + 'Caja descuadrada, ajuste sin registrar o queja sin gestionar = turno no validado.',
         '#3b82f6')
 
     + _infoCard('📝 Mi Turno — Campo a campo',
@@ -651,6 +651,29 @@ function buildInfoContent(area){
       + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando.<br><br>'
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo abierto que continúa (reserva especial, evento mañana, gestión con proveedor).<br><br>'
       + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Queja de cliente, error de servicio, problema con producto, etc.',
+        '#3b82f6')
+
+    + _infoCard('⚡ Ajustes — Obligatorio en Sala',
+        '<b>¿Qué es un ajuste?</b><br>'
+      + 'Cualquier operación en POSMEWS que modifica una venta original: anulación, devolución, invitación, error de TPV o de cobro, cargo incorrecto. '
+      + 'Es decir, dinero que <u>no entró</u> aunque se generó ticket, o cargos que se rectificaron.<br><br>'
+
+      + '<b>¿Por qué se rellena?</b><br>'
+      + '• Sin registro de ajustes, la caja parece descuadrada cuando no lo está realmente.<br>'
+      + '• Es la <u>única forma</u> de demostrar que un faltante tiene explicación legítima.<br>'
+      + '• Sin ajuste registrado, contabilidad asume pérdida = penalización al turno.<br><br>'
+
+      + '<b>Flujo:</b><br>'
+      + 'Al cerrar turno, el sistema pregunta <b>"¿Hubo ajustes en este turno?"</b><br>'
+      + '• Si NO hubo → pulsa <b>"✓ No hubo ajustes"</b> (es '+_req('obligatorio')+' confirmarlo)<br>'
+      + '• Si SÍ hubo → pulsa <b>"⚡ Sí hubo ajustes"</b> y añade una línea por cada ajuste<br><br>'
+
+      + '<b>Campo a campo de cada línea:</b><br>'
+      + '• <b>Tipo</b> — Anulación · Devolución · Invitación · Error TPV · Error cobro · Cargo incorrecto · Otro<br>'
+      + '• <b>Nº operaciones</b> — cuántas veces ocurrió ese ajuste (mínimo 1)<br>'
+      + '• <b>Importe estimado (€)</b> — cuánto suma ese ajuste<br>'
+      + '• <b>¿Comunicado al responsable? SÍ/NO</b> — si avisaste al jefe en el momento<br>'
+      + '• <b>Motivo</b> — explicación breve (ej: "Cliente devolvió plato frío", "Invitación VIP autorizada por F&B")',
         '#3b82f6')
 
     + _infoCard('🏦 Caja Sala (POSMEWS) — Cómo rellenar',
@@ -673,8 +696,37 @@ function buildInfoContent(area){
 
     + bloqueDiferencias
 
+    + _infoCard('🚨 Evaluación objetiva — Por qué importa que registres TODO',
+        '<b>Lo que NO se registra, NO existe en el sistema. Y lo que no existe en el sistema, NO cuenta a tu favor.</b><br><br>'
+
+      + 'El sistema mide automáticamente cada turno:<br>'
+      + '• ¿Cerraste turno con ajustes confirmados (SÍ o NO)?<br>'
+      + '• ¿Reportaste incidencias o marcaste "sin incidencias"?<br>'
+      + '• ¿Tu caja cuadró o explicaste la diferencia?<br>'
+      + '• ¿Comunicaste los ajustes al responsable en su momento?<br><br>'
+
+      + '<b>Estos datos generan tu evaluación objetiva mensual.</b><br>'
+      + 'Esa evaluación impacta directamente en <u>tus incentivos económicos</u>.<br><br>'
+
+      + '<b>Qué penaliza:</b><br>'
+      + '• Turnos cerrados sin confirmar ajustes → penalización<br>'
+      + '• Caja descuadrada sin justificar → penalización<br>'
+      + '• Ajustes detectados a posteriori (no registrados por ti) → penalización doble<br>'
+      + '• Incidencias detectadas por cliente o supervisor que tú no reportaste → penalización<br><br>'
+
+      + '<b>Qué premia:</b><br>'
+      + '• Turnos con registro completo y caja cuadrada<br>'
+      + '• Ajustes comunicados al responsable en el momento (no al cierre)<br>'
+      + '• Incidencias documentadas con acción tomada clara<br><br>'
+
+      + '<b>La regla es simple: registrar = transparencia = confianza = incentivo. '
+      + 'No registrar = opacidad = riesgo = penalización.</b>',
+        '#ef4444')
+
     + _infoCard('✅ Checklist antes de guardar',
         '☐ Servicios marcados<br>'
+      + '☐ Ajustes confirmados (SÍ con líneas, o NO explícito)<br>'
+      + '☐ Cada ajuste con tipo, importe, motivo y "comunicado al responsable"<br>'
       + '☐ Caja cuadrada o diferencia explicada<br>'
       + '☐ Si producto roto/falta → tarea a Economato o Cocina<br>'
       + '☐ Queja sin resolver → incidencia + responsable informado<br>'
