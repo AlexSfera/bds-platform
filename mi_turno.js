@@ -398,6 +398,47 @@ function _infoCard(title, body, color){
 function _req(t){ return '<span style="color:#ef4444;font-weight:700;">'+t+' *</span>'; }
 function _tag(t,c){ return '<span style="display:inline-block;background:'+c+'22;color:'+c+';border:1px solid '+c+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;margin:0 2px;">'+t+'</span>'; }
 
+function _esJefe(){
+  if(!currentUser) return false;
+  var r = currentUser.rol || '';
+  return r === 'admin' || r === 'chef' || r === 'fb' || r === 'jefe_recepcion'
+      || r === 'gobernante' || r === 'jefe_departamento'
+      || r === 'coord_recepcion_syncrolab' || r === 'coord_entrenadores' || r === 'coord_fisioterapeutas'
+      || r === 'supervisor';
+}
+
+function _bloqueJefe(area){
+  return ''
+    + _infoCard('👔 Como JEFE/SUPERVISOR de '+area+' — Validación',
+        '<b>¿Qué tienes que hacer además de tu turno?</b><br>'
+      + 'Validar los turnos del equipo en la pantalla <b>"Validación"</b> del menú lateral.<br><br>'
+
+      + '<b>¿Por qué tienes que validar?</b><br>'
+      + '• Sin tu validación, los datos del empleado <u>no entran en los KPIs ni en el cálculo de horas/nómina</u>.<br>'
+      + '• Sin validación, las incidencias no se siguen ni se cierran.<br>'
+      + '• Sin validación, el CEO no tiene fotografía real del día. Vuela ciego.<br>'
+      + '• Es tu firma operativa: lo que validas, lo apruebas.<br><br>'
+
+      + '<b>¿Qué revisas en cada turno?</b><br>'
+      + '• Horas trabajadas coherentes (no 12h sin causa)<br>'
+      + '• Caja cuadrada (o diferencia explicada y acción tomada)<br>'
+      + '• Merma registrada (Cocina) o "sin merma" marcado<br>'
+      + '• Gestiones/Incidencias del turno bien descritas (no "todo OK" vacío)<br>'
+      + '• Tareas inter-dpto creadas si corresponde<br><br>'
+
+      + '<b>3 acciones posibles al validar:</b><br>'
+      + '1. '+_tag('✓ Validar','#10b981')+' — todo correcto, datos entran al sistema<br>'
+      + '2. '+_tag('↩ Devolver para corrección','#f59e0b')+' — falta algo, indícale qué corregir<br>'
+      + '3. '+_tag('Validar con nota','#3b82f6')+' — OK pero con observación al empleado<br><br>'
+
+      + '<b>⏰ Plazo máximo: 24h tras cierre del turno.</b><br>'
+      + 'Más tiempo = empleados no cobran horas correctas = problema RRHH.<br><br>'
+
+      + '<b>⚠ Si NO validas:</b> el turno queda en '+_tag('PENDIENTE','#ef4444')+' bloqueando el ciclo. '
+      + 'Llega un punto en que el sistema te marca alerta y te avisa al CEO.',
+        '#a855f7');
+}
+
 function buildInfoContent(area){
 
   // ════════════════════════════════════════════════════════════════════
@@ -428,231 +469,396 @@ function buildInfoContent(area){
     +   '</div>'
     + '</div>';
 
+  var jefe = _esJefe() ? _bloqueJefe(area) : '';
+
+  // ════════════════════════════════════════════════════════════════════
   // ─── RECEPCIÓN ──────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
   if(area === 'Recepción'){
     return ''
-    + _infoCard('🏨 Recepción — Tu objetivo en Mi Turno',
-        'Registrar el cierre de tu turno: caja, incidencias de cliente y de la cámara hipóxica. '
-      + 'Tu turno se valida cuando supervisor confirma que <b>caja cuadra</b> y todas las incidencias quedaron informadas o derivadas a otro dpto.',
+    + _infoCard('🏨 Recepción — ¿Para qué rellenas tu turno?',
+        'Para que el hotel tenga foto real del día: <b>cuánto dinero entró</b> (caja MEWS), '
+      + '<b>qué pasó con los clientes</b> (incidencias) y <b>qué queda pendiente</b> para el siguiente turno (tareas y gestiones). '
+      + 'Sin tu turno cerrado, contabilidad no cuadra y el supervisor no puede validar.',
         '#10b981')
-    + _infoCard('📝 Mi Turno — Campos obligatorios',
-        '• '+_req('Fecha')+'<br>'
-      + '• '+_req('Turno')+' — Mañana / Tarde / Noche (selección única)<br>'
-      + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
-      + '• '+_req('¿Gestión pendiente? SÍ/NO')+' — si SÍ → describir<br>'
-      + '• '+_req('¿Incidencia? SÍ/NO')+' — si SÍ → describir + informar responsable',
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b><br>Día del turno que estás cerrando. Por defecto hoy.<br><br>'
+
+      + '<b>'+_req('Turno')+'</b><br>Mañana / Tarde / Noche. Marca el que cubriste. Solo uno.<br><br>'
+
+      + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales. Si hiciste horas extra → ponlas aquí.<br><br>'
+
+      + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando del turno. Normalmente tú mismo.<br><br>'
+
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
+      + '<u>SÍ</u> si queda algo abierto que el siguiente turno tiene que continuar (ej: "Cliente 304 pide factura mañana", "Llamar a proveedor de toallas"). '
+      + 'Si SÍ → describe qué es y a quién va dirigido.<br><br>'
+
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
+      + '<u>SÍ</u> si pasó algo durante tu turno (queja de cliente, problema de habitación, error de cobro). '
+      + 'Si SÍ → describe qué ocurrió + qué hiciste + si avisaste al responsable.',
         '#10b981')
-    + _infoCard('🏦 Caja Recepción — Obligatorio al cierre',
-        'Bloque <b>POSMEWS</b> (lo que dice el sistema): Cash · Tarjeta · Stripe.<br>'
-      + 'Bloque <b>Cargos directos</b>: Room Charge · SYNCROLAB Charge · Cargo Alexander.<br>'
-      + 'Bloque <b>Pensiones</b>: nº pax desayunos + nº pax comida/cena + importes €.<br>'
-      + 'Bloque <b>Conteo real</b>: Cash contado · TPV físico · Stripe plataforma · Propinas TPV · Propinas efectivo.<br><br>'
-      + '<b>⚠ Si hay diferencia</b> entre POSMEWS y real → obligatorio: '+_req('Explicación')+' · '+_req('Acción tomada')+' · ¿Informado al responsable?',
+
+    + _infoCard('🏦 Caja Recepción MEWS — Cómo rellenar',
+        '<b>¿Por qué se rellena?</b><br>Para verificar que el dinero <u>real</u> coincide con lo que dice <b>MEWS</b> (el sistema del hotel). '
+      + 'Si hay diferencia → o falta dinero, o sobra, y hay que saber por qué.<br><br>'
+
+      + '<b>1 · Fondo recibido del turno anterior (€)</b><br>'
+      + 'El dinero en caja que te dejó el turno anterior. Cuéntalo al empezar.<br><br>'
+
+      + '<b>2 · Bloque "SEGÚN PMS MEWS" — '+_req('obligatorios')+'</b><br>'
+      + '• <b>Cash según MEWS</b> — lo que MEWS dice que cobraste en efectivo<br>'
+      + '• <b>Tarjeta según MEWS</b> — lo que MEWS dice que cobraste por TPV<br>'
+      + '• <b>Stripe según MEWS</b> — lo que MEWS dice que se cobró por Stripe (reservas online)<br>'
+      + '<i>Estos números los sacas del informe de cierre de MEWS.</i><br><br>'
+
+      + '<b>3 · Transferencias</b><br>'
+      + '• <b>Transferencias según MEWS</b> — si hay alguna transferencia registrada<br>'
+      + '• <b>Transferencias Banco</b> — confirma si entró en el banco (con fecha)<br><br>'
+
+      + '<b>4 · Cargos Hotel</b><br>'
+      + '• <b>Room Charge</b> — consumos pasados a la habitación<br>'
+      + '• <b>SYNCROLAB Charge</b> — cargos del Lab a la habitación<br>'
+      + '• <b>Cargo Alexander</b> — cargos directos del propietario<br><br>'
+
+      + '<b>5 · Pensiones</b> <i>(informativo, no bloquea)</i><br>'
+      + 'nº pax desayunos · nº pax comida+cena · importes €. Para control de F&B.<br><br>'
+
+      + '<b>6 · Bloque "REAL / FÍSICO" — '+_req('obligatorios')+'</b><br>'
+      + '• <b>Cash real contado</b> — cuenta los billetes y monedas REALES en caja<br>'
+      + '• <b>TPV físico</b> — total que marca el datáfono al cierre<br>'
+      + '• <b>Stripe real (Stripe.com)</b> — total real del panel Stripe.com<br><br>'
+
+      + '<b>7 · Diferencias</b><br>El sistema calcula solo: Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia.<br>'
+      + '<b>Si todo es 0,00 € → perfecto, caja cuadra.</b><br><br>'
+
+      + '<b>⚠ Si hay diferencia → '+_req('OBLIGATORIO')+':</b><br>'
+      + '• <b>Explicación</b> — por qué hay diferencia<br>'
+      + '• <b>Acción tomada</b> — qué hiciste para resolverlo<br>'
+      + '• <b>¿Informado al responsable? SÍ/NO</b><br><br>'
+
+      + '<b>8 · Caja Fuerte — '+_req('obligatorio')+'</b><br>¿Retiraste dinero a caja fuerte? SÍ/NO. Si SÍ → importe.<br><br>'
+
+      + '<b>9 · Traspaso al siguiente turno — '+_req('obligatorio')+'</b><br>'
+      + 'El sistema calcula cuánto debes dejar al siguiente turno (Fondo recibido + Cash MEWS − Retiro caja fuerte). '
+      + 'Cuenta el dinero que dejas e introdúcelo en "Fondo real a traspasar". Si no coincide → diferencia.',
+        '#8b5cf6')
+
+    + _infoCard('🫁 Hypoxic Room — Solo si HAY problema',
+        '<b>¿Cuándo se rellena?</b> SOLO cuando la cámara hipóxica da problemas. Uso normal NO se registra.<br><br>'
+
+      + '<b>Avisos que disparan registro:</b><br>'
+      + '• Hipoxia por debajo del set point<br>'
+      + '• CO₂ alto<br>'
+      + '• Puerta abierta varias veces >1 min<br>'
+      + '• Sensor sin datos<br>'
+      + '• Cliente avisa de cualquier problema<br><br>'
+
+      + '<b>Campo a campo:</b><br>'
+      + '• '+_req('Habitación')+' (104–109 / 202–209) — qué habitación tiene el problema<br>'
+      + '• '+_req('Tipo de incidencia')+' — marca todos los que apliquen<br>'
+      + '• <b>CO₂ (ppm)</b> — si sabes el valor, ponlo. Si no, déjalo<br>'
+      + '• <b>Altitud actual (m)</b> — la que marca la pantalla<br>'
+      + '• <b>Set point (m)</b> — la altitud configurada<br>'
+      + '• ☐ <b>Puerta abierta varias veces >1min</b> — marca si aplica<br>'
+      + '• ☐ <b>Recepción notificada por cliente</b> — marca si el cliente avisó<br>'
+      + '• <b>Anotaciones</b> — cualquier detalle útil<br><br>'
+
+      + '<b>Estados:</b> '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
+      + 'Al cerrar describe '+_req('Acción tomada')+' (qué hiciste para resolverlo).',
         '#06b6d4')
-    + _infoCard('🫁 Hypoxic Room — Solo registrar si HAY INCIDENCIA',
-        'NO es un registro de uso normal. Solo se rellena cuando la cámara da problemas.<br><br>'
-      + '<b>Cuándo crear incidencia:</b> hipoxia por debajo del set point · CO₂ alto · puerta abierta varias veces >1min · sensor sin datos · cliente avisa.<br><br>'
-      + '<b>Campos:</b><br>'
-      + '• '+_req('Habitación')+' (104–109 / 202–209)<br>'
-      + '• '+_req('Tipo de incidencia')+' (puedes marcar varios)<br>'
-      + '• CO₂ (ppm) · Altitud actual (m) · Set point (m) — rellenar los que apliquen<br>'
-      + '• ☐ Puerta abierta varias veces >1min<br>'
-      + '• ☐ Recepción notificada por cliente<br>'
-      + '• Anotaciones (opcional)<br><br>'
-      + 'Estados: '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'. Al cerrar describe '+_req('Acción tomada')+'.',
-        '#06b6d4')
+
     + bloqueDiferencias
+
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Caja cuadrada (o diferencia explicada)<br>'
-      + '☐ Hypoxic: si hubo aviso del cliente, ¿está creada la incidencia?<br>'
-      + '☐ Gestión pendiente marcada (SÍ/NO)<br>'
-      + '☐ Incidencia de turno marcada (SÍ/NO)<br>'
-      + '☐ Si hay tarea para HK / Mantenimiento → ¿está creada?',
-        '#10b981');
+        '☐ Fecha, turno y horas correctas<br>'
+      + '☐ Responsable de turno indicado<br>'
+      + '☐ Caja MEWS cuadrada (o diferencia explicada + acción + informado)<br>'
+      + '☐ Caja fuerte: SÍ/NO + importe si aplica<br>'
+      + '☐ Fondo real a traspasar contado<br>'
+      + '☐ Hypoxic: si hubo problema → incidencia creada<br>'
+      + '☐ Gestión SÍ/NO marcado<br>'
+      + '☐ Incidencia SÍ/NO marcado<br>'
+      + '☐ Si hay trabajo para HK / Mantenimiento → tarea creada',
+        '#10b981')
+    + jefe;
   }
 
+  // ════════════════════════════════════════════════════════════════════
   // ─── COCINA ─────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
   if(area === 'Cocina'){
     return ''
-    + _infoCard('🍳 Cocina — Tu objetivo en Mi Turno',
-        'Registrar servicios cubiertos, merma del día y cualquier incidencia operativa (proveedor, producto, equipo). '
-      + 'Sin merma registrada el supervisor <b>no puede validar</b>.',
+    + _infoCard('🍳 Cocina — ¿Para qué rellenas tu turno?',
+        'Para registrar qué servicios cubriste, qué se perdió (merma) y qué incidencias tuviste. '
+      + 'La merma es <b>clave</b>: sin ella no se controla coste real ni se cierra el inventario.',
         '#f59e0b')
-    + _infoCard('📝 Mi Turno — Campos obligatorios',
-        '• '+_req('Fecha')+'<br>'
-      + '• '+_req('Servicio')+' — Desayuno / Comida / Cena / Evento (puedes marcar VARIOS)<br>'
-      + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
-      + '• '+_req('¿Gestión pendiente? SÍ/NO')+'<br>'
-      + '• '+_req('¿Incidencia? SÍ/NO')+'<br>'
-      + '• '+_req('Merma')+' — o pulsar "✓ Sin merma en este turno"',
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b><br>Día del turno.<br><br>'
+      + '<b>'+_req('Servicio')+'</b><br>Desayuno · Comida · Cena · Evento. Puedes marcar <u>VARIOS</u> si cubriste más de uno.<br><br>'
+      + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales del turno.<br><br>'
+      + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando.<br><br>'
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Si queda algo abierto para mañana o para Economato (ej: "Pedir lubina al proveedor").<br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que ocurrió en el turno (avería de equipo, error de servicio, problema con proveedor).',
         '#f59e0b')
-    + _infoCard('📦 Merma — Obligatorio en Cocina',
-        'Una línea por cada producto perdido (rotura, caducidad, error de cocción, devolución).<br><br>'
-      + '<b>Cada línea:</b> producto · cantidad · unidad · coste estimado · motivo.<br><br>'
-      + 'Si la merma necesita acción de otro dpto (ej. Economato debe reponer, Mantenimiento debe revisar nevera) → marca '
-      + '<b>"¿Crear tarea operativa? SÍ"</b> y rellena dpto destinatario + prioridad + deadline.',
+
+    + _infoCard('📦 Merma — '+_req('OBLIGATORIO')+' en Cocina',
+        '<b>¿Por qué?</b> Sin merma registrada, el supervisor NO puede validar. La merma es coste real que afecta el P&L de Cocina.<br><br>'
+
+      + '<b>¿Cuándo creas una línea?</b><br>Cualquier producto perdido: rotura · caducidad · error de cocción · devolución de cliente · sobreproducción tirada.<br><br>'
+
+      + '<b>Campos por línea:</b><br>'
+      + '• <b>Producto</b> — qué se perdió<br>'
+      + '• <b>Cantidad + unidad</b> (kg, ud, litros)<br>'
+      + '• <b>Coste estimado (€)</b> — lo que cuesta esa cantidad<br>'
+      + '• <b>Motivo</b> — por qué se perdió<br><br>'
+
+      + '<b>¿No hubo merma?</b> Pulsa <b>"✓ Sin merma en este turno"</b>. Es obligatorio confirmarlo.<br><br>'
+
+      + '<b>¿Genera trabajo para otro dpto?</b><br>'
+      + 'Si la merma requiere acción externa (Economato debe reponer, Mantenimiento debe revisar nevera, etc.) → '
+      + 'marca <b>"¿Crear tarea operativa? SÍ"</b> y rellena: dpto destinatario · prioridad · deadline.',
         '#f59e0b')
+
     + bloqueDiferencias
+
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Todos los servicios del día marcados<br>'
-      + '☐ Merma registrada o "Sin merma" marcado<br>'
+        '☐ Todos los servicios cubiertos marcados<br>'
+      + '☐ Merma registrada O "Sin merma" marcado<br>'
       + '☐ Si producto requiere reposición → tarea a Economato creada<br>'
       + '☐ Si fallo de equipo → tarea a Mantenimiento creada<br>'
       + '☐ Gestión / Incidencia marcadas',
-        '#10b981');
+        '#10b981')
+    + jefe;
   }
 
+  // ════════════════════════════════════════════════════════════════════
   // ─── SALA ───────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
   if(area === 'Sala'){
     return ''
-    + _infoCard('🍽 Sala — Tu objetivo en Mi Turno',
-        'Registrar servicios cubiertos, cierre de caja y cualquier incidencia con cliente o servicio. '
-      + 'Tu turno se valida cuando caja cuadra y las incidencias están informadas.',
+    + _infoCard('🍽 Sala — ¿Para qué rellenas tu turno?',
+        'Para registrar qué servicios cubriste, cierre de caja (POSMEWS) y cualquier incidencia con cliente. '
+      + 'Caja descuadrada o queja sin gestionar = turno no validado.',
         '#3b82f6')
-    + _infoCard('📝 Mi Turno — Campos obligatorios',
-        '• '+_req('Fecha')+'<br>'
-      + '• '+_req('Servicio')+' — Desayuno / Comida / Cena / Evento / Otro (puedes marcar VARIOS)<br>'
-      + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
-      + '• '+_req('¿Gestión pendiente? SÍ/NO')+'<br>'
-      + '• '+_req('¿Incidencia? SÍ/NO'),
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b><br>Día del turno.<br><br>'
+      + '<b>'+_req('Servicio')+'</b><br>Desayuno · Comida · Cena · Evento · Otro. Puedes marcar <u>VARIOS</u>.<br><br>'
+      + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales.<br><br>'
+      + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando.<br><br>'
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo abierto que continúa (reserva especial, evento mañana, gestión con proveedor).<br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Queja de cliente, error de servicio, problema con producto, etc.',
         '#3b82f6')
-    + _infoCard('🏦 Caja Sala — Obligatorio al cierre',
-        'Bloque <b>POSMEWS</b>: Cash · Tarjeta · Stripe que registra el sistema.<br>'
-      + 'Bloque <b>Cargos</b>: Room Charge · SYNCROLAB · Cargo Alexander.<br>'
-      + 'Bloque <b>Pensiones</b>: pax desayuno + pax comida/cena + importes.<br>'
-      + 'Bloque <b>Real</b>: Cash contado · TPV físico · Stripe plataforma · Propinas TPV · Propinas efectivo.<br><br>'
-      + '<b>⚠ Si hay diferencia</b> → obligatorio: '+_req('Explicación')+' · '+_req('Acción tomada')+' · ¿Informado al responsable?',
+
+    + _infoCard('🏦 Caja Sala (POSMEWS) — Cómo rellenar',
+        '<b>¿Por qué?</b> Para que el dinero contado en caja coincida con lo que <b>POSMEWS</b> (el TPV del restaurante) registró.<br><br>'
+
+      + '<b>Bloque "SEGÚN POSMEWS" — '+_req('obligatorios')+'</b><br>'
+      + '• <b>Cash POSMEWS</b> — efectivo que dice POSMEWS<br>'
+      + '• <b>Tarjeta POSMEWS</b> — tarjeta que dice POSMEWS<br>'
+      + '• <b>Stripe POSMEWS</b> — Stripe que dice POSMEWS<br><br>'
+
+      + '<b>Cargos</b><br>Room Charge · SYNCROLAB · Cargo Alexander (consumos a habitación).<br><br>'
+
+      + '<b>Pensiones</b><br>pax desayuno · pax comida/cena + importes.<br><br>'
+
+      + '<b>Bloque "REAL" — '+_req('obligatorios')+'</b><br>'
+      + '• Cash contado · TPV físico · Stripe plataforma · Propinas TPV · Propinas efectivo<br><br>'
+
+      + '<b>⚠ Si hay diferencia → '+_req('OBLIGATORIO')+': Explicación + Acción tomada + ¿Informado al responsable?</b>',
         '#3b82f6')
+
     + bloqueDiferencias
+
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Todos los servicios del día marcados<br>'
-      + '☐ Caja cuadrada (o diferencia explicada)<br>'
-      + '☐ Si producto roto / falta → tarea a Economato o Cocina<br>'
-      + '☐ Si queja de cliente sin resolver → incidencia + informar responsable<br>'
+        '☐ Servicios marcados<br>'
+      + '☐ Caja cuadrada o diferencia explicada<br>'
+      + '☐ Si producto roto/falta → tarea a Economato o Cocina<br>'
+      + '☐ Queja sin resolver → incidencia + responsable informado<br>'
       + '☐ Gestión / Incidencia marcadas',
-        '#10b981');
+        '#10b981')
+    + jefe;
   }
 
+  // ════════════════════════════════════════════════════════════════════
   // ─── MANTENIMIENTO ──────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
   if(area === 'Mantenimiento'){
     return ''
-    + _infoCard('🔧 Mantenimiento — Tu objetivo en Mi Turno',
-        'Registrar trabajos realizados y cerrar tareas recibidas de otros dptos (Recepción, HK, Cocina, Sala). '
-      + 'Tu valor = tareas cerradas con '+_req('Acción tomada')+' clara.',
+    + _infoCard('🔧 Mantenimiento — ¿Para qué rellenas tu turno?',
+        'Tu valor en el sistema = <b>tareas cerradas con acción tomada clara</b>. '
+      + 'Recepción, HK, Cocina y Sala te crean tareas. Tú las recibes, las trabajas, las cierras describiendo qué hiciste.',
         '#ef4444')
-    + _infoCard('📝 Mi Turno — Campos obligatorios',
-        '• '+_req('Fecha')+'<br>'
-      + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
-      + '• '+_req('¿Gestión pendiente? SÍ/NO')+'<br>'
-      + '• '+_req('¿Incidencia? SÍ/NO'),
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Trabajo bloqueado (falta pieza, esperar proveedor, etc.).<br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que detectaste mientras trabajabas (rotura grave, riesgo de seguridad, daño no previsto).',
         '#ef4444')
-    + _infoCard('🔗 Tareas que recibes',
-        'Aparecen automáticamente en tu pantalla Mi Turno y en "Tareas Inter-Departamento".<br><br>'
-      + '<b>Flujo obligatorio:</b><br>'
-      + '1. '+_tag('Abierta','#ef4444')+' → pulsa <b>Iniciar</b><br>'
-      + '2. '+_tag('En proceso','#3b82f6')+' → trabajas en ello<br>'
-      + '3. Al terminar → <b>Cerrar</b> describiendo '+_req('Acción tomada')+' (qué pieza, qué arreglo, si necesita seguimiento)<br>'
-      + '4. '+_tag('Cerrada','#10b981')+' → supervisor verifica<br><br>'
-      + 'Si la tarea requiere compra / pieza no disponible → no la cierres, créa GESTIÓN de tu dpto explicando el bloqueo.',
+
+    + _infoCard('🔗 Tareas que recibes — Flujo obligatorio',
+        '<b>Las tareas aparecen automáticamente</b> en tu pantalla Mi Turno y en "Tareas Inter-Departamento". No hace falta que nadie te avise.<br><br>'
+
+      + '<b>Flujo de cada tarea:</b><br>'
+      + '1. '+_tag('Abierta','#ef4444')+' → pulsa <b>"Iniciar"</b> cuando empiezas<br>'
+      + '2. '+_tag('En proceso','#3b82f6')+' → estás trabajando en ello<br>'
+      + '3. Al terminar → pulsa <b>"Cerrar"</b><br>'
+      + '4. Describe '+_req('Acción tomada')+': <u>qué pieza cambiaste, qué arreglo hiciste, si requiere seguimiento</u><br>'
+      + '5. '+_tag('Cerrada','#10b981')+' → supervisor verifica<br><br>'
+
+      + '<b>⚠ Si no puedes cerrar (falta pieza, proveedor):</b><br>'
+      + '<u>No cierres la tarea</u>. Créa una <b>GESTIÓN</b> de tu dpto explicando el bloqueo. La tarea queda en "En proceso" hasta que llegue la pieza.',
         '#ef4444')
+
     + bloqueDiferencias
+
     + _infoCard('✅ Checklist antes de guardar',
         '☐ Todas las tareas trabajadas hoy → estado actualizado<br>'
       + '☐ Tareas cerradas tienen "Acción tomada" descrita<br>'
       + '☐ Bloqueos por falta de pieza → gestión creada<br>'
-      + '☐ Si rompiste algo o detectaste problema mayor → incidencia',
-        '#10b981');
+      + '☐ Daño grave detectado → incidencia',
+        '#10b981')
+    + jefe;
   }
 
+  // ════════════════════════════════════════════════════════════════════
   // ─── HK / HOUSEKEEPING ──────────────────────────────────────────────
-  if(area === 'HK' || area === 'Housekeeping'){
+  // ════════════════════════════════════════════════════════════════════
+  if(area === 'HK' || area === 'Housekeeping' || area === 'Limpieza'){
     return ''
-    + _infoCard('🧹 Housekeeping — Tu objetivo en Mi Turno',
-        'Registrar habitaciones limpiadas, supervisadas y cerrar tareas de Recepción (cambio de toallas, reposición, limpieza extra).',
+    + _infoCard('🧹 Housekeeping — ¿Para qué entras al sistema?',
+        '<b>Tu pantalla principal es "Mi Ruta"</b> — ahí ves las habitaciones que la <b>Gobernanta</b> te asignó hoy. '
+      + 'Tu trabajo: limpiarlas, pausarlas si interrumpes, finalizarlas, y avisar de desperfectos.',
         '#f97316')
-    + _infoCard('📝 Mi Turno — Campos obligatorios',
-        '• '+_req('Fecha')+'<br>'
-      + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
-      + '• '+_req('¿Gestión pendiente? SÍ/NO')+'<br>'
-      + '• '+_req('¿Incidencia? SÍ/NO'),
+
+    + _infoCard('📅 Mi Ruta — Cómo funciona',
+        '<b>Al abrir "Mi Ruta" verás:</b><br>'
+      + '• Las habitaciones asignadas para hoy<br>'
+      + '• El estado de cada una<br>'
+      + '• Tiempo previsto<br><br>'
+
+      + '<b>Estados de habitación:</b><br>'
+      + '• '+_tag('Pendiente','#ef4444')+' — aún no la has tocado<br>'
+      + '• '+_tag('En proceso','#3b82f6')+' — la estás limpiando<br>'
+      + '• '+_tag('Pausada','#f59e0b')+' — interrumpiste (cliente entró, esperar)<br>'
+      + '• '+_tag('Finalizada','#10b981')+' — terminada, lista para revisión<br>'
+      + '• '+_tag('Revisada','#a855f7')+' — la Gobernanta confirmó OK<br>'
+      + '• '+_tag('Requiere corrección','#ef4444')+' — la Gobernanta detectó algo, vuelve a entrar<br><br>'
+
+      + '<b>Flujo en cada habitación:</b><br>'
+      + '1. Pulsa <b>"Iniciar"</b> al entrar → empieza el cronómetro<br>'
+      + '2. Si interrumpes → <b>"Pausar"</b> (cliente, descanso, etc.)<br>'
+      + '3. Al terminar → <b>"Finalizar"</b><br>'
+      + '4. La Gobernanta revisará y la marcará como '+_tag('Revisada','#a855f7'),
         '#f97316')
-    + _infoCard('🔗 Tareas que recibes de Recepción',
-        '<b>Flujo:</b> '+_tag('Abierta','#ef4444')+' → <b>Iniciar</b> → '+_tag('En proceso','#3b82f6')+' → <b>Cerrar</b> con '+_req('Acción tomada')+'.<br><br>'
-      + 'Si encuentras desperfecto en habitación (mancha persistente, avería, objeto roto) → crea TAREA a Mantenimiento. '
-      + 'Si objeto olvidado por cliente → crea INCIDENCIA con descripción + ubicación.',
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo que continúa mañana (habitación sin terminar, reposición pendiente, falta material).<br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Hallazgos en habitación: objeto olvidado · desperfecto · daño · cliente difícil · queja.',
         '#f97316')
+
+    + _infoCard('🔗 Si encuentras un problema en habitación',
+        '<b>Desperfecto físico</b> (mancha persistente, avería, objeto roto, grifo gotea):<br>'
+      + '→ <b>Crea TAREA a Mantenimiento</b> con habitación + qué falla.<br><br>'
+
+      + '<b>Objeto olvidado por cliente</b>:<br>'
+      + '→ <b>Crea INCIDENCIA</b> con descripción del objeto + ubicación exacta. Llévalo a Recepción.<br><br>'
+
+      + '<b>Falta material de limpieza / amenities</b>:<br>'
+      + '→ <b>Crea TAREA a Economato</b> con producto + cantidad.<br><br>'
+
+      + '<b>No puedes terminar la habitación (cliente dentro, no se va):</b><br>'
+      + '→ Marca la habitación como '+_tag('Pausada','#f59e0b')+' y avisa a Recepción.',
+        '#f97316')
+
     + bloqueDiferencias
+
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Tareas recibidas trabajadas o reasignadas<br>'
-      + '☐ Desperfectos detectados → tarea a Mantenimiento<br>'
+        '☐ Todas las habitaciones de tu ruta tienen estado actualizado<br>'
+      + '☐ Habitaciones no terminadas → pausadas o gestión creada<br>'
+      + '☐ Desperfectos → tarea a Mantenimiento<br>'
       + '☐ Objetos olvidados → incidencia<br>'
+      + '☐ Material que falta → tarea a Economato<br>'
       + '☐ Gestión / Incidencia marcadas',
-        '#10b981');
+        '#10b981')
+    + jefe;
   }
 
+  // ════════════════════════════════════════════════════════════════════
   // ─── SYNCROLAB ──────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
   if(/syncrolab/i.test(area)){
     return ''
-    + _infoCard('🏋 SYNCROLAB — Tu objetivo en Mi Turno',
-        'Registrar sesiones, testing y recovery con cliente identificado. '
-      + 'Toda incidencia de seguridad o médica → '+_tag('INCIDENCIA','#f59e0b')+' obligatoria + aviso inmediato al responsable.',
+    + _infoCard('🏋 SYNCROLAB — ¿Para qué rellenas tu turno?',
+        'Para registrar sesiones realizadas, testing, recovery y CUALQUIER incidencia médica o de seguridad. '
+      + 'En SYNCROLAB la seguridad del cliente está por encima de todo: incidencia médica = aviso inmediato al responsable.',
         '#a855f7')
-    + _infoCard('📝 Mi Turno — Campos obligatorios',
-        '• '+_req('Fecha')+'<br>'
-      + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
-      + '• '+_req('¿Gestión pendiente? SÍ/NO')+'<br>'
-      + '• '+_req('¿Incidencia? SÍ/NO'),
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Cliente que vuelve mañana, test pendiente, programa por cerrar.<br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br><u>Cualquier</u> tema médico, mareo, sobrecarga, mala respuesta al test, problema técnico.',
         '#a855f7')
+
     + _infoCard('🫁 Hypoxic Room — Si detectas problema técnico',
-        'Si durante la sesión la cámara da problemas (CO₂ alto, hipoxia por debajo del set point, puerta abierta, sensor sin datos) → '
-      + 'crear incidencia en módulo Hypoxic con: '+_req('Habitación')+' · '+_req('Tipo')+' · CO₂ · Altitud · Set point · Anotaciones.<br><br>'
-      + 'Si el cliente sufre malestar → INCIDENCIA + parar sesión + informar responsable.',
+        'Si durante la sesión la cámara da problemas (CO₂ alto · hipoxia bajo set point · puerta abierta · sensor sin datos) → '
+      + 'crea incidencia en módulo Hypoxic con: '+_req('Habitación')+' · '+_req('Tipo')+' · CO₂ · Altitud · Set point · Anotaciones.<br><br>'
+      + '<b>Si el cliente sufre malestar:</b> INCIDENCIA inmediata + parar sesión + informar responsable.',
         '#a855f7')
+
     + bloqueDiferencias
+
     + _infoCard('✅ Checklist antes de guardar',
         '☐ Sesiones del día registradas<br>'
       + '☐ Problemas técnicos cámara → incidencia Hypoxic<br>'
-      + '☐ Incidencia médica/seguridad → marcada + informada<br>'
+      + '☐ Incidencia médica/seguridad → marcada + informada al responsable<br>'
       + '☐ Material que falte → tarea a Economato',
-        '#10b981');
+        '#10b981')
+    + jefe;
   }
 
+  // ════════════════════════════════════════════════════════════════════
   // ─── ECONOMATO ──────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
   if(area === 'Economato'){
     return ''
-    + _infoCard('📦 Economato — Tu objetivo en Mi Turno',
-        'Registrar entradas de proveedores, atender peticiones de Cocina/Sala/SYNCROLAB y cerrar tareas de reposición.',
+    + _infoCard('📦 Economato — ¿Para qué rellenas tu turno?',
+        'Para registrar entradas de proveedores, cerrar tareas de reposición que te crean otros dptos, '
+      + 'y avisar de productos caducados o problemas con proveedores.',
         '#06b6d4')
-    + _infoCard('📝 Mi Turno — Campos obligatorios',
-        '• '+_req('Fecha')+'<br>'
-      + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
-      + '• '+_req('¿Gestión pendiente? SÍ/NO')+'<br>'
-      + '• '+_req('¿Incidencia? SÍ/NO'),
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Pedido por confirmar, proveedor que no responde, reposición urgente para mañana.<br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Producto caducado · dañado · cantidad incorrecta · proveedor que falla.',
         '#06b6d4')
-    + _infoCard('🔗 Tareas que recibes',
+
+    + _infoCard('🔗 Tareas que recibes — Flujo',
         'Cocina, Sala y SYNCROLAB te crean tareas de reposición. Flujo: '
       + _tag('Abierta','#ef4444')+' → <b>Iniciar</b> → '+_tag('En proceso','#3b82f6')+' → <b>Cerrar</b> con '+_req('Acción tomada')+' (qué se repuso, proveedor, fecha entrega).<br><br>'
-      + 'Si proveedor falla o producto agotado → no cierres, créa GESTIÓN explicando el bloqueo y la alternativa.',
+      + '<b>Si proveedor falla o producto agotado:</b> no cierres la tarea, créa <b>GESTIÓN</b> explicando el bloqueo y la alternativa.',
         '#06b6d4')
+
     + bloqueDiferencias
+
     + _infoCard('✅ Checklist antes de guardar',
         '☐ Entradas de proveedor registradas<br>'
       + '☐ Tareas de reposición cerradas o bloqueadas con gestión<br>'
       + '☐ Producto caducado / dañado → incidencia<br>'
       + '☐ Gestión / Incidencia marcadas',
-        '#10b981');
+        '#10b981')
+    + jefe;
   }
 
-  // ─── ADMINISTRACIÓN / LIMPIEZA / OTROS ──────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  // ─── ADMINISTRACIÓN / OTROS ─────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
   return ''
-    + _infoCard('📋 '+area+' — Tu objetivo en Mi Turno',
+    + _infoCard('📋 '+area+' — ¿Para qué rellenas tu turno?',
         'Registrar tu jornada, gestiones pendientes y cualquier incidencia operativa.',
         '#a855f7')
     + _infoCard('📝 Campos obligatorios',
@@ -667,8 +873,10 @@ function buildInfoContent(area){
         '☐ Todos los campos obligatorios rellenados<br>'
       + '☐ Si necesita acción de otro dpto → tarea creada<br>'
       + '☐ Gestión / Incidencia marcadas',
-        '#10b981');
+        '#10b981')
+    + jefe;
 }
+
 
 // Exponer globalmente
 window.renderInfoScreen = renderInfoScreen;
