@@ -376,6 +376,9 @@ async function submitCloseFollowup() {
 
 function renderInfoScreen(){
   if(!currentUser){ return; }
+  // Defensa: cerrar cualquier modal huérfano que pudiera estar visible
+  var _orphan = document.getElementById('dash-detail-overlay');
+  if(_orphan){ _orphan.style.display = 'none'; }
   var area = currentUser.area || 'Empleado';
   var headerEl = document.getElementById('info-screen-header');
   var bodyEl   = document.getElementById('info-screen-body');
@@ -1013,3 +1016,11 @@ function buildInfoContent(area){
 // Exponer globalmente
 window.renderInfoScreen = renderInfoScreen;
 window.buildInfoContent = buildInfoContent;
+
+// Defensa: si la página carga con el modal huérfano abierto, cerrarlo
+if(typeof document !== 'undefined'){
+  document.addEventListener('DOMContentLoaded', function(){
+    var ov = document.getElementById('dash-detail-overlay');
+    if(ov){ ov.style.display = 'none'; }
+  });
+}
