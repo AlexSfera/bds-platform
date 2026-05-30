@@ -454,21 +454,23 @@ function buildInfoContent(area){
     +     '<tr style="background:var(--bg2);">'
     +       '<th style="text-align:left;padding:8px;border:1px solid var(--border);">Tipo</th>'
     +       '<th style="text-align:left;padding:8px;border:1px solid var(--border);">¿Para qué?</th>'
-    +       '<th style="text-align:left;padding:8px;border:1px solid var(--border);width:140px;">¿Se traspasa?</th>'
+    +       '<th style="text-align:left;padding:8px;border:1px solid var(--border);width:170px;">¿Quién lo resuelve?</th>'
     +     '</tr>'
-    +     '<tr><td style="padding:8px;border:1px solid var(--border);">'+_tag('TAREA','#3b82f6')+'</td>'
-    +       '<td style="padding:8px;border:1px solid var(--border);">Trabajo que <b>otro dpto</b> u <b>otro turno</b> debe hacer.</td>'
-    +       '<td style="padding:8px;border:1px solid var(--border);color:#10b981;font-weight:600;">SÍ — hasta cerrarse</td></tr>'
-    +     '<tr><td style="padding:8px;border:1px solid var(--border);">'+_tag('INCIDENCIA','#f59e0b')+'</td>'
-    +       '<td style="padding:8px;border:1px solid var(--border);">Algo que <b>ocurrió en tu turno</b>. Ya resuelto o informado.</td>'
-    +       '<td style="padding:8px;border:1px solid var(--border);color:#ef4444;font-weight:600;">NO — muere en tu turno</td></tr>'
-    +     '<tr><td style="padding:8px;border:1px solid var(--border);">'+_tag('GESTIÓN','#a855f7')+'</td>'
-    +       '<td style="padding:8px;border:1px solid var(--border);">Pendiente <b>operativo de tu dpto</b>. Visible al equipo hasta cierre.</td>'
-    +       '<td style="padding:8px;border:1px solid var(--border);color:#10b981;font-weight:600;">SÍ — visible al dpto</td></tr>'
+    +     '<tr><td style="padding:8px;border:1px solid var(--border);vertical-align:top;">'+_tag('TAREA','#3b82f6')+'</td>'
+    +       '<td style="padding:8px;border:1px solid var(--border);vertical-align:top;">Trabajo concreto para <b>otro departamento</b> u <b>otro turno</b>. Con deadline. Ejemplo: "Mantenimiento revisar ducha 203 antes del check-in".</td>'
+    +       '<td style="padding:8px;border:1px solid var(--border);vertical-align:top;color:#3b82f6;font-weight:600;">El dpto/turno destinatario hasta cerrarla</td></tr>'
+    +     '<tr><td style="padding:8px;border:1px solid var(--border);vertical-align:top;">'+_tag('INCIDENCIA','#f59e0b')+'</td>'
+    +       '<td style="padding:8px;border:1px solid var(--border);vertical-align:top;">Algo que <b>ocurrió en tu turno</b> y necesita decisión o respuesta del <b>jefe de tu departamento</b>. Ejemplo: "Cliente exige devolución total", "fallo de equipo grave".</td>'
+    +       '<td style="padding:8px;border:1px solid var(--border);vertical-align:top;color:#f59e0b;font-weight:600;">El jefe de tu dpto — tú la abres, él la cierra</td></tr>'
+    +     '<tr><td style="padding:8px;border:1px solid var(--border);vertical-align:top;">'+_tag('GESTIÓN','#a855f7')+'</td>'
+    +       '<td style="padding:8px;border:1px solid var(--border);vertical-align:top;">Pendiente <b>operativo dentro de tu dpto</b>. Lo continúa otro compañero o el siguiente turno del MISMO dpto. Ejemplo: "Cliente 304 quiere factura mañana", "Repasar mise en place tarde".</td>'
+    +       '<td style="padding:8px;border:1px solid var(--border);vertical-align:top;color:#a855f7;font-weight:600;">Tu equipo + siguiente turno del mismo dpto</td></tr>'
     +   '</table>'
-    +   '<div style="font-size:12px;color:var(--text3);margin-top:10px;padding:8px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;">'
-    +     '<b>⚠ Regla clave:</b> Si necesita acción del <u>siguiente turno o de otro dpto</u> → <b>TAREA</b>. '
-    +     'Si ya cerraste tú → <b>INCIDENCIA</b>.'
+    +   '<div style="font-size:12px;color:var(--text3);margin-top:10px;padding:10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;line-height:1.6;">'
+    +     '<b>⚠ Cómo elegir:</b><br>'
+    +     '• ¿Lo soluciona <u>OTRO dpto u OTRO turno externo</u>, con plazo? → '+_tag('TAREA','#3b82f6')+'<br>'
+    +     '• ¿Requiere decisión o intervención del <u>JEFE de tu dpto</u>? → '+_tag('INCIDENCIA','#f59e0b')+'<br>'
+    +     '• ¿Es tema interno de tu dpto que continúa tu equipo o el siguiente turno tuyo? → '+_tag('GESTIÓN','#a855f7')+''
     +   '</div>'
     + '</div>';
 
@@ -495,12 +497,12 @@ function buildInfoContent(area){
       + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando del turno. Normalmente tú mismo.<br><br>'
 
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
-      + '<u>SÍ</u> si queda algo abierto que el siguiente turno tiene que continuar (ej: "Cliente 304 pide factura mañana", "Llamar a proveedor de toallas"). '
-      + 'Si SÍ → describe qué es y a quién va dirigido.<br><br>'
+      + '<u>SÍ</u> si queda algo abierto que <b>el siguiente turno de Recepción</b> debe continuar. Ej: "Cliente 304 pide factura mañana", "Esperar respuesta de reserva de grupo". '
+      + '<i>Si el trabajo lo debe hacer OTRO dpto → crea TAREA, no gestión.</i><br><br>'
 
       + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
-      + '<u>SÍ</u> si pasó algo durante tu turno (queja de cliente, problema de habitación, error de cobro). '
-      + 'Si SÍ → describe qué ocurrió + qué hiciste + si avisaste al responsable.',
+      + '<u>SÍ</u> si pasó algo que necesita <b>decisión del jefe de Recepción</b>. Ej: queja seria de cliente, error grave de cobro, daño en habitación, descuadre importante, robo. '
+      + 'Tú la abres con qué ocurrió + acción tomada + si avisaste al responsable. <b>El jefe la cierra.</b>',
         '#10b981')
 
     + _infoCard('🏦 Caja Recepción MEWS — Cómo rellenar',
@@ -637,8 +639,8 @@ function buildInfoContent(area){
       + '<b>'+_req('Servicio')+'</b><br>Desayuno · Comida · Cena · Evento. Puedes marcar <u>VARIOS</u> si cubriste más de uno.<br><br>'
       + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales del turno.<br><br>'
       + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando.<br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Si queda algo abierto para mañana o para Economato (ej: "Pedir lubina al proveedor").<br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que ocurrió en el turno (avería de equipo, error de servicio, problema con proveedor).',
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto de Cocina que continúa otro compañero o el siguiente turno tuyo. Ej: "Repasar mise en place de cena", "Marinar lubina para mañana". <i>Si pide acción de Economato/Mantenimiento → TAREA, no gestión.</i><br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo del turno que requiere <b>decisión del jefe de Cocina</b>: avería grave de equipo, contaminación detectada, fallo importante de proveedor, error de servicio que escala. Tú la abres, <b>el jefe la cierra</b>.',
         '#f59e0b')
 
     + _infoCard('📦 Merma — '+_req('OBLIGATORIO')+' en Cocina',
@@ -732,8 +734,8 @@ function buildInfoContent(area){
       + '<b>'+_req('Servicio')+'</b><br>Desayuno · Comida · Cena · Evento · Otro. Puedes marcar <u>VARIOS</u>.<br><br>'
       + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales.<br><br>'
       + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando.<br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo abierto que continúa (reserva especial, evento mañana, gestión con proveedor).<br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Queja de cliente, error de servicio, problema con producto, etc.',
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto de Sala que continúa el siguiente turno tuyo o tu equipo. Ej: "Reserva especial 21h con menú celíaco", "Repasar montaje para evento mañana". <i>Si pide acción de Cocina/Economato → TAREA, no gestión.</i><br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que requiere <b>decisión del jefe de F&B</b>: queja seria de cliente, conflicto cliente-personal, error grave en cobro, daño material relevante. Tú la abres, <b>el jefe la cierra</b>.',
         '#3b82f6')
 
     + _infoCard('⚡ Ajustes — Obligatorio en Sala',
@@ -830,8 +832,8 @@ function buildInfoContent(area){
 
     + _infoCard('📝 Mi Turno — Campo a campo',
         '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Trabajo bloqueado (falta pieza, esperar proveedor, etc.).<br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que detectaste mientras trabajabas (rotura grave, riesgo de seguridad, daño no previsto).',
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Trabajo del propio dpto que continúa tu compañero o siguiente turno. Ej: "Terminar pintura sala mañana", "Comprobar boiler tras nueva pieza". <i>Si esperas pieza del proveedor → eso también es gestión interna.</i><br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo grave detectado que requiere <b>decisión del jefe de Mantenimiento</b>: riesgo de seguridad, daño estructural, fallo crítico de instalación, accidente. Tú la abres, <b>el jefe la cierra</b>.',
         '#ef4444')
 
     + _infoCard('🔗 Tareas que recibes — Flujo obligatorio',
@@ -892,8 +894,8 @@ function buildInfoContent(area){
 
     + _infoCard('📝 Mi Turno — Campo a campo',
         '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo que continúa mañana (habitación sin terminar, reposición pendiente, falta material).<br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Hallazgos en habitación: objeto olvidado · desperfecto · daño · cliente difícil · queja.',
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto de HK que continúa tu compañera o el siguiente turno tuyo. Ej: "Habitación 204 sin terminar — falta dosaje toallas", "Repasar VIP 305 antes de check-in". <i>Si pide Mantenimiento o Economato → TAREA, no gestión.</i><br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que requiere <b>decisión de la Gobernanta</b>: cliente difícil, queja seria, robo, daño relevante encontrado, conflicto con cliente, hallazgo sospechoso. Tú la abres, <b>la Gobernanta la cierra</b>.',
         '#f97316')
 
     + _infoCard('🔗 Si encuentras un problema en habitación',
@@ -935,8 +937,8 @@ function buildInfoContent(area){
 
     + _infoCard('📝 Mi Turno — Campo a campo',
         '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Cliente que vuelve mañana, test pendiente, programa por cerrar.<br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br><u>Cualquier</u> tema médico, mareo, sobrecarga, mala respuesta al test, problema técnico.',
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto que continúa tu compañero. Ej: "Cliente vuelve mañana para 2ª sesión", "Cerrar informe del test de hoy", "Revisar programa de recovery". <i>Si pide acción a Economato/Mantenimiento → TAREA, no gestión.</i><br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br><u>Cualquier</u> tema que requiere <b>decisión del coordinador</b>: mareo, sobrecarga, mala respuesta al test, malestar médico, problema técnico grave de cámara. La seguridad del cliente está sobre todo. Tú la abres + paras la sesión si aplica + avisas. <b>El coordinador la cierra.</b>',
         '#a855f7')
 
     + _infoCard('🫁 Hypoxic Room — Si detectas problema técnico',
@@ -968,8 +970,8 @@ function buildInfoContent(area){
 
     + _infoCard('📝 Mi Turno — Campo a campo',
         '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Pedido por confirmar, proveedor que no responde, reposición urgente para mañana.<br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Producto caducado · dañado · cantidad incorrecta · proveedor que falla.',
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto de Economato. Ej: "Pedido por confirmar al proveedor", "Reposición urgente para mañana", "Esperar entrega del lunes". <i>Si tienes que avisar a Cocina/Sala → TAREA, no gestión.</i><br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que requiere <b>decisión del jefe</b>: producto caducado en masa, mercancía dañada, cantidad muy inferior a la pedida, proveedor que falla sistemáticamente. Tú la abres, <b>el jefe la cierra</b>.',
         '#06b6d4')
 
     + _infoCard('🔗 Tareas que recibes — Flujo',
