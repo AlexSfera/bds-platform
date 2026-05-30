@@ -2885,12 +2885,40 @@ async function renderMermaMod(){
     subText += ' · <b style="color:var(--amber);">'+pendientes+' pendiente(s) de asociar a turno</b>';
   }
 
+  // Panel explicativo lateral — qué es merma + causas
+  var infoPanel = ''
+    + '<aside style="background:var(--bg);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:10px;padding:14px 16px;font-size:12px;line-height:1.5;height:fit-content;position:sticky;top:12px;">'
+    +   '<div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--text);font-size:13px;margin-bottom:8px;">'
+    +     '<span style="font-size:16px;">📦</span><span>¿Qué es merma?</span>'
+    +   '</div>'
+    +   '<div style="color:var(--text2);margin-bottom:12px;">'
+    +     'Producto que <b>podríamos reaprovechar</b> para preparar platos o vender, pero acaba <b>en la basura</b>. '
+    +     'Cada línea cuenta — el objetivo es bajarla.'
+    +   '</div>'
+    +   '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:8px;">CAUSAS</div>'
+    +   '<div style="display:flex;flex-direction:column;gap:6px;">'
+    +     '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:15px;flex-shrink:0;">📅</span><div><b style="color:var(--text);">Caducidad</b><br><span style="color:var(--text3);font-size:11px;">producto fuera de fecha</span></div></div>'
+    +     '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:15px;flex-shrink:0;">🔪</span><div><b style="color:var(--text);">Error de preparación</b><br><span style="color:var(--text3);font-size:11px;">mal corte, mala receta, plato mal montado</span></div></div>'
+    +     '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:15px;flex-shrink:0;">🔥</span><div><b style="color:var(--text);">Accidente</b><br><span style="color:var(--text3);font-size:11px;">quemado, caído al suelo, rotura</span></div></div>'
+    +     '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:15px;flex-shrink:0;">↩️</span><div><b style="color:var(--text);">Devolución de sala</b><br><span style="color:var(--text3);font-size:11px;">cliente devuelve plato o no se sirve</span></div></div>'
+    +     '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:15px;flex-shrink:0;">🍽</span><div><b style="color:var(--text);">Exceso de producción</b><br><span style="color:var(--text3);font-size:11px;">se preparó más de lo necesario</span></div></div>'
+    +     '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:15px;flex-shrink:0;">⚠️</span><div><b style="color:var(--text);">Otro</b><br><span style="color:var(--text3);font-size:11px;">cualquier otro motivo — describir en obs.</span></div></div>'
+    +   '</div>'
+    +   '<div style="margin-top:12px;padding:8px 10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:#78350f;">'
+    +     '<b>Importante:</b> registra siempre el motivo real. Sin causa clara no se puede reducir la merma.'
+    +   '</div>'
+    + '</aside>';
+
   el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
     + '<div><div class="page-title">📦 Merma — hoy</div>'
     + '<div class="page-sub">'+subText+'</div></div>'
     + '<button class="btn btn-primary" onclick="openNewMermaMod()">+ Nueva línea</button>'
     + '</div>'
-    + '<div>'+cards+'</div>';
+    + '<div class="merma-layout" style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start;">'
+    +   '<div>'+cards+'</div>'
+    +   infoPanel
+    + '</div>'
+    + '<style>@media(max-width:760px){.merma-layout{grid-template-columns:1fr !important;}.merma-layout aside{position:static !important;}}</style>';
 }
 window.renderMermaMod = renderMermaMod;
 
