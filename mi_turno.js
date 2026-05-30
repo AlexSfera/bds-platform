@@ -571,6 +571,40 @@ function buildInfoContent(area){
 
     + bloqueDiferencias
 
+    + _infoCard('🚨 Evaluación objetiva — Tu desempeño se mide',
+        '<b>El registro completo en Mi Turno es la base de tu evaluación mensual</b>, '
+      + 'y esa evaluación afecta directamente tus <u>incentivos económicos</u>.<br><br>'
+
+      + '<b>Qué mide el sistema automáticamente:</b><br>'
+      + '• Cuadre de Caja MEWS (Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia)<br>'
+      + '• Diferencias explicadas + acción tomada + ¿informado al responsable?<br>'
+      + '• Conteo de fondo real a traspasar (cuadrado o no)<br>'
+      + '• Caja fuerte: registro SÍ/NO + importe<br>'
+      + '• Incidencias reportadas vs detectadas a posteriori (queja de cliente, supervisor)<br>'
+      + '• Hypoxic: incidencia abierta cuando cliente avisó o cámara dio problema<br>'
+      + '• Tareas creadas a HK / Mantenimiento cuando correspondía<br><br>'
+
+      + '<b>Qué penaliza:</b><br>'
+      + '• Caja MEWS descuadrada sin explicación + acción + responsable informado → penalización<br>'
+      + '• Diferencia ocultada o redondeada para que cuadre → penalización doble<br>'
+      + '• Aviso de cliente sobre Hypoxic sin incidencia creada → penalización<br>'
+      + '• Queja de cliente detectada por supervisor o redes sociales que tú no reportaste → penalización doble<br>'
+      + '• Cierre de turno sin contar el fondo a traspasar → penalización<br>'
+      + '• Caja fuerte: retiro no registrado o sin importe → penalización<br>'
+      + '• Habitación con desperfecto detectado por HK que tú no avisaste a Mantenimiento → penalización<br><br>'
+
+      + '<b>Qué premia:</b><br>'
+      + '• Cierres de caja cuadrados de forma sostenida (Δ = 0,00 €)<br>'
+      + '• Diferencias mínimas con explicación clara y rápida<br>'
+      + '• Comunicación proactiva al responsable EN EL MOMENTO, no al cierre<br>'
+      + '• Incidencias documentadas con acción tomada y seguimiento<br>'
+      + '• Hypoxic reportado al primer aviso, no cuando ya está cerrada<br>'
+      + '• Tareas inter-dpto bien escaladas (HK, Mantenimiento) con prioridad correcta<br><br>'
+
+      + '<b>La regla es simple: registrar = transparencia = confianza = incentivo. '
+      + 'No registrar = opacidad = riesgo = penalización.</b>',
+        '#ef4444')
+
     + _infoCard('✅ Checklist antes de guardar',
         '☐ Fecha, turno y horas correctas<br>'
       + '☐ Responsable de turno indicado<br>'
@@ -622,11 +656,57 @@ function buildInfoContent(area){
       + 'marca <b>"¿Crear tarea operativa? SÍ"</b> y rellena: dpto destinatario · prioridad · deadline.',
         '#f59e0b')
 
+    + _infoCard('🖨 Regla operativa de Cocina — NO se toca comida sin orden por impresora',
+        '<b>Norma:</b> Ningún plato, ingrediente o preparación sale de cocina sin <u>orden impresa por la impresora del POS</u>.<br><br>'
+
+      + '<b>Esto incluye:</b><br>'
+      + '• Pedidos de cliente (sala, eventos, room service)<br>'
+      + '• <b>Comida del personal</b> — también requiere ticket impreso<br>'
+      + '• Cortesías e invitaciones — autorizadas por F&B y registradas como ajuste en Sala<br>'
+      + '• Pruebas de menú, catas, fotografías — con ticket de motivo<br><br>'
+
+      + '<b>¿Por qué?</b><br>'
+      + '• Sin ticket no hay rastro = no se puede medir merma real<br>'
+      + '• Sin ticket no se sabe si fue comida, regalo o pérdida<br>'
+      + '• Sin ticket el inventario nunca cuadra<br><br>'
+
+      + '<b>Si llega petición verbal sin ticket:</b> NO se prepara. Pide ticket o autorización formal (responsable o F&B) antes de tocar producto.',
+        '#dc2626')
+
     + bloqueDiferencias
+
+    + _infoCard('🚨 Evaluación objetiva — Tu desempeño se mide',
+        '<b>Objetivo principal de Cocina: bajar la merma del 38% actual.</b><br>'
+      + 'Cada turno que cierras genera datos. Esos datos suman tu evaluación mensual y afectan tus <u>incentivos económicos</u>.<br><br>'
+
+      + '<b>Qué mide el sistema automáticamente:</b><br>'
+      + '• % merma del turno (coste merma / coste total preparado)<br>'
+      + '• Líneas de merma registradas vs producto realmente tirado<br>'
+      + '• Salidas de cocina con ticket vs sin ticket (incluida comida personal)<br>'
+      + '• Confirmación de "Sin merma" cuando aplica<br>'
+      + '• Incidencias técnicas reportadas (averías, fallos de frío)<br><br>'
+
+      + '<b>Qué penaliza:</b><br>'
+      + '• Merma superior al 38% sin causa justificada → penalización<br>'
+      + '• Producto salido sin ticket (incluido staff meal sin ticket) → penalización<br>'
+      + '• Merma detectada por inventario sin que tú la registraras → penalización doble<br>'
+      + '• Turno cerrado sin merma ni "Sin merma" confirmado → bloqueo + penalización<br>'
+      + '• Avería de equipo no reportada que genera pérdida posterior → penalización<br><br>'
+
+      + '<b>Qué premia:</b><br>'
+      + '• Merma por debajo del 38% con tendencia descendente sostenida<br>'
+      + '• 100% de salidas con ticket de impresora<br>'
+      + '• Mermas registradas con motivo claro (no "se cayó")<br>'
+      + '• Avisos preventivos: nevera marca temperatura rara, producto al límite, etc.<br><br>'
+
+      + '<b>La regla es simple: registrar = transparencia = confianza = incentivo. '
+      + 'No registrar = opacidad = riesgo = penalización.</b>',
+        '#ef4444')
 
     + _infoCard('✅ Checklist antes de guardar',
         '☐ Todos los servicios cubiertos marcados<br>'
       + '☐ Merma registrada O "Sin merma" marcado<br>'
+      + '☐ Toda salida de cocina del turno tuvo ticket impreso (incluido staff)<br>'
       + '☐ Si producto requiere reposición → tarea a Economato creada<br>'
       + '☐ Si fallo de equipo → tarea a Mantenimiento creada<br>'
       + '☐ Gestión / Incidencia marcadas',
