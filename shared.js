@@ -156,10 +156,7 @@ let sinMermaFlag= false;
 let editingShiftId    = null;
 let validatingShiftId = null;
 let _validatingMermas = [];
-let _fioSelectedEmps = []; // [{id, nombre, puesto, area}] — autocomplete multi-select
-let _fioAllEmps = [];      // full active employee list for search
-let _peFioSelectedEmps = []; // same for post-error modal (pe- prefix)
-let _peFioAllEmps = [];
+// Variables FIO viejas eliminadas en Fase 4 (autocomplete sustituido por módulo FIO)
 let _editEmpId        = null;
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -626,119 +623,7 @@ async function populateDashEmpDropdowns(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TOGGLES
-function onFioNingunoToggle(){
-  if((document.getElementById('val-emp-ninguno')||{}).checked){
-    _fioSelectedEmps=[];
-    var tagsEl=document.getElementById('val-fio-tags');
-    if(tagsEl) tagsEl.innerHTML='';
-    var srch=document.getElementById('val-fio-search');
-    if(srch) srch.value='';
-    var dd=document.getElementById('val-fio-dropdown');
-    if(dd) dd.style.display='none';
-  }
-}
-function onFioSearch(q){
-  q=(q||'').toLowerCase().trim();
-  var dd=document.getElementById('val-fio-dropdown');
-  if(!dd) return;
-  var filtered=_fioAllEmps.filter(function(e){
-    if(_fioSelectedEmps.some(function(s){return s.id===e.id;})) return false;
-    if(!q) return true;
-    return (e.nombre+' '+e.puesto+' '+(e.area||'')).toLowerCase().indexOf(q)!==-1;
-  });
-  if(!filtered.length){ dd.style.display='none'; return; }
-  dd.innerHTML=filtered.slice(0,10).map(function(e){
-    var esc=function(s){return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");};
-    return '<div onclick="onFioSelectEmp(\''+esc(e.id)+'\',\''+esc(e.nombre)+'\',\''+esc(e.puesto)+'\',\''+esc(e.area||'')+'\',this)"'
-      +' style="padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);"'
-      +' onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-      +'<strong>'+formatDisplayValue(e.nombre)+'</strong>'
-      +' <span style="font-size:11px;color:var(--text3)">'+e.puesto+(e.area?' · '+e.area:'')+'</span>'
-      +'</div>';
-  }).join('');
-  dd.style.display='block';
-}
-function onFioSelectEmp(id,nombre,puesto,area){
-  if(_fioSelectedEmps.some(function(s){return s.id===id;})) return;
-  _fioSelectedEmps.push({id:id,nombre:nombre,puesto:puesto,area:area});
-  var ninguno=document.getElementById('val-emp-ninguno');
-  if(ninguno) ninguno.checked=false;
-  var tagsEl=document.getElementById('val-fio-tags');
-  if(tagsEl){
-    var chip=document.createElement('span');
-    chip.dataset.empId=id;
-    chip.style.cssText='display:inline-flex;align-items:center;gap:4px;background:var(--bg2);border:1px solid #8b5cf6;border-radius:4px;padding:3px 8px;font-size:12px;';
-    chip.innerHTML='<span>'+formatDisplayValue(nombre)+'</span>'
-      +'<button onclick="onFioRemoveEmp(\''+id.replace(/'/g,"\\'")+'\')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;line-height:1;padding:0 0 0 2px;">×</button>';
-    tagsEl.appendChild(chip);
-  }
-  var srch=document.getElementById('val-fio-search');
-  if(srch) srch.value='';
-  var dd=document.getElementById('val-fio-dropdown');
-  if(dd) dd.style.display='none';
-}
-function onFioRemoveEmp(id){
-  _fioSelectedEmps=_fioSelectedEmps.filter(function(s){return s.id!==id;});
-  var tagsEl=document.getElementById('val-fio-tags');
-  if(tagsEl){
-    var chip=tagsEl.querySelector('[data-emp-id="'+id+'"]');
-    if(chip) chip.remove();
-  }
-}
-// ── Post-error modal FIO autocomplete (pe- prefix) ──
-function onPeFioNingunoToggle(){
-  if((document.getElementById('pe-emp-ninguno')||{}).checked){
-    _peFioSelectedEmps=[];
-    var t=document.getElementById('pe-fio-tags'); if(t) t.innerHTML='';
-    var s=document.getElementById('pe-fio-search'); if(s) s.value='';
-    var d=document.getElementById('pe-fio-dropdown'); if(d) d.style.display='none';
-  }
-}
-function onPeFioSearch(q){
-  q=(q||'').toLowerCase().trim();
-  var dd=document.getElementById('pe-fio-dropdown'); if(!dd) return;
-  var filtered=_peFioAllEmps.filter(function(e){
-    if(_peFioSelectedEmps.some(function(s){return s.id===e.id;})) return false;
-    if(!q) return true;
-    return (e.nombre+' '+e.puesto+' '+(e.area||'')).toLowerCase().indexOf(q)!==-1;
-  });
-  if(!filtered.length){ dd.style.display='none'; return; }
-  var esc=function(s){return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");};
-  dd.innerHTML=filtered.slice(0,10).map(function(e){
-    return '<div onclick="onPeFioSelectEmp(\''+esc(e.id)+'\',\''+esc(e.nombre)+'\',\''+esc(e.puesto)+'\',\''+esc(e.area||'')+'\',this)"'
-      +' style="padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);"'
-      +' onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'\'">'
-      +'<strong>'+formatDisplayValue(e.nombre)+'</strong>'
-      +' <span style="font-size:11px;color:var(--text3)">'+e.puesto+(e.area?' · '+e.area:'')+'</span>'
-      +'</div>';
-  }).join('');
-  dd.style.display='block';
-}
-function onPeFioSelectEmp(id,nombre,puesto,area){
-  if(_peFioSelectedEmps.some(function(s){return s.id===id;})) return;
-  _peFioSelectedEmps.push({id:id,nombre:nombre,puesto:puesto,area:area});
-  var ninguno=document.getElementById('pe-emp-ninguno'); if(ninguno) ninguno.checked=false;
-  var tagsEl=document.getElementById('pe-fio-tags');
-  if(tagsEl){
-    var chip=document.createElement('span');
-    chip.dataset.empId=id;
-    chip.style.cssText='display:inline-flex;align-items:center;gap:4px;background:var(--bg2);border:1px solid #8b5cf6;border-radius:4px;padding:3px 8px;font-size:12px;';
-    chip.innerHTML='<span>'+formatDisplayValue(nombre)+'</span>'
-      +'<button onclick="onPeFioRemoveEmp(\''+id.replace(/'/g,"\\'")+'\')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;line-height:1;padding:0 0 0 2px;">×</button>';
-    tagsEl.appendChild(chip);
-  }
-  var srch=document.getElementById('pe-fio-search'); if(srch) srch.value='';
-  var dd=document.getElementById('pe-fio-dropdown'); if(dd) dd.style.display='none';
-}
-function onPeFioRemoveEmp(id){
-  _peFioSelectedEmps=_peFioSelectedEmps.filter(function(s){return s.id!==id;});
-  var tagsEl=document.getElementById('pe-fio-tags');
-  if(tagsEl){
-    var chip=tagsEl.querySelector('[data-emp-id="'+id+'"]');
-    if(chip) chip.remove();
-  }
-}
+// TOGGLES (autocomplete FIO viejo eliminado en Fase 4)
 function setT(name,val){
   toggleState[name]=val;
   const maps={
@@ -749,8 +634,6 @@ function setT(name,val){
     reqdisc:{si:'rd-si',no:'rd-no'},
     inci_task:{si:'it-si',no:'it-no'},
     merma_task:{si:'mt-si',no:'mt-no'},
-    fio:{si:'fio-si',no:'fio-no'},
-    posterr_fio:{si:'posterr-fio-si',no:'posterr-fio-no'},
     informresp:{si:'informresp-si',no:'informresp-no'},
   };
   const ids=maps[name]; if(!ids) return;
