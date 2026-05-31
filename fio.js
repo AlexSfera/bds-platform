@@ -81,6 +81,68 @@ function _fioMonth(d){
   return s.slice(0,7); // YYYY-MM
 }
 
+// Comprime una imagen a JPEG ~82% calidad, máx 1200px lado largo. Devuelve dataURL base64.
+function _fioCompressImage(file, maxDim, quality){
+  maxDim = maxDim || 1200;
+  quality = quality || 0.82;
+  return new Promise(function(resolve, reject){
+    if(!file){ resolve(null); return; }
+    if(!/^image\//.test(file.type)){ reject(new Error('Archivo no es imagen')); return; }
+    var reader = new FileReader();
+    reader.onerror = function(){ reject(new Error('No se pudo leer el archivo')); };
+    reader.onload = function(){
+      var img = new Image();
+      img.onerror = function(){ reject(new Error('Imagen no válida')); };
+      img.onload = function(){
+        var w = img.width, h = img.height;
+        if(w > maxDim || h > maxDim){
+          var ratio = w > h ? maxDim/w : maxDim/h;
+          w = Math.round(w*ratio);
+          h = Math.round(h*ratio);
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function _onFIOImageChange(input){
+  var file = input.files && input.files[0];
+  var prev = document.getElementById('nfo-evidence-preview');
+  if(!file){ window._fioPendingImage = null; if(prev) prev.innerHTML = ''; return; }
+  try {
+    var dataUrl = await _fioCompressImage(file, 1200, 0.82);
+    window._fioPendingImage = dataUrl;
+    var sizeKb = Math.round(dataUrl.length * 0.75 / 1024);
+    if(prev){
+      prev.innerHTML =
+          '<div style="margin-top:6px;padding:8px;background:var(--bg2);border-radius:6px;border:1px solid var(--border);">'
+        +   '<img src="'+dataUrl+'" style="max-width:100%;max-height:180px;border-radius:4px;display:block;margin:auto;"/>'
+        +   '<div style="font-size:11px;color:var(--text3);text-align:center;margin-top:6px;">'+sizeKb+' KB · listo para subir</div>'
+        +   '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;width:100%;" onclick="_clearFIOImage()">✕ Quitar foto</button>'
+        + '</div>';
+    }
+  } catch(e){
+    toast('Error con la imagen: '+e.message,'err');
+    input.value='';
+  }
+}
+window._onFIOImageChange = _onFIOImageChange;
+
+function _clearFIOImage(){
+  window._fioPendingImage = null;
+  var inp = document.getElementById('nfo-evidence-img'); if(inp) inp.value='';
+  var prev = document.getElementById('nfo-evidence-preview'); if(prev) prev.innerHTML='';
+}
+window._clearFIOImage = _clearFIOImage;
+
 // ═══════════════════════════════════════════════════════════════════════
 // RENDER PANTALLA "FAULTS"
 // ═══════════════════════════════════════════════════════════════════════
@@ -213,6 +275,7 @@ async function openNewFIOModal(opts){
     empleadoNombre: opts.empleadoNombre || '',
     fecha: opts.fecha || today()
   };
+  window._fioPendingImage = null;
 
   var ov = document.getElementById('modal-new-fio');
   if(!ov){
@@ -291,6 +354,12 @@ async function openNewFIOModal(opts){
     + '<textarea id="nfo-evidence" rows="2" placeholder="Link foto / ticket / nº ticket / nombre testigo / etc."></textarea>'
     + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Obligatorio si el nivel afecta al incentivo (≠ L0)</div></div>'
 
+    + '<div class="fg"><label>📷 Foto evidencia (opcional)</label>'
+    + '<input type="file" id="nfo-evidence-img" accept="image/*" capture="environment" onchange="_onFIOImageChange(this)" '
+    + 'style="font-size:12px;color:var(--text2);">'
+    + '<div id="nfo-evidence-preview"></div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">La imagen se comprime automáticamente (máx 1200px lado largo).</div></div>'
+
     + '<div class="fg"><label><input type="checkbox" id="nfo-informed" style="margin-right:6px;"> Empleado ha sido informado del FIO</label></div>';
 
   // Guardar catálogo en window para reusar en _onFIOTypeChange
@@ -356,9 +425,10 @@ async function saveNewFIO(){
     if(!cat){ toast('Fallo no encontrado en catálogo','err'); return; }
 
     var L = FIO_LEVELS[cat.nivel_default] || FIO_LEVELS.L0;
+    var hasImage = !!(window._fioPendingImage);
     var requiereEv = cat.requiere_ev && L.code !== 'L0';
-    if(requiereEv && !evidence){
-      toast('Para afectar incentivo debe adjuntar evidencia o descripción verificable','err');
+    if(requiereEv && !evidence && !hasImage){
+      toast('Para afectar incentivo debe adjuntar evidencia (texto o foto)','err');
       return;
     }
 
@@ -378,6 +448,7 @@ async function saveNewFIO(){
       applied_points: cat.puntos_default,   // MVP: sin reincidencia auto. Fase 2 lo recalcula.
       impact_area: impact,
       evidence_text: evidence,
+      evidence_image: window._fioPendingImage || null,
       description: desc,
       created_by: currentUser.nombre,
       status: FIO_STATUS.REGISTRADO,
@@ -389,6 +460,7 @@ async function saveNewFIO(){
     invalidateCache('fio');
     auditLog('FIO_CREATE', currentUser.nombre+' → '+empName+' | '+cat.nombre+' ('+L.code+' · '+cat.puntos_default+'p) | '+desc.slice(0,80));
     toast('FIO registrado','ok');
+    window._fioPendingImage = null;
     closeModal('modal-new-fio');
     renderFIOScreen();
 
@@ -451,6 +523,7 @@ async function openFIODetail(fid){
     +   '<div style="margin-bottom:10px;"><strong>Impacto:</strong> '+formatDisplayValue(f.impact_area)+'</div>'
     +   '<div style="margin-bottom:10px;"><strong>Descripción:</strong><br><div style="color:var(--text2);font-size:13px;">'+formatDisplayValue(f.description)+'</div></div>'
     +   '<div style="margin-bottom:10px;"><strong>Evidencia:</strong><br><div style="color:var(--text2);font-size:13px;font-family:var(--font-mono);">'+formatDisplayValue(f.evidence_text || '—')+'</div></div>'
+    +   (f.evidence_image ? '<div style="margin-bottom:10px;"><strong>📷 Foto:</strong><br><a href="'+f.evidence_image+'" target="_blank" rel="noopener"><img src="'+f.evidence_image+'" style="max-width:100%;max-height:280px;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;display:block;margin-top:6px;"/></a></div>' : '')
     +   '<div style="margin-bottom:10px;"><strong>Estado:</strong> '+bFIOStatus(f.status)+'</div>'
     +   '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">'
     +     'Creado por '+formatDisplayValue(f.created_by)+' · '+formatDisplayValue(f.created_at)
@@ -483,8 +556,8 @@ async function validateFIO(fid, newStatus){
     toast('L4/L5 solo Dirección/RRHH','err');
     return;
   }
-  if(newStatus === 'Validado' && L.code !== 'L0' && !f.evidence_text){
-    toast('No se puede validar sin evidencia','err');
+  if(newStatus === 'Validado' && L.code !== 'L0' && !f.evidence_text && !f.evidence_image){
+    toast('No se puede validar sin evidencia (texto o foto)','err');
     return;
   }
 
@@ -527,17 +600,14 @@ async function deleteFIO(fid){
   var all = await getDB('fio');
   var f = all.find(function(x){ return x.id === fid; });
   auditLog('FIO_DELETE', currentUser.nombre+' eliminó FIO '+fid+' | '+(f? f.employee_name+' · '+f.fault_name : '?'));
-  await dbUpdate('fio', fid, {}); // noop para forzar timestamp, opcional
-  // DELETE real
   try {
-    await fetch((window.SUPABASE_URL||'')+'/rest/v1/fio?id=eq.'+encodeURIComponent(fid), {
-      method:'DELETE',
-      headers:{ apikey: window.SUPABASE_KEY, Authorization:'Bearer '+window.SUPABASE_KEY }
-    });
-  } catch(e){}
-  invalidateCache('fio');
-  toast('Eliminado','ok');
-  renderFIOScreen();
+    await dbDelete('fio', fid);
+    invalidateCache('fio');
+    toast('Eliminado','ok');
+    renderFIOScreen();
+  } catch(e){
+    toast('Error al eliminar: '+e.message,'err');
+  }
 }
 window.deleteFIO = deleteFIO;
 
@@ -643,6 +713,7 @@ async function openMisFIODetail(fid){
     +   '<div style="margin-bottom:10px;"><strong>Impacto:</strong> '+formatDisplayValue(f.impact_area)+'</div>'
     +   '<div style="margin-bottom:10px;"><strong>Descripción:</strong><br><div style="color:var(--text2);font-size:13px;">'+formatDisplayValue(f.description)+'</div></div>'
     +   (f.evidence_text ? '<div style="margin-bottom:10px;"><strong>Evidencia:</strong><br><div style="color:var(--text2);font-size:13px;font-family:var(--font-mono);">'+formatDisplayValue(f.evidence_text)+'</div></div>' : '')
+    +   (f.evidence_image ? '<div style="margin-bottom:10px;"><strong>📷 Foto:</strong><br><a href="'+f.evidence_image+'" target="_blank" rel="noopener"><img src="'+f.evidence_image+'" style="max-width:100%;max-height:280px;border-radius:6px;border:1px solid var(--border);cursor:zoom-in;display:block;margin-top:6px;"/></a></div>' : '')
     +   '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">'
     +     'Registrado por '+formatDisplayValue(f.created_by)+' · '+formatDisplayValue(f.created_at)
     +     (f.validated_by ? '<br>Validado por '+formatDisplayValue(f.validated_by)+' · '+formatDisplayValue(f.validated_at) : '')
