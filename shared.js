@@ -401,6 +401,7 @@ function getScreens(rol){
     maestro:     {id:'maestro',     label:'👥 Maestro'},
     export:      {id:'export',      label:'⬇ Exportar'},
     fio:         {id:'fio',         label:'⚖ FIO'},
+    misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
@@ -418,7 +419,7 @@ function getScreens(rol){
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
   var navComun = isAdminU
     ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
-    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias];
+    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio];
 
   // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
   if(isAdminU || isSyncrolab || isRecepcion) navComun.push(ITEMS.hypoxic);
@@ -590,6 +591,7 @@ async function showScreen(id){
   if(id==='gestiones'){ renderGestionesScreen(); }
   if(id==='incidencias'){ renderIncidenciasScreen(); }
   if(id==='fio'){ renderFIOScreen(); }
+  if(id==='mis-fio'){ renderMisFIOScreen(); }
   if(id==='hypoxic'){ renderHypoxicScreen(); }
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }

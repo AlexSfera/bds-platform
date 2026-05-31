@@ -540,3 +540,152 @@ async function deleteFIO(fid){
   renderFIOScreen();
 }
 window.deleteFIO = deleteFIO;
+
+// ═══════════════════════════════════════════════════════════════════════
+// VISTA EMPLEADO: MIS FIO (solo lectura + botón Disputar)
+// ═══════════════════════════════════════════════════════════════════════
+async function renderMisFIOScreen(){
+  var el = document.getElementById('screen-mis-fio');
+  if(!el) return;
+  if(!currentUser){
+    el.innerHTML = '<div class="page-header"><div class="page-title">🚫 Mis FIO</div><div class="page-sub">Inicia sesión</div></div>';
+    return;
+  }
+
+  var all = [];
+  try { all = await getDB('fio'); } catch(e){ all = []; }
+  // Filtrar a SOLO los FIO del empleado actual
+  var mine = all.filter(function(f){ return f.employee_id === currentUser.id; });
+  mine.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  // KPIs personales
+  var pendientes = mine.filter(function(f){ return f.status === FIO_STATUS.REGISTRADO; });
+  var validados  = mine.filter(function(f){ return f.status === FIO_STATUS.VALIDADO || f.status === FIO_STATUS.CERRADO; });
+  var disputados = mine.filter(function(f){ return f.status === FIO_STATUS.DISPUTADO; });
+  var puntosVal  = validados.reduce(function(s,f){ return s + (parseFloat(f.applied_points)||0); }, 0);
+  var thisMonth  = _fioMonth();
+  var puntosMes  = validados.filter(function(f){ return f.incentive_month === thisMonth; })
+                            .reduce(function(s,f){ return s + (parseFloat(f.applied_points)||0); }, 0);
+
+  el.innerHTML =
+      '<div class="page-header">'
+    +   '<div class="page-title">⚖ Mis FIO</div>'
+    +   '<div class="page-sub">Tus incidencias de proceso registradas — solo lectura</div>'
+    + '</div>'
+
+    + '<div class="kpi-grid" style="margin-bottom:14px;">'
+    +   '<div class="kpi k-red"><div class="kpi-lbl">Pendientes</div><div class="kpi-val">'+pendientes.length+'</div><div class="kpi-sub">Por validar</div></div>'
+    +   '<div class="kpi k-green"><div class="kpi-lbl">Validados</div><div class="kpi-val">'+validados.length+'</div><div class="kpi-sub">'+puntosVal+' pts totales</div></div>'
+    +   '<div class="kpi k-amber"><div class="kpi-lbl">Puntos del mes</div><div class="kpi-val">'+puntosMes+'</div><div class="kpi-sub">'+thisMonth+'</div></div>'
+    +   '<div class="kpi k-blue"><div class="kpi-lbl">Disputados</div><div class="kpi-val">'+disputados.length+'</div><div class="kpi-sub">En revisión</div></div>'
+    + '</div>'
+
+    + (mine.length
+        ? _renderMisFIOTable(mine)
+        : '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">No tienes FIO registrados</div></div>');
+}
+window.renderMisFIOScreen = renderMisFIOScreen;
+
+function _renderMisFIOTable(list){
+  return '<div style="overflow-x:auto"><table>'
+    + '<tr><th>Fecha</th><th>Fallo</th><th>Nivel · Puntos</th><th>Impacto</th><th>Descripción</th><th>Estado</th><th>Acción</th></tr>'
+    + list.map(function(f){
+        var canDispute = (f.status === FIO_STATUS.REGISTRADO || f.status === FIO_STATUS.VALIDADO);
+        var acciones = '<button class="btn btn-secondary btn-sm" onclick="openMisFIODetail(\''+f.id+'\')">Ver</button>'
+          + (canDispute ? ' <button class="btn btn-warn btn-sm" onclick="disputeMisFIO(\''+f.id+'\')">⚠ Disputar</button>' : '');
+        return '<tr>'
+          + '<td style="font-family:var(--font-mono);font-size:11px">'+formatDisplayValue(f.fecha)+'</td>'
+          + '<td style="font-size:12px;max-width:240px">'+formatDisplayValue(f.fault_name)+'</td>'
+          + '<td>'+bFIOLevel(f.level_code)+'</td>'
+          + '<td style="font-size:11px;color:var(--text3)">'+formatDisplayValue(f.impact_area)+'</td>'
+          + '<td style="font-size:11px;color:var(--text2);max-width:240px">'+formatDisplayValue(f.description)+'</td>'
+          + '<td>'+bFIOStatus(f.status)+'</td>'
+          + '<td style="white-space:nowrap">'+acciones+'</td>'
+          + '</tr>';
+      }).join('')
+    + '</table></div>';
+}
+
+// Detalle (solo lectura)
+async function openMisFIODetail(fid){
+  var all = await getDB('fio');
+  var f = all.find(function(x){ return x.id === fid; });
+  if(!f){ toast('FIO no encontrado','err'); return; }
+  if(f.employee_id !== currentUser.id){ toast('No autorizado','err'); return; }
+
+  var L = FIO_LEVELS[f.level_code] || FIO_LEVELS.L0;
+  var canDispute = (f.status === FIO_STATUS.REGISTRADO || f.status === FIO_STATUS.VALIDADO);
+
+  var ov = document.getElementById('modal-mis-fio-detail');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-mis-fio-detail';
+    ov.className = 'modal-overlay';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-mis-fio-detail'); });
+  }
+
+  ov.innerHTML = '<div class="modal" style="max-width:560px;">'
+    + '<div class="modal-h"><h3>⚖ Detalle FIO</h3>'
+    + '<button class="modal-x" onclick="closeModal(\'modal-mis-fio-detail\')">✕</button></div>'
+    + '<div class="modal-b">'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;font-size:12px;">'
+    +     '<div><strong>Fecha:</strong><br>'+formatDisplayValue(f.fecha)+'</div>'
+    +     '<div><strong>Departamento:</strong><br>'+deptBadge(f.departamento)+'</div>'
+    +     '<div><strong>Mes incentivo:</strong><br>'+formatDisplayValue(f.incentive_month)+'</div>'
+    +     '<div><strong>Estado:</strong><br>'+bFIOStatus(f.status)+'</div>'
+    +   '</div>'
+    +   '<div style="padding:10px;background:var(--bg2);border-radius:6px;border-left:3px solid '+L.color+';margin-bottom:12px;">'
+    +     '<div style="font-weight:700;color:'+L.color+';">'+L.name+' · '+f.applied_points+' puntos</div>'
+    +     '<div style="font-size:12px;color:var(--text2);margin-top:4px;">'+L.msg+'</div>'
+    +   '</div>'
+    +   '<div style="margin-bottom:10px;"><strong>Fallo:</strong><br>'+formatDisplayValue(f.fault_name)+'</div>'
+    +   '<div style="margin-bottom:10px;"><strong>Impacto:</strong> '+formatDisplayValue(f.impact_area)+'</div>'
+    +   '<div style="margin-bottom:10px;"><strong>Descripción:</strong><br><div style="color:var(--text2);font-size:13px;">'+formatDisplayValue(f.description)+'</div></div>'
+    +   (f.evidence_text ? '<div style="margin-bottom:10px;"><strong>Evidencia:</strong><br><div style="color:var(--text2);font-size:13px;font-family:var(--font-mono);">'+formatDisplayValue(f.evidence_text)+'</div></div>' : '')
+    +   '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">'
+    +     'Registrado por '+formatDisplayValue(f.created_by)+' · '+formatDisplayValue(f.created_at)
+    +     (f.validated_by ? '<br>Validado por '+formatDisplayValue(f.validated_by)+' · '+formatDisplayValue(f.validated_at) : '')
+    +   '</div>'
+    +   (f.accion_tomada ? '<div style="margin-bottom:10px;"><strong>Acción tomada:</strong><br>'+formatDisplayValue(f.accion_tomada)+'</div>' : '')
+    +   (f.status === FIO_STATUS.DISPUTADO ? '<div style="padding:8px;background:#fef3c722;border-left:3px solid var(--amber);border-radius:4px;font-size:12px;color:var(--amber);">⚠ Has disputado este FIO. Está en revisión por Dirección/RRHH.</div>' : '')
+    + '</div>'
+    + '<div class="modal-f">'
+    +   (canDispute ? '<button class="btn btn-warn" onclick="disputeMisFIO(\''+fid+'\')">⚠ Disputar</button>' : '')
+    +   '<button class="btn btn-secondary" onclick="closeModal(\'modal-mis-fio-detail\')">Cerrar</button>'
+    + '</div></div>';
+
+  ov.classList.add('open');
+}
+window.openMisFIODetail = openMisFIODetail;
+
+// Disputar (cambia status a Disputado)
+async function disputeMisFIO(fid){
+  var all = await getDB('fio');
+  var f = all.find(function(x){ return x.id === fid; });
+  if(!f){ toast('FIO no encontrado','err'); return; }
+  if(f.employee_id !== currentUser.id){ toast('No autorizado','err'); return; }
+  if(f.status !== FIO_STATUS.REGISTRADO && f.status !== FIO_STATUS.VALIDADO){
+    toast('Solo se pueden disputar FIO Registrados o Validados','err');
+    return;
+  }
+
+  var motivo = prompt('Motivo de la disputa (obligatorio — Dirección/RRHH lo revisará):');
+  if(motivo === null) return;
+  if(!motivo.trim()){ toast('Motivo obligatorio','err'); return; }
+
+  var ts = localTs();
+  // Concatenamos motivo a accion_tomada para que el supervisor lo vea
+  var nuevaAccion = (f.accion_tomada ? f.accion_tomada + ' | ' : '') + 'DISPUTA EMPLEADO: ' + motivo.trim();
+  await dbUpdate('fio', fid, {
+    status: FIO_STATUS.DISPUTADO,
+    accion_tomada: nuevaAccion,
+    updated_at: ts
+  });
+  invalidateCache('fio');
+  auditLog('FIO_DISPUTADO_EMPLEADO', currentUser.nombre+' disputó FIO '+fid+' | '+motivo.trim().slice(0,80));
+  toast('FIO disputado. Dirección lo revisará.','warn');
+  closeModal('modal-mis-fio-detail');
+  renderMisFIOScreen();
+}
+window.disputeMisFIO = disputeMisFIO;
