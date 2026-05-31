@@ -1608,6 +1608,16 @@ async function renderValidacion(){
     + '</div>';
   document.getElementById('val-alerts').innerHTML = _alertsHtml;
   const mermas=await getDB('merma'); const incis=await getDB('incidencias');
+  // FIO nuevo: cargar y mapear por shift_id (Fase 2)
+  var fiosAll = [];
+  try { fiosAll = await getDB('fio'); } catch(e){ fiosAll = []; }
+  var fiosByShift = {};
+  fiosAll.forEach(function(f){
+    if(f.shift_id){
+      if(!fiosByShift[f.shift_id]) fiosByShift[f.shift_id] = [];
+      fiosByShift[f.shift_id].push(f);
+    }
+  });
   const el=document.getElementById('validacion-table');
   if(!shifts.length){el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin registros</div></div>';return;}
   // Build validation table without nested template literals
@@ -1664,7 +1674,14 @@ async function renderValidacion(){
       +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
       +'<td style="text-align:center;">'+mermaCell+'</td>'
-      +'<td style="text-align:center;">'+(s.fio===true?'<span class="badge b-red">FIO</span>':s.estado!=='Pendiente'?'<span style="color:var(--green);">✓</span>':'<span style="color:var(--text3);">—</span>')+'</td>'
+      +'<td style="text-align:center;">'+(function(){
+        var sfios = fiosByShift[s.id] || [];
+        if(sfios.length){
+          var maxPts = Math.max.apply(null, sfios.map(function(f){ return parseFloat(f.applied_points)||0; }));
+          return '<span class="badge b-red" title="'+sfios.length+' FIO ('+maxPts+'p máx)">'+sfios.length+'</span>';
+        }
+        return s.estado!=='Pendiente'?'<span style="color:var(--green);">✓</span>':'<span style="color:var(--text3);">—</span>';
+      })()+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
   el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
@@ -1963,12 +1980,16 @@ async function renderDashboard(){
   let mermas=await getDB('merma');
   let incis=await getDB('incidencias');
   const tareas=await getDB('tareas');
+  // FIO nuevo (tabla `fio`) — Fase 2
+  let fios = [];
+  try { fios = await getDB('fio'); } catch(e){ fios = []; }
 
-  if(desde){shifts=shifts.filter(s=>s.fecha>=desde);mermas=mermas.filter(m=>m.fecha>=desde);incis=incis.filter(i=>i.fecha>=desde);}
+  if(desde){shifts=shifts.filter(s=>s.fecha>=desde);mermas=mermas.filter(m=>m.fecha>=desde);incis=incis.filter(i=>i.fecha>=desde);fios=fios.filter(f=>f.fecha>=desde);}
   if(servFilt){shifts=shifts.filter(s=>s.servicio===servFilt);mermas=mermas.filter(m=>m.servicio===servFilt);incis=incis.filter(i=>i.servicio===servFilt);}
-  if(empFilt) shifts=shifts.filter(s=>s.nombre===empFilt);
-  if(tipoErrorFilt) shifts=shifts.filter(s=>s.tipo_error===tipoErrorFilt);
-  if(sevFilt) shifts=shifts.filter(s=>s.gravedad_error===sevFilt);
+  if(empFilt) { shifts=shifts.filter(s=>s.nombre===empFilt); fios=fios.filter(f=>f.employee_name===empFilt); }
+  if(deptFilter) fios = fios.filter(function(f){ return f.departamento === deptFilter; });
+  if(currentUser.rol==='jefe_recepcion') fios = fios.filter(function(f){ return f.departamento==='Recepción' || f.departamento==='Recepción SFERA'; });
+  // Filtros viejos tipo_error / gravedad_error eliminados en Fase 2 (no se escriben más datos a esas columnas)
 
   const pl={hoy:'Hoy',semana:'Esta semana',mes:'Este mes',todo:'Total'};
   document.getElementById('dash-sub').textContent=`${pl[periodo]} ${servFilt?'· '+servFilt:''} ${empFilt?'· '+empFilt:''}`;
@@ -1982,32 +2003,29 @@ async function renderDashboard(){
   const inciAb=incis.filter(i=>i.estado==='Abierta').length;
   const pctFU=0; // follow-up field removed
   const tasksPend=tareas.filter(t=>t.estado==='Pendiente').length;
-  const totalFIO=shifts.filter(s=>s.fio===true).length;
-  const totalErrores=shifts.reduce((a,s)=>a+(parseInt(s.num_errores)||0),0);
+  // ── FIO KPIs (Fase 2 — leen de tabla `fio` nueva) ──
+  const fiosVal = fios.filter(function(f){ return f.status==='Validado' || f.status==='Cerrado'; });
+  const fiosPend = fios.filter(function(f){ return f.status==='Registrado'; });
+  const fiosCrit = fios.filter(function(f){ return ['L3','L4','L5'].indexOf(f.level_code) >= 0 && (f.status==='Validado'||f.status==='Cerrado'); });
+  const fiosToday = fios.filter(function(f){ return f.fecha === today(); });
+  const puntosTot = fiosVal.reduce(function(a,f){ return a + (parseFloat(f.applied_points)||0); }, 0);
+  var fioByEmpMap = {};
+  fiosVal.forEach(function(f){ if(f.employee_name){ fioByEmpMap[f.employee_name] = (fioByEmpMap[f.employee_name]||0) + 1; } });
+  const topFioEmp = Object.keys(fioByEmpMap).sort(function(a,b){ return fioByEmpMap[b]-fioByEmpMap[a]; })[0] || '—';
+  const totalFIO = fios.length;
   document.getElementById('kpi-grid').innerHTML=
     '<div class="kpi k-amber"><div class="kpi-lbl">Turnos</div><div class="kpi-val">'+totalH+'</div><div class="kpi-sub">'+valH+' validados · '+pendH+' pendientes</div></div>'+
     '<div class="kpi k-green"><div class="kpi-lbl">Horas</div><div class="kpi-val">'+totalHoras.toFixed(1)+'h</div><div class="kpi-sub">Prom. '+(totalH?(totalHoras/totalH).toFixed(1):0)+'h/turno</div></div>'+
     '<div class="kpi k-orange"><div class="kpi-lbl">Coste merma</div><div class="kpi-val">'+costeMerma.toFixed(0)+'€</div><div class="kpi-sub">'+mermas.length+' líneas totales</div></div>'+
     '<div class="kpi k-red"><div class="kpi-lbl">Incidencias</div><div class="kpi-val">'+inciAb+'</div><div class="kpi-sub">'+incis.length+' total · '+inciAb+' abiertas</div></div>'+
     (function(){
-    var fioEl=document.getElementById('dash-fio-count');
-    if(fioEl) fioEl.textContent='('+totalFIO+' registros)';
-    return (function(){
-    var fioToday=shifts.filter(function(s){return (s.fio===true||s.fio===1||s.fio==='true')&&s.fecha===today();}).length;
-    var fioCrit=shifts.filter(function(s){return s.fio===true&&(s.gravedad_error==='Alta'||s.gravedad_error==='Crítica');}).length;
-    var fioPend=shifts.filter(function(s){return s.fio===true&&(!s.validado_por);}).length;
-    var fioByEmp={};
-    shifts.filter(function(s){return s.fio===true&&s.error_employee_nombre;}).forEach(function(s){
-      fioByEmp[s.error_employee_nombre]=(fioByEmp[s.error_employee_nombre]||0)+1;
-    });
-    var topEmp=Object.keys(fioByEmp).sort(function(a,b){return fioByEmp[b]-fioByEmp[a];})[0]||'—';
-    return '<div class="kpi k-red"><div class="kpi-lbl">FIO total</div><div class="kpi-val">'+totalFIO+'</div><div class="kpi-sub">'+fioToday+' hoy</div></div>'
-      +'<div class="kpi k-red"><div class="kpi-lbl">FIO Alta/Crítica</div><div class="kpi-val">'+fioCrit+'</div><div class="kpi-sub">Máx. severidad</div></div>'
-      +'<div class="kpi k-orange"><div class="kpi-lbl">FIO Pendiente</div><div class="kpi-val">'+fioPend+'</div><div class="kpi-sub">Sin validar</div></div>'
-      +'<div class="kpi k-amber"><div class="kpi-lbl">+ FIO empleado</div><div class="kpi-val" style="font-size:13px;font-weight:700;">'+topEmp+'</div><div class="kpi-sub">'+(fioByEmp[topEmp]||0)+' FIO</div></div>';
-  })();
-  })()+
-
+      var fioEl=document.getElementById('dash-fio-count');
+      if(fioEl) fioEl.textContent='('+totalFIO+' registros)';
+      return '<div class="kpi k-red"><div class="kpi-lbl">FIO total</div><div class="kpi-val">'+totalFIO+'</div><div class="kpi-sub">'+fiosToday.length+' hoy</div></div>'
+        +'<div class="kpi k-red"><div class="kpi-lbl">FIO Grave (L3+)</div><div class="kpi-val">'+fiosCrit.length+'</div><div class="kpi-sub">L3/L4/L5</div></div>'
+        +'<div class="kpi k-orange"><div class="kpi-lbl">FIO Pendiente</div><div class="kpi-val">'+fiosPend.length+'</div><div class="kpi-sub">Sin validar</div></div>'
+        +'<div class="kpi k-amber"><div class="kpi-lbl">Puntos negativos</div><div class="kpi-val">'+puntosTot+'</div><div class="kpi-sub">Top: '+(topFioEmp.length>14?topFioEmp.slice(0,14)+'…':topFioEmp)+'</div></div>';
+    })()+
     '<div class="kpi k-purple"><div class="kpi-lbl">Tareas pend.</div><div class="kpi-val">'+tasksPend+'</div><div class="kpi-sub">'+tareas.filter(function(t){return t.estado==='Verificada';}).length+' verificadas</div></div>';
 
   // Empleados
@@ -2015,20 +2033,19 @@ async function renderDashboard(){
   shifts.forEach(s=>{ if(!eMap[s.nombre]) eMap[s.nombre]={nombre:s.nombre,puesto:s.puesto,turnos:0,horas:0,mermas:0,incis:0}; eMap[s.nombre].turnos++;eMap[s.nombre].horas+=parseFloat(s.horas)||0;if(s.merma_declarada==='si')eMap[s.nombre].mermas++;if(s.incidencia_declarada==='si')eMap[s.nombre].incis++; });
   const eRows=Object.values(eMap).sort((a,b)=>b.horas-a.horas);
   const empEl=document.getElementById('dash-emp-table');
-  // FIO counted by RESPONSIBLE (error_employee_id/nombre)
+  // FIO contado por empleado RESPONSABLE (leer de tabla `fio` nueva)
   var fioMap={};
-  shifts.filter(function(s){return s.fio===true||s.fio===1||s.fio==='true';}).forEach(function(s){
-    // Count FIO to the person responsible (error_employee), not the reporter
-    var respKey = s.error_employee_nombre || s.nombre;
-    if(!fioMap[respKey]) fioMap[respKey] = 0;
-    fioMap[respKey]++;
-    // Also ensure that person appears in empMap (they may not have filed shifts in filter)
-    if(!eMap[respKey]) eMap[respKey]={nombre:respKey,puesto:s.error_employee_nombre?s.puesto:'—',turnos:0,horas:0,mermas:0,incis:0};
+  fios.forEach(function(f){
+    var key = f.employee_name;
+    if(!key) return;
+    fioMap[key] = (fioMap[key]||0) + 1;
+    // Asegurar que aparece en empMap aunque no tenga turnos en el periodo
+    if(!eMap[key]) eMap[key]={nombre:key,puesto:'—',turnos:0,horas:0,mermas:0,incis:0};
   });
   Object.keys(eMap).forEach(function(k){ eMap[k].fio_count = fioMap[eMap[k].nombre]||0; });
   const eRows2=Object.values(eMap).sort((a,b)=>b.horas-a.horas);
   empEl.innerHTML=eRows2.length?'<table><tr><th>Empleado</th><th>Turnos</th><th>Horas</th><th>Incid.</th><th>FIO</th></tr>'+eRows2.map(function(e){
-    return '<tr><td><div style="font-weight:600">'+e.nombre+'</div><div style="font-size:11px;color:var(--text3)">'+e.puesto+'</div></td><td style="font-family:var(--font-mono)">'+e.turnos+'</td><td style="font-family:var(--font-mono)">'+e.horas.toFixed(1)+'h</td><td>'+( e.incis>0?'<span class="badge b-red">'+e.incis+'</span>':'—')+'</td><td>'+(e.fio_count>0?'<span class="badge b-red">'+e.fio_count+'</span>':'—')+'</td><td style="font-family:var(--font-mono);color:'+(e.error_count>0?'var(--red)':'var(--text3)')+'">'+( e.error_count>0?e.error_count:'—')+'</td></tr>';
+    return '<tr><td><div style="font-weight:600">'+e.nombre+'</div><div style="font-size:11px;color:var(--text3)">'+e.puesto+'</div></td><td style="font-family:var(--font-mono)">'+e.turnos+'</td><td style="font-family:var(--font-mono)">'+e.horas.toFixed(1)+'h</td><td>'+( e.incis>0?'<span class="badge b-red">'+e.incis+'</span>':'—')+'</td><td>'+(e.fio_count>0?'<span class="badge b-red">'+e.fio_count+'</span>':'—')+'</td></tr>';
   }).join('')+'</table>':'<div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Sin datos</div></div>';
 
   // Alertas
@@ -2095,36 +2112,42 @@ async function renderDashboard(){
   const openTasks=tareas.filter(t=>t.estado!=='Verificada').sort((a,b)=>{ const ps={Alta:3,Media:2,Baja:1}; return (ps[b.prioridad]||0)-(ps[a.prioridad]||0); });
   tasksTbl.innerHTML=openTasks.length?`<table><tr><th>Dpto.</th><th>Prioridad</th><th>Tarea</th><th>Origen</th><th>Deadline</th><th>Estado</th><th>Creada por</th></tr>
   ${openTasks.map(t=>`<tr><td>${deptBadge(t.dept_destino)}</td><td>${bPrio(t.prioridad)}</td><td style="font-weight:600;font-size:12px">${t.titulo}</td><td><span class="task-origin">${t.origen}</span></td><td style="font-family:var(--font-mono);font-size:10px;${isOverdue(t.deadline)?'color:var(--red);font-weight:700':''}">${fmtDate(t.deadline)}${isOverdue(t.deadline)?' ⚠':''}</td><td>${bTaskEstado(t.estado)}</td><td style="font-size:11px;color:var(--text3)">${t.creado_por}</td></tr>`).join('')}</table>`:'<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin tareas abiertas</div></div>';
-  // ── FIO Table ──────────────────────────────────────────
+  // ── FIO Table (Fase 2 — leen de tabla `fio` nueva) ──────────
   var fioEl2=document.getElementById('dash-fio-table');
   if(fioEl2){
-    var fioShifts2=shifts.filter(function(s){return s.fio===true||s.fio===1||s.fio==='true'||s.fio==='1';});
     var fioKpiEl=document.getElementById('dash-fio-count');
-    if(fioKpiEl) fioKpiEl.textContent='('+fioShifts2.length+' registros)';
-    if(!fioShifts2.length){
+    if(fioKpiEl) fioKpiEl.textContent='('+fios.length+' registros)';
+    if(!fios.length){
       fioEl2.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin FIO en el periodo</div></div>';
     } else {
+      var levelBadge = function(code){
+        var L = (typeof FIO_LEVELS !== 'undefined') ? FIO_LEVELS[code] : null;
+        if(!L) return '<span class="badge b-gray">'+(code||'—')+'</span>';
+        return '<span class="badge" style="background:'+L.color+'22;color:'+L.color+';border:1px solid '+L.color+'66;">'+L.name+' · '+L.points+'p</span>';
+      };
+      var statusBadge = function(st){
+        if(st==='Validado'||st==='Cerrado') return '<span class="badge b-green">'+st+'</span>';
+        if(st==='Rechazado') return '<span class="badge b-gray">'+st+'</span>';
+        if(st==='Disputado') return '<span class="badge b-yellow">'+st+'</span>';
+        return '<span class="badge b-red">'+(st||'Registrado')+'</span>';
+      };
       var fioRows2='';
-      fioShifts2.forEach(function(s){
-        var staffI=incis.filter(function(i){return i.shift_id===s.id;});
-        var sn='—'; try{if(staffI.length&&staffI[0].staff_implicado_nombres){var ar=JSON.parse(staffI[0].staff_implicado_nombres);sn=ar.join(', ');}}catch(e){}
-        var infR=staffI.length?(staffI[0].informado_responsable==='si'?'<span class="badge b-green">✓ Sí</span>':'<span class="badge b-gray">No</span>'):'—';
+      fios.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); }).forEach(function(f){
         fioRows2+='<tr>'
-          +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(s.fecha)+'</td>'
-          +'<td style="font-weight:600">'+s.nombre+'</td>'
-          +'<td>'+(s.error_employee_nombre||'—')+'</td>'
-          +'<td style="font-size:11px">'+sn+'</td>'
-          +'<td style="font-size:13px;">'+displayServicio(s.servicio)+'</td>'
-          +'<td>'+(s.tipo_error?'<span class="badge b-orange">'+s.tipo_error+'</span>':'—')+'</td>'
-          +'<td>'+(s.gravedad_error==='Alta'?'<span class="badge b-red">Alta</span>':s.gravedad_error==='Media'?'<span class="badge b-orange">Media</span>':s.gravedad_error?'<span class="badge b-blue">Baja</span>':'—')+'</td>'
-          +'<td style="font-size:11px;color:var(--text2)">'+(s.comentario_validador||'—')+'</td>'
-          +'<td>'+infR+'</td>'
-          +'<td>'+bEstado(s.estado)+'</td>'
+          +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(f.fecha)+'</td>'
+          +'<td style="font-weight:600">'+formatDisplayValue(f.employee_name)+'</td>'
+          +'<td>'+deptBadge(f.departamento)+'</td>'
+          +'<td style="font-size:12px;max-width:240px">'+formatDisplayValue(f.fault_name)+'</td>'
+          +'<td>'+levelBadge(f.level_code)+'</td>'
+          +'<td style="font-size:11px">'+formatDisplayValue(f.impact_area)+'</td>'
+          +'<td style="font-size:11px;color:var(--text2);max-width:200px">'+formatDisplayValue(f.description)+'</td>'
+          +'<td>'+statusBadge(f.status)+'</td>'
+          +'<td style="font-size:11px;color:var(--text3)">'+formatDisplayValue(f.validated_by||'—')+'</td>'
           +'</tr>';
       });
       fioEl2.innerHTML='<div style="overflow-x:auto"><table><tr>'
-        +'<th>Fecha</th><th>Reporta</th><th>Responsable error</th><th>Staff implicado</th>'
-        +'<th>Servicio</th><th>Tipo</th><th>Gravedad</th><th>Comentario</th><th>Informado resp.</th><th>Estado</th>'
+        +'<th>Fecha</th><th>Empleado</th><th>Dept</th><th>Fallo</th>'
+        +'<th>Nivel · Puntos</th><th>Impacto</th><th>Descripción</th><th>Estado</th><th>Validado por</th>'
         +'</tr>'+fioRows2+'</table></div>';
     }
   }
