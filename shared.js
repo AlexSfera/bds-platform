@@ -1650,8 +1650,8 @@ async function renderValidacion(){
     // BUG-50: turno validado también abre openValidarModal para permitir gestionar gestiones/incidencias
     var btnVer = (isReadOnly && canSupervise)
       ? '<button class="vbtn vbtn-sec" onclick="openValidarModal(\''+sid+'\')">📋 Ver</button>' : '';
-    var btnArevisar = ((isAdmin(currentUser)||currentUser.rol==='fb')&&s.estado==='Validado')
-      ? '<button class="vbtn vbtn-warn" onclick="openPostErrorModal(\''+sid+'\')">🔍</button>' : '';
+    var btnArevisar = '';  // Botón post-error eliminado en Fase 1 (función openPostErrorModal no implementada)
+                            // Para revisar errores post-validación usar el módulo FIO
     var canReopen = isAdmin(currentUser)
       && (s.estado==='Validado'||s.estado==='Validado con FIO');
     var btnReabrir = canReopen
@@ -1850,28 +1850,29 @@ async function openValidarModal(shiftId){
   document.querySelectorAll('.modal-footer .btn-warn, .modal-footer .btn-danger, .modal-footer .btn-success').forEach(function(b){
     b.style.display='';
   });
-  // Init FIO autocomplete
-  _fioSelectedEmps=[];
-  var tagsEl=document.getElementById('val-fio-tags');
-  if(tagsEl) tagsEl.innerHTML='';
-  var srchEl=document.getElementById('val-fio-search');
-  if(srchEl) srchEl.value='';
-  var ddEl=document.getElementById('val-fio-dropdown');
-  if(ddEl) ddEl.style.display='none';
-  var ningunoEl=document.getElementById('val-emp-ninguno');
-  if(ningunoEl) ningunoEl.checked=false;
-  getDB('employees').then(function(emps){
-    _fioAllEmps=emps.filter(function(e){return e.estado==='Activo';});
+  // Guarda shift actual para que el botón "Registrar FIO" pueda usarlo
+  window._currentValidatingShift = s;
+  // Reset de selects del bloque FIO viejo (si aún existen en el DOM, se ignoran si no)
+  ['val-gravedad','val-tipo-error','val-impacto-bonus','val-num-errores'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value=(id==='val-num-errores'?'0':'');
   });
-  // Reset FIO toggles
-  ['fio-si','fio-no'].forEach(function(id){var el=document.getElementById(id);if(el)el.className='tbtn';});
-  toggleState.fio=null;
-  document.getElementById('val-gravedad').value='';
-  document.getElementById('val-tipo-error').value='';
-  if(document.getElementById('val-impacto-bonus')) document.getElementById('val-impacto-bonus').value='';
-  if(document.getElementById('val-num-errores')) document.getElementById('val-num-errores').value='0';
   document.getElementById('modal-validar').classList.add('open');
 }
+
+// Apertura del modal FIO desde el modal de validación de turno
+function openFIOFromValidar(){
+  var s = window._currentValidatingShift;
+  if(!s){ toast('No hay turno activo','err'); return; }
+  if(typeof openNewFIOModal !== 'function'){ toast('Módulo FIO no cargado','err'); return; }
+  openNewFIOModal({
+    shiftId: s.id,
+    departamento: s.area || '',
+    empleadoId: s.employee_id || '',
+    empleadoNombre: s.nombre || '',
+    fecha: s.fecha || today()
+  });
+}
+window.openFIOFromValidar = openFIOFromValidar;
 function updMcoste(mid,cant){ var v=parseFloat(document.getElementById('mcoste-'+mid).value)||0; var t=v*parseFloat(cant); document.getElementById('mtot-'+mid).textContent=t>0?t.toFixed(2)+'€':'—'; var total=0; _validatingMermas.forEach(function(x){ var inp=document.getElementById('mcoste-'+x.id); total+=(inp?parseFloat(inp.value)||0:parseFloat(x.coste_unitario)||0)*parseFloat(x.cantidad); }); var el=document.getElementById('mtot-gen'); if(el) el.textContent=total>0?total.toFixed(2)+'€':'Pendiente'; }
 async function doValidacion(newEstado){
   if(!validatingShiftId) return;
@@ -1911,27 +1912,15 @@ async function doValidacion(newEstado){
   // Actualizar shift
   const shifts=await getDB('shifts');
   const idx=shifts.findIndex(s=>s.id===validatingShiftId); if(idx===-1) return;
-  var fio = toggleState.fio === 'si';
-  var valGravedad = (document.getElementById('val-gravedad')||{}).value || '';
-  var valTipoError = (document.getElementById('val-tipo-error')||{}).value || '';
-  var errorEmpId=_fioSelectedEmps.length>0?JSON.stringify(_fioSelectedEmps.map(function(e){return e.id;})):'';
-  var errorEmpNombre=_fioSelectedEmps.length>0?JSON.stringify(_fioSelectedEmps.map(function(e){return e.nombre;})):'';
-  var valNumErrores=_fioSelectedEmps.length;
 
   // CRITICAL: save all validation fields to Supabase
+  // FIO antiguo ELIMINADO en Fase 1 — ahora los FIO se registran en tabla `fio` vía módulo FIO
   var valCosteMerma = parseFloat((document.getElementById('val-coste-total')||{}).value)||0;
   var updatePayload = {
     estado: newEstado,
     validado_por: currentUser.nombre,
     validado_ts: localTs(),
     comentario_validador: comentario,
-    fio: fio,
-    gravedad_error: valGravedad,
-    tipo_error: valTipoError,
-    impacto_bonus: (document.getElementById('val-impacto-bonus')||{}).value||'',
-    num_errores: valNumErrores,
-    error_employee_id: errorEmpId,
-    error_employee_nombre: errorEmpNombre,
     coste_merma_supervisor: valCosteMerma,
   };
 

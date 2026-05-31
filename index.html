@@ -1465,87 +1465,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
   </div>
 </div>
 
-<!-- ══ MODAL ERROR POSTERIOR ══ -->
-<div class="modal-overlay" id="modal-post-error">
-  <div class="modal" style="max-width:620px;">
-    <div class="modal-title" id="pe-title">🔍 Revisión posterior</div>
-    <div id="pe-shift-info" style="margin-bottom:12px;"></div>
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;">
-      <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.15em;color:#2ec4b6;text-transform:uppercase;margin-bottom:14px;">EVALUACIÓN SUPERVISOR</div>
-      <div class="grid2" style="gap:12px;">
-        <div class="fg">
-          <label>FIO — Fallo Individual Operativo</label>
-          <div class="toggle-group">
-            <button class="tbtn" id="posterr-fio-si" onclick="setT('posterr_fio','si')">SÍ — Hay FIO</button>
-            <button class="tbtn" id="posterr-fio-no" onclick="setT('posterr_fio','no')">NO — Sin FIO</button>
-          </div>
-        </div>
-        <div class="fg">
-          <label>Empleado(s) responsable(s) del error</label>
-          <div style="position:relative;">
-            <input type="text" id="pe-fio-search" autocomplete="off" placeholder="Buscar empleado..."
-              oninput="onPeFioSearch(this.value)"
-              onfocus="onPeFioSearch(this.value)"
-              onblur="setTimeout(function(){var d=document.getElementById('pe-fio-dropdown');if(d)d.style.display='none';},200)"
-              style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box;">
-            <div id="pe-fio-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.4);"></div>
-          </div>
-          <div id="pe-fio-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;font-size:12px;color:var(--text3);">
-            <input type="checkbox" id="pe-emp-ninguno" onchange="onPeFioNingunoToggle()" style="accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;">
-            <span>— Sin error / Sin responsable —</span>
-          </label>
-        </div>
-        <div class="fg">
-          <label>Concepto FIO</label>
-          <select id="posterr-tipo" style="color:#111827;background:#ffffff;">
-            <option value="">— Sin FIO —</option>
-            <option>Cobro / TPV</option>
-            <option>Descuento no justificado</option>
-            <option>Anulación no justificada</option>
-            <option>Falta de comunicación</option>
-            <option>Incumplimiento de procedimiento</option>
-            <option>Retraso</option>
-            <option>Servicio incorrecto</option>
-            <option>Actitud / disciplina</option>
-            <option>Falta de registro en follow-up</option>
-            <option>Otro</option>
-          </select>
-        </div>
-        <div class="fg">
-          <label>Severidad FIO</label>
-          <select id="posterr-sev" style="color:#111827;background:#ffffff;">
-            <option value="">— Sin FIO —</option>
-            <option value="Baja">🟡 Baja</option>
-            <option value="Media">🟠 Media</option>
-            <option value="Alta">🔴 Alta</option>
-            <option value="Crítica">🚨 Crítica</option>
-          </select>
-        </div>
-        <div class="fg">
-          <label>Impacto en bonus</label>
-          <select id="posterr-impacto-bonus" style="color:#111827;background:#ffffff;">
-            <option value="">— Sin impacto —</option>
-            <option value="ninguno">Sin impacto</option>
-            <option value="parcial">Parcial</option>
-            <option value="total">Total</option>
-            <option value="revision">Requiere revisión</option>
-          </select>
-        </div>
-        <div class="fg sp2">
-          <label>Comentario <span style="color:var(--amber)">*</span></label>
-          <textarea id="posterr-comentario" rows="2" placeholder="Describe el error o motivo de la decisión"></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-post-error')">Cancelar</button>
-      <button class="btn btn-warn btn-sm" onclick="savePostError()">⚠ Registrar nota posterior</button>
-      <button class="btn btn-success btn-sm" id="pe-btn-revalidar" onclick="doRevalidar()" style="display:none;">✓ Revalidar con FIO</button>
-    </div>
-  </div>
-</div>
-
 <!-- ══ MODAL REABRIR ══ -->
 <div class="modal-overlay" id="modal-reabrir">
   <div class="modal">
@@ -1571,71 +1490,13 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <!-- SUPERVISOR VALIDATION FIELDS -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:12px;">
       <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.15em;color:#2ec4b6;text-transform:uppercase;margin-bottom:14px;">EVALUACIÓN SUPERVISOR</div>
-      <div class="grid2" style="gap:12px;">
-        <div class="fg">
-          <label>FIO — Fallo Individual Operativo</label>
-          <div class="toggle-group">
-            <button class="tbtn" id="fio-si" onclick="setT('fio','si')">SÍ — Hay FIO</button>
-            <button class="tbtn" id="fio-no" onclick="setT('fio','no')">NO — Sin FIO</button>
-          </div>
-        </div>
-        <div class="fg">
-          <label>Empleado(s) responsable(s) del error</label>
-          <div style="position:relative;">
-            <input type="text" id="val-fio-search" autocomplete="off" placeholder="Buscar empleado..."
-              oninput="onFioSearch(this.value)"
-              onfocus="onFioSearch(this.value)"
-              onblur="setTimeout(function(){var d=document.getElementById('val-fio-dropdown');if(d)d.style.display='none';},200)"
-              style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:7px 10px;outline:none;box-sizing:border-box;">
-            <div id="val-fio-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;max-height:160px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.4);"></div>
-          </div>
-          <div id="val-fio-tags" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;font-size:12px;color:var(--text3);">
-            <input type="checkbox" id="val-emp-ninguno" onchange="onFioNingunoToggle()" style="accent-color:#8b5cf6;width:14px;height:14px;flex-shrink:0;">
-            <span>— Sin error / Sin responsable —</span>
-          </label>
-        </div>
-        <div class="fg">
-          <label>Concepto FIO</label>
-          <select id="val-tipo-error" style="color:#111827;background:#ffffff;">
-            <option value="">— Sin FIO —</option>
-            <option>Cobro / TPV</option>
-            <option>Descuento no justificado</option>
-            <option>Anulación no justificada</option>
-            <option>Falta de comunicación</option>
-            <option>Incumplimiento de procedimiento</option>
-            <option>Retraso</option>
-            <option>Servicio incorrecto</option>
-            <option>Actitud / disciplina</option>
-            <option>Falta de registro en follow-up</option>
-            <option>Otro</option>
-          </select>
-        </div>
-        <div class="fg">
-          <label>Severidad FIO</label>
-          <select id="val-gravedad" style="color:#111827;background:#ffffff;">
-            <option value="">— Sin FIO —</option>
-            <option value="Baja">🟡 Baja</option>
-            <option value="Media">🟠 Media</option>
-            <option value="Alta">🔴 Alta</option>
-            <option value="Crítica">🚨 Crítica</option>
-          </select>
-        </div>
-        <div class="fg">
-          <label>Impacto en bonus</label>
-          <select id="val-impacto-bonus" style="color:#111827;background:#ffffff;">
-            <option value="">— Sin impacto —</option>
-            <option value="ninguno">Sin impacto</option>
-            <option value="parcial">Parcial</option>
-            <option value="total">Total</option>
-            <option value="revision">Requiere revisión</option>
-          </select>
-        </div>
-        
-        <div class="fg sp2">
-          <label>Comentario supervisor <span style="color:var(--amber)">*</span></label>
-          <textarea id="val-comentario" rows="2" placeholder="Describe el error o motivo de la decisión"></textarea>
-        </div>
+      <div class="fg">
+        <label>Comentario supervisor <span style="color:var(--amber)">*</span></label>
+        <textarea id="val-comentario" rows="2" placeholder="Describe el motivo de la decisión, observaciones o correcciones"></textarea>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:10px;background:var(--bg);border:1px dashed var(--border);border-radius:6px;">
+        <div style="font-size:12px;color:var(--text2);">⚖ Si hay incumplimiento individual operativo (FIO), regístralo en el módulo FIO</div>
+        <button type="button" class="btn btn-warn btn-sm" onclick="openFIOFromValidar()">⚖ Registrar FIO</button>
       </div>
     </div>
     <div class="modal-footer">

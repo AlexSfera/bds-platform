@@ -43,6 +43,23 @@ function canValidateCritical(u){
   // L4 / L5 solo admin/fb (Dirección/RRHH)
   return !!u && (u.rol === 'admin' || u.rol === 'fb');
 }
+// Departamentos visibles para el usuario actual (admin = todos)
+function _fioViewableDepts(u){
+  if(!u) return [];
+  if(isAdmin(u)) return [];  // [] = sin filtro = ver todos
+  // Reusa SUPERVISOR_DEPT_MAP de shared.js
+  if(typeof getSupervisorDepartments === 'function'){
+    var arr = getSupervisorDepartments(u);
+    if(arr && arr.length && arr[0] !== '*') return arr;
+  }
+  return u.area ? [u.area] : [];
+}
+function _fioCanViewDept(u, dept){
+  var viewable = _fioViewableDepts(u);
+  if(viewable.length === 0) return true;  // admin
+  return viewable.map(function(d){return String(d||'').trim().toLowerCase();})
+    .indexOf(String(dept||'').trim().toLowerCase()) >= 0;
+}
 
 // ── BADGES ────────────────────────────────────────────────────────────
 function bFIOStatus(st){
@@ -79,10 +96,19 @@ async function renderFIOScreen(){
   var all = [];
   try { all = await getDB('fio'); } catch(e){ all = []; }
 
+  // Permisos por departamento (obligatorio para no-admin)
+  var viewable = _fioViewableDepts(currentUser);  // [] = admin = ver todos
+  if(viewable.length > 0){
+    var viewableLower = viewable.map(function(d){return String(d||'').trim().toLowerCase();});
+    all = all.filter(function(f){
+      return viewableLower.indexOf(String(f.departamento||'').trim().toLowerCase()) >= 0;
+    });
+  }
+
   // Filtros del estado de pantalla (persistidos en memoria simple)
   var fMonth  = (document.getElementById('flt-month')  || {}).value || _fioMonth();
   var fStatus = (document.getElementById('flt-status') || {}).value || '';
-  var fDept   = (document.getElementById('flt-dept')   || {}).value || (isAdmin(currentUser) ? '' : (currentUser.area||''));
+  var fDept   = (document.getElementById('flt-dept')   || {}).value || '';
 
   var list = all.filter(function(f){
     if(fMonth  && f.incentive_month !== fMonth) return false;
@@ -116,14 +142,18 @@ async function renderFIOScreen(){
     +     '<option value="Rechazado"  '+(fStatus==='Rechazado' ?'selected':'')+'>Rechazado</option>'
     +     '<option value="Cerrado"    '+(fStatus==='Cerrado'   ?'selected':'')+'>Cerrado</option>'
     +   '</select></div>'
-    + (isAdmin(currentUser)
-      ? '<div class="fg" style="margin:0;"><label>Departamento</label><select id="flt-dept" onchange="renderFIOScreen()">'
-        + '<option value="">Todos</option>'
-        + ['Sala','Cocina','Recepción','Housekeeping','Mantenimiento'].map(function(d){
-            return '<option value="'+d+'" '+(fDept===d?'selected':'')+'>'+d+'</option>';
-          }).join('')
-        + '</select></div>'
-      : '')
+    + (function(){
+        var deptOpts = isAdmin(currentUser)
+          ? ['Sala','Cocina','Friegue','Recepción','Recepción SFERA','Housekeeping','Mantenimiento','SYNCROLAB']
+          : _fioViewableDepts(currentUser);
+        if(deptOpts.length <= 1) return ''; // sin selector si solo 1 dept
+        return '<div class="fg" style="margin:0;"><label>Departamento</label><select id="flt-dept" onchange="renderFIOScreen()">'
+          + '<option value="">Todos</option>'
+          + deptOpts.map(function(d){
+              return '<option value="'+d+'" '+(fDept===d?'selected':'')+'>'+d+'</option>';
+            }).join('')
+          + '</select></div>';
+      })()
     + '</div>'
 
     // KPIs
@@ -169,10 +199,20 @@ function _renderFIOTable(list){
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// MODAL: REGISTRAR NUEVA FAULT
+// MODAL: REGISTRAR NUEVA FIO
+//   opts opcional: {shiftId, departamento, empleadoId, empleadoNombre, fecha}
+//   Permite preseleccionar campos al abrir desde modal de validación de turno
 // ═══════════════════════════════════════════════════════════════════════
-async function openNewFIOModal(){
+async function openNewFIOModal(opts){
   if(!canCreateFIO(currentUser)){ toast('Sin permisos','err'); return; }
+  opts = opts || {};
+  window._fioPreset = {
+    shiftId: opts.shiftId || '',
+    departamento: opts.departamento || '',
+    empleadoId: opts.empleadoId || '',
+    empleadoNombre: opts.empleadoNombre || '',
+    fecha: opts.fecha || today()
+  };
 
   var ov = document.getElementById('modal-new-fio');
   if(!ov){
@@ -190,30 +230,44 @@ async function openNewFIOModal(){
     document.body.appendChild(ov);
     ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-new-fio'); });
   }
+  ov.classList.add('open');
 
   // Cargar empleados activos + catálogo
   var emps = (await getDB('employees')).filter(function(e){ return e.estado === 'Activo'; });
   var cat  = (await getDB('fio_catalog')).filter(function(c){ return c.activo !== false; });
 
-  // Por defecto Sala (piloto)
-  var defaultDept = 'Sala';
+  // Determinar departamentos disponibles para este usuario
+  var viewable = _fioViewableDepts(currentUser);
+  var allDepts = ['Sala','Cocina','Friegue','Recepción','Recepción SFERA','Housekeeping','Mantenimiento','SYNCROLAB'];
+  var deptOpts = (viewable.length === 0) ? allDepts : viewable;
+
+  // Default: preset > primer dept disponible
+  var defaultDept = window._fioPreset.departamento
+    || (deptOpts.indexOf('Sala') >= 0 ? 'Sala' : deptOpts[0]);
+  var deptLocked = !!window._fioPreset.shiftId;  // si viene de turno, dept fijo
 
   var body = document.getElementById('nfo-body');
   body.innerHTML =
-    '<div class="fg"><label>Fecha del fallo *</label>'
-    + '<input type="date" id="nfo-fecha" value="'+today()+'" max="'+today()+'"></div>'
+    (window._fioPreset.shiftId
+      ? '<div style="padding:8px 10px;background:var(--amber-dim,#fef3c7);border-left:3px solid var(--amber);border-radius:4px;margin-bottom:12px;font-size:12px;color:var(--text);">🔗 Vinculado al turno <strong>'+window._fioPreset.shiftId+'</strong></div>'
+      : '')
+
+    + '<div class="fg"><label>Fecha del fallo *</label>'
+    + '<input type="date" id="nfo-fecha" value="'+window._fioPreset.fecha+'" max="'+today()+'"></div>'
 
     + '<div class="fg"><label>Departamento *</label>'
-    + '<select id="nfo-dept" onchange="_onFIODeptChange()">'
-    + ['Sala','Cocina','Recepción','Housekeeping','Mantenimiento'].map(function(d){
+    + '<select id="nfo-dept" onchange="_onFIODeptChange()"'+(deptLocked?' disabled':'')+'>'
+    + deptOpts.map(function(d){
         return '<option value="'+d+'" '+(d===defaultDept?'selected':'')+'>'+d+'</option>';
       }).join('')
     + '</select></div>'
 
     + '<div class="fg"><label>Empleado *</label>'
-    + '<select id="nfo-emp"><option value="">— Seleccionar —</option>'
+    + '<select id="nfo-emp">'
+    + '<option value="">— Seleccionar —</option>'
     + emps.map(function(e){
-        return '<option value="'+e.id+'" data-area="'+(e.area||'')+'" data-nombre="'+e.nombre+'">'+e.nombre+' · '+(e.area||'')+'</option>';
+        var sel = (e.id === window._fioPreset.empleadoId) ? ' selected' : '';
+        return '<option value="'+e.id+'" data-area="'+(e.area||'')+'" data-nombre="'+e.nombre+'"'+sel+'>'+e.nombre+' · '+(e.area||'')+'</option>';
       }).join('')
     + '</select></div>'
 
@@ -237,7 +291,7 @@ async function openNewFIOModal(){
     + '<textarea id="nfo-evidence" rows="2" placeholder="Link foto / ticket / nº ticket / nombre testigo / etc."></textarea>'
     + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Obligatorio si el nivel afecta al incentivo (≠ L0)</div></div>'
 
-    + '<div class="fg"><label><input type="checkbox" id="nfo-informed" style="margin-right:6px;"> Empleado ha sido informado del fault</label></div>';
+    + '<div class="fg"><label><input type="checkbox" id="nfo-informed" style="margin-right:6px;"> Empleado ha sido informado del FIO</label></div>';
 
   // Guardar catálogo en window para reusar en _onFIOTypeChange
   window._fioCatalogCache = cat;
@@ -310,6 +364,7 @@ async function saveNewFIO(){
 
     var rec = {
       id: genId(),
+      shift_id: (window._fioPreset && window._fioPreset.shiftId) || null,
       employee_id: empId,
       employee_name: empName,
       departamento: dept,
