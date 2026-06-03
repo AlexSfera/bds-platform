@@ -40,8 +40,8 @@ function canValidateFIO(u){
   return false;
 }
 function canValidateCritical(u){
-  // L4 / L5 solo admin/fb (Dirección/RRHH)
-  return !!u && (u.rol === 'admin' || u.rol === 'fb');
+  // L4 / L5 solo admin / adjunto_directivo / fb (Dirección/RRHH)
+  return !!u && (u.rol === 'admin' || u.rol === 'adjunto_directivo' || u.rol === 'fb');
 }
 // Departamentos visibles para el usuario actual (admin = todos)
 function _fioViewableDepts(u){
@@ -562,15 +562,42 @@ async function validateFIO(fid, newStatus){
   }
 
   var ts = localTs();
-  await dbUpdate('fio', fid, {
+  var updates = {
     status: newStatus,
     validated_by: currentUser.nombre,
     validated_at: ts,
     updated_at: ts
-  });
+  };
+
+  // ─── Reincidencia automática (Fase 2A) ─────────────────────────────
+  // Al pasar a Validado: contar otros FIO YA validados del mismo empleado, mismo fault_id, mismo mes.
+  // Reglas: 1ª×1, 2ª×1.5, 3ª×2, 4ª+ → salto a L4 (15p).
+  if(newStatus === FIO_STATUS.VALIDADO && L.code !== 'L5'){
+    var prev = all.filter(function(x){
+      return x.id !== fid
+          && x.employee_id === f.employee_id
+          && x.fault_id === f.fault_id
+          && x.incentive_month === f.incentive_month
+          && (x.status === FIO_STATUS.VALIDADO || x.status === FIO_STATUS.CERRADO);
+    }).length;
+    var base = parseFloat(f.base_points) || 0;
+    var newApplied = base;
+    var newLevel   = f.level_code;
+    var recurLabel = 'Primera vez en el mes';
+    if(prev === 1){       newApplied = base * 1.5; recurLabel = '2ª vez en el mes (×1.5)'; }
+    else if(prev === 2){  newApplied = base * 2;   recurLabel = '3ª vez en el mes (×2)'; }
+    else if(prev >= 3){   newApplied = 15;         newLevel   = 'L4'; recurLabel = '4ª vez o más → L4 automático'; }
+    if(newApplied !== parseFloat(f.applied_points) || newLevel !== f.level_code){
+      updates.applied_points = newApplied;
+      updates.level_code     = newLevel;
+      updates.accion_tomada  = (f.accion_tomada ? f.accion_tomada + ' | ' : '') + 'REINCIDENCIA: ' + recurLabel;
+    }
+  }
+
+  await dbUpdate('fio', fid, updates);
   invalidateCache('fio');
-  auditLog('FAULT_'+newStatus.toUpperCase(), currentUser.nombre+' → '+f.employee_name+' | '+f.fault_name+' | '+L.code);
-  toast('Estado: '+newStatus,'ok');
+  auditLog('FIO_'+newStatus.toUpperCase(), currentUser.nombre+' → '+f.employee_name+' | '+f.fault_name+' | '+(updates.level_code||L.code)+(updates.applied_points?' · '+updates.applied_points+'p':''));
+  toast('Estado: '+newStatus + (updates.applied_points && updates.applied_points!==parseFloat(f.applied_points) ? ' · '+updates.applied_points+'p (reincidencia)' : ''), 'ok');
   closeModal('modal-fio-detail');
   renderFIOScreen();
 }

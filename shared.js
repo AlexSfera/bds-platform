@@ -217,6 +217,11 @@ function toYMD(date){
 // normalizeIncidentState, isIncidentOpen → incidencias.js
 function normalizeDeptName(dept){ return String(dept||'').trim().toLowerCase(); }
 function isAdmin(user){ return !!user && user.rol==='admin'; }
+function isAdjuntoDirectivo(user){ return !!user && user.rol==='adjunto_directivo'; }
+// Quién puede hacer cosas de admin operativo (todo salvo gestionar al usuario admin):
+function canActAsAdmin(user){ return isAdmin(user) || isAdjuntoDirectivo(user); }
+// Quién puede gestionar usuarios con rol=admin (solo el propio admin):
+function canManageAdminUsers(user){ return isAdmin(user); }
 function isSupervisor(user){ return !!user && Object.prototype.hasOwnProperty.call(SUPERVISOR_DEPT_MAP,user.rol); }
 function getSupervisorDepartments(user){
   if(!user) return [];
@@ -364,7 +369,7 @@ async function startApp(){
   if(_portal){ _portal.style.display='none'; _portal.style.pointerEvents='none'; _portal.style.visibility='hidden'; }
   document.getElementById('app').style.display='block';
   var unTop=document.getElementById('user-name-top'); if(unTop) unTop.textContent=currentUser.nombre;
-  const rl={admin:'ADMIN',chef:'CHEF',fb:'F&B',jefe_recepcion:'JEF.REC',supervisor:'SUPERV.',mantenimiento:'MANT.',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
+  const rl={admin:'ADMIN',adjunto_directivo:'ADJ.DIR',chef:'CHEF',fb:'F&B',jefe_recepcion:'JEF.REC',supervisor:'SUPERV.',mantenimiento:'MANT.',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
   var urTop=document.getElementById('user-role-top'); if(urTop) urTop.textContent=rl[currentUser.rol]||currentUser.rol.toUpperCase();
   buildNav();
   // Show loading state
@@ -2069,14 +2074,23 @@ async function renderDashboard(){
 // MAESTRO
 async function renderMaestro(){
   const employees=(await getDB('employees')).filter(e=>e.id!=='E13');
+  // Permisos: adjunto_directivo NO puede modificar/eliminar/ver-PIN de fila con rol=admin
+  function canEditRow(e){
+    if(isAdjuntoDirectivo(currentUser) && e.rol === 'admin') return false;
+    return canActAsAdmin(currentUser) || (currentUser.rol === 'fb' && e.rol !== 'admin');
+  }
+  function pinCell(e){
+    if(isAdjuntoDirectivo(currentUser) && e.rol === 'admin') return '<span style="color:var(--text3)">●●●●</span>';
+    return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">'+e.pin+'</span>';
+  }
   document.getElementById('maestro-table').innerHTML=`<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Acciones</th></tr>
-  ${employees.map(e=>`<tr><td><strong>${e.nombre}</strong></td><td>${deptBadge(e.area)}</td><td style="font-size:11px">${e.puesto}</td><td>${e.estado==='Activo'?'<span class="badge b-green">Activo</span>':e.estado==='Baja'?'<span class="badge b-red">Baja</span>':'<span class="badge b-yellow">'+e.estado+'</span>'}</td><td>${e.responsable==1?'<span class="badge b-blue">SÍ</span>':'—'}</td><td>${e.validador==1?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td style="font-family:var(--font-mono);font-size:10px">${e.rol}</td><td style="font-family:var(--font-mono)">${parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—'}</td><td style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">${e.pin}</td><td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" onclick="openEmpModal('${e.id}')">Editar</button> ${(currentUser.rol==='admin'||(currentUser.rol==='fb'&&e.rol!=='admin'))?
+  ${employees.map(e=>`<tr><td><strong>${e.nombre}</strong></td><td>${deptBadge(e.area)}</td><td style="font-size:11px">${e.puesto}</td><td>${e.estado==='Activo'?'<span class="badge b-green">Activo</span>':e.estado==='Baja'?'<span class="badge b-red">Baja</span>':'<span class="badge b-yellow">'+e.estado+'</span>'}</td><td>${e.responsable==1?'<span class="badge b-blue">SÍ</span>':'—'}</td><td>${e.validador==1?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td style="font-family:var(--font-mono);font-size:10px">${e.rol}</td><td style="font-family:var(--font-mono)">${parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—'}</td><td>${pinCell(e)}</td><td style="white-space:nowrap">${canEditRow(e) ? `<button class="btn btn-secondary btn-sm" onclick="openEmpModal('${e.id}')">Editar</button> ${(canActAsAdmin(currentUser)||(currentUser.rol==='fb'&&e.rol!=='admin'))?
               (e.estado==='Activo'?
                 `<button class="btn btn-danger btn-sm" onclick="toggleEmp('${e.id}','Baja')">Baja</button>`:
                 `<button class="btn btn-success btn-sm" onclick="toggleEmp('${e.id}','Activo')">Activar</button>`
               ):
               '<span style="font-size:11px;color:var(--text3);">—</span>'
-            }</td></tr>`).join('')}</table>`;
+            }` : '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>'}</td></tr>`).join('')}</table>`;
 }
 async function openEmpModal(empId){
   _editEmpId=empId||null;
@@ -2091,6 +2105,17 @@ async function saveEmpleado(){
   if(!pin||pin.length<4){toast('PIN mínimo 4 dígitos','err');return;}
   const employees=await getDB('employees');
   if(employees.find(e=>e.pin===pin&&e.id!==_editEmpId)){toast('PIN ya en uso','err');return;}
+  // Bloqueo: adjunto_directivo no puede crear/modificar usuarios con rol=admin
+  var selectedRol = document.getElementById('emp-rol').value;
+  if(isAdjuntoDirectivo(currentUser) && selectedRol === 'admin'){
+    toast('Adjunto Directivo no puede gestionar usuarios admin','err'); return;
+  }
+  if(_editEmpId){
+    var origEmp = employees.find(e=>e.id===_editEmpId);
+    if(origEmp && origEmp.rol==='admin' && !canManageAdminUsers(currentUser)){
+      toast('Solo un admin puede modificar a otro admin','err'); return;
+    }
+  }
   var costeVal = parseFloat(document.getElementById('emp-coste').value)||0;
   const emp={
     nombre, pin,
