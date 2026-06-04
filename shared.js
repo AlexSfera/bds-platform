@@ -2010,10 +2010,11 @@ async function renderDashboard(){
     if(!fios.length){
       fioEl2.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin FIO en el periodo</div></div>';
     } else {
-      var levelBadge = function(code){
+      var levelBadge = function(code, applied){
         var L = (typeof FIO_LEVELS !== 'undefined') ? FIO_LEVELS[code] : null;
+        var pts = (applied!==undefined && applied!==null && !isNaN(parseFloat(applied))) ? parseFloat(applied) : (L?L.points:0);
         if(!L) return '<span class="badge b-gray">'+(code||'—')+'</span>';
-        return '<span class="badge" style="background:'+L.color+'22;color:'+L.color+';border:1px solid '+L.color+'66;">'+L.name+' · '+L.points+'p</span>';
+        return '<span class="badge" style="background:'+L.color+'22;color:'+L.color+';border:1px solid '+L.color+'66;">'+L.name+' · '+pts+'p</span>';
       };
       var statusBadge = function(st){
         if(st==='Validado'||st==='Cerrado') return '<span class="badge b-green">'+st+'</span>';
@@ -2028,7 +2029,7 @@ async function renderDashboard(){
           +'<td style="font-weight:600">'+formatDisplayValue(f.employee_name)+'</td>'
           +'<td>'+deptBadge(f.departamento)+'</td>'
           +'<td style="font-size:12px;max-width:240px">'+formatDisplayValue(f.fault_name)+'</td>'
-          +'<td>'+levelBadge(f.level_code)+'</td>'
+          +'<td>'+levelBadge(f.level_code, f.applied_points)+'</td>'
           +'<td style="font-size:11px">'+formatDisplayValue(f.impact_area)+'</td>'
           +'<td style="font-size:11px;color:var(--text2);max-width:200px">'+formatDisplayValue(f.description)+'</td>'
           +'<td>'+statusBadge(f.status)+'</td>'

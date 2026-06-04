@@ -12,7 +12,7 @@
 var FIO_LEVELS = {
   L0: { code:'L0', name:'No afecta incentivo',         points:0,   color:'#9ca3af', msg:'Registro de control interno. No suma puntos.' },
   L1: { code:'L1', name:'Afecta leve',                 points:1,   color:'#fbbf24', msg:'Suma 1 punto. Incumplimiento menor sin impacto económico.' },
-  L2: { code:'L2', name:'Afecta parcialmente',         points:3,   color:'#f59e0b', msg:'Suma 3 puntos. Afecta operación, ventas, caja o control interno.' },
+  L2: { code:'L2', name:'Afecta parcialmente',         points:1,   color:'#f59e0b', msg:'1ª vez: 1 punto (advertencia). Reincidencia escala: 2ª=3p · 3ª=4.5p · 4ª=6p · 5ª=L4.' },
   L3: { code:'L3', name:'Afecta gravemente',           points:5,   color:'#ef4444', msg:'Suma 5 puntos. Afecta cliente, dinero, reputación o reincidencia.' },
   L4: { code:'L4', name:'Afecta totalmente',           points:15,  color:'#dc2626', msg:'Suma 15 puntos. Pérdida del incentivo mensual. Requiere validación Dirección/RRHH.' },
   L5: { code:'L5', name:'Bloqueo inmediato incentivo', points:999, color:'#000000', msg:'Bloqueo directo del incentivo. Fraude / robo / manipulación / agresión.' }
@@ -69,10 +69,15 @@ function bFIOStatus(st){
   if(st === FIO_STATUS.DISPUTADO) return '<span class="badge b-yellow">Disputado</span>';
   return '<span class="badge b-red">Registrado</span>';
 }
-function bFIOLevel(lvlCode){
+function bFIOLevel(lvlCode, appliedPts){
   var L = FIO_LEVELS[lvlCode] || FIO_LEVELS.L0;
+  // Si llegan puntos reales (applied_points del registro), los mostramos.
+  // Si no, los puntos base del nivel.
+  var pts = (appliedPts !== undefined && appliedPts !== null && !isNaN(parseFloat(appliedPts)))
+            ? parseFloat(appliedPts)
+            : L.points;
   return '<span class="badge" style="background:'+L.color+'22;color:'+L.color+';border:1px solid '+L.color+'66;">'
-       + L.name + ' · ' + L.points + 'p</span>';
+       + L.name + ' · ' + pts + 'p</span>';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -171,11 +176,24 @@ async function renderFIOScreen(){
   var fMonth  = (document.getElementById('flt-month')  || {}).value || _fioMonth();
   var fStatus = (document.getElementById('flt-status') || {}).value || '';
   var fDept   = (document.getElementById('flt-dept')   || {}).value || '';
+  var fEmp    = (document.getElementById('flt-emp')    || {}).value || '';
+
+  // Catálogo de empleados visibles (para selector)
+  var empOptions = [];
+  try {
+    var allEmps = (await getDB('employees')).filter(function(e){ return e.estado === 'Activo'; });
+    if(viewable.length > 0){
+      var vLow = viewable.map(function(d){return String(d||'').trim().toLowerCase();});
+      allEmps = allEmps.filter(function(e){ return vLow.indexOf(String(e.area||'').trim().toLowerCase()) >= 0; });
+    }
+    empOptions = allEmps;
+  } catch(e){}
 
   var list = all.filter(function(f){
     if(fMonth  && f.incentive_month !== fMonth) return false;
     if(fStatus && f.status !== fStatus) return false;
     if(fDept   && f.departamento !== fDept) return false;
+    if(fEmp    && f.employee_id !== fEmp) return false;
     return true;
   });
   list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
@@ -195,7 +213,9 @@ async function renderFIOScreen(){
 
     // Filtros
     + '<div class="card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;">'
-    +   '<div class="fg" style="margin:0;"><label>Mes</label><input type="month" id="flt-month" value="'+fMonth+'" onchange="renderFIOScreen()"></div>'
+    +   '<div class="fg" style="margin:0;min-width:160px;"><label>Mes</label>'
+    +     '<input type="month" id="flt-month" value="'+fMonth+'" onchange="renderFIOScreen()" '
+    +       'style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:7px 10px;font-family:var(--font-mono);color-scheme:dark;"></div>'
     +   '<div class="fg" style="margin:0;"><label>Estado</label><select id="flt-status" onchange="renderFIOScreen()">'
     +     '<option value="">Todos</option>'
     +     '<option value="Registrado" '+(fStatus==='Registrado'?'selected':'')+'>Registrado</option>'
@@ -216,6 +236,12 @@ async function renderFIOScreen(){
             }).join('')
           + '</select></div>';
       })()
+    + '<div class="fg" style="margin:0;min-width:200px;"><label>Empleado</label><select id="flt-emp" onchange="renderFIOScreen()">'
+    +   '<option value="">Todos</option>'
+    +   empOptions.map(function(e){
+          return '<option value="'+e.id+'" '+(fEmp===e.id?'selected':'')+'>'+e.nombre+(e.area?' · '+e.area:'')+'</option>';
+        }).join('')
+    + '</select></div>'
     + '</div>'
 
     // KPIs
@@ -251,7 +277,7 @@ function _renderFIOTable(list){
           + '<td style="font-size:12px"><strong>'+formatDisplayValue(f.employee_name)+'</strong></td>'
           + '<td>'+deptBadge(f.departamento)+'</td>'
           + '<td style="font-size:12px;max-width:240px">'+formatDisplayValue(f.fault_name)+'</td>'
-          + '<td>'+bFIOLevel(f.level_code)+'</td>'
+          + '<td>'+bFIOLevel(f.level_code, f.applied_points)+'</td>'
           + '<td style="font-size:11px;color:var(--text3)">'+formatDisplayValue(f.impact_area)+'</td>'
           + '<td>'+bFIOStatus(f.status)+'</td>'
           + '<td style="white-space:nowrap">'+acciones+'</td>'
@@ -298,6 +324,7 @@ async function openNewFIOModal(opts){
   // Cargar empleados activos + catálogo
   var emps = (await getDB('employees')).filter(function(e){ return e.estado === 'Activo'; });
   var cat  = (await getDB('fio_catalog')).filter(function(c){ return c.activo !== false; });
+  window._fioAllEmps = emps;  // cache para _onFIODeptChange
 
   // Determinar departamentos disponibles para este usuario
   var viewable = _fioViewableDepts(currentUser);
@@ -377,6 +404,26 @@ function _onFIODeptChange(){
     + cat.map(function(c){
         return '<option value="'+c.id+'">'+c.nombre+'</option>';
       }).join('');
+  // Filtrar empleados por dept (case-insensitive con tolerancia a variantes Recepción/Recepción SFERA)
+  var empSel = document.getElementById('nfo-emp');
+  if(empSel && Array.isArray(window._fioAllEmps)){
+    var deptLower = dept.toLowerCase().trim();
+    var emps = window._fioAllEmps.filter(function(e){
+      var a = (e.area || '').toLowerCase().trim();
+      return a === deptLower
+          || (deptLower === 'recepción' && (a === 'recepción sfera' || a === 'recepcion sfera'))
+          || (deptLower === 'cocina' && a === 'friegue')   // chef gestiona Friegue desde Cocina
+          || (deptLower === 'syncrolab' && (a === 'syncrolab' || a === 'recepción syncrolab'));
+    });
+    var prevSel = empSel.value;
+    empSel.innerHTML = '<option value="">— Seleccionar —</option>'
+      + emps.map(function(e){
+          var sel = (e.id === (window._fioPreset||{}).empleadoId) ? ' selected' : '';
+          return '<option value="'+e.id+'" data-area="'+(e.area||'')+'" data-nombre="'+e.nombre+'"'+sel+'>'+e.nombre+' · '+(e.area||'')+'</option>';
+        }).join('');
+    // Restaurar selección si sigue siendo válida
+    if(prevSel && emps.some(function(e){return e.id===prevSel;})) empSel.value = prevSel;
+  }
   // Reset info
   var info = document.getElementById('nfo-level-info'); if(info) info.style.display='none';
 }
@@ -571,7 +618,8 @@ async function validateFIO(fid, newStatus){
 
   // ─── Reincidencia automática (Fase 2A) ─────────────────────────────
   // Al pasar a Validado: contar otros FIO YA validados del mismo empleado, mismo fault_id, mismo mes.
-  // Reglas: 1ª×1, 2ª×1.5, 3ª×2, 4ª+ → salto a L4 (15p).
+  // L2 (Parcial)        : 1ª=1p · 2ª=3p · 3ª=4.5p · 4ª=6p · 5ª+ → L4 automático (15p)
+  // Otros niveles (≠L5) : 1ª=base · 2ª=base×1.5 · 3ª=base×2 · 4ª+ → L4 automático (15p)
   if(newStatus === FIO_STATUS.VALIDADO && L.code !== 'L5'){
     var prev = all.filter(function(x){
       return x.id !== fid
@@ -583,10 +631,20 @@ async function validateFIO(fid, newStatus){
     var base = parseFloat(f.base_points) || 0;
     var newApplied = base;
     var newLevel   = f.level_code;
-    var recurLabel = 'Primera vez en el mes';
-    if(prev === 1){       newApplied = base * 1.5; recurLabel = '2ª vez en el mes (×1.5)'; }
-    else if(prev === 2){  newApplied = base * 2;   recurLabel = '3ª vez en el mes (×2)'; }
-    else if(prev >= 3){   newApplied = 15;         newLevel   = 'L4'; recurLabel = '4ª vez o más → L4 automático'; }
+    var recurLabel = '1ª vez en el mes';
+    if(L.code === 'L2'){
+      // Escala L2 (faltas leves de proceso)
+      if(prev === 0){      newApplied = 1;  recurLabel = '1ª vez · advertencia (1p)'; }
+      else if(prev === 1){ newApplied = 3;  recurLabel = '2ª vez · base completo (3p)'; }
+      else if(prev === 2){ newApplied = 4.5; recurLabel = '3ª vez · ×1.5 (4.5p)'; }
+      else if(prev === 3){ newApplied = 6;  recurLabel = '4ª vez · ×2 (6p)'; }
+      else {               newApplied = 15; newLevel = 'L4'; recurLabel = '5ª vez o más → L4 automático (15p)'; }
+    } else {
+      // Escala estándar L1/L3/L4
+      if(prev === 1){      newApplied = base * 1.5; recurLabel = '2ª vez · ×1.5'; }
+      else if(prev === 2){ newApplied = base * 2;   recurLabel = '3ª vez · ×2'; }
+      else if(prev >= 3){  newApplied = 15; newLevel = 'L4'; recurLabel = '4ª vez o más → L4 automático'; }
+    }
     if(newApplied !== parseFloat(f.applied_points) || newLevel !== f.level_code){
       updates.applied_points = newApplied;
       updates.level_code     = newLevel;
@@ -693,7 +751,7 @@ function _renderMisFIOTable(list){
         return '<tr>'
           + '<td style="font-family:var(--font-mono);font-size:11px">'+formatDisplayValue(f.fecha)+'</td>'
           + '<td style="font-size:12px;max-width:240px">'+formatDisplayValue(f.fault_name)+'</td>'
-          + '<td>'+bFIOLevel(f.level_code)+'</td>'
+          + '<td>'+bFIOLevel(f.level_code, f.applied_points)+'</td>'
           + '<td style="font-size:11px;color:var(--text3)">'+formatDisplayValue(f.impact_area)+'</td>'
           + '<td style="font-size:11px;color:var(--text2);max-width:240px">'+formatDisplayValue(f.description)+'</td>'
           + '<td>'+bFIOStatus(f.status)+'</td>'
