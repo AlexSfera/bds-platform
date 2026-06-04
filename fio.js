@@ -189,6 +189,22 @@ async function renderFIOScreen(){
     empOptions = allEmps;
   } catch(e){}
 
+  // Si hay filtro de departamento activo, restringir lista de empleados a ese dept
+  if(fDept){
+    var fDeptLow = fDept.toLowerCase().trim();
+    empOptions = empOptions.filter(function(e){
+      var a = String(e.area||'').toLowerCase().trim();
+      return a === fDeptLow
+          || (fDeptLow === 'recepción' && (a === 'recepción sfera' || a === 'recepcion sfera'))
+          || (fDeptLow === 'cocina' && a === 'friegue')
+          || (fDeptLow === 'syncrolab' && (a === 'recepción syncrolab' || a === 'recepcion syncrolab'));
+    });
+    // Si el empleado seleccionado ya no está en la lista, limpiar fEmp
+    if(fEmp && !empOptions.some(function(e){ return e.id === fEmp; })){
+      fEmp = '';
+    }
+  }
+
   var list = all.filter(function(f){
     if(fMonth  && f.incentive_month !== fMonth) return false;
     if(fStatus && f.status !== fStatus) return false;
@@ -374,12 +390,9 @@ async function openNewFIOModal(opts){
       }).join('')
     + '</select></div>'
 
-    + '<div class="fg"><label>Descripción de lo ocurrido *</label>'
-    + '<textarea id="nfo-desc" rows="3" placeholder="¿Qué pasó? Sé concreto."></textarea></div>'
-
-    + '<div class="fg"><label>Evidencia (link / referencia / detalle verificable)</label>'
-    + '<textarea id="nfo-evidence" rows="2" placeholder="Link foto / ticket / nº ticket / nombre testigo / etc."></textarea>'
-    + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Obligatorio si el nivel afecta al incentivo (≠ L0)</div></div>'
+    + '<div class="fg"><label>Descripción · evidencia · link · referencia *</label>'
+    + '<textarea id="nfo-desc" rows="5" placeholder="Describe qué pasó. Incluye evidencia verificable: testigo, nº de ticket, link foto, referencia documental, comentario del cliente, etc."></textarea>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Obligatorio. Para fallos que afectan al incentivo (≠ L0) la descripción debe incluir evidencia verificable.</div></div>'
 
     + '<div class="fg"><label>📷 Foto evidencia (opcional)</label>'
     + '<input type="file" id="nfo-evidence-img" accept="image/*" capture="environment" onchange="_onFIOImageChange(this)" '
@@ -458,7 +471,6 @@ async function saveNewFIO(){
     var faultId  = (document.getElementById('nfo-fault')||{}).value || '';
     var impact   = (document.getElementById('nfo-impact')||{}).value || '';
     var desc     = ((document.getElementById('nfo-desc')||{}).value || '').trim();
-    var evidence = ((document.getElementById('nfo-evidence')||{}).value || '').trim();
     var informed = !!(document.getElementById('nfo-informed')||{}).checked;
 
     // Validaciones
@@ -472,10 +484,9 @@ async function saveNewFIO(){
     if(!cat){ toast('Fallo no encontrado en catálogo','err'); return; }
 
     var L = FIO_LEVELS[cat.nivel_default] || FIO_LEVELS.L0;
-    var hasImage = !!(window._fioPendingImage);
-    var requiereEv = cat.requiere_ev && L.code !== 'L0';
-    if(requiereEv && !evidence && !hasImage){
-      toast('Para afectar incentivo debe adjuntar evidencia (texto o foto)','err');
+    // Para fallos que afectan al incentivo (≠ L0), exigir descripción mínima razonable
+    if(L.code !== 'L0' && desc.length < 15){
+      toast('Para FIO que afecta al incentivo, la descripción debe incluir evidencia (mín. 15 caracteres)','err');
       return;
     }
 
@@ -492,9 +503,9 @@ async function saveNewFIO(){
       incentive_month: _fioMonth(fecha),
       level_code: L.code,
       base_points: cat.puntos_default,
-      applied_points: cat.puntos_default,   // MVP: sin reincidencia auto. Fase 2 lo recalcula.
+      applied_points: cat.puntos_default,   // se recalcula al validar por reincidencia
       impact_area: impact,
-      evidence_text: evidence,
+      evidence_text: '',                     // DEPRECATED en Fase 2A: la descripción contiene todo
       evidence_image: window._fioPendingImage || null,
       description: desc,
       created_by: currentUser.nombre,
@@ -603,9 +614,12 @@ async function validateFIO(fid, newStatus){
     toast('L4/L5 solo Dirección/RRHH','err');
     return;
   }
-  if(newStatus === 'Validado' && L.code !== 'L0' && !f.evidence_text && !f.evidence_image){
-    toast('No se puede validar sin evidencia (texto o foto)','err');
-    return;
+  if(newStatus === 'Validado' && L.code !== 'L0'){
+    var descLen = (f.description || '').trim().length;
+    if(descLen < 15 && !f.evidence_image && !f.evidence_text){
+      toast('No se puede validar sin evidencia (descripción con detalle o foto)','err');
+      return;
+    }
   }
 
   var ts = localTs();
