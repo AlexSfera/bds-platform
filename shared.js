@@ -404,6 +404,7 @@ function getScreens(rol){
     export:      {id:'export',      label:'⬇ Exportar'},
     fio:         {id:'fio',         label:'⚖ FIO'},
     misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
+    ventas:      {id:'ventas',      label:'💵 Ventas semanales'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
@@ -462,6 +463,10 @@ function getScreens(rol){
   }
   if(isAdminU || isAdjuntoDirectivo(currentUser)){
     gestion.push(ITEMS.maestro);
+    gestion.push(ITEMS.ventas);
+  }
+  if(isJefe && !isAdminU && !isAdjuntoDirectivo(currentUser)){
+    gestion.push(ITEMS.ventas);
   }
   if(isAdminU){
     gestion.push(ITEMS.export);
@@ -592,6 +597,7 @@ async function showScreen(id){
   }
   if(id==='rec-caja'){ renderRecepcionCajaList(); }
   if(id==='maestro'){ renderMaestro(); }
+  if(id==='ventas'){  renderVentasSemanales(); }
   if(id==='gestiones'){ renderGestionesScreen(); }
   if(id==='incidencias'){ renderIncidenciasScreen(); }
   if(id==='fio'){ renderFIOScreen(); }
@@ -3487,6 +3493,325 @@ window.saveNewIncidenciaStandalone = saveNewIncidenciaStandalone;
 
 // ═══════════════════════════════════════════════════════════════════════
 // INIT — portal controls display, NOT this script
+// ═══════════════════════════════════════════════════════════════════════
+// SUB-FASE 2C · VENTAS SEMANALES
+// ═══════════════════════════════════════════════════════════════════════
+
+// Roles con acceso a ventas semanales
+function canAccessVentas(user){
+  if(!user) return false;
+  if(isAdmin(user) || isAdjuntoDirectivo(user)) return true;
+  return isSupervisor(user); // chef, fb, jefe_recepcion, gobernante, coords
+}
+
+// Devuelve los últimos N lunes (inclusive hoy si es lunes) como objetos {label, dateStr}
+function getVentasWeekOptions(n){
+  n = n || 12;
+  var options = [];
+  var now = new Date();
+  // Retroceder al lunes más reciente
+  var day = now.getDay(); // 0=dom, 1=lun...
+  var diff = day === 0 ? 6 : day - 1;
+  var lunes = new Date(now);
+  lunes.setDate(now.getDate() - diff);
+  lunes.setHours(0,0,0,0);
+
+  var meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var dias  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  for(var i=0; i<n; i++){
+    var d = new Date(lunes);
+    d.setDate(lunes.getDate() - (i*7));
+    var label = 'Lun ' + d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
+    // ISO date string YYYY-MM-DD
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    var dd = String(d.getDate()).padStart(2,'0');
+    var dateStr = d.getFullYear()+'-'+mm+'-'+dd;
+    // year_week ISO 8601
+    var jan4 = new Date(d.getFullYear(),0,4);
+    var startOfWeek1 = new Date(jan4);
+    startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay()||7)-1));
+    var weekNum = Math.round((d - startOfWeek1)/(7*24*3600*1000)) + 1;
+    var yw = d.getFullYear()+'-W'+String(weekNum).padStart(2,'0');
+    options.push({label:label, dateStr:dateStr, yearWeek:yw});
+  }
+  return options;
+}
+
+// Departamentos visibles para el usuario actual
+function getVentasDepts(user){
+  if(isAdmin(user) || isAdjuntoDirectivo(user)){
+    return ['Sala','Jefe de Sala','Cocina','Chef','Recepción SFERA','Housekeeping',
+            'Recepción SYNCROLAB','Clínica','Entrenadores','Coordinador/a Atención al Cliente'];
+  }
+  var mapped = canViewDepartmentList(user);
+  return mapped.length ? mapped : (user.area ? [user.area] : []);
+}
+
+function canViewDepartmentList(user){
+  if(!user) return [];
+  var map = SUPERVISOR_DEPT_MAP[user.rol];
+  return map || [];
+}
+
+var _ventasSelectedDept = '';
+var _ventasSelectedDate = '';
+var _ventasWeekOptions  = [];
+
+async function renderVentasSemanales(){
+  if(!canAccessVentas(currentUser)){ toast('Sin permisos','err'); return; }
+
+  var el = document.getElementById('ventas-content');
+  if(!el) return;
+
+  _ventasWeekOptions = getVentasWeekOptions(12);
+  var depts = getVentasDepts(currentUser);
+
+  // Defaults
+  if(!_ventasSelectedDept || depts.indexOf(_ventasSelectedDept)===-1) _ventasSelectedDept = depts[0]||'';
+  if(!_ventasSelectedDate) _ventasSelectedDate = _ventasWeekOptions[0] ? _ventasWeekOptions[0].dateStr : '';
+
+  var deptOpts = depts.map(function(d){
+    return '<option value="'+d+'"'+(d===_ventasSelectedDept?' selected':'')+'>'+d+'</option>';
+  }).join('');
+
+  var weekOpts = _ventasWeekOptions.map(function(w){
+    return '<option value="'+w.dateStr+'"'+(w.dateStr===_ventasSelectedDate?' selected':'')+'>'+w.label+'</option>';
+  }).join('');
+
+  el.innerHTML = ''
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;align-items:flex-end;">'
+    +  (depts.length>1
+        ? '<div class="fg" style="min-width:200px;flex:1;"><label>Departamento</label>'
+          +'<select id="ventas-dept-sel" onchange="onVentasDeptChange(this.value)">'+deptOpts+'</select></div>'
+        : '<input type="hidden" id="ventas-dept-sel" value="'+depts[0]+'">')
+    +  '<div class="fg" style="min-width:200px;flex:1;"><label>Semana (inicio)</label>'
+    +    '<select id="ventas-week-sel" onchange="onVentasWeekChange(this.value)">'+weekOpts+'</select></div>'
+    +'</div>'
+    +'<div id="ventas-table-wrap"><p style="color:var(--text3);">Cargando…</p></div>'
+    +'<div id="ventas-acumulado" style="margin-top:20px;"></div>';
+
+  await loadVentasTable();
+}
+window.renderVentasSemanales = renderVentasSemanales;
+
+async function onVentasDeptChange(val){
+  _ventasSelectedDept = val;
+  await loadVentasTable();
+}
+window.onVentasDeptChange = onVentasDeptChange;
+
+async function onVentasWeekChange(val){
+  _ventasSelectedDate = val;
+  await loadVentasTable();
+}
+window.onVentasWeekChange = onVentasWeekChange;
+
+async function loadVentasTable(){
+  var wrap = document.getElementById('ventas-table-wrap');
+  if(!wrap) return;
+  wrap.innerHTML = '<p style="color:var(--text3);">Cargando…</p>';
+
+  var dept = _ventasSelectedDept;
+  var dateStr = _ventasSelectedDate;
+  if(!dept || !dateStr){ wrap.innerHTML='<p style="color:var(--text3);">Selecciona departamento y semana.</p>'; return; }
+
+  // Empleados activos del dept
+  var allEmps = await getDB('employees');
+  var emps = allEmps.filter(function(e){
+    return e.estado==='Activo' && e.id!=='E13' && String(e.area||'').trim()===dept;
+  });
+
+  if(!emps.length){
+    wrap.innerHTML='<p style="color:var(--text3);">No hay empleados activos en '+dept+'.</p>';
+    _renderVentasAcumulado(dept, dateStr, []);
+    return;
+  }
+
+  // Registros existentes para esta semana+dept
+  var existing = [];
+  try{
+    var res = await fetch(
+      SUPABASE_URL+'/rest/v1/employee_sales_weekly?departamento=eq.'+encodeURIComponent(dept)
+        +'&fecha_inicio_semana=eq.'+dateStr+'&select=*',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    );
+    if(res.ok) existing = await res.json();
+  } catch(e){ console.warn('ventas load error',e); }
+
+  // Mapa employee_id → registro
+  var exMap = {};
+  (existing||[]).forEach(function(r){ exMap[r.employee_id] = r; });
+
+  var rows = emps.map(function(e){
+    var rec = exMap[e.id];
+    var ventas = rec ? parseFloat(rec.ventas||0) : '';
+    var comensales = rec ? (rec.comensales||'') : '';
+    var estadoBadge = rec
+      ? '<span class="badge b-green" style="font-size:10px;">✅ Guardado</span>'
+      : '<span class="badge b-gray" style="font-size:10px;">— Sin registro</span>';
+    return '<tr id="vrow-'+e.id+'">'
+      +'<td><strong>'+e.nombre+'</strong></td>'
+      +'<td>'+estadoBadge+'</td>'
+      +'<td><input type="number" id="vinput-'+e.id+'" value="'+ventas+'" step="0.01" min="0" '
+      +  'style="width:110px;font-family:var(--font-mono);" placeholder="0.00" '
+      +  'onkeydown="if(event.key===\'Enter\') saveVentaFila(\''+e.id+'\',\''+e.nombre+'\')"></td>'
+      +'<td><input type="number" id="cinput-'+e.id+'" value="'+comensales+'" step="1" min="0" '
+      +  'style="width:80px;font-family:var(--font-mono);" placeholder="—"></td>'
+      +'<td><button class="btn btn-primary btn-sm" onclick="saveVentaFila(\''+e.id+'\',\''+e.nombre+'\')">💾 Guardar</button></td>'
+      +'</tr>';
+  }).join('');
+
+  wrap.innerHTML = '<table>'
+    +'<tr><th>Empleado</th><th>Estado</th><th>Ventas (€)</th><th>Comensales</th><th></th></tr>'
+    +rows+'</table>';
+
+  await _renderVentasAcumulado(dept, dateStr, existing);
+}
+window.loadVentasTable = loadVentasTable;
+
+async function saveVentaFila(empId, empNombre){
+  var dept     = _ventasSelectedDept;
+  var dateStr  = _ventasSelectedDate;
+  var weekOpt  = (_ventasWeekOptions||[]).find(function(w){ return w.dateStr===dateStr; });
+
+  var ventasEl     = document.getElementById('vinput-'+empId);
+  var comensalesEl = document.getElementById('cinput-'+empId);
+  if(!ventasEl){ toast('Error: fila no encontrada','err'); return; }
+
+  var ventas = parseFloat(ventasEl.value);
+  if(isNaN(ventas)||ventas<0){ toast('Introduce un valor de ventas válido','err'); return; }
+  var comensales = parseInt(comensalesEl.value||0)||null;
+
+  // ¿Existe ya un registro para este emp+semana?
+  var checkRes = await fetch(
+    SUPABASE_URL+'/rest/v1/employee_sales_weekly?employee_id=eq.'+encodeURIComponent(empId)
+      +'&fecha_inicio_semana=eq.'+dateStr+'&select=id',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  );
+  var existing = checkRes.ok ? await checkRes.json() : [];
+  var existingId = (existing&&existing.length) ? existing[0].id : null;
+
+  var payload = {
+    employee_id:         empId,
+    employee_name:       empNombre,
+    departamento:        dept,
+    year_week:           weekOpt ? weekOpt.yearWeek : '',
+    fecha_inicio_semana: dateStr,
+    ventas:              ventas,
+    comensales:          comensales,
+    created_by:          currentUser.nombre
+  };
+
+  var ok = false;
+  if(existingId){
+    // PATCH
+    var pRes = await fetch(
+      SUPABASE_URL+'/rest/v1/employee_sales_weekly?id=eq.'+encodeURIComponent(existingId),
+      {method:'PATCH',
+       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+       body:JSON.stringify({ventas:ventas, comensales:comensales, created_by:currentUser.nombre})}
+    );
+    ok = pRes.ok;
+  } else {
+    // INSERT
+    payload.id = 'VS-'+empId+'-'+dateStr;
+    payload.created_at = localTs();
+    var iRes = await fetch(
+      SUPABASE_URL+'/rest/v1/employee_sales_weekly',
+      {method:'POST',
+       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+       body:JSON.stringify(payload)}
+    );
+    ok = iRes.ok;
+    if(!ok){ var et=await iRes.text(); console.error('[VENTAS INSERT]',iRes.status,et); toast('Error '+iRes.status+': '+et.slice(0,80),'err'); return; }
+  }
+
+  if(!ok){ toast('Error al guardar','err'); return; }
+
+  // Actualizar badge en la fila sin recargar toda la tabla
+  var row = document.getElementById('vrow-'+empId);
+  if(row){
+    var badge = row.querySelector('.badge');
+    if(badge){ badge.className='badge b-green'; badge.style.fontSize='10px'; badge.textContent='✅ Guardado'; }
+  }
+  toast(empNombre+': '+ventas.toFixed(2)+'€ guardado','ok');
+  invalidateCache('employee_sales_weekly');
+
+  // Refrescar acumulado
+  await _refreshVentasAcumulado(dept, dateStr);
+}
+window.saveVentaFila = saveVentaFila;
+
+async function _refreshVentasAcumulado(dept, dateStr){
+  var existing = [];
+  try{
+    var res = await fetch(
+      SUPABASE_URL+'/rest/v1/employee_sales_weekly?departamento=eq.'+encodeURIComponent(dept)
+        +'&fecha_inicio_semana=eq.'+dateStr+'&select=*',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    );
+    if(res.ok) existing = await res.json();
+  } catch(e){}
+  await _renderVentasAcumulado(dept, dateStr, existing);
+}
+
+async function _renderVentasAcumulado(dept, dateStr, ventasSemana){
+  var el = document.getElementById('ventas-acumulado');
+  if(!el) return;
+
+  // Mes en curso: obtener primer y último día
+  var d = new Date(dateStr+'T00:00:00');
+  var mesInicio = new Date(d.getFullYear(), d.getMonth(), 1);
+  var mesFin    = new Date(d.getFullYear(), d.getMonth()+1, 0);
+  var mm = String(mesInicio.getMonth()+1).padStart(2,'0');
+  var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var mesLabel = meses[mesInicio.getMonth()]+' '+d.getFullYear();
+
+  // Traer todos los registros del dept en el mes
+  var resM = await fetch(
+    SUPABASE_URL+'/rest/v1/employee_sales_weekly?departamento=eq.'+encodeURIComponent(dept)
+      +'&fecha_inicio_semana=gte.'+d.getFullYear()+'-'+mm+'-01'
+      +'&fecha_inicio_semana=lte.'+d.getFullYear()+'-'+mm+'-'+String(mesFin.getDate()).padStart(2,'0')
+      +'&select=employee_id,employee_name,ventas,fecha_inicio_semana',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  );
+  var mensual = resM.ok ? await resM.json() : [];
+
+  // Agrupar por empleado
+  var acum = {};
+  (mensual||[]).forEach(function(r){
+    if(!acum[r.employee_id]) acum[r.employee_id]={nombre:r.employee_name, total:0, semanas:0};
+    acum[r.employee_id].total  += parseFloat(r.ventas||0);
+    acum[r.employee_id].semanas++;
+  });
+
+  var keys = Object.keys(acum);
+  if(!keys.length){ el.innerHTML=''; return; }
+
+  var totalDept = keys.reduce(function(s,k){ return s+acum[k].total; },0);
+
+  var filas = keys.map(function(k){
+    var a = acum[k];
+    return '<tr>'
+      +'<td>'+a.nombre+'</td>'
+      +'<td style="font-family:var(--font-mono);">'+a.total.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+      +'<td style="font-family:var(--font-mono);color:var(--text3);">'+a.semanas+' sem.</td>'
+      +'</tr>';
+  }).join('');
+
+  el.innerHTML = '<div class="card" style="margin-top:8px;">'
+    +'<div style="font-weight:600;margin-bottom:10px;">📊 Acumulado '+dept+' · '+mesLabel+'</div>'
+    +'<table>'
+    +'<tr><th>Empleado</th><th>Total mes</th><th>Semanas</th></tr>'
+    +filas
+    +'<tr style="border-top:2px solid var(--border);font-weight:600;">'
+    +'<td>TOTAL DEPT</td>'
+    +'<td style="font-family:var(--font-mono);color:var(--accent);">'+totalDept.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+    +'<td></td></tr>'
+    +'</table></div>';
+}
+
 runMigrations();
 seedEmployees();
 mermaRows=[];
