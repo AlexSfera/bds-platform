@@ -2181,7 +2181,7 @@ async function renderIncentiveRulesTable(){
     return '<tr>'
       +'<td>'+deptBadge(r.departamento)+'</td>'
       +'<td>'+(r.periodo==='semanal'?'📅 Semanal':'🗓 Mensual')+'</td>'
-      +'<td style="font-family:var(--font-mono);">'+parseFloat(r.objetivo_ventas||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+      +'<td style="font-family:var(--font-mono);">'+parseFloat(r.objetivo||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
       +'<td style="font-family:var(--font-mono);font-weight:600;color:var(--green);">'+parseFloat(r.importe_bonus||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
       +'<td style="font-size:11px;color:var(--text3);">'+(r.notas||'—')+'</td>'
       +'<td>'+activoBadge+'</td>'
@@ -2210,7 +2210,7 @@ async function openRuleModal(ruleId){
     document.getElementById('rule-modal-title').textContent = 'Editar regla · '+r.departamento;
     document.getElementById('rule-dept').value    = r.departamento;
     document.getElementById('rule-periodo').value = r.periodo;
-    document.getElementById('rule-objetivo').value = parseFloat(r.objetivo_ventas||0);
+    document.getElementById('rule-objetivo').value = parseFloat(r.objetivo||0);
     document.getElementById('rule-bonus').value    = parseFloat(r.importe_bonus||0);
     document.getElementById('rule-notas').value    = r.notas||'';
     document.getElementById('rule-activo').checked = !!r.activo;
@@ -2253,7 +2253,7 @@ async function saveRule(){
     if(dup){ toast('Ya existe una regla activa para '+dept+' / '+periodo+'. Desactívala primero.','err'); return; }
   }
 
-  var payload = { departamento:dept, periodo:periodo, objetivo_ventas:objetivo, importe_bonus:bonus, notas:notas, activo:activo, updated_at:localTs() };
+  var payload = { departamento:dept, periodo:periodo, objetivo:objetivo, importe_bonus:bonus, notas:notas, activo:activo, updated_by:currentUser.nombre };
 
   if(_editRuleId){
     var res = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+encodeURIComponent(_editRuleId),{
@@ -2312,7 +2312,7 @@ async function toggleRule(ruleId, nuevoEstado){
   var res = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+encodeURIComponent(ruleId),{
     method:'PATCH',
     headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({activo:nuevoEstado, updated_at:localTs()})
+    body:JSON.stringify({activo:nuevoEstado, updated_by:currentUser.nombre})
   });
   if(!res.ok){ toast('Error al actualizar','err'); return; }
 
@@ -2334,7 +2334,7 @@ async function deleteRule(ruleId){
 
   if(!confirm('¿Eliminar regla '+rule.departamento+' / '+rule.periodo+'?\n\nNo se puede deshacer.')) return;
 
-  await auditLog('INCENTIVE_RULE_DELETE', ruleId+' | '+rule.departamento+'/'+rule.periodo+'/obj:'+rule.objetivo_ventas+'/bonus:'+rule.importe_bonus);
+  await auditLog('INCENTIVE_RULE_DELETE', ruleId+' | '+rule.departamento+'/'+rule.periodo+'/obj:'+rule.objetivo+'/bonus:'+rule.importe_bonus);
   var ok = await dbDelete('dept_incentive_rules', ruleId);
   if(!ok){ toast('Error al eliminar','err'); return; }
 
