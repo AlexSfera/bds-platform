@@ -374,7 +374,7 @@ async function submitCloseFollowup() {
 // Cada dpto tiene su lógica: campos obligatorios distintos, módulos distintos.
 // ═══════════════════════════════════════════════════════════════════════
 
-function renderInfoScreen(){
+async function renderInfoScreen(){
   if(!currentUser){ return; }
   // Defensa: cerrar cualquier modal huérfano que pudiera estar visible
   var _orphan = document.getElementById('dash-detail-overlay');
@@ -388,7 +388,119 @@ function renderInfoScreen(){
   }
   if(bodyEl){
     bodyEl.innerHTML = buildInfoContent(area);
+    // Contenedor para el bloque FIO (se rellena async)
+    var fioDiv = document.createElement('div');
+    fioDiv.id = 'info-fio-section';
+    bodyEl.appendChild(fioDiv);
   }
+  // Bloque FIO async (catálogo viene de Supabase)
+  try {
+    var allFios = await getDB('fio_catalog');
+    var deptKey = _matchDeptToCatalog(area);
+    var fios = (allFios || []).filter(function(f){
+      return f.activo !== false && f.departamento === deptKey;
+    }).sort(function(a,b){
+      // Orden por gravedad: L0 → L1 → L2 → L3 → L4 → L5
+      var ord = {L0:0,L1:1,L2:2,L3:3,L4:4,L5:5};
+      var oa = ord[a.nivel_default] || 9, ob = ord[b.nivel_default] || 9;
+      if(oa !== ob) return oa - ob;
+      return (a.id||'').localeCompare(b.id||'');
+    });
+    var fioContainer = document.getElementById('info-fio-section');
+    if(fioContainer){
+      fioContainer.innerHTML = _infoFIOBlock(area, deptKey, fios);
+    }
+  } catch(e){
+    console.warn('No se pudo cargar catálogo FIO en Info:', e);
+  }
+}
+
+// Match entre área del empleado y departamento del catálogo FIO
+function _matchDeptToCatalog(area){
+  var a = String(area||'').trim().toLowerCase();
+  if(a === 'sala') return 'Sala';
+  if(a === 'cocina') return 'Cocina';
+  if(a === 'friegue') return 'Friegue';
+  if(a === 'recepción' || a === 'recepcion' || a === 'recepción sfera' || a === 'recepcion sfera') return 'Recepción';
+  if(a === 'housekeeping' || a === 'limpieza' || a === 'hk') return 'Housekeeping';
+  if(a === 'mantenimiento') return 'Mantenimiento';
+  if(a === 'syncrolab' || a === 'recepción syncrolab' || a === 'recepcion syncrolab') return 'SYNCROLAB';
+  return '';  // sin match, no se muestra bloque
+}
+
+// Bloque visual con catálogo de FIO del departamento del empleado
+function _infoFIOBlock(area, deptKey, fios){
+  if(!deptKey || !fios || !fios.length){
+    return ''; // si su dept no tiene catálogo, no mostramos nada
+  }
+  var LEVELS = {
+    L0: {name:'No afecta',           color:'#9ca3af', emoji:'🟢'},
+    L1: {name:'Leve',                color:'#fbbf24', emoji:'🟡'},
+    L2: {name:'Parcial',             color:'#f59e0b', emoji:'🟠'},
+    L3: {name:'Grave',               color:'#ef4444', emoji:'🔴'},
+    L4: {name:'Total',               color:'#dc2626', emoji:'🚨'},
+    L5: {name:'Bloqueo inmediato',   color:'#000000', emoji:'⚫'}
+  };
+  function lvlBadge(code, pts){
+    var L = LEVELS[code] || LEVELS.L0;
+    var ptsTxt = (code==='L5') ? 'Directo' : (pts + 'p');
+    return '<span style="display:inline-block;background:'+L.color+'22;color:'+L.color+';border:1px solid '+L.color+'66;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;">'
+        + L.emoji + ' ' + L.name + ' · ' + ptsTxt + '</span>';
+  }
+
+  // Cabecera + tabla
+  var rows = fios.map(function(f){
+    var pts = (f.nivel_default === 'L2') ? 1 : parseFloat(f.puntos_default);
+    return '<tr>'
+      + '<td style="font-family:var(--font-mono);font-size:10px;color:var(--text3);white-space:nowrap;">'+f.id+'</td>'
+      + '<td style="font-size:12px;color:var(--text);">'+f.nombre+'</td>'
+      + '<td style="text-align:center;">'+lvlBadge(f.nivel_default, pts)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  var html =
+      '<div style="background:var(--bg);border:1px solid var(--border);border-left:4px solid #ef4444;border-radius:8px;padding:14px 16px;margin-top:14px;">'
+    +   '<div style="font-weight:700;color:var(--text);font-size:14px;margin-bottom:6px;">⚖ FIO · Fallos de tu departamento que afectan al bonus</div>'
+    +   '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px;">'
+    +     'Cada fallo registrado y validado suma puntos negativos en tu mes. '
+    +     'Cuando llegas a cierto total, pierdes parte o la totalidad del incentivo.'
+    +   '</div>'
+
+    // Tabla de penalización mensual
+    +   '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:12px;">'
+    +     '<div style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">📉 Penalización mensual</div>'
+    +     '<div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;">'
+    +       '<span style="background:#22c55e22;color:#22c55e;padding:2px 8px;border-radius:4px;">0 pts → 0%</span>'
+    +       '<span style="background:#84cc1622;color:#84cc16;padding:2px 8px;border-radius:4px;">1-2 → 5%</span>'
+    +       '<span style="background:#eab30822;color:#eab308;padding:2px 8px;border-radius:4px;">3-4 → 10%</span>'
+    +       '<span style="background:#f59e0b22;color:#f59e0b;padding:2px 8px;border-radius:4px;">5-7 → 25%</span>'
+    +       '<span style="background:#f9731622;color:#f97316;padding:2px 8px;border-radius:4px;">8-10 → 50%</span>'
+    +       '<span style="background:#ef444422;color:#ef4444;padding:2px 8px;border-radius:4px;">11-14 → 75%</span>'
+    +       '<span style="background:#dc262622;color:#dc2626;padding:2px 8px;border-radius:4px;">15+ → 100%</span>'
+    +     '</div>'
+    +   '</div>'
+
+    // Tabla de fallos
+    +   '<div style="overflow-x:auto;">'
+    +     '<table style="width:100%;font-size:12px;border-collapse:collapse;">'
+    +       '<thead><tr style="border-bottom:1px solid var(--border);">'
+    +         '<th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Cód.</th>'
+    +         '<th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Fallo</th>'
+    +         '<th style="text-align:center;padding:6px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">Nivel · Puntos (1ª vez)</th>'
+    +       '</tr></thead>'
+    +       '<tbody>'+rows+'</tbody>'
+    +     '</table>'
+    +   '</div>'
+
+    // Avisos clave
+    +   '<div style="margin-top:12px;padding:10px;background:var(--bg2);border-radius:6px;font-size:11px;color:var(--text2);line-height:1.6;">'
+    +     '<div style="margin-bottom:4px;"><strong style="color:var(--text);">📌 Reincidencia:</strong> repetir el mismo fallo en el mes sube los puntos. En L2 la escala es <code>1 → 3 → 4.5 → 6 → L4</code>. En L1/L3 es <code>×1 → ×1.5 → ×2 → L4</code>.</div>'
+    +     '<div style="margin-bottom:4px;"><strong style="color:var(--text);">📷 Evidencia:</strong> todo FIO que afecta al bonus se registra con descripción detallada (testigo, ticket, comentario, foto…). Sin evidencia no hay sanción.</div>'
+    +     '<div><strong style="color:var(--text);">⚠ Disputar:</strong> si no estás de acuerdo, tienes 5 días para disputar desde la pantalla <strong>⚖ Mis FIO</strong>.</div>'
+    +   '</div>'
+    + '</div>';
+
+  return html;
 }
 
 function _infoCard(title, body, color){
