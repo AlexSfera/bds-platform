@@ -460,8 +460,10 @@ function getScreens(rol){
     gestion.push(ITEMS.validacion);
     gestion.push(ITEMS.dashboard);
   }
-  if(isAdminU){
+  if(isAdminU || isAdjuntoDirectivo(currentUser)){
     gestion.push(ITEMS.maestro);
+  }
+  if(isAdminU){
     gestion.push(ITEMS.export);
   }
   if(isJefe) gestion.push(ITEMS.fio);
@@ -2073,9 +2075,61 @@ async function renderDashboard(){
 
 // ═══════════════════════════════════════════════════════════════════════
 // MAESTRO
+// ═══════════════════════════════════════════════════════════════════════
+// MAESTRO MULTI-TAB — Sub-fase 2B
+// ═══════════════════════════════════════════════════════════════════════
+
+var _maestroActiveTab = 'empleados';
+
 async function renderMaestro(){
+  // Activar tab por defecto si se acaba de entrar
+  _switchMaestroTabUI(_maestroActiveTab);
+  if(_maestroActiveTab === 'reglas'){
+    await renderIncentiveRulesTable();
+  } else {
+    await _renderEmpleadosTab();
+  }
+}
+
+function _switchMaestroTabUI(tab){
+  var btnEmp    = document.getElementById('maestro-tab-btn-empleados');
+  var btnReglas = document.getElementById('maestro-tab-btn-reglas');
+  var panelEmp  = document.getElementById('maestro-panel-empleados');
+  var panelReg  = document.getElementById('maestro-panel-reglas');
+  if(!btnEmp || !panelEmp) return;
+
+  var activeStyle   = 'background:var(--accent);color:#fff;border:none;border-radius:6px 6px 0 0;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-2px;';
+  var inactiveStyle = 'background:transparent;color:var(--text2);border:none;border-radius:6px 6px 0 0;padding:8px 18px;font-size:13px;cursor:pointer;margin-bottom:-2px;';
+
+  if(tab === 'reglas'){
+    btnEmp.style.cssText    = inactiveStyle;
+    btnReglas.style.cssText = activeStyle;
+    panelEmp.style.display  = 'none';
+    panelReg.style.display  = '';
+  } else {
+    btnEmp.style.cssText    = activeStyle;
+    btnReglas.style.cssText = inactiveStyle;
+    panelEmp.style.display  = '';
+    panelReg.style.display  = 'none';
+  }
+
+  // Ocultar tab Reglas si el usuario no tiene permisos
+  if(btnReglas) btnReglas.style.display = canActAsAdmin(currentUser) ? '' : 'none';
+}
+
+async function switchMaestroTab(tab){
+  _maestroActiveTab = tab;
+  _switchMaestroTabUI(tab);
+  if(tab === 'reglas'){
+    await renderIncentiveRulesTable();
+  } else {
+    await _renderEmpleadosTab();
+  }
+}
+window.switchMaestroTab = switchMaestroTab;
+
+async function _renderEmpleadosTab(){
   const employees=(await getDB('employees')).filter(e=>e.id!=='E13');
-  // Permisos: adjunto_directivo NO puede modificar/eliminar/ver-PIN de fila con rol=admin
   function canEditRow(e){
     if(isAdjuntoDirectivo(currentUser) && e.rol === 'admin') return false;
     return canActAsAdmin(currentUser) || (currentUser.rol === 'fb' && e.rol !== 'admin');
@@ -2093,6 +2147,188 @@ async function renderMaestro(){
               '<span style="font-size:11px;color:var(--text3);">—</span>'
             }` : '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>'}</td></tr>`).join('')}</table>`;
 }
+
+// ── 1. renderIncentiveRulesTable ─────────────────────────────────────
+
+async function renderIncentiveRulesTable(){
+  var el = document.getElementById('maestro-rules-table');
+  if(!el) return;
+  el.innerHTML = '<p style="color:var(--text3);padding:16px 0;">Cargando…</p>';
+
+  var rules = await getDB('dept_incentive_rules');
+  rules = (rules||[]).sort(function(a,b){
+    if(a.departamento < b.departamento) return -1;
+    if(a.departamento > b.departamento) return 1;
+    return a.periodo < b.periodo ? -1 : 1;
+  });
+
+  if(!rules.length){
+    el.innerHTML = '<p style="color:var(--text3);padding:16px 0;">Sin reglas configuradas. Usa "+ Nueva regla" para añadir.</p>';
+    return;
+  }
+
+  var rows = rules.map(function(r){
+    var activoBadge = r.activo
+      ? '<span class="badge b-green">✅ Activo</span>'
+      : '<span class="badge b-gray">⏸ Inactivo</span>';
+    var editBtn   = '<button class="btn btn-secondary btn-sm" onclick="openRuleModal(\''+r.id+'\')">✏️ Editar</button> ';
+    var toggleBtn = r.activo
+      ? '<button class="btn btn-secondary btn-sm" onclick="toggleRule(\''+r.id+'\',false)">⏸</button> '
+      : '<button class="btn btn-success btn-sm" onclick="toggleRule(\''+r.id+'\',true)">▶ Activar</button> ';
+    var delBtn = isAdmin(currentUser)
+      ? '<button class="btn btn-danger btn-sm" onclick="deleteRule(\''+r.id+'\')">🗑</button>'
+      : '';
+    return '<tr>'
+      +'<td>'+deptBadge(r.departamento)+'</td>'
+      +'<td>'+(r.periodo==='semanal'?'📅 Semanal':'🗓 Mensual')+'</td>'
+      +'<td style="font-family:var(--font-mono);">'+parseFloat(r.objetivo_ventas||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+      +'<td style="font-family:var(--font-mono);font-weight:600;color:var(--green);">'+parseFloat(r.importe_bonus||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+      +'<td style="font-size:11px;color:var(--text3);">'+(r.notas||'—')+'</td>'
+      +'<td>'+activoBadge+'</td>'
+      +'<td style="white-space:nowrap;">'+editBtn+toggleBtn+delBtn+'</td>'
+      +'</tr>';
+  }).join('');
+
+  el.innerHTML = '<table>'
+    +'<tr><th>Departamento</th><th>Periodo</th><th>Objetivo</th><th>Bonus</th><th>Notas</th><th>Estado</th><th>Acciones</th></tr>'
+    +rows+'</table>';
+}
+window.renderIncentiveRulesTable = renderIncentiveRulesTable;
+
+// ── 2. openRuleModal ─────────────────────────────────────────────────
+
+var _editRuleId = null;
+
+async function openRuleModal(ruleId){
+  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
+  _editRuleId = ruleId || null;
+
+  if(ruleId){
+    var rules = await getDB('dept_incentive_rules');
+    var r = (rules||[]).find(function(x){ return x.id===ruleId; });
+    if(!r){ toast('Regla no encontrada','err'); return; }
+    document.getElementById('rule-modal-title').textContent = 'Editar regla · '+r.departamento;
+    document.getElementById('rule-dept').value    = r.departamento;
+    document.getElementById('rule-periodo').value = r.periodo;
+    document.getElementById('rule-objetivo').value = parseFloat(r.objetivo_ventas||0);
+    document.getElementById('rule-bonus').value    = parseFloat(r.importe_bonus||0);
+    document.getElementById('rule-notas').value    = r.notas||'';
+    document.getElementById('rule-activo').checked = !!r.activo;
+  } else {
+    document.getElementById('rule-modal-title').textContent = 'Nueva regla de incentivo';
+    document.getElementById('rule-dept').selectedIndex    = 0;
+    document.getElementById('rule-periodo').selectedIndex = 0;
+    document.getElementById('rule-objetivo').value = '';
+    document.getElementById('rule-bonus').value    = '';
+    document.getElementById('rule-notas').value    = '';
+    document.getElementById('rule-activo').checked = true;
+  }
+  document.getElementById('modal-rule').classList.add('open');
+}
+window.openRuleModal = openRuleModal;
+
+// ── 3. saveRule ──────────────────────────────────────────────────────
+
+async function saveRule(){
+  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
+
+  var dept     = (document.getElementById('rule-dept')||{}).value||'';
+  var periodo  = (document.getElementById('rule-periodo')||{}).value||'';
+  var objetivo = parseFloat((document.getElementById('rule-objetivo')||{}).value);
+  var bonus    = parseFloat((document.getElementById('rule-bonus')||{}).value);
+  var notas    = ((document.getElementById('rule-notas')||{}).value||'').trim();
+  var activo   = !!(document.getElementById('rule-activo')||{}).checked;
+
+  if(!dept)              { toast('Departamento obligatorio','err'); return; }
+  if(!periodo)           { toast('Periodo obligatorio','err'); return; }
+  if(isNaN(objetivo)||objetivo<=0){ toast('Objetivo debe ser mayor que 0','err'); return; }
+  if(isNaN(bonus)||bonus<=0)      { toast('Bonus debe ser mayor que 0','err'); return; }
+
+  // No permitir 2 reglas activas con mismo dept+periodo
+  if(activo){
+    var all = await getDB('dept_incentive_rules');
+    var dup = (all||[]).find(function(r){
+      return r.departamento===dept && r.periodo===periodo && r.activo && r.id!==_editRuleId;
+    });
+    if(dup){ toast('Ya existe una regla activa para '+dept+' / '+periodo+'. Desactívala primero.','err'); return; }
+  }
+
+  var payload = { departamento:dept, periodo:periodo, objetivo_ventas:objetivo, importe_bonus:bonus, notas:notas, activo:activo, updated_at:localTs() };
+
+  if(_editRuleId){
+    var res = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+encodeURIComponent(_editRuleId),{
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify(payload)
+    });
+    if(!res.ok){ toast('Error Supabase '+res.status,'err'); return; }
+    await auditLog('INCENTIVE_RULE_UPDATE', dept+'/'+periodo+'/obj:'+objetivo+'/bonus:'+bonus+' id:'+_editRuleId);
+    toast('Regla actualizada','ok');
+  } else {
+    payload.id = 'R-'+dept.replace(/\s/g,'').toUpperCase().slice(0,5)+'-'+(periodo==='semanal'?'S':'M')+'-'+Date.now().toString(36).toUpperCase();
+    payload.created_at = localTs();
+    var ins = await dbInsert('dept_incentive_rules', payload);
+    if(!ins){ toast('Error al guardar regla','err'); return; }
+    await auditLog('INCENTIVE_RULE_CREATE', dept+'/'+periodo+'/obj:'+objetivo+'/bonus:'+bonus+' id:'+payload.id);
+    toast('Regla creada','ok');
+  }
+
+  invalidateCache('dept_incentive_rules');
+  closeModal('modal-rule');
+  _editRuleId = null;
+  await renderIncentiveRulesTable();
+}
+window.saveRule = saveRule;
+
+// ── 4. toggleRule ────────────────────────────────────────────────────
+
+async function toggleRule(ruleId, nuevoEstado){
+  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
+
+  if(nuevoEstado){
+    var all = await getDB('dept_incentive_rules');
+    var r   = (all||[]).find(function(x){ return x.id===ruleId; });
+    if(!r){ toast('Regla no encontrada','err'); return; }
+    var dup = (all||[]).find(function(x){
+      return x.departamento===r.departamento && x.periodo===r.periodo && x.activo && x.id!==ruleId;
+    });
+    if(dup){ toast('Ya hay una regla activa para '+r.departamento+' / '+r.periodo,'err'); return; }
+  }
+
+  var res = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+encodeURIComponent(ruleId),{
+    method:'PATCH',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify({activo:nuevoEstado, updated_at:localTs()})
+  });
+  if(!res.ok){ toast('Error al actualizar','err'); return; }
+
+  await auditLog('INCENTIVE_RULE_TOGGLE', ruleId+' → activo:'+nuevoEstado);
+  invalidateCache('dept_incentive_rules');
+  toast(nuevoEstado?'Regla activada':'Regla desactivada','ok');
+  await renderIncentiveRulesTable();
+}
+window.toggleRule = toggleRule;
+
+// ── 5 & 6. deleteRule ────────────────────────────────────────────────
+
+async function deleteRule(ruleId){
+  if(!isAdmin(currentUser)){ toast('Solo admin puede eliminar reglas','err'); return; }
+
+  var all  = await getDB('dept_incentive_rules');
+  var rule = (all||[]).find(function(r){ return r.id===ruleId; });
+  if(!rule){ toast('Regla no encontrada','err'); return; }
+
+  if(!confirm('¿Eliminar regla '+rule.departamento+' / '+rule.periodo+'?\n\nNo se puede deshacer.')) return;
+
+  await auditLog('INCENTIVE_RULE_DELETE', ruleId+' | '+rule.departamento+'/'+rule.periodo+'/obj:'+rule.objetivo_ventas+'/bonus:'+rule.importe_bonus);
+  var ok = await dbDelete('dept_incentive_rules', ruleId);
+  if(!ok){ toast('Error al eliminar','err'); return; }
+
+  invalidateCache('dept_incentive_rules');
+  toast('Regla eliminada','ok');
+  await renderIncentiveRulesTable();
+}
+window.deleteRule = deleteRule;
 async function openEmpModal(empId){
   _editEmpId=empId||null;
   if(empId){ const e=(await getDB('employees')).find(x=>x.id===empId); if(!e) return; document.getElementById('me-title').textContent='Editar: '+e.nombre; document.getElementById('emp-nombre').value=e.nombre; document.getElementById('emp-area').value=e.area; document.getElementById('emp-puesto').value=e.puesto; document.getElementById('emp-pin').value=e.pin; document.getElementById('emp-coste').value=(e.coste&&parseFloat(e.coste)>0)?parseFloat(e.coste):''; document.getElementById('emp-estado').value=e.estado; document.getElementById('emp-resp').value=(e.responsable==1||e.responsable===true||e.responsable==='1'||e.responsable==='true')?'1':'0'; document.getElementById('emp-val').value=(e.validador==1||e.validador===true||e.validador==='1'||e.validador==='true')?'1':'0'; document.getElementById('emp-rol').value=e.rol; document.getElementById('emp-obs').value=e.obs||'';
