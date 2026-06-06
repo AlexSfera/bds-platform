@@ -2106,11 +2106,44 @@ async function saveEmpleado(){
   if(!pin||pin.length<4){toast('PIN mínimo 4 dígitos','err');return;}
   const employees=await getDB('employees');
   if(employees.find(e=>e.pin===pin&&e.id!==_editEmpId)){toast('PIN ya en uso','err');return;}
-  // Bloqueo: adjunto_directivo no puede crear/modificar usuarios con rol=admin
-  var selectedRol = document.getElementById('emp-rol').value;
-  if(isAdjuntoDirectivo(currentUser) && selectedRol === 'admin'){
-    toast('Adjunto Directivo no puede gestionar usuarios admin','err'); return;
+  var selectedArea = document.getElementById('emp-area').value;
+  var selectedRol  = document.getElementById('emp-rol').value;
+
+  // ─── Validación de ámbito de creación/edición según rol del usuario actual ───
+  // Admin: sin restricciones
+  // Adjunto Directivo: todo excepto tocar admin
+  // F&B Manager: solo crea/edita en Sala / Cocina / Friegue, rol ≤ supervisor
+  // Coord_*, chef, jefe_recepcion, gobernante, jefe_departamento, supervisor, mantenimiento:
+  //   solo crea/edita en SU dept (según SUPERVISOR_DEPT_MAP), rol = empleado
+  if(!isAdmin(currentUser)){
+    if(selectedRol === 'admin'){
+      toast('Solo un Administrador puede crear/modificar usuarios admin','err'); return;
+    }
+    if(isAdjuntoDirectivo(currentUser)){
+      // todo permitido excepto admin (validado arriba)
+    } else if(currentUser.rol === 'fb'){
+      var fbAreas = ['Sala','Cocina','Friegue'];
+      if(fbAreas.indexOf(selectedArea) === -1){
+        toast('F&B Manager solo puede gestionar empleados de Sala / Cocina / Friegue','err'); return;
+      }
+      if(['adjunto_directivo','admin','fb','chef','jefe_recepcion','gobernante','coord_recepcion_syncrolab','coord_entrenadores','coord_fisioterapeutas','mantenimiento'].indexOf(selectedRol) !== -1){
+        toast('F&B Manager solo puede asignar roles base/supervisor/jefe_departamento','err'); return;
+      }
+    } else if(isSupervisor(currentUser)){
+      var allowedAreas = (typeof SUPERVISOR_DEPT_MAP !== 'undefined' && SUPERVISOR_DEPT_MAP[currentUser.rol]) ? SUPERVISOR_DEPT_MAP[currentUser.rol] : [];
+      var sa = String(selectedArea||'').trim().toLowerCase();
+      var ok = allowedAreas.some(function(d){ return String(d||'').trim().toLowerCase() === sa; });
+      if(!ok){
+        toast('Solo puedes gestionar empleados de tu departamento ('+(allowedAreas.join(' / ')||'sin dept')+')','err'); return;
+      }
+      if(selectedRol !== 'empleado'){
+        toast('Como jefe de departamento solo puedes crear/editar empleados con rol Empleado','err'); return;
+      }
+    } else {
+      toast('No tienes permisos para gestionar empleados','err'); return;
+    }
   }
+
   if(_editEmpId){
     var origEmp = employees.find(e=>e.id===_editEmpId);
     if(origEmp && origEmp.rol==='admin' && !canManageAdminUsers(currentUser)){
