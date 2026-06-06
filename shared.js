@@ -2267,8 +2267,22 @@ async function saveRule(){
   } else {
     payload.id = 'R-'+dept.replace(/\s/g,'').toUpperCase().slice(0,5)+'-'+(periodo==='semanal'?'S':'M')+'-'+Date.now().toString(36).toUpperCase();
     payload.created_at = localTs();
-    var ins = await dbInsert('dept_incentive_rules', payload);
-    if(!ins){ toast('Error al guardar regla','err'); return; }
+    var insRes = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer '+SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(payload)
+    });
+    if(!insRes.ok){
+      var errTxt = await insRes.text();
+      console.error('[RULE INSERT ERROR]', insRes.status, errTxt);
+      toast('Error '+insRes.status+': '+errTxt.slice(0,80), 'err');
+      return;
+    }
     await auditLog('INCENTIVE_RULE_CREATE', dept+'/'+periodo+'/obj:'+objetivo+'/bonus:'+bonus+' id:'+payload.id);
     toast('Regla creada','ok');
   }
