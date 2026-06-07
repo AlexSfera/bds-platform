@@ -405,6 +405,7 @@ function getScreens(rol){
     fio:         {id:'fio',         label:'⚖ FIO'},
     misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
     ventas:      {id:'ventas',      label:'💵 Ventas semanales'},
+    incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
@@ -464,9 +465,11 @@ function getScreens(rol){
   if(isAdminU || isAdjuntoDirectivo(currentUser)){
     gestion.push(ITEMS.maestro);
     gestion.push(ITEMS.ventas);
+    gestion.push(ITEMS.incentivos);
   }
   if(isJefe && !isAdminU && !isAdjuntoDirectivo(currentUser)){
     gestion.push(ITEMS.ventas);
+    gestion.push(ITEMS.incentivos);
   }
   if(isAdminU){
     gestion.push(ITEMS.export);
@@ -598,6 +601,7 @@ async function showScreen(id){
   if(id==='rec-caja'){ renderRecepcionCajaList(); }
   if(id==='maestro'){ renderMaestro(); }
   if(id==='ventas'){  renderVentasSemanales(); }
+  if(id==='incentivos'){ if(typeof renderIncentivos==='function') renderIncentivos(); }
   if(id==='gestiones'){ renderGestionesScreen(); }
   if(id==='incidencias'){ renderIncidenciasScreen(); }
   if(id==='fio'){ renderFIOScreen(); }
