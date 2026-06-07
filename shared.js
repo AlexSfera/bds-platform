@@ -2153,7 +2153,7 @@ async function _renderEmpleadosTab(){
   ${employees.map(e=>`<tr><td><strong>${e.nombre}</strong></td><td>${deptBadge(e.area)}</td><td style="font-size:11px">${e.puesto}</td><td>${e.estado==='Activo'?'<span class="badge b-green">Activo</span>':e.estado==='Baja'?'<span class="badge b-red">Baja</span>':'<span class="badge b-yellow">'+e.estado+'</span>'}</td><td>${e.responsable==1?'<span class="badge b-blue">SÍ</span>':'—'}</td><td>${e.validador==1?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td style="font-family:var(--font-mono);font-size:10px">${e.rol}</td><td style="font-family:var(--font-mono)">${parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—'}</td><td>${pinCell(e)}</td><td style="white-space:nowrap">${canEditRow(e) ? `<button class="btn btn-secondary btn-sm" onclick="openEmpModal('${e.id}')">Editar</button> ${(canActAsAdmin(currentUser)||(currentUser.rol==='fb'&&e.rol!=='admin'))?
               (e.estado==='Activo'?
                 `<button class="btn btn-danger btn-sm" onclick="toggleEmp('${e.id}','Baja')">Baja</button>`:
-                `<button class="btn btn-success btn-sm" onclick="toggleEmp('${e.id}','Activo')">Activar</button>`
+                `<button class="btn btn-success btn-sm" onclick="toggleEmp('${e.id}','Activo')">Activar</button> ${isAdmin(currentUser)?`<button class="btn btn-danger btn-sm" onclick="deleteEmp('${e.id}','${e.nombre.replace(/'/g,"\\'")}')">🗑</button>`:''}`
               ):
               '<span style="font-size:11px;color:var(--text3);">—</span>'
             }` : '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>'}</td></tr>`).join('')}</table>`;
@@ -2469,6 +2469,49 @@ async function saveEmpleado(){
   }, 200);
 }
 async function toggleEmp(empId,newEstado){ const employees=await getDB('employees'); const idx=employees.findIndex(e=>e.id===empId); if(idx===-1) return; employees[idx].estado=newEstado; await setDB('employees',employees); renderMaestro(); toast('Estado: '+newEstado,'ok'); }
+
+async function deleteEmp(empId, empNombre){
+  if(!isAdmin(currentUser)){ toast('Solo admin puede eliminar empleados','err'); return; }
+
+  // Solo se puede eliminar si está en Baja
+  var employees = await getDB('employees');
+  var emp = employees.find(function(e){ return e.id===empId; });
+  if(!emp){ toast('Empleado no encontrado','err'); return; }
+  if(emp.estado !== 'Baja'){
+    toast('Solo se pueden eliminar empleados en estado Baja','err'); return;
+  }
+
+  // Doble confirmación
+  if(!confirm('¿Eliminar definitivamente a '+empNombre+'?\n\nEsta acción NO se puede deshacer.\nSus registros históricos (turnos, FIO, ventas) se conservan.')) return;
+  if(!confirm('CONFIRMACIÓN FINAL\n\n¿Seguro que deseas eliminar a '+empNombre+' del sistema?')) return;
+
+  // Audit log ANTES del DELETE
+  await auditLog('EMPLOYEE_DELETE', empId+' | '+empNombre+' | área:'+emp.area+' | rol:'+emp.rol);
+
+  var res = await fetch(
+    SUPABASE_URL+'/rest/v1/employees?id=eq.'+encodeURIComponent(empId),
+    {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer '+SUPABASE_KEY,
+        'Prefer': 'return=minimal'
+      }
+    }
+  );
+
+  if(!res.ok){
+    var errTxt = await res.text();
+    console.error('[DELETE EMP]', res.status, errTxt);
+    toast('Error '+res.status+': '+errTxt.slice(0,100),'err');
+    return;
+  }
+
+  invalidateCache('employees');
+  toast(empNombre+' eliminado','ok');
+  await renderMaestro();
+}
+window.deleteEmp = deleteEmp;
 
 // ═══════════════════════════════════════════════════════════════════════
 // EXPORT
