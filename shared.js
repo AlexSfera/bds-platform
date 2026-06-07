@@ -380,7 +380,7 @@ async function startApp(){
   setTimeout(fixSelectColors, 200);
 }
 function getScreens(rol){
-  var isSala       = currentUser && currentUser.area === 'Sala';
+  var isSala       = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
   var isRecepcion  = currentUser && currentUser.area === 'Recepción';
   var isCocina     = currentUser && currentUser.area === 'Cocina';
   var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
