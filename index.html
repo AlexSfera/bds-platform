@@ -609,6 +609,15 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
   <div class="main">
 
+    <!-- ══ ALERTAS FICHAJE ══ -->
+    <div class="screen" id="screen-fichaje">
+      <div class="page-header">
+        <div class="page-title">📋 Alertas de Fichaje</div>
+        <div class="page-sub">Análisis de alertas Bitrix24 · Control de marcajes</div>
+      </div>
+      <div id="fichaje-content"></div>
+    </div>
+
     <!-- ══ INSTRUCCIONES ══ -->
     <div class="screen" id="screen-readme">
       <div class="page-header" id="info-screen-header"><div class="page-title">📋 Instrucciones</div><div class="page-sub">Cargando...</div></div>
@@ -995,60 +1004,13 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- ══ MAESTRO ══ -->
     <div class="screen" id="screen-maestro">
-      <div class="page-header"><div class="page-title">👥 Maestro</div><div class="page-sub">Administrador · Adjunto Directivo</div></div>
-
-      <!-- Tab bar -->
-      <div id="maestro-tab-bar" style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border);">
-        <button id="maestro-tab-btn-empleados"
-          style="background:var(--accent);color:#fff;border:none;border-radius:6px 6px 0 0;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-2px;"
-          onclick="switchMaestroTab('empleados')">👥 Empleados</button>
-        <button id="maestro-tab-btn-reglas"
-          style="background:transparent;color:var(--text2);border:none;border-radius:6px 6px 0 0;padding:8px 18px;font-size:13px;cursor:pointer;margin-bottom:-2px;"
-          onclick="switchMaestroTab('reglas')">💰 Reglas de incentivo</button>
+      <div class="page-header"><div class="page-title">👥 Maestro Cocina</div><div class="page-sub">Solo Administrador</div></div>
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-primary" onclick="openEmpModal()">+ Nuevo Empleado</button>
+        <button class="btn btn-secondary" onclick="exportCSV('employees')">⬇ CSV</button>
       </div>
-
-      <!-- Panel Empleados -->
-      <div id="maestro-panel-empleados">
-        <div class="btn-row" style="margin-bottom:14px;">
-          <button class="btn btn-primary" onclick="openEmpModal()">+ Nuevo Empleado</button>
-          <button class="btn btn-secondary" onclick="exportCSV('employees')">⬇ CSV</button>
-        </div>
-        <div class="card"><div class="tbl-wrap" id="maestro-table"></div></div>
-      </div>
-
-      <!-- Panel Reglas de incentivo -->
-      <div id="maestro-panel-reglas" style="display:none;">
-        <div class="btn-row" style="margin-bottom:14px;">
-          <button class="btn btn-primary" onclick="openRuleModal(null)">+ Nueva regla</button>
-        </div>
-        <div class="card"><div class="tbl-wrap" id="maestro-rules-table"></div></div>
-      </div>
-    </div>
-
-    <!-- ══ VENTAS SEMANALES SCREEN ══ -->
-    <div class="screen" id="screen-ventas">
-      <div class="page-header">
-        <div class="page-title">💵 Ventas semanales</div>
-        <div class="page-sub">Registro semanal por empleado · Acumulado mensual</div>
-      </div>
-      <div class="card">
-        <div id="ventas-content">
-          <p style="color:var(--text3);">Cargando…</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ INCENTIVOS SCREEN ══ -->
-    <div class="screen" id="screen-incentivos">
-      <div class="page-header">
-        <div class="page-title">💰 Incentivos</div>
-        <div class="page-sub">Cálculo y liquidación mensual de bonuses</div>
-      </div>
-      <div id="incentivos-content">
-        <p style="color:var(--text3);">Cargando…</p>
-      </div>
-    </div>
-
+      <div class="card"><div class="tbl-wrap" id="maestro-table"></div></div>
+    
     <!-- ══ RECEPCIÓN CAJA SCREEN ══ -->
     <div id="screen-rec-caja" class="screen">
       <div class="page-header">
@@ -1665,8 +1627,10 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <option>Responsable</option>
   </optgroup>
   <optgroup label="Otros">
-    <option>Adjunto Directivo</option>
-    <option>RRHH</option>
+    <option>Técnico</option>
+    <option>Recepcionista</option>
+    <option>Entrenador</option>
+    <option>Fisioterapeuta</option>
     <option>Otro</option>
   </optgroup>
   <optgroup label="Housekeeping">
@@ -1723,59 +1687,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
   </div>
 </div>
 
-
-<!-- ══ MODAL REGLA DE INCENTIVO ══ -->
-<div class="modal-overlay" id="modal-rule">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-title" id="rule-modal-title">Nueva regla de incentivo</div>
-    <div class="grid2" style="gap:12px;">
-      <div class="fg"><label>Departamento <span class="req">*</span></label>
-        <select id="rule-dept">
-          <optgroup label="Restaurante">
-            <option value="Sala">Sala</option>
-            <option value="Jefe de Sala">Jefe de Sala</option>
-            <option value="Cocina">Cocina</option>
-            <option value="Chef">Chef</option>
-          </optgroup>
-          <optgroup label="Hotel">
-            <option value="Recepción SFERA">Recepción SFERA</option>
-            <option value="Housekeeping">Housekeeping</option>
-          </optgroup>
-          <optgroup label="SYNCROLAB">
-            <option value="Recepción SYNCROLAB">Recepción SYNCROLAB</option>
-            <option value="Clínica">Clínica</option>
-            <option value="Entrenadores">Entrenadores</option>
-            <option value="Coordinador/a Atención al Cliente">Coordinador/a Atención al Cliente</option>
-          </optgroup>
-        </select>
-      </div>
-      <div class="fg"><label>Periodo <span class="req">*</span></label>
-        <select id="rule-periodo">
-          <option value="semanal">📅 Semanal</option>
-          <option value="mensual">🗓 Mensual</option>
-        </select>
-      </div>
-      <div class="fg"><label>Objetivo ventas (€) <span class="req">*</span></label>
-        <input type="number" id="rule-objetivo" step="0.01" min="0.01" placeholder="ej: 3125.00">
-      </div>
-      <div class="fg"><label>Bonus (€) <span class="req">*</span></label>
-        <input type="number" id="rule-bonus" step="0.01" min="0.01" placeholder="ej: 50.00">
-      </div>
-      <div class="fg sp2"><label>Notas</label>
-        <input type="text" id="rule-notas" placeholder="Descripción opcional">
-      </div>
-      <div class="fg sp2" style="display:flex;align-items:center;gap:10px;padding-top:4px;">
-        <input type="checkbox" id="rule-activo" checked style="width:auto;margin:0;cursor:pointer;">
-        <label for="rule-activo" style="margin:0;cursor:pointer;font-weight:500;">Regla activa</label>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-rule')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveRule()">💾 Guardar</button>
-    </div>
-  </div>
-</div>
-
 <div id="toast-c"></div>
 <div class="ver-badge">v3.0 · Schema 3.0 · Migración Supabase lista</div>
 
@@ -1794,6 +1705,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <script src="validacion.js"></script>
 <script src="housekeeping.js"></script>
 <script src="fio.js"></script>
-<script src="incentivos.js"></script>
+<script src="fichaje.js"></script>
 </body>
 </html>

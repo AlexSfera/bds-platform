@@ -404,8 +404,6 @@ function getScreens(rol){
     export:      {id:'export',      label:'⬇ Exportar'},
     fio:         {id:'fio',         label:'⚖ FIO'},
     misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
-    ventas:      {id:'ventas',      label:'💵 Ventas semanales'},
-    incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
@@ -417,17 +415,20 @@ function getScreens(rol){
     hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
     hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
     hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
-    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'}
+    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
+    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'}
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
-  // Incentivos: empleados de Sala ven su propia vista (resto ve "no disponible")
   var navComun = isAdminU
-    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]
-    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.incentivos];
+    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
+    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio];
 
   // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
   if(isAdminU || isSyncrolab || isRecepcion) navComun.push(ITEMS.hypoxic);
+
+  // Alertas Fichaje: todos los empleados ven sus propias; admin/adjunto ven todos
+  navComun.push(ITEMS.fichaje);
 
   // ── ZONA 2: Módulo de departamento (varía) ────────────────────────
   var dptoMod = [];
@@ -463,16 +464,8 @@ function getScreens(rol){
     gestion.push(ITEMS.validacion);
     gestion.push(ITEMS.dashboard);
   }
-  if(isAdminU || isAdjuntoDirectivo(currentUser)){
-    gestion.push(ITEMS.maestro);
-    gestion.push(ITEMS.ventas);
-    gestion.push(ITEMS.incentivos);
-  }
-  if(isJefe && !isAdminU && !isAdjuntoDirectivo(currentUser)){
-    gestion.push(ITEMS.ventas);
-    gestion.push(ITEMS.incentivos);
-  }
   if(isAdminU){
+    gestion.push(ITEMS.maestro);
     gestion.push(ITEMS.export);
   }
   if(isJefe) gestion.push(ITEMS.fio);
@@ -601,8 +594,6 @@ async function showScreen(id){
   }
   if(id==='rec-caja'){ renderRecepcionCajaList(); }
   if(id==='maestro'){ renderMaestro(); }
-  if(id==='ventas'){  renderVentasSemanales(); }
-  if(id==='incentivos'){ if(typeof renderIncentivos==='function') renderIncentivos(); }
   if(id==='gestiones'){ renderGestionesScreen(); }
   if(id==='incidencias'){ renderIncidenciasScreen(); }
   if(id==='fio'){ renderFIOScreen(); }
@@ -617,6 +608,7 @@ async function showScreen(id){
   if(id==='hk-config'   && typeof renderHKConfig==='function')         renderHKConfig();
   if(id==='hk-revision' && typeof renderHKRevision==='function')       renderHKRevision();
   if(id==='hk-dash'     && typeof renderHKDashboard==='function')      renderHKDashboard();
+  if(id==='fichaje'     && typeof renderFichaje==='function')          { _fichajeFilterPeriodo=''; renderFichaje(); }
   updateDots();
 }
 async function updateDots(){
@@ -2086,61 +2078,9 @@ async function renderDashboard(){
 
 // ═══════════════════════════════════════════════════════════════════════
 // MAESTRO
-// ═══════════════════════════════════════════════════════════════════════
-// MAESTRO MULTI-TAB — Sub-fase 2B
-// ═══════════════════════════════════════════════════════════════════════
-
-var _maestroActiveTab = 'empleados';
-
 async function renderMaestro(){
-  // Activar tab por defecto si se acaba de entrar
-  _switchMaestroTabUI(_maestroActiveTab);
-  if(_maestroActiveTab === 'reglas'){
-    await renderIncentiveRulesTable();
-  } else {
-    await _renderEmpleadosTab();
-  }
-}
-
-function _switchMaestroTabUI(tab){
-  var btnEmp    = document.getElementById('maestro-tab-btn-empleados');
-  var btnReglas = document.getElementById('maestro-tab-btn-reglas');
-  var panelEmp  = document.getElementById('maestro-panel-empleados');
-  var panelReg  = document.getElementById('maestro-panel-reglas');
-  if(!btnEmp || !panelEmp) return;
-
-  var activeStyle   = 'background:var(--accent);color:#fff;border:none;border-radius:6px 6px 0 0;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-2px;';
-  var inactiveStyle = 'background:transparent;color:var(--text2);border:none;border-radius:6px 6px 0 0;padding:8px 18px;font-size:13px;cursor:pointer;margin-bottom:-2px;';
-
-  if(tab === 'reglas'){
-    btnEmp.style.cssText    = inactiveStyle;
-    btnReglas.style.cssText = activeStyle;
-    panelEmp.style.display  = 'none';
-    panelReg.style.display  = '';
-  } else {
-    btnEmp.style.cssText    = activeStyle;
-    btnReglas.style.cssText = inactiveStyle;
-    panelEmp.style.display  = '';
-    panelReg.style.display  = 'none';
-  }
-
-  // Ocultar tab Reglas si el usuario no tiene permisos
-  if(btnReglas) btnReglas.style.display = canActAsAdmin(currentUser) ? '' : 'none';
-}
-
-async function switchMaestroTab(tab){
-  _maestroActiveTab = tab;
-  _switchMaestroTabUI(tab);
-  if(tab === 'reglas'){
-    await renderIncentiveRulesTable();
-  } else {
-    await _renderEmpleadosTab();
-  }
-}
-window.switchMaestroTab = switchMaestroTab;
-
-async function _renderEmpleadosTab(){
   const employees=(await getDB('employees')).filter(e=>e.id!=='E13');
+  // Permisos: adjunto_directivo NO puede modificar/eliminar/ver-PIN de fila con rol=admin
   function canEditRow(e){
     if(isAdjuntoDirectivo(currentUser) && e.rol === 'admin') return false;
     return canActAsAdmin(currentUser) || (currentUser.rol === 'fb' && e.rol !== 'admin');
@@ -2153,207 +2093,11 @@ async function _renderEmpleadosTab(){
   ${employees.map(e=>`<tr><td><strong>${e.nombre}</strong></td><td>${deptBadge(e.area)}</td><td style="font-size:11px">${e.puesto}</td><td>${e.estado==='Activo'?'<span class="badge b-green">Activo</span>':e.estado==='Baja'?'<span class="badge b-red">Baja</span>':'<span class="badge b-yellow">'+e.estado+'</span>'}</td><td>${e.responsable==1?'<span class="badge b-blue">SÍ</span>':'—'}</td><td>${e.validador==1?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td style="font-family:var(--font-mono);font-size:10px">${e.rol}</td><td style="font-family:var(--font-mono)">${parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—'}</td><td>${pinCell(e)}</td><td style="white-space:nowrap">${canEditRow(e) ? `<button class="btn btn-secondary btn-sm" onclick="openEmpModal('${e.id}')">Editar</button> ${(canActAsAdmin(currentUser)||(currentUser.rol==='fb'&&e.rol!=='admin'))?
               (e.estado==='Activo'?
                 `<button class="btn btn-danger btn-sm" onclick="toggleEmp('${e.id}','Baja')">Baja</button>`:
-                `<button class="btn btn-success btn-sm" onclick="toggleEmp('${e.id}','Activo')">Activar</button> ${isAdmin(currentUser)?`<button class="btn btn-danger btn-sm" onclick="deleteEmp('${e.id}','${e.nombre.replace(/'/g,"\\'")}')">🗑</button>`:''}`
+                `<button class="btn btn-success btn-sm" onclick="toggleEmp('${e.id}','Activo')">Activar</button>`
               ):
               '<span style="font-size:11px;color:var(--text3);">—</span>'
             }` : '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>'}</td></tr>`).join('')}</table>`;
 }
-
-// ── 1. renderIncentiveRulesTable ─────────────────────────────────────
-
-async function renderIncentiveRulesTable(){
-  var el = document.getElementById('maestro-rules-table');
-  if(!el) return;
-  el.innerHTML = '<p style="color:var(--text3);padding:16px 0;">Cargando…</p>';
-
-  var rules = await getDB('dept_incentive_rules');
-  rules = (rules||[]).sort(function(a,b){
-    if(a.departamento < b.departamento) return -1;
-    if(a.departamento > b.departamento) return 1;
-    return a.periodo < b.periodo ? -1 : 1;
-  });
-
-  if(!rules.length){
-    el.innerHTML = '<p style="color:var(--text3);padding:16px 0;">Sin reglas configuradas. Usa "+ Nueva regla" para añadir.</p>';
-    return;
-  }
-
-  var rows = rules.map(function(r){
-    var activoBadge = r.activo
-      ? '<span class="badge b-green">✅ Activo</span>'
-      : '<span class="badge b-gray">⏸ Inactivo</span>';
-    var editBtn   = '<button class="btn btn-secondary btn-sm" onclick="openRuleModal(\''+r.id+'\')">✏️ Editar</button> ';
-    var toggleBtn = r.activo
-      ? '<button class="btn btn-secondary btn-sm" onclick="toggleRule(\''+r.id+'\',false)">⏸</button> '
-      : '<button class="btn btn-success btn-sm" onclick="toggleRule(\''+r.id+'\',true)">▶ Activar</button> ';
-    var delBtn = isAdmin(currentUser)
-      ? '<button class="btn btn-danger btn-sm" onclick="deleteRule(\''+r.id+'\')">🗑</button>'
-      : '';
-    return '<tr>'
-      +'<td>'+deptBadge(r.departamento)+'</td>'
-      +'<td>'+(r.periodo==='semanal'?'📅 Semanal':'🗓 Mensual')+'</td>'
-      +'<td style="font-family:var(--font-mono);">'+parseFloat(r.objetivo||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
-      +'<td style="font-family:var(--font-mono);font-weight:600;color:var(--green);">'+parseFloat(r.importe_bonus||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
-      +'<td style="font-size:11px;color:var(--text3);">'+(r.notas||'—')+'</td>'
-      +'<td>'+activoBadge+'</td>'
-      +'<td style="white-space:nowrap;">'+editBtn+toggleBtn+delBtn+'</td>'
-      +'</tr>';
-  }).join('');
-
-  el.innerHTML = '<table>'
-    +'<tr><th>Departamento</th><th>Periodo</th><th>Objetivo</th><th>Bonus</th><th>Notas</th><th>Estado</th><th>Acciones</th></tr>'
-    +rows+'</table>';
-}
-window.renderIncentiveRulesTable = renderIncentiveRulesTable;
-
-// ── 2. openRuleModal ─────────────────────────────────────────────────
-
-var _editRuleId = null;
-
-async function openRuleModal(ruleId){
-  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
-  _editRuleId = ruleId || null;
-
-  if(ruleId){
-    var rules = await getDB('dept_incentive_rules');
-    var r = (rules||[]).find(function(x){ return x.id===ruleId; });
-    if(!r){ toast('Regla no encontrada','err'); return; }
-    document.getElementById('rule-modal-title').textContent = 'Editar regla · '+r.departamento;
-    document.getElementById('rule-dept').value    = r.departamento;
-    document.getElementById('rule-periodo').value = r.periodo;
-    document.getElementById('rule-objetivo').value = parseFloat(r.objetivo||0);
-    document.getElementById('rule-bonus').value    = parseFloat(r.importe_bonus||0);
-    document.getElementById('rule-notas').value    = r.notas||'';
-    document.getElementById('rule-activo').checked = !!r.activo;
-  } else {
-    document.getElementById('rule-modal-title').textContent = 'Nueva regla de incentivo';
-    document.getElementById('rule-dept').selectedIndex    = 0;
-    document.getElementById('rule-periodo').selectedIndex = 0;
-    document.getElementById('rule-objetivo').value = '';
-    document.getElementById('rule-bonus').value    = '';
-    document.getElementById('rule-notas').value    = '';
-    document.getElementById('rule-activo').checked = true;
-  }
-  document.getElementById('modal-rule').classList.add('open');
-}
-window.openRuleModal = openRuleModal;
-
-// ── 3. saveRule ──────────────────────────────────────────────────────
-
-async function saveRule(){
-  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
-
-  var dept     = (document.getElementById('rule-dept')||{}).value||'';
-  var periodo  = (document.getElementById('rule-periodo')||{}).value||'';
-  var objetivo = parseFloat((document.getElementById('rule-objetivo')||{}).value);
-  var bonus    = parseFloat((document.getElementById('rule-bonus')||{}).value);
-  var notas    = ((document.getElementById('rule-notas')||{}).value||'').trim();
-  var activo   = !!(document.getElementById('rule-activo')||{}).checked;
-
-  if(!dept)              { toast('Departamento obligatorio','err'); return; }
-  if(!periodo)           { toast('Periodo obligatorio','err'); return; }
-  if(isNaN(objetivo)||objetivo<=0){ toast('Objetivo debe ser mayor que 0','err'); return; }
-  if(isNaN(bonus)||bonus<=0)      { toast('Bonus debe ser mayor que 0','err'); return; }
-
-  // No permitir 2 reglas activas con mismo dept+periodo
-  if(activo){
-    var all = await getDB('dept_incentive_rules');
-    var dup = (all||[]).find(function(r){
-      return r.departamento===dept && r.periodo===periodo && r.activo && r.id!==_editRuleId;
-    });
-    if(dup){ toast('Ya existe una regla activa para '+dept+' / '+periodo+'. Desactívala primero.','err'); return; }
-  }
-
-  var payload = { departamento:dept, periodo:periodo, objetivo:objetivo, importe_bonus:bonus, notas:notas, activo:activo, updated_by:currentUser.nombre };
-
-  if(_editRuleId){
-    var res = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+encodeURIComponent(_editRuleId),{
-      method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify(payload)
-    });
-    if(!res.ok){ toast('Error Supabase '+res.status,'err'); return; }
-    await auditLog('INCENTIVE_RULE_UPDATE', dept+'/'+periodo+'/obj:'+objetivo+'/bonus:'+bonus+' id:'+_editRuleId);
-    toast('Regla actualizada','ok');
-  } else {
-    payload.id = 'R-'+dept.replace(/\s/g,'').toUpperCase().slice(0,5)+'-'+(periodo==='semanal'?'S':'M')+'-'+Date.now().toString(36).toUpperCase();
-    payload.created_at = localTs();
-    var insRes = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules', {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer '+SUPABASE_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify(payload)
-    });
-    if(!insRes.ok){
-      var errTxt = await insRes.text();
-      console.error('[RULE INSERT ERROR]', insRes.status, errTxt);
-      toast('Error '+insRes.status+': '+errTxt.slice(0,80), 'err');
-      return;
-    }
-    await auditLog('INCENTIVE_RULE_CREATE', dept+'/'+periodo+'/obj:'+objetivo+'/bonus:'+bonus+' id:'+payload.id);
-    toast('Regla creada','ok');
-  }
-
-  invalidateCache('dept_incentive_rules');
-  closeModal('modal-rule');
-  _editRuleId = null;
-  await renderIncentiveRulesTable();
-}
-window.saveRule = saveRule;
-
-// ── 4. toggleRule ────────────────────────────────────────────────────
-
-async function toggleRule(ruleId, nuevoEstado){
-  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
-
-  if(nuevoEstado){
-    var all = await getDB('dept_incentive_rules');
-    var r   = (all||[]).find(function(x){ return x.id===ruleId; });
-    if(!r){ toast('Regla no encontrada','err'); return; }
-    var dup = (all||[]).find(function(x){
-      return x.departamento===r.departamento && x.periodo===r.periodo && x.activo && x.id!==ruleId;
-    });
-    if(dup){ toast('Ya hay una regla activa para '+r.departamento+' / '+r.periodo,'err'); return; }
-  }
-
-  var res = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+encodeURIComponent(ruleId),{
-    method:'PATCH',
-    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({activo:nuevoEstado, updated_by:currentUser.nombre})
-  });
-  if(!res.ok){ toast('Error al actualizar','err'); return; }
-
-  await auditLog('INCENTIVE_RULE_TOGGLE', ruleId+' → activo:'+nuevoEstado);
-  invalidateCache('dept_incentive_rules');
-  toast(nuevoEstado?'Regla activada':'Regla desactivada','ok');
-  await renderIncentiveRulesTable();
-}
-window.toggleRule = toggleRule;
-
-// ── 5 & 6. deleteRule ────────────────────────────────────────────────
-
-async function deleteRule(ruleId){
-  if(!isAdmin(currentUser)){ toast('Solo admin puede eliminar reglas','err'); return; }
-
-  var all  = await getDB('dept_incentive_rules');
-  var rule = (all||[]).find(function(r){ return r.id===ruleId; });
-  if(!rule){ toast('Regla no encontrada','err'); return; }
-
-  if(!confirm('¿Eliminar regla '+rule.departamento+' / '+rule.periodo+'?\n\nNo se puede deshacer.')) return;
-
-  await auditLog('INCENTIVE_RULE_DELETE', ruleId+' | '+rule.departamento+'/'+rule.periodo+'/obj:'+rule.objetivo+'/bonus:'+rule.importe_bonus);
-  var ok = await dbDelete('dept_incentive_rules', ruleId);
-  if(!ok){ toast('Error al eliminar','err'); return; }
-
-  invalidateCache('dept_incentive_rules');
-  toast('Regla eliminada','ok');
-  await renderIncentiveRulesTable();
-}
-window.deleteRule = deleteRule;
 async function openEmpModal(empId){
   _editEmpId=empId||null;
   if(empId){ const e=(await getDB('employees')).find(x=>x.id===empId); if(!e) return; document.getElementById('me-title').textContent='Editar: '+e.nombre; document.getElementById('emp-nombre').value=e.nombre; document.getElementById('emp-area').value=e.area; document.getElementById('emp-puesto').value=e.puesto; document.getElementById('emp-pin').value=e.pin; document.getElementById('emp-coste').value=(e.coste&&parseFloat(e.coste)>0)?parseFloat(e.coste):''; document.getElementById('emp-estado').value=e.estado; document.getElementById('emp-resp').value=(e.responsable==1||e.responsable===true||e.responsable==='1'||e.responsable==='true')?'1':'0'; document.getElementById('emp-val').value=(e.validador==1||e.validador===true||e.validador==='1'||e.validador==='true')?'1':'0'; document.getElementById('emp-rol').value=e.rol; document.getElementById('emp-obs').value=e.obs||'';
@@ -2469,49 +2213,6 @@ async function saveEmpleado(){
   }, 200);
 }
 async function toggleEmp(empId,newEstado){ const employees=await getDB('employees'); const idx=employees.findIndex(e=>e.id===empId); if(idx===-1) return; employees[idx].estado=newEstado; await setDB('employees',employees); renderMaestro(); toast('Estado: '+newEstado,'ok'); }
-
-async function deleteEmp(empId, empNombre){
-  if(!isAdmin(currentUser)){ toast('Solo admin puede eliminar empleados','err'); return; }
-
-  // Solo se puede eliminar si está en Baja
-  var employees = await getDB('employees');
-  var emp = employees.find(function(e){ return e.id===empId; });
-  if(!emp){ toast('Empleado no encontrado','err'); return; }
-  if(emp.estado !== 'Baja'){
-    toast('Solo se pueden eliminar empleados en estado Baja','err'); return;
-  }
-
-  // Doble confirmación
-  if(!confirm('¿Eliminar definitivamente a '+empNombre+'?\n\nEsta acción NO se puede deshacer.\nSus registros históricos (turnos, FIO, ventas) se conservan.')) return;
-  if(!confirm('CONFIRMACIÓN FINAL\n\n¿Seguro que deseas eliminar a '+empNombre+' del sistema?')) return;
-
-  // Audit log ANTES del DELETE
-  await auditLog('EMPLOYEE_DELETE', empId+' | '+empNombre+' | área:'+emp.area+' | rol:'+emp.rol);
-
-  var res = await fetch(
-    SUPABASE_URL+'/rest/v1/employees?id=eq.'+encodeURIComponent(empId),
-    {
-      method: 'DELETE',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer '+SUPABASE_KEY,
-        'Prefer': 'return=minimal'
-      }
-    }
-  );
-
-  if(!res.ok){
-    var errTxt = await res.text();
-    console.error('[DELETE EMP]', res.status, errTxt);
-    toast('Error '+res.status+': '+errTxt.slice(0,100),'err');
-    return;
-  }
-
-  invalidateCache('employees');
-  toast(empNombre+' eliminado','ok');
-  await renderMaestro();
-}
-window.deleteEmp = deleteEmp;
 
 // ═══════════════════════════════════════════════════════════════════════
 // EXPORT
@@ -3541,325 +3242,6 @@ window.saveNewIncidenciaStandalone = saveNewIncidenciaStandalone;
 
 // ═══════════════════════════════════════════════════════════════════════
 // INIT — portal controls display, NOT this script
-// ═══════════════════════════════════════════════════════════════════════
-// SUB-FASE 2C · VENTAS SEMANALES
-// ═══════════════════════════════════════════════════════════════════════
-
-// Roles con acceso a ventas semanales
-function canAccessVentas(user){
-  if(!user) return false;
-  if(isAdmin(user) || isAdjuntoDirectivo(user)) return true;
-  return isSupervisor(user); // chef, fb, jefe_recepcion, gobernante, coords
-}
-
-// Devuelve los últimos N lunes (inclusive hoy si es lunes) como objetos {label, dateStr}
-function getVentasWeekOptions(n){
-  n = n || 12;
-  var options = [];
-  var now = new Date();
-  // Retroceder al lunes más reciente
-  var day = now.getDay(); // 0=dom, 1=lun...
-  var diff = day === 0 ? 6 : day - 1;
-  var lunes = new Date(now);
-  lunes.setDate(now.getDate() - diff);
-  lunes.setHours(0,0,0,0);
-
-  var meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var dias  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-
-  for(var i=0; i<n; i++){
-    var d = new Date(lunes);
-    d.setDate(lunes.getDate() - (i*7));
-    var label = 'Lun ' + d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
-    // ISO date string YYYY-MM-DD
-    var mm = String(d.getMonth()+1).padStart(2,'0');
-    var dd = String(d.getDate()).padStart(2,'0');
-    var dateStr = d.getFullYear()+'-'+mm+'-'+dd;
-    // year_week ISO 8601
-    var jan4 = new Date(d.getFullYear(),0,4);
-    var startOfWeek1 = new Date(jan4);
-    startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay()||7)-1));
-    var weekNum = Math.round((d - startOfWeek1)/(7*24*3600*1000)) + 1;
-    var yw = d.getFullYear()+'-W'+String(weekNum).padStart(2,'0');
-    options.push({label:label, dateStr:dateStr, yearWeek:yw});
-  }
-  return options;
-}
-
-// Departamentos visibles para el usuario actual
-function getVentasDepts(user){
-  if(isAdmin(user) || isAdjuntoDirectivo(user)){
-    return ['Sala','Jefe de Sala','Cocina','Chef','Recepción SFERA','Housekeeping',
-            'Recepción SYNCROLAB','Clínica','Entrenadores','Coordinador/a Atención al Cliente'];
-  }
-  var mapped = canViewDepartmentList(user);
-  return mapped.length ? mapped : (user.area ? [user.area] : []);
-}
-
-function canViewDepartmentList(user){
-  if(!user) return [];
-  var map = SUPERVISOR_DEPT_MAP[user.rol];
-  return map || [];
-}
-
-var _ventasSelectedDept = '';
-var _ventasSelectedDate = '';
-var _ventasWeekOptions  = [];
-
-async function renderVentasSemanales(){
-  if(!canAccessVentas(currentUser)){ toast('Sin permisos','err'); return; }
-
-  var el = document.getElementById('ventas-content');
-  if(!el) return;
-
-  _ventasWeekOptions = getVentasWeekOptions(12);
-  var depts = getVentasDepts(currentUser);
-
-  // Defaults
-  if(!_ventasSelectedDept || depts.indexOf(_ventasSelectedDept)===-1) _ventasSelectedDept = depts[0]||'';
-  if(!_ventasSelectedDate) _ventasSelectedDate = _ventasWeekOptions[0] ? _ventasWeekOptions[0].dateStr : '';
-
-  var deptOpts = depts.map(function(d){
-    return '<option value="'+d+'"'+(d===_ventasSelectedDept?' selected':'')+'>'+d+'</option>';
-  }).join('');
-
-  var weekOpts = _ventasWeekOptions.map(function(w){
-    return '<option value="'+w.dateStr+'"'+(w.dateStr===_ventasSelectedDate?' selected':'')+'>'+w.label+'</option>';
-  }).join('');
-
-  el.innerHTML = ''
-    +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;align-items:flex-end;">'
-    +  (depts.length>1
-        ? '<div class="fg" style="min-width:200px;flex:1;"><label>Departamento</label>'
-          +'<select id="ventas-dept-sel" onchange="onVentasDeptChange(this.value)">'+deptOpts+'</select></div>'
-        : '<input type="hidden" id="ventas-dept-sel" value="'+depts[0]+'">')
-    +  '<div class="fg" style="min-width:200px;flex:1;"><label>Semana (inicio)</label>'
-    +    '<select id="ventas-week-sel" onchange="onVentasWeekChange(this.value)">'+weekOpts+'</select></div>'
-    +'</div>'
-    +'<div id="ventas-table-wrap"><p style="color:var(--text3);">Cargando…</p></div>'
-    +'<div id="ventas-acumulado" style="margin-top:20px;"></div>';
-
-  await loadVentasTable();
-}
-window.renderVentasSemanales = renderVentasSemanales;
-
-async function onVentasDeptChange(val){
-  _ventasSelectedDept = val;
-  await loadVentasTable();
-}
-window.onVentasDeptChange = onVentasDeptChange;
-
-async function onVentasWeekChange(val){
-  _ventasSelectedDate = val;
-  await loadVentasTable();
-}
-window.onVentasWeekChange = onVentasWeekChange;
-
-async function loadVentasTable(){
-  var wrap = document.getElementById('ventas-table-wrap');
-  if(!wrap) return;
-  wrap.innerHTML = '<p style="color:var(--text3);">Cargando…</p>';
-
-  var dept = _ventasSelectedDept;
-  var dateStr = _ventasSelectedDate;
-  if(!dept || !dateStr){ wrap.innerHTML='<p style="color:var(--text3);">Selecciona departamento y semana.</p>'; return; }
-
-  // Empleados activos del dept
-  var allEmps = await getDB('employees');
-  var emps = allEmps.filter(function(e){
-    return e.estado==='Activo' && e.id!=='E13' && String(e.area||'').trim()===dept;
-  });
-
-  if(!emps.length){
-    wrap.innerHTML='<p style="color:var(--text3);">No hay empleados activos en '+dept+'.</p>';
-    _renderVentasAcumulado(dept, dateStr, []);
-    return;
-  }
-
-  // Registros existentes para esta semana+dept
-  var existing = [];
-  try{
-    var res = await fetch(
-      SUPABASE_URL+'/rest/v1/employee_sales_weekly?departamento=eq.'+encodeURIComponent(dept)
-        +'&fecha_inicio_semana=eq.'+dateStr+'&select=*',
-      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-    );
-    if(res.ok) existing = await res.json();
-  } catch(e){ console.warn('ventas load error',e); }
-
-  // Mapa employee_id → registro
-  var exMap = {};
-  (existing||[]).forEach(function(r){ exMap[r.employee_id] = r; });
-
-  var rows = emps.map(function(e){
-    var rec = exMap[e.id];
-    var ventas = rec ? parseFloat(rec.ventas||0) : '';
-    var comensales = rec ? (rec.comensales||'') : '';
-    var estadoBadge = rec
-      ? '<span class="badge b-green" style="font-size:10px;">✅ Guardado</span>'
-      : '<span class="badge b-gray" style="font-size:10px;">— Sin registro</span>';
-    return '<tr id="vrow-'+e.id+'">'
-      +'<td><strong>'+e.nombre+'</strong></td>'
-      +'<td>'+estadoBadge+'</td>'
-      +'<td><input type="number" id="vinput-'+e.id+'" value="'+ventas+'" step="0.01" min="0" '
-      +  'style="width:110px;font-family:var(--font-mono);" placeholder="0.00" '
-      +  'onkeydown="if(event.key===\'Enter\') saveVentaFila(\''+e.id+'\',\''+e.nombre+'\')"></td>'
-      +'<td><input type="number" id="cinput-'+e.id+'" value="'+comensales+'" step="1" min="0" '
-      +  'style="width:80px;font-family:var(--font-mono);" placeholder="—"></td>'
-      +'<td><button class="btn btn-primary btn-sm" onclick="saveVentaFila(\''+e.id+'\',\''+e.nombre+'\')">💾 Guardar</button></td>'
-      +'</tr>';
-  }).join('');
-
-  wrap.innerHTML = '<table>'
-    +'<tr><th>Empleado</th><th>Estado</th><th>Ventas (€)</th><th>Comensales</th><th></th></tr>'
-    +rows+'</table>';
-
-  await _renderVentasAcumulado(dept, dateStr, existing);
-}
-window.loadVentasTable = loadVentasTable;
-
-async function saveVentaFila(empId, empNombre){
-  var dept     = _ventasSelectedDept;
-  var dateStr  = _ventasSelectedDate;
-  var weekOpt  = (_ventasWeekOptions||[]).find(function(w){ return w.dateStr===dateStr; });
-
-  var ventasEl     = document.getElementById('vinput-'+empId);
-  var comensalesEl = document.getElementById('cinput-'+empId);
-  if(!ventasEl){ toast('Error: fila no encontrada','err'); return; }
-
-  var ventas = parseFloat(ventasEl.value);
-  if(isNaN(ventas)||ventas<0){ toast('Introduce un valor de ventas válido','err'); return; }
-  var comensales = parseInt(comensalesEl.value||0)||null;
-
-  // ¿Existe ya un registro para este emp+semana?
-  var checkRes = await fetch(
-    SUPABASE_URL+'/rest/v1/employee_sales_weekly?employee_id=eq.'+encodeURIComponent(empId)
-      +'&fecha_inicio_semana=eq.'+dateStr+'&select=id',
-    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  );
-  var existing = checkRes.ok ? await checkRes.json() : [];
-  var existingId = (existing&&existing.length) ? existing[0].id : null;
-
-  var payload = {
-    employee_id:         empId,
-    employee_name:       empNombre,
-    departamento:        dept,
-    year_week:           weekOpt ? weekOpt.yearWeek : '',
-    fecha_inicio_semana: dateStr,
-    ventas:              ventas,
-    comensales:          comensales,
-    created_by:          currentUser.nombre
-  };
-
-  var ok = false;
-  if(existingId){
-    // PATCH
-    var pRes = await fetch(
-      SUPABASE_URL+'/rest/v1/employee_sales_weekly?id=eq.'+encodeURIComponent(existingId),
-      {method:'PATCH',
-       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-       body:JSON.stringify({ventas:ventas, comensales:comensales, created_by:currentUser.nombre})}
-    );
-    ok = pRes.ok;
-  } else {
-    // INSERT
-    payload.id = 'VS-'+empId+'-'+dateStr;
-    payload.created_at = localTs();
-    var iRes = await fetch(
-      SUPABASE_URL+'/rest/v1/employee_sales_weekly',
-      {method:'POST',
-       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-       body:JSON.stringify(payload)}
-    );
-    ok = iRes.ok;
-    if(!ok){ var et=await iRes.text(); console.error('[VENTAS INSERT]',iRes.status,et); toast('Error '+iRes.status+': '+et.slice(0,80),'err'); return; }
-  }
-
-  if(!ok){ toast('Error al guardar','err'); return; }
-
-  // Actualizar badge en la fila sin recargar toda la tabla
-  var row = document.getElementById('vrow-'+empId);
-  if(row){
-    var badge = row.querySelector('.badge');
-    if(badge){ badge.className='badge b-green'; badge.style.fontSize='10px'; badge.textContent='✅ Guardado'; }
-  }
-  toast(empNombre+': '+ventas.toFixed(2)+'€ guardado','ok');
-  invalidateCache('employee_sales_weekly');
-
-  // Refrescar acumulado
-  await _refreshVentasAcumulado(dept, dateStr);
-}
-window.saveVentaFila = saveVentaFila;
-
-async function _refreshVentasAcumulado(dept, dateStr){
-  var existing = [];
-  try{
-    var res = await fetch(
-      SUPABASE_URL+'/rest/v1/employee_sales_weekly?departamento=eq.'+encodeURIComponent(dept)
-        +'&fecha_inicio_semana=eq.'+dateStr+'&select=*',
-      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-    );
-    if(res.ok) existing = await res.json();
-  } catch(e){}
-  await _renderVentasAcumulado(dept, dateStr, existing);
-}
-
-async function _renderVentasAcumulado(dept, dateStr, ventasSemana){
-  var el = document.getElementById('ventas-acumulado');
-  if(!el) return;
-
-  // Mes en curso: obtener primer y último día
-  var d = new Date(dateStr+'T00:00:00');
-  var mesInicio = new Date(d.getFullYear(), d.getMonth(), 1);
-  var mesFin    = new Date(d.getFullYear(), d.getMonth()+1, 0);
-  var mm = String(mesInicio.getMonth()+1).padStart(2,'0');
-  var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  var mesLabel = meses[mesInicio.getMonth()]+' '+d.getFullYear();
-
-  // Traer todos los registros del dept en el mes
-  var resM = await fetch(
-    SUPABASE_URL+'/rest/v1/employee_sales_weekly?departamento=eq.'+encodeURIComponent(dept)
-      +'&fecha_inicio_semana=gte.'+d.getFullYear()+'-'+mm+'-01'
-      +'&fecha_inicio_semana=lte.'+d.getFullYear()+'-'+mm+'-'+String(mesFin.getDate()).padStart(2,'0')
-      +'&select=employee_id,employee_name,ventas,fecha_inicio_semana',
-    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  );
-  var mensual = resM.ok ? await resM.json() : [];
-
-  // Agrupar por empleado
-  var acum = {};
-  (mensual||[]).forEach(function(r){
-    if(!acum[r.employee_id]) acum[r.employee_id]={nombre:r.employee_name, total:0, semanas:0};
-    acum[r.employee_id].total  += parseFloat(r.ventas||0);
-    acum[r.employee_id].semanas++;
-  });
-
-  var keys = Object.keys(acum);
-  if(!keys.length){ el.innerHTML=''; return; }
-
-  var totalDept = keys.reduce(function(s,k){ return s+acum[k].total; },0);
-
-  var filas = keys.map(function(k){
-    var a = acum[k];
-    return '<tr>'
-      +'<td>'+a.nombre+'</td>'
-      +'<td style="font-family:var(--font-mono);">'+a.total.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
-      +'<td style="font-family:var(--font-mono);color:var(--text3);">'+a.semanas+' sem.</td>'
-      +'</tr>';
-  }).join('');
-
-  el.innerHTML = '<div class="card" style="margin-top:8px;">'
-    +'<div style="font-weight:600;margin-bottom:10px;">📊 Acumulado '+dept+' · '+mesLabel+'</div>'
-    +'<table>'
-    +'<tr><th>Empleado</th><th>Total mes</th><th>Semanas</th></tr>'
-    +filas
-    +'<tr style="border-top:2px solid var(--border);font-weight:600;">'
-    +'<td>TOTAL DEPT</td>'
-    +'<td style="font-family:var(--font-mono);color:var(--accent);">'+totalDept.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
-    +'<td></td></tr>'
-    +'</table></div>';
-}
-
 runMigrations();
 seedEmployees();
 mermaRows=[];
