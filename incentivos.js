@@ -633,48 +633,69 @@ async function incParseExcelBuffer(arrayBuf) {
 }
 
 function incParseWithSheetJS(arrayBuf) {
-  var wb = XLSX.read(arrayBuf, {type:'array', cellDates:true});
+  // raw:true + cellDates:false → col0 fecha = número serial Excel (ej: 46143)
+  // Más robusto que raw:false que depende del locale del OS
+  var wb = XLSX.read(arrayBuf, {type:'array', cellDates:false, raw:true});
   var ws = wb.Sheets[wb.SheetNames[0]];
-  var rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, dateNF:'yyyy-mm-dd'});
+  var rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
 
   var currentUser = null;
-  var userTotals = {};   // nombre → { total, dias }
-  var userDayVentas = {}; // nombre → [{fecha, ventas}]
-
-  // Columna índices según formato POSMEWS:
-  // col 0: Fecha, col 9: VentasBrutas, col 10: Descuentos, col 11: VentasNetas
+  var userTotals = {};
+  var userDayVentas = {};
   var COL_VENTAS_NETAS = 11;
 
-  rows.forEach(function(row) {
-    if(!row || !row[0]) return;
-    var c0 = String(row[0]).trim();
+  // Convertir número serial Excel → "yyyy-mm-dd"
+  // Excel serial 1 = 1900-01-01, pero tiene el bug del año 1900 (serial 60 = 28-Feb-1900 inválido)
+  function excelSerialToISO(serial) {
+    var s = Math.floor(serial);
+    if(s < 1) return null;
+    if(s > 60) s--; // corregir bug 1900 de Excel
+    var d = new Date(1900, 0, 1); // 1 Jan 1900
+    d.setDate(d.getDate() + s - 1);
+    var y = d.getFullYear();
+    var mo = String(d.getMonth()+1).padStart(2,'0');
+    var da = String(d.getDate()).padStart(2,'0');
+    return y+'-'+mo+'-'+da;
+  }
 
-    // Detectar cabecera de usuario
-    if(c0.startsWith('Usuario:')) {
-      var hasTotal = row[1] && !isNaN(parseFloat(String(row[1]).replace(',','.')));
-      if(!hasTotal) {
-        currentUser = c0.replace('Usuario:','').trim();
+  // Detectar si un valor es un serial de fecha Excel razonable (2020-2030 → 43831-49352)
+  function isExcelDateSerial(v) {
+    return typeof v === 'number' && v > 43000 && v < 55000;
+  }
+
+  rows.forEach(function(row) {
+    if(!row || row[0] === null || row[0] === undefined) return;
+    var c0 = row[0];
+    var c0str = String(c0).trim();
+
+    // Cabecera de usuario: string que empieza por "Usuario:"
+    if(typeof c0 === 'string' && c0str.startsWith('Usuario:')) {
+      // Si col1 tiene valor numérico = línea de total del usuario → ignorar
+      var col1 = row[1];
+      var isTotal = col1 !== null && col1 !== undefined && !isNaN(parseFloat(String(col1)));
+      if(!isTotal) {
+        currentUser = c0str.replace('Usuario:','').trim();
       }
       return;
     }
 
-    // Fila de dato — col0 es fecha
-    if(currentUser && row[COL_VENTAS_NETAS] !== undefined && row[COL_VENTAS_NETAS] !== null) {
-      // Detectar que col0 es fecha (formato "yyyy-mm-dd" o Date)
-      var fechaStr = String(row[0]).trim();
-      var isDate = /^\d{4}-\d{2}-\d{2}/.test(fechaStr) || /^\d{2}\/\d{2}\/\d{4}/.test(fechaStr);
-      if(!isDate) return;
-
-      var ventasNetas = parseFloat(String(row[COL_VENTAS_NETAS]).replace(',','.'));
+    // Fila de dato: col0 es serial de fecha Excel
+    if(currentUser && isExcelDateSerial(c0)) {
+      var ventasRaw = row[COL_VENTAS_NETAS];
+      if(ventasRaw === null || ventasRaw === undefined) return;
+      var ventasNetas = parseFloat(String(ventasRaw).replace(',','.'));
       if(isNaN(ventasNetas)) return;
+
+      var fechaISO = excelSerialToISO(c0);
+      if(!fechaISO) return;
 
       if(!userTotals[currentUser]) {
         userTotals[currentUser] = { total: 0, dias: new Set() };
         userDayVentas[currentUser] = [];
       }
       userTotals[currentUser].total += ventasNetas;
-      userTotals[currentUser].dias.add(fechaStr.substring(0,10));
-      userDayVentas[currentUser].push({ fecha: fechaStr.substring(0,10), ventas: ventasNetas });
+      userTotals[currentUser].dias.add(fechaISO);
+      userDayVentas[currentUser].push({ fecha: fechaISO, ventas: ventasNetas });
     }
   });
 

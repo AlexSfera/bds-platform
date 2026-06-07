@@ -435,6 +435,7 @@ function getScreens(rol){
   var dptoMod = [];
   if(isCocina)    dptoMod.push(ITEMS.merma);
   if(isSala)      dptoMod.push(ITEMS.ajustes);
+  if(isSala)      dptoMod.push(ITEMS.incentivos); // empleados Sala ven su bonus
   if(isHK)        {
     dptoMod.push(ITEMS.ruta);
     // Gobernanta/Subgobernanta ven planificación + zonas + revisión + dashboard + config
