@@ -421,9 +421,10 @@ function getScreens(rol){
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
+  // Incentivos: empleados de Sala ven su propia vista (resto ve "no disponible")
   var navComun = isAdminU
-    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
-    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio];
+    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]
+    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.incentivos];
 
   // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
   if(isAdminU || isSyncrolab || isRecepcion) navComun.push(ITEMS.hypoxic);
