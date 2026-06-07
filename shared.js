@@ -416,7 +416,8 @@ function getScreens(rol){
     hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
     hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
     hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
-    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'}
+    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
+    incentivos:  {id:'incentivos',  label:'💰 Incentivos'}
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
@@ -469,6 +470,7 @@ function getScreens(rol){
     gestion.push(ITEMS.export);
   }
   if(isJefe) gestion.push(ITEMS.fio);
+  if(isJefe) gestion.push(ITEMS.incentivos);
 
   // Devolvemos array plano con separadores marcados para buildNav
   var out = [].concat(navComun);
@@ -609,6 +611,7 @@ async function showScreen(id){
   if(id==='hk-revision' && typeof renderHKRevision==='function')       renderHKRevision();
   if(id==='hk-dash'     && typeof renderHKDashboard==='function')      renderHKDashboard();
   if(id==='fichaje'     && typeof renderFichaje==='function')          { _fichajeFilterPeriodo=''; renderFichaje(); }
+  if(id==='incentivos'  && typeof renderIncentivos==='function')        renderIncentivos();
   updateDots();
 }
 async function updateDots(){
