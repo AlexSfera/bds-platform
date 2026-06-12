@@ -518,6 +518,7 @@ window.renderValHypoxicList = renderValHypoxicList;
 async function renderValCajaList() {
   var el = document.getElementById('val-caja-table');
   if(!el) return;
+  renderValCajaRecepcion(); // CAJA-V2: independiente de Sala — debe pintarse aunque Sala esté vacía
 
   // Filtrar por dept seleccionado: hoy solo Sala tiene cierres reales
   var dept = (typeof _currentValDept !== 'undefined' && _currentValDept) || '';
@@ -585,7 +586,6 @@ async function renderValCajaList() {
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">No se puede cargar — ejecuta primero el SQL de Sala Phase 1.</div>';
   }
-  renderValCajaRecepcion();
 }
 
 // ── CAJA-V2 · VALIDACIÓN CAJAS RECEPCIÓN (cierres + traspasos) ──────────
