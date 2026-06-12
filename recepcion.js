@@ -987,7 +987,7 @@ async function evalRecCajaChoice() {
 
   if(dup && !isAdminU){
     if(msg){
-      msg.textContent = '⛔ El turno '+_recTipoTurno+' ya registró '+(dup.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy ('+(dup.responsable_nombre || dup.usuario_nombre || '')+'). Solo una operación por turno y día.';
+      msg.textContent = '⛔ El turno '+_recTipoTurno+' ya registró '+(dup.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy ('+(dup.responsable_nombre || dup.usuario_nombre || '')+'). Cierra el turno sin caja.';
       msg.style.color = 'var(--red)';
     }
     setRecTipoBtns(false, false);
@@ -1007,6 +1007,14 @@ async function evalRecCajaChoice() {
       msg.textContent = '';
     }
   }
+}
+
+// Cierre de turno SIN operación de caja (2 recepcionistas: la caja la hace el compañero)
+function skipRecCajaOp() {
+  var turno = _recTipoTurno || getRecTurnoValue() || '—';
+  closeRecCajaChoice();
+  auditLog('REC_CAJA_SKIP', currentUser.nombre+' cerró turno '+turno+' sin operación de caja ('+today()+')');
+  toast('Turno cerrado sin operación de caja', 'ok');
 }
 
 function startRecTraspaso() {

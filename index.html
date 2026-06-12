@@ -1406,7 +1406,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
   <div style="background:var(--bg2);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:440px;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · OPERACIÓN DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">¿Traspaso o cierre de caja?</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Mañana y Tarde solo pueden traspasar. El cierre de caja se hace en el turno de Noche. Una sola operación por turno y día.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Mañana y Tarde solo pueden traspasar. El cierre de caja se hace en el turno de Noche. Una sola operación de caja por turno y día — si sois dos en el turno, la hace uno y el otro cierra sin caja.</div>
     <div class="fg" style="margin-bottom:12px;">
       <label>Turno <span class="req">*</span></label>
       <div style="display:flex;gap:8px;margin-top:6px;">
@@ -1419,7 +1419,8 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button id="rec-tipo-btn-traspaso" onclick="startRecTraspaso()" disabled style="width:100%;padding:14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">🔁 Traspaso de caja al siguiente turno</button>
       <button id="rec-tipo-btn-cierre" onclick="startRecCierre()" disabled style="width:100%;padding:14px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (turno Noche)</button>
-      <button onclick="closeRecCajaChoice()" style="width:100%;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>
+      <button onclick="skipRecCajaOp()" style="width:100%;padding:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">✓ Cerrar turno sin caja (la gestiona mi compañero/a)</button>
+      <button onclick="closeRecCajaChoice()" style="width:100%;padding:10px;background:transparent;color:var(--text3);border:none;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
     </div>
   </div>
 </div>
