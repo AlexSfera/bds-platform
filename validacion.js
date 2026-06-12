@@ -585,7 +585,83 @@ async function renderValCajaList() {
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">No se puede cargar — ejecuta primero el SQL de Sala Phase 1.</div>';
   }
+  renderValCajaRecepcion();
 }
+
+// ── CAJA-V2 · VALIDACIÓN CAJAS RECEPCIÓN (cierres + traspasos) ──────────
+// Visible: admin + jefe_recepcion · Acciones: Ver / Reabrir / Eliminar(admin)
+// Reutiliza modales y funciones de recepcion.js (tabla recepcion_cash).
+async function renderValCajaRecepcion() {
+  var block = document.getElementById('val-rec-caja-block');
+  var el    = document.getElementById('val-rec-caja-table');
+  if(!block || !el) return;
+
+  var isAdminU  = currentUser && currentUser.rol === 'admin';
+  var isJefeRec = currentUser && currentUser.rol === 'jefe_recepcion';
+  if(!isAdminU && !isJefeRec){ block.style.display = 'none'; return; }
+  block.style.display = 'block';
+  el.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
+
+  var rows = [];
+  try { rows = await getDB('recepcion_cash'); } catch(e){ rows = []; }
+
+  var periodo = (document.getElementById('val-rec-caja-periodo')||{value:'semana'}).value || 'semana';
+  var t = today();
+  rows = rows.filter(function(r){
+    if(periodo === 'hoy')    return r.fecha === t;
+    if(periodo === 'semana') return r.fecha >= startOfWeek();
+    if(periodo === 'mes')    return r.fecha >= startOfMonth();
+    return true;
+  });
+  rows.sort(function(a,b){
+    return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||'');
+  });
+
+  if(!rows.length){
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin operaciones de caja Recepción en este periodo</div></div>';
+    return;
+  }
+
+  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Recepcionista</th>'
+    + '<th>Fondo recibido</th><th>Retiro</th><th>Fondo traspasado</th><th>Δ Total</th>'
+    + '<th>Estado</th><th>Acción</th></tr>';
+
+  rows.forEach(function(r){
+    var dif      = parseFloat(r.dif_total || 0);
+    var difColor = Math.abs(dif) < 0.01 ? 'var(--green)' : 'var(--red)';
+    var esTraspaso = r.tipo === 'traspaso';
+    var tipoBadge  = esTraspaso
+      ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
+      : '<span class="badge" style="background:rgba(139,92,246,.15);color:#8b5cf6;border:1px solid #8b5cf6;">💰 Cierre</span>';
+    var estado = r.estado || 'cerrado';
+    var estadoBadge = estado === 'validado'  ? '<span class="badge b-green">✓ Validado</span>'
+                    : estado === 'reabierto' ? '<span class="badge b-orange">↩ Reabierto</span>'
+                    : '<span class="badge b-gray">● '+estado+'</span>';
+    var verFn = esTraspaso ? 'openRecTraspasoModal' : 'openRecCajaModal';
+
+    var acciones = '<div style="display:flex;flex-direction:column;gap:4px;">'
+      + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
+      + (estado !== 'reabierto' ? '<button class="btn btn-warn btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">↩ Reabrir</button>' : '')
+      + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaRec(\''+r.id+'\')">🗑 Eliminar</button>' : '')
+      + '</div>';
+
+    html += '<tr>'
+      + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
+      + '<td>' + (r.turno || '—') + '</td>'
+      + '<td>' + tipoBadge + '</td>'
+      + '<td style="font-weight:600">' + (r.responsable_nombre || r.usuario_nombre || '—') + '</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_recibido)||0).toFixed(2) + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.retiro_caja_fuerte)||0).toFixed(2) + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_real_a_traspasar)||0).toFixed(2) + '€</td>'
+      + '<td style="font-family:var(--font-mono);font-weight:700;color:' + difColor + '">' + (dif >= 0 ? '+' : '') + dif.toFixed(2) + '€</td>'
+      + '<td>' + estadoBadge + '</td>'
+      + '<td style="white-space:nowrap">' + acciones + '</td>'
+      + '</tr>';
+  });
+  html += '</table>';
+  el.innerHTML = html;
+}
+window.renderValCajaRecepcion = renderValCajaRecepcion;
 
 async function openCajaSummary(cajaId, showValidar) {
   var data = await dbGetAll('sala_cash_closures');

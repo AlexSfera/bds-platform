@@ -881,6 +881,20 @@ tr:hover td{background:rgba(255,255,255,.018);}
           </div>
         </div>
         <div class="card"><div class="tbl-wrap" id="val-caja-table"></div></div>
+
+        <!-- CAJA-V2: cajas Recepción (cierres + traspasos) — visible admin / jefe_recepcion -->
+        <div id="val-rec-caja-block" style="display:none;margin-top:24px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;">🏨 RECEPCIÓN · CIERRES Y TRASPASOS DE CAJA</div>
+            <select id="val-rec-caja-periodo" onchange="renderValCajaRecepcion()" style="color:#111827;background:#ffffff;padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;">
+              <option value="hoy">Hoy</option>
+              <option value="semana" selected>Esta semana</option>
+              <option value="mes">Este mes</option>
+              <option value="todo">Todos</option>
+            </select>
+          </div>
+          <div class="card"><div class="tbl-wrap" id="val-rec-caja-table"><div class="empty"><div class="empty-text">Cargando...</div></div></div></div>
+        </div>
       </div>
     </div>
 
@@ -1032,7 +1046,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
           <option value="semana" selected>Esta semana</option>
           <option value="mes">Este mes</option>
         </select>
-        <button onclick="openRecCajaModal()" class="btn btn-primary">+ Nuevo cuadre de caja</button>
+        <button onclick="openRecCajaChoice()" class="btn btn-primary">+ Nueva operación de caja</button>
       </div>
       <div class="card"><div class="tbl-wrap" id="rec-caja-list"><div class="empty"><div class="empty-text">Cargando...</div></div></div></div>
 

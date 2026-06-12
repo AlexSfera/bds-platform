@@ -752,6 +752,7 @@ async function reabrirCajaRec(cajaId) {
     invalidateCache(REC_TABLE);
     toast('Caja reabierta', 'ok');
     renderRecepcionCajaList();
+    if(typeof renderValCajaRecepcion === 'function') renderValCajaRecepcion();
   } catch(e){ toast('Error: '+e.message,'err'); }
 }
 
@@ -766,6 +767,7 @@ async function eliminarCajaRec(cajaId) {
     invalidateCache(REC_TABLE);
     toast('Caja eliminada — registrado en auditoría','ok');
     renderRecepcionCajaList();
+    if(typeof renderValCajaRecepcion === 'function') renderValCajaRecepcion();
   } catch(e){ toast('Error: '+e.message,'err'); }
 }
 
