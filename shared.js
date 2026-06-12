@@ -408,6 +408,7 @@ function getScreens(rol){
     merma:       {id:'merma-mod',   label:'📦 Merma'},
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
+    cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
     recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
     mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true},
     // ── HOUSEKEEPING ─────────────────────────────────────────────────
@@ -448,7 +449,7 @@ function getScreens(rol){
       dptoMod.push(ITEMS.hkConfig);
     }
   }
-  if(isRecepcion) dptoMod.push(ITEMS.recmod);
+  if(isRecepcion) { dptoMod.push(ITEMS.cajaRec); dptoMod.push(ITEMS.recmod); }
   if(isMant)      dptoMod.push(ITEMS.mantmod);
   // Admin ve también todas las pantallas HK
   if(isAdminU && !isHK){
@@ -501,9 +502,10 @@ function buildNav(){
     'export':    _svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
     'gestiones': _svg('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
     'incidencias': _svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
-    'hypoxic':   _svg('<path d="M12 2a3 3 0 0 0-3 3c0 1.5 1 2.5 1 4v3a4 4 0 0 1-2 3.5L7 16a3 3 0 0 0 0 4.5 3 3 0 0 0 4 0l1-1 1 1a3 3 0 0 0 4 0 3 3 0 0 0 0-4.5l-1-.5a4 4 0 0 1-2-3.5V9c0-1.5 1-2.5 1-4a3 3 0 0 0-3-3z"/>')
+    'hypoxic':   _svg('<path d="M12 2a3 3 0 0 0-3 3c0 1.5 1 2.5 1 4v3a4 4 0 0 1-2 3.5L7 16a3 3 0 0 0 0 4.5 3 3 0 0 0 4 0l1-1 1 1a3 3 0 0 0 4 0 3 3 0 0 0 0-4.5l-1-.5a4 4 0 0 1-2-3.5V9c0-1.5 1-2.5 1-4a3 3 0 0 0-3-3z"/>'),
+    'rec-caja-op': _svg('<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 10h.01"/><path d="M2 10h20"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
 
   // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
   const sideb = document.getElementById('sidebar-nav');
@@ -531,6 +533,8 @@ function buildNav(){
                   + '<span class="alert-dot" id="dotside-'+s.id+'"></span>';
       if(isPending){
         a.onclick = function(){ toast('Módulo en desarrollo','info'); };
+      } else if(s.action){
+        a.onclick = function(){ if(typeof window[s.action] === 'function') window[s.action](); else toast('Función no disponible','err'); };
       } else {
         a.onclick = function(){ showScreen(s.id); };
       }
@@ -543,6 +547,7 @@ function buildNav(){
     b.innerHTML=s.label+'<span class="alert-dot" id="dot-'+s.id+'"></span>';
     b.onclick=function(){
       if(isPending){ toast('Módulo en desarrollo','info'); return; }
+      if(s.action){ if(typeof window[s.action] === 'function') window[s.action](); return; }
       showScreen(s.id);
     };
     nav.appendChild(b);
@@ -555,6 +560,7 @@ function buildNav(){
       bb.innerHTML='<span class="bnav-icon">'+(ICONS[s.id]||'●')+'</span><span class="bnav-label">'+(SHORT[s.id]||s.id)+'</span><span class="bnav-dot" id="bdot-'+s.id+'"></span>';
       bb.onclick=function(){
         if(isPending){ toast('Módulo en desarrollo','info'); return; }
+        if(s.action){ if(typeof window[s.action] === 'function') window[s.action](); return; }
         showScreen(s.id);
       };
       bnav.appendChild(bb);

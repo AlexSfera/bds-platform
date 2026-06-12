@@ -1401,6 +1401,90 @@ tr:hover td{background:rgba(255,255,255,.018);}
   </div>
 </div>
 
+<!-- ══ CAJA-V2 · MODAL ELECCIÓN: TRASPASO O CIERRE (RECEPCIÓN) ══ -->
+<div id="modal-rec-tipo" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:710;padding:16px;">
+  <div style="background:var(--bg2);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:440px;">
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · OPERACIÓN DE CAJA</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">¿Traspaso o cierre de caja?</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Mañana y Tarde solo pueden traspasar. El cierre de caja se hace en el turno de Noche. Una sola operación por turno y día.</div>
+    <div class="fg" style="margin-bottom:12px;">
+      <label>Turno <span class="req">*</span></label>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="tbtn" id="rec-tipo-turno-manana" onclick="setRecTipoTurno('Mañana',this)">🌅 Mañana</button>
+        <button class="tbtn" id="rec-tipo-turno-tarde" onclick="setRecTipoTurno('Tarde',this)">🌆 Tarde</button>
+        <button class="tbtn" id="rec-tipo-turno-noche" onclick="setRecTipoTurno('Noche',this)">🌙 Noche</button>
+      </div>
+    </div>
+    <div id="rec-tipo-msg" style="font-size:12px;color:var(--text3);min-height:18px;margin-bottom:12px;font-family:var(--font-mono);"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button id="rec-tipo-btn-traspaso" onclick="startRecTraspaso()" disabled style="width:100%;padding:14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">🔁 Traspaso de caja al siguiente turno</button>
+      <button id="rec-tipo-btn-cierre" onclick="startRecCierre()" disabled style="width:100%;padding:14px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (turno Noche)</button>
+      <button onclick="closeRecCajaChoice()" style="width:100%;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CAJA-V2 · MODAL TRASPASO DE CAJA (RECEPCIÓN) ══ -->
+<div id="modal-rec-traspaso" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
+  <div style="background:var(--bg2);border:2px solid #0891b2;border-radius:14px;padding:24px;width:100%;max-width:560px;margin:40px auto;">
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#0891b2;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · TRASPASO DE CAJA</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Traspaso de caja — <span id="rec-tras-turno-label">Turno</span></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px;">El fondo recibido viene del último cierre o traspaso y no es editable. Cuenta el efectivo y traspasa el fondo al siguiente turno.</div>
+
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Fondo recibido del turno anterior (€)</label>
+      <input type="text" id="rec-tras-fondo-recibido" value="0.00" readonly style="color:#111827;background:#ffffff;opacity:.6;cursor:not-allowed;">
+    </div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Ventas en efectivo según MEWS (€) <span class="req">*</span></label>
+      <input type="text" inputmode="decimal" id="rec-tras-ventas-mews" placeholder="0.00" oninput="calcRecTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Cash real contado (€) <span class="req">*</span></label>
+      <input type="text" inputmode="decimal" id="rec-tras-cash-real" placeholder="0.00" oninput="calcRecTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+
+    <div class="fg" style="margin-bottom:8px;">
+      <label>¿Hay retiro para caja fuerte? <span class="req">*</span></label>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="tbtn" id="rec-tras-cf-si" onclick="setRecTrasCF('si',this)">SÍ</button>
+        <button class="tbtn" id="rec-tras-cf-no" onclick="setRecTrasCF('no',this)">NO</button>
+      </div>
+    </div>
+    <div id="rec-tras-cf-block" style="display:none;" class="fg">
+      <label>Importe retirado a caja fuerte (€) <span class="req">*</span></label>
+      <input type="text" inputmode="decimal" id="rec-tras-cf-importe" placeholder="0.00" oninput="calcRecTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin:14px 0 8px;">TRASPASO AL SIGUIENTE TURNO</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--font-mono);">Calculado = Fondo recibido + Ventas efectivo MEWS − Retiro caja fuerte</div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Fondo esperado a traspasar (€)</label>
+      <div id="rec-tras-fondo-esperado" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div>
+    </div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Fondo real a traspasar (€) <span class="req">*</span></label>
+      <input type="text" inputmode="decimal" id="rec-tras-fondo-real" placeholder="0.00" oninput="calcRecTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+    <div id="rec-tras-dif" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;">—</div>
+    <div id="rec-tras-dif-block" style="display:none;">
+      <div class="fg" style="margin-bottom:8px;">
+        <label>Explicación de la diferencia <span class="req">*</span></label>
+        <textarea id="rec-tras-dif-exp" rows="2" placeholder="Explica por qué no cuadra el fondo..." style="color:#111827;background:#ffffff;"></textarea>
+      </div>
+      <div class="fg" style="margin-bottom:8px;">
+        <label>Acción tomada</label>
+        <input type="text" id="rec-tras-dif-accion" placeholder="Opcional" style="color:#111827;background:#ffffff;">
+      </div>
+    </div>
+    <div id="rec-tras-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="closeRecTraspasoModal()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>
+      <button onclick="submitRecTraspaso()" style="flex:2;padding:12px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar traspaso</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- ══ MODAL FOLLOWUP / INCIDENCIA ══ -->
 <div id="modal-followup" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:800;padding:16px;overflow-y:auto;">

@@ -358,8 +358,9 @@ function submitRecKpi() {
 
   closeRecKpiModal();
   // BUG-01 FIX: guardar turno PRIMERO, luego abrir caja
+  // CAJA-V2: pregunta traspaso o cierre en vez de abrir cierre directo
   _doSaveTurno().then(function() {
-    openRecCajaModal();
+    openRecCajaChoice();
   });
 }
 
@@ -409,7 +410,7 @@ function openRecCajaModal(existingId) {
     });
   }
 
-  var turno = getRecTurnoValue() || '—';
+  var turno = getRecTurnoValue() || _recTipoTurno || '—';
   var label = document.getElementById('rec-caja-turno-label');
   if(label) label.textContent = turno;
 
@@ -482,7 +483,7 @@ async function submitRecCaja() {
   var fondoRec  = gv('rec-fondo-recibido') || 0;
   var fondoTras = gv('rec-fondo-traspaso');
   var cfImporte = gv('rec-cf-importe') || 0;
-  var turno     = getRecTurnoValue();
+  var turno     = getRecTurnoValue() || _recTipoTurno || '';
 
   // Cargos hotel y pensiones
   var roomCharge           = gv('rec-room-charge') || 0;
@@ -526,6 +527,23 @@ async function submitRecCaja() {
   var errEl2 = document.getElementById('rec-caja-err');
   if(errEl2) errEl2.textContent = '';
 
+  // CAJA-V2: Mañana/Tarde solo traspasan + una operación por turno y día
+  if(!_recCajaEditId && currentUser.rol !== 'admin'){
+    if(turno !== 'Noche'){
+      var msgT = 'El turno de '+turno+' no puede cerrar caja. Haz un traspaso.';
+      if(errEl2) errEl2.textContent = msgT;
+      toast(msgT, 'err');
+      return;
+    }
+    var dupC = await getRecOpToday(turno);
+    if(dupC){
+      var msgD = 'El turno '+turno+' ya registró '+(dupC.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy. Solo una operación por turno.';
+      if(errEl2) errEl2.textContent = msgD;
+      toast(msgD, 'err');
+      return;
+    }
+  }
+
   var ts    = localTs();
   var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : today();
 
@@ -540,6 +558,7 @@ async function submitRecCaja() {
     usuario_id:                currentUser.id,
     usuario_nombre:            currentUser.nombre,
     estado:                    'cerrado',
+    tipo:                      'cierre',
     // Fondos
     fondo_recibido:            fondoRec,
     fondo_traspasado:          fondoTras,
@@ -625,7 +644,7 @@ async function renderRecepcionCajaList() {
   });
 
   if(!rows.length){
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin cierres de caja en este periodo</div></div>';
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin operaciones de caja en este periodo</div></div>';
     return;
   }
 
@@ -634,7 +653,7 @@ async function renderRecepcionCajaList() {
   var canReopen  = isAdminU || isJefeRec;
 
   var html = '<div style="overflow-x:auto"><table>'
-    + '<tr><th>Fecha</th><th>Turno</th><th>Recepcionista</th>'
+    + '<tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Recepcionista</th>'
     + '<th>Δ Cash</th><th>Δ TPV</th><th>Δ Stripe</th><th>Δ Trans.</th><th>Δ Total</th>'
     + '<th>Estado</th><th>Acciones</th></tr>';
 
@@ -648,7 +667,12 @@ async function renderRecepcionCajaList() {
                     : estado === 'reabierto' ? '<span class="badge b-orange">↩ Reabierto</span>'
                     : '<span class="badge b-red">● '+estado+'</span>';
 
-    var acciones = '<button class="btn btn-secondary btn-sm" onclick="openRecCajaModal(\''+r.id+'\')">Ver</button>';
+    var esTraspaso = r.tipo === 'traspaso';
+    var tipoBadge  = esTraspaso
+      ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
+      : '<span class="badge" style="background:rgba(139,92,246,.15);color:#8b5cf6;border:1px solid #8b5cf6;">💰 Cierre</span>';
+    var verFn    = esTraspaso ? 'openRecTraspasoModal' : 'openRecCajaModal';
+    var acciones = '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">Ver</button>';
     if(canReopen && estado !== 'reabierto')
       acciones += ' <button class="btn btn-secondary btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">Reabrir</button>';
     if(isAdminU)
@@ -659,6 +683,7 @@ async function renderRecepcionCajaList() {
     html += '<tr>'
       + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
       + '<td>' + bTurno(r.turno) + '</td>'
+      + '<td>' + tipoBadge + '</td>'
       + '<td style="font-weight:600">' + (r.responsable_nombre || r.usuario_nombre || '—') + '</td>'
       + dCell(r.dif_cash)
       + dCell(r.dif_tarjeta)
@@ -889,4 +914,340 @@ function calcRecDifs() {
   var expBlock = document.getElementById('rec-dif-exp-block');
   if(alertEl)  alertEl.style.display  = hasError?'block':'none';
   if(expBlock) expBlock.style.display = hasError?'block':'none';
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// CAJA-V2 · ELECCIÓN TRASPASO/CIERRE + TRASPASO DE CAJA RECEPCIÓN
+// Reglas: Mañana/Tarde → solo traspaso · Noche → traspaso o cierre
+//         Una operación (cierre O traspaso) por turno y día · admin exento
+// Cadena de fondo: fondo recibido = fondo_real_a_traspasar del último
+// registro (cierre o traspaso, comparten tabla recepcion_cash).
+// Requiere columna recepcion_cash.tipo (default 'cierre').
+// ═══════════════════════════════════════════════════════════════════════
+var _recTipoTurno      = null;
+var _recTraspasoEditId = null;
+var _recTrasCF         = null;
+
+async function getRecOpToday(turno) {
+  var rows = [];
+  try { rows = await getDB(REC_TABLE); } catch(e){ rows = []; }
+  var t = today();
+  return rows.find(function(r){ return r.fecha === t && r.turno === turno; }) || null;
+}
+
+function openRecCajaChoice() {
+  _recTipoTurno = getRecTurnoValue() || null;
+  ['manana','tarde','noche'].forEach(function(k){
+    var b = document.getElementById('rec-tipo-turno-'+k);
+    if(b) b.classList.remove('t-si');
+  });
+  var map = { 'Mañana':'manana', 'Tarde':'tarde', 'Noche':'noche' };
+  if(_recTipoTurno && map[_recTipoTurno]){
+    var sel = document.getElementById('rec-tipo-turno-'+map[_recTipoTurno]);
+    if(sel) sel.classList.add('t-si');
+  }
+  var msg = document.getElementById('rec-tipo-msg');
+  if(msg) msg.textContent = _recTipoTurno ? '' : 'Selecciona tu turno para continuar';
+  setRecTipoBtns(false, false);
+  var m = document.getElementById('modal-rec-tipo');
+  if(m) m.style.display = 'flex';
+  if(_recTipoTurno) evalRecCajaChoice();
+}
+
+function closeRecCajaChoice() {
+  var m = document.getElementById('modal-rec-tipo');
+  if(m) m.style.display = 'none';
+}
+
+function setRecTipoTurno(t, btn) {
+  _recTipoTurno = t;
+  if(btn && btn.parentElement){
+    btn.parentElement.querySelectorAll('.tbtn').forEach(function(b){ b.classList.remove('t-si'); });
+    btn.classList.add('t-si');
+  }
+  evalRecCajaChoice();
+}
+
+function setRecTipoBtns(traspasoOn, cierreOn) {
+  var bt = document.getElementById('rec-tipo-btn-traspaso');
+  var bc = document.getElementById('rec-tipo-btn-cierre');
+  if(bt){ bt.disabled = !traspasoOn; bt.style.opacity = traspasoOn ? '1' : '.4'; bt.style.cursor = traspasoOn ? 'pointer' : 'not-allowed'; }
+  if(bc){ bc.disabled = !cierreOn;   bc.style.opacity = cierreOn   ? '1' : '.4'; bc.style.cursor = cierreOn   ? 'pointer' : 'not-allowed'; }
+}
+
+async function evalRecCajaChoice() {
+  var msg = document.getElementById('rec-tipo-msg');
+  if(!_recTipoTurno){ setRecTipoBtns(false, false); return; }
+  setRecTipoBtns(false, false);
+  if(msg){ msg.textContent = 'Comprobando operaciones de hoy...'; msg.style.color = 'var(--text3)'; }
+
+  var isAdminU = currentUser && currentUser.rol === 'admin';
+  var dup = await getRecOpToday(_recTipoTurno);
+
+  if(dup && !isAdminU){
+    if(msg){
+      msg.textContent = '⛔ El turno '+_recTipoTurno+' ya registró '+(dup.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy ('+(dup.responsable_nombre || dup.usuario_nombre || '')+'). Solo una operación por turno y día.';
+      msg.style.color = 'var(--red)';
+    }
+    setRecTipoBtns(false, false);
+    return;
+  }
+
+  var puedeCerrar = isAdminU || _recTipoTurno === 'Noche';
+  setRecTipoBtns(true, puedeCerrar);
+  if(msg){
+    if(dup && isAdminU){
+      msg.textContent = '⚠ Ya existe una operación de este turno hoy. Como admin puedes duplicar — revisa antes de guardar.';
+      msg.style.color = 'var(--amber)';
+    } else if(!puedeCerrar){
+      msg.textContent = 'Turno '+_recTipoTurno+': solo traspaso. El cierre de caja corresponde al turno de Noche.';
+      msg.style.color = 'var(--text3)';
+    } else {
+      msg.textContent = '';
+    }
+  }
+}
+
+function startRecTraspaso() {
+  var b = document.getElementById('rec-tipo-btn-traspaso');
+  if(b && b.disabled) return;
+  if(!_recTipoTurno){ toast('Selecciona tu turno','err'); return; }
+  closeRecCajaChoice();
+  openRecTraspasoModal();
+}
+
+function startRecCierre() {
+  var b = document.getElementById('rec-tipo-btn-cierre');
+  if(b && b.disabled) return;
+  if(!_recTipoTurno){ toast('Selecciona tu turno','err'); return; }
+  closeRecCajaChoice();
+  openRecCajaModal();
+}
+
+// ── TRASPASO: modal ─────────────────────────────────────────────────────
+function openRecTraspasoModal(existingId) {
+  _recTraspasoEditId = existingId || null;
+  _recTrasCF = null;
+
+  ['rec-tras-ventas-mews','rec-tras-cash-real','rec-tras-cf-importe',
+   'rec-tras-fondo-real','rec-tras-dif-exp','rec-tras-dif-accion'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  ['rec-tras-cf-si','rec-tras-cf-no'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.classList.remove('t-si','t-no');
+  });
+  var cfBlock = document.getElementById('rec-tras-cf-block');
+  if(cfBlock) cfBlock.style.display = 'none';
+  var difBlock = document.getElementById('rec-tras-dif-block');
+  if(difBlock) difBlock.style.display = 'none';
+  var difEl = document.getElementById('rec-tras-dif');
+  if(difEl){ difEl.textContent = '—'; difEl.style.color = 'var(--text3)'; }
+  var errEl = document.getElementById('rec-tras-err');
+  if(errEl) errEl.textContent = '';
+
+  var fondoEl = document.getElementById('rec-tras-fondo-recibido');
+  if(fondoEl) fondoEl.value = '0.00';
+
+  var label = document.getElementById('rec-tras-turno-label');
+
+  if(!existingId){
+    if(label) label.textContent = _recTipoTurno || getRecTurnoValue() || '—';
+    // Fondo recibido = fondo_real_a_traspasar del último cierre O traspaso — no editable
+    getDB(REC_TABLE).then(function(rows){
+      var sorted = rows
+        .filter(function(r){ return r.fondo_real_a_traspasar != null; })
+        .sort(function(a,b){
+          return (b.fecha||'').localeCompare(a.fecha||'') ||
+                 (b.created_at||'').localeCompare(a.created_at||'');
+        });
+      var ultimo = sorted[0];
+      if(fondoEl && ultimo){
+        fondoEl.value = (parseFloat(ultimo.fondo_real_a_traspasar)||0).toFixed(2);
+        calcRecTraspaso();
+      }
+    });
+  } else {
+    getDB(REC_TABLE).then(function(rows){
+      var row = rows.find(function(r){ return r.id === existingId; });
+      if(!row) return;
+      _recTipoTurno = row.turno || _recTipoTurno;
+      if(label) label.textContent = row.turno || '—';
+      function set(id, val){ var el = document.getElementById(id); if(el && val != null) el.value = val; }
+      set('rec-tras-fondo-recibido', (parseFloat(row.fondo_recibido)||0).toFixed(2));
+      set('rec-tras-ventas-mews',    row.cash_mews);
+      set('rec-tras-cash-real',      row.cash_real);
+      set('rec-tras-fondo-real',     row.fondo_traspasado);
+      set('rec-tras-dif-exp',        row.explicacion_diferencia);
+      set('rec-tras-dif-accion',     row.accion_diferencia);
+      var cf = parseFloat(row.retiro_caja_fuerte)||0;
+      if(cf > 0){
+        setRecTrasCF('si', document.getElementById('rec-tras-cf-si'));
+        set('rec-tras-cf-importe', cf);
+      } else {
+        setRecTrasCF('no', document.getElementById('rec-tras-cf-no'));
+      }
+      calcRecTraspaso();
+    });
+  }
+
+  var m = document.getElementById('modal-rec-traspaso');
+  if(m) m.style.display = 'flex';
+}
+
+function closeRecTraspasoModal() {
+  var m = document.getElementById('modal-rec-traspaso');
+  if(m) m.style.display = 'none';
+}
+
+function setRecTrasCF(val, btn) {
+  _recTrasCF = val;
+  if(btn && btn.parentElement){
+    btn.parentElement.querySelectorAll('.tbtn').forEach(function(b){ b.classList.remove('t-si','t-no'); });
+    btn.classList.add(val === 'si' ? 't-si' : 't-no');
+  }
+  var block = document.getElementById('rec-tras-cf-block');
+  if(block) block.style.display = val === 'si' ? 'block' : 'none';
+  if(val === 'no'){
+    var imp = document.getElementById('rec-tras-cf-importe');
+    if(imp) imp.value = '';
+  }
+  calcRecTraspaso();
+}
+
+function calcRecTraspaso() {
+  function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  var fondoRec = gv('rec-tras-fondo-recibido');
+  var ventas   = gv('rec-tras-ventas-mews');
+  var cf       = _recTrasCF === 'si' ? gv('rec-tras-cf-importe') : 0;
+
+  // Fondo esperado = Fondo recibido + Ventas efectivo MEWS − Retiro caja fuerte
+  var esperado = fondoRec + ventas - cf;
+  var espEl = document.getElementById('rec-tras-fondo-esperado');
+  if(espEl){
+    espEl.textContent = esperado.toFixed(2) + ' €';
+    espEl.style.color = esperado >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+
+  var realRaw = (document.getElementById('rec-tras-fondo-real')||{value:''}).value;
+  var difEl    = document.getElementById('rec-tras-dif');
+  var difBlock = document.getElementById('rec-tras-dif-block');
+  if(realRaw === '' || isNaN(parseFloat(realRaw))){
+    if(difEl){ difEl.textContent = '—'; difEl.style.color = 'var(--text3)'; }
+    if(difBlock) difBlock.style.display = 'none';
+    return;
+  }
+  var dif = (parseFloat(realRaw)||0) - esperado;
+  var cuadrado = Math.abs(dif) < 0.01;
+  if(difEl){
+    difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + (dif >= 0 ? '+' : '') + dif.toFixed(2) + '€';
+    difEl.style.color = cuadrado ? 'var(--green)' : 'var(--red)';
+  }
+  if(difBlock) difBlock.style.display = cuadrado ? 'none' : 'block';
+}
+
+// ── TRASPASO: guardar ───────────────────────────────────────────────────
+async function submitRecTraspaso() {
+  var errs = [];
+  function gv(id){ return parseFloat((document.getElementById(id)||{}).value); }
+
+  var turno    = _recTipoTurno || getRecTurnoValue() || '';
+  var fondoRec = gv('rec-tras-fondo-recibido') || 0;
+  var ventas   = gv('rec-tras-ventas-mews');
+  var cashReal = gv('rec-tras-cash-real');
+  var fondoReal= gv('rec-tras-fondo-real');
+  var cf       = _recTrasCF === 'si' ? gv('rec-tras-cf-importe') : 0;
+
+  if(!turno)              errs.push('Selecciona turno');
+  if(isNaN(ventas) || ventas < 0)  errs.push('Ventas en efectivo según MEWS obligatorio (0 si no hubo)');
+  if(isNaN(cashReal))     errs.push('Cash real contado obligatorio');
+  if(_recTrasCF !== 'si' && _recTrasCF !== 'no') errs.push('Indica si hay retiro para caja fuerte');
+  if(_recTrasCF === 'si' && (isNaN(cf) || cf <= 0)) errs.push('Importe del retiro a caja fuerte obligatorio');
+  if(isNaN(fondoReal))    errs.push('Fondo real a traspasar obligatorio');
+
+  var esperado = fondoRec + (ventas||0) - (cf||0);
+  var dif      = (fondoReal||0) - esperado;
+  var exp      = (document.getElementById('rec-tras-dif-exp')||{value:''}).value.trim();
+  if(!isNaN(fondoReal) && Math.abs(dif) > 0.01 && !exp)
+    errs.push('Fondo no cuadrado: explicación obligatoria');
+
+  var errEl = document.getElementById('rec-tras-err');
+  if(errs.length > 0){
+    if(errEl) errEl.textContent = errs.join(' · ');
+    toast(errs[0], 'err');
+    return;
+  }
+  if(errEl) errEl.textContent = '';
+
+  // Una operación por turno y día (creación · admin exento)
+  if(!_recTraspasoEditId && currentUser.rol !== 'admin'){
+    var dup = await getRecOpToday(turno);
+    if(dup){
+      var msgD = 'El turno '+turno+' ya registró '+(dup.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy. Solo una operación por turno.';
+      if(errEl) errEl.textContent = msgD;
+      toast(msgD, 'err');
+      return;
+    }
+  }
+
+  var ts    = localTs();
+  var fecha = document.getElementById('t-fecha') && document.getElementById('t-fecha').value
+            ? document.getElementById('t-fecha').value : today();
+
+  var record = {
+    id:                      _recTraspasoEditId || genId(),
+    shift_id:                window._lastSavedShiftId || null,
+    fecha:                   fecha,
+    turno:                   turno,
+    tipo:                    'traspaso',
+    estado:                  'cerrado',
+    responsable_id:          currentUser.id,
+    responsable_nombre:      currentUser.nombre,
+    usuario_id:              currentUser.id,
+    usuario_nombre:          currentUser.nombre,
+    // Fondos — cadena: el siguiente turno recibe el fondo real entregado
+    fondo_recibido:          fondoRec,
+    fondo_traspasado:        fondoReal,
+    fondo_real_a_traspasar:  fondoReal,
+    fondo_inicial_siguiente: fondoReal,
+    retiro_caja_fuerte:      cf || 0,
+    // Efectivo del turno (reutiliza columnas existentes — sin cambio de esquema)
+    cash_mews:               ventas,
+    cash_real:               cashReal,
+    tarjeta_mews:            0,
+    stripe_mews:             0,
+    transferencia_mews:      0,
+    tpv_real:                0,
+    stripe_real:             0,
+    transferencia_banco:     0,
+    // Diferencias — solo aplica el descuadre de fondo
+    dif_cash:                dif,
+    dif_tarjeta:             0,
+    dif_stripe:              0,
+    dif_transferencia:       0,
+    dif_total:               dif,
+    dif_fondo_traspaso:      dif,
+    explicacion_diferencia:  exp || null,
+    accion_diferencia:       (document.getElementById('rec-tras-dif-accion')||{value:''}).value.trim() || null,
+    updated_at:              ts
+  };
+  if(!_recTraspasoEditId) record.created_at = ts;
+
+  try {
+    if(_recTraspasoEditId){
+      await dbUpdate(REC_TABLE, _recTraspasoEditId, record);
+      await auditLog('REC_TRASPASO_EDIT', currentUser.nombre+' editó traspaso caja recepción '+fecha+' turno '+turno+' · fondo '+(fondoReal||0).toFixed(2)+'€');
+      toast('Traspaso actualizado', 'ok');
+    } else {
+      await dbInsert(REC_TABLE, record);
+      await auditLog('REC_TRASPASO_SAVE', currentUser.nombre+' traspasó caja recepción '+fecha+' turno '+turno+' · fondo '+(fondoReal||0).toFixed(2)+'€');
+      toast('Traspaso de caja guardado', 'ok');
+    }
+    invalidateCache(REC_TABLE);
+    closeRecTraspasoModal();
+    renderRecepcionCajaList();
+  } catch(e){
+    if(errEl) errEl.textContent = 'Error al guardar: '+e.message;
+    toast('Error al guardar traspaso', 'err');
+  }
 }
