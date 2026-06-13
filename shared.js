@@ -391,7 +391,8 @@ function getScreens(rol){
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
   var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
-  var isJefe       = isAdminU || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
+  var isAdjDir     = (rol === 'adjunto_directivo');
+  var isJefe       = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
     || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
 
   // ── Definiciones de pantallas ─────────────────────────────────────
@@ -473,8 +474,10 @@ function getScreens(rol){
     gestion.push(ITEMS.validacion);
     gestion.push(ITEMS.dashboard);
   }
-  if(isAdminU){
+  if(isAdminU || isAdjDir){
     gestion.push(ITEMS.maestro);
+  }
+  if(isAdminU){
     gestion.push(ITEMS.export);
   }
   if(isJefe) gestion.push(ITEMS.fio);
@@ -2273,7 +2276,37 @@ async function saveEmpleado(){
     toast((_editEmpId?'Empleado actualizado':'Empleado creado')+' — coste: '+costeVal+'€/h','ok');
   }, 200);
 }
-async function toggleEmp(empId,newEstado){ const employees=await getDB('employees'); const idx=employees.findIndex(e=>e.id===empId); if(idx===-1) return; employees[idx].estado=newEstado; await setDB('employees',employees); renderMaestro(); toast('Estado: '+newEstado,'ok'); }
+async function toggleEmp(empId,newEstado){
+  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
+  var allEmps=await getDB('employees');
+  var emp=allEmps.find(function(e){ return e.id===empId; });
+  if(!emp){ toast('Empleado no encontrado','err'); return; }
+  if(emp.rol==='admin'&&!isAdmin(currentUser)){ toast('No puedes cambiar estado de administrador','err'); return; }
+  var patchRes=await fetch(SUPABASE_URL+'/rest/v1/employees?id=eq.'+encodeURIComponent(empId),{
+    method:'PATCH',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify({estado:newEstado})
+  });
+  if(!patchRes.ok){ var errTxt=await patchRes.text(); toast('Error: '+patchRes.status+' — '+errTxt.substring(0,60),'err'); return; }
+  await auditLog('EMP_TOGGLE',empId+' | '+(emp.nombre||'')+' → '+newEstado);
+  invalidateCache('employees');
+  await renderMaestro();
+  toast('Estado: '+newEstado,'ok');
+}
+
+window.toggleEmp=toggleEmp;
+
+// ── Buscador en Maestro (filtra tabla ya renderizada) ──────────────────
+function filterMaestroList(q){
+  var q2=(q||'').toLowerCase().trim();
+  var rows=document.querySelectorAll('#maestro-table table tr');
+  rows.forEach(function(tr,i){
+    if(i===0){ tr.style.display=''; return; } // header siempre visible
+    var txt=(tr.textContent||'').toLowerCase();
+    tr.style.display=(q2===''||txt.indexOf(q2)!==-1)?'':'none';
+  });
+}
+window.filterMaestroList=filterMaestroList;
 
 // ═══════════════════════════════════════════════════════════════════════
 // EXPORT

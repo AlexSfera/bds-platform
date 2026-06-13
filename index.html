@@ -1046,10 +1046,13 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- ══ MAESTRO ══ -->
     <div class="screen" id="screen-maestro">
-      <div class="page-header"><div class="page-title">👥 Maestro Cocina</div><div class="page-sub">Solo Administrador</div></div>
-      <div class="btn-row" style="margin-bottom:14px;">
+      <div class="page-header"><div class="page-title">👥 Maestro Empleados</div><div class="page-sub">Administración / Dirección</div></div>
+      <div class="btn-row" style="margin-bottom:10px;">
         <button class="btn btn-primary" onclick="openEmpModal()">+ Nuevo Empleado</button>
         <button class="btn btn-secondary" onclick="exportCSV('employees')">⬇ CSV</button>
+      </div>
+      <div style="margin-bottom:12px;">
+        <input type="search" id="maestro-search" placeholder="🔍 Buscar por nombre, área o puesto..." oninput="filterMaestroList(this.value)" autocomplete="off" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);color:var(--text1);font-size:13px;">
       </div>
       <div class="card"><div class="tbl-wrap" id="maestro-table"></div></div>
     
@@ -1746,7 +1749,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
       </select></div>
       <div class="fg"><label>Puesto</label><select id="emp-puesto">
   <optgroup label="Cocina">
-    <option>Jefe de Cocina</option>
     <option>Segundo Jefe de Cocina</option>
     <option>Cocinero</option>
     <option>Cocinera</option>
@@ -1754,7 +1756,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <option>Friegue</option>
   </optgroup>
   <optgroup label="Sala">
-    <option>Jefe de Sala</option>
     <option>Jefe de Sector</option>
     <option>Camarero</option>
     <option>Camarera</option>
@@ -1763,14 +1764,14 @@ tr:hover td{background:rgba(255,255,255,.018);}
   </optgroup>
   <optgroup label="Dirección / F&amp;B">
     <option>F&amp;B Manager</option>
-    <option>Administrador</option>
-    <option>Responsable</option>
+    <option>Chef</option>
+    <option>Jefe de Cocina</option>
+    <option>Jefe de Sala</option>
   </optgroup>
-  <optgroup label="Otros">
-    <option>Técnico</option>
-    <option>Recepcionista</option>
-    <option>Entrenador</option>
-    <option>Fisioterapeuta</option>
+  <optgroup label="Gestión / General">
+    <option>Recursos Humanos</option>
+    <option>Mantenimiento</option>
+    <option>Responsable de compras</option>
     <option>Otro</option>
   </optgroup>
   <optgroup label="Housekeeping">
