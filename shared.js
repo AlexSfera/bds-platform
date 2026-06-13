@@ -1520,10 +1520,16 @@ function onValDeptChange(){
 function initValDeptFilter(){
   var sel=document.getElementById('v-dept');
   if(!sel||!currentUser) return;
-  if(currentUser.rol==='chef'){
+  if(canActAsAdmin(currentUser)){
+    // Admin + adjunto_directivo: filtro libre
+    sel.disabled=false;
+  } else if(currentUser.rol==='chef'){
     sel.value='Cocina'; sel.disabled=true;
   } else if(currentUser.rol==='jefe_recepcion'){
     sel.value='Recepción'; sel.disabled=true;
+  } else if(typeof isSupervisor === 'function' && isSupervisor(currentUser)){
+    // Otros supervisores: datos ya filtrados a nivel JS; dejar en Todos y deshabilitar
+    sel.value=''; sel.disabled=true;
   } else {
     sel.disabled=false;
   }
@@ -1532,13 +1538,23 @@ function initValDeptFilter(){
 
 async function renderValidacion(){
   let shifts=await getDB('shifts');
-  // jefe_recepcion: only see Recepción shifts
-  if(currentUser && currentUser.rol==='jefe_recepcion'){
-    shifts = shifts.filter(function(s){ return s.area==='Recepción'; });
-  }
-  // Fix: empleado recepción solo ve sus propios turnos
-  if(currentUser && currentUser.area==='Recepción' && currentUser.rol==='empleado'){
-    shifts = shifts.filter(function(s){ return s.employee_id===currentUser.id; });
+  // ── Filtro por rol ────────────────────────────────────────────────────
+  // Admin + adjunto_directivo: ven todo (sin filtro)
+  // Supervisor (chef, fb, jefe_recepcion, coord_*, gobernante…): solo sus dptos según SUPERVISOR_DEPT_MAP
+  // Empleado: solo sus propios turnos
+  if(currentUser && !canActAsAdmin(currentUser)){
+    if(typeof isSupervisor === 'function' && isSupervisor(currentUser)){
+      var _supDepts = (typeof getSupervisorDepartments === 'function') ? getSupervisorDepartments(currentUser) : [];
+      if(_supDepts && _supDepts.length && _supDepts[0] !== '*'){
+        var _sdLower = _supDepts.map(function(d){ return String(d||'').trim().toLowerCase(); });
+        shifts = shifts.filter(function(s){
+          return _sdLower.indexOf(String(s.area||'').trim().toLowerCase()) >= 0;
+        });
+      }
+    } else {
+      // Empleado: solo sus propios turnos
+      shifts = shifts.filter(function(s){ return s.employee_id===currentUser.id; });
+    }
   }
   const desde=document.getElementById('v-desde').value;
   const hasta=document.getElementById('v-hasta').value;

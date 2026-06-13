@@ -165,6 +165,27 @@ async function saveTask(){
 // ── RENDER PANTALLA TAREAS ────────────────────────────────────────────
 async function renderTareas(){
   let tareas=await getDB('tareas');
+  // ── Filtro por rol ────────────────────────────────────────────────────
+  // Admin + adjunto_directivo: ven todas las tareas
+  // Supervisor: solo tareas de sus departamentos (SUPERVISOR_DEPT_MAP)
+  // Empleado: solo tareas de su departamento
+  var _isAdmOrAdj = (typeof canActAsAdmin === 'function') ? canActAsAdmin(currentUser) : isAdmin(currentUser);
+  if(!_isAdmOrAdj){
+    if(typeof isSupervisor === 'function' && isSupervisor(currentUser)){
+      var _tSupDepts = (typeof getSupervisorDepartments === 'function') ? getSupervisorDepartments(currentUser) : [];
+      if(_tSupDepts && _tSupDepts.length && _tSupDepts[0] !== '*'){
+        var _tsdLower = _tSupDepts.map(function(d){ return String(d||'').trim().toLowerCase(); });
+        tareas = tareas.filter(function(t){
+          return _tsdLower.indexOf(String(t.dept_destino||'').trim().toLowerCase()) >= 0;
+        });
+      }
+    } else {
+      // Empleado: solo tareas de su departamento
+      tareas = tareas.filter(function(t){ return t.dept_destino===currentUser.area; });
+    }
+  }
+  // Guardamos el set filtrado por rol (antes de filtros UI) para KPIs correctos
+  var _tareasForKpi = tareas.slice();
   const estado=document.getElementById('tk-estado').value;
   const dept=document.getElementById('tk-dept').value;
   const prio=document.getElementById('tk-prio').value;
@@ -184,8 +205,8 @@ async function renderTareas(){
     return (ps[b.prioridad]||0)-(ps[a.prioridad]||0);
   });
 
-  // KPIs tareas
-  const all=await getDB('tareas');
+  // KPIs tareas — sobre el universo filtrado por rol del usuario actual
+  const all=_tareasForKpi;
   const kpiEl=document.getElementById('tareas-kpi');
   const pend  =all.filter(t=>normalizeTaskState(t.estado)===TASK_STATES.ABIERTA).length;
   const enProc=all.filter(t=>normalizeTaskState(t.estado)===TASK_STATES.EN_PROCESO).length;
