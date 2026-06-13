@@ -997,6 +997,7 @@ function openRecCajaChoice() {
   var msg = document.getElementById('rec-tipo-msg');
   if(msg) msg.textContent = _recTipoTurno ? '' : 'Selecciona tu turno para continuar';
   setRecTipoBtns(false, false);
+  setRecSkipBtn('none');
   var m = document.getElementById('modal-rec-tipo');
   if(m) m.style.display = 'flex';
   if(_recTipoTurno) evalRecCajaChoice();
@@ -1023,6 +1024,22 @@ function setRecTipoBtns(traspasoOn, cierreOn) {
   if(bc){ bc.disabled = !cierreOn;   bc.style.opacity = cierreOn   ? '1' : '.4'; bc.style.cursor = cierreOn   ? 'pointer' : 'not-allowed'; }
 }
 
+function setRecSkipBtn(mode, opTipo) {
+  // mode: 'self' (yo ya hice caja) · 'mate' (compañero la hizo) · 'none' (nadie)
+  var b = document.getElementById('rec-tipo-btn-skip');
+  if(!b) return;
+  if(mode === 'self'){
+    b.style.display = 'block';
+    b.textContent = '✓ Cerrar turno — ' + (opTipo === 'traspaso' ? 'traspaso' : 'cierre') + ' de caja ya registrado por ti';
+  } else if(mode === 'mate'){
+    b.style.display = 'block';
+    b.textContent = '✓ Cerrar turno sin caja (la gestiona mi compañero/a)';
+  } else {
+    b.style.display = 'block';
+    b.textContent = '✓ Cerrar turno sin caja (la gestiona mi compañero/a)';
+  }
+}
+
 async function evalRecCajaChoice() {
   var msg = document.getElementById('rec-tipo-msg');
   if(!_recTipoTurno){ setRecTipoBtns(false, false); return; }
@@ -1031,16 +1048,31 @@ async function evalRecCajaChoice() {
 
   var isAdminU = currentUser && currentUser.rol === 'admin';
   var dup = await getRecOpToday(_recTipoTurno);
+  var dupEsMia = dup && (dup.responsable_id === currentUser.id || dup.usuario_id === currentUser.id);
 
-  if(dup && !isAdminU){
+  if(dup && dupEsMia && !isAdminU){
+    // YO ya hice mi caja hoy → no hay nada que elegir, solo cerrar turno
+    if(msg){
+      msg.textContent = '✓ Ya registraste tu ' + (dup.tipo === 'traspaso' ? 'traspaso' : 'cierre') + ' de caja en el turno ' + _recTipoTurno + '. Cierra el turno para terminar.';
+      msg.style.color = 'var(--green)';
+    }
+    setRecTipoBtns(false, false);
+    setRecSkipBtn('self', dup.tipo);
+    return;
+  }
+
+  if(dup && !dupEsMia && !isAdminU){
+    // Mi COMPAÑERO hizo la caja → cerrar sin caja
     if(msg){
       msg.textContent = '⛔ El turno '+_recTipoTurno+' ya registró '+(dup.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy ('+(dup.responsable_nombre || dup.usuario_nombre || '')+'). Cierra el turno sin caja.';
       msg.style.color = 'var(--red)';
     }
     setRecTipoBtns(false, false);
+    setRecSkipBtn('mate');
     return;
   }
 
+  setRecSkipBtn('none');
   var puedeCerrar = isAdminU || _recTipoTurno === 'Noche';
   setRecTipoBtns(true, puedeCerrar);
   if(msg){
@@ -1057,11 +1089,18 @@ async function evalRecCajaChoice() {
 }
 
 // Cierre de turno SIN operación de caja (2 recepcionistas: la caja la hace el compañero)
-function skipRecCajaOp() {
+async function skipRecCajaOp() {
   var turno = _recTipoTurno || getRecTurnoValue() || '—';
   closeRecCajaChoice();
-  auditLog('REC_CAJA_SKIP', currentUser.nombre+' cerró turno '+turno+' sin operación de caja ('+today()+')');
-  toast('Turno cerrado sin operación de caja', 'ok');
+  var dup = await getRecOpToday(turno);
+  var dupEsMia = dup && (dup.responsable_id === currentUser.id || dup.usuario_id === currentUser.id);
+  if(dupEsMia){
+    // Yo ya hice la caja: el turno simplemente se cierra, sin registro de "skip"
+    toast('Turno cerrado — caja ya registrada', 'ok');
+  } else {
+    auditLog('REC_CAJA_SKIP', currentUser.nombre+' cerró turno '+turno+' sin operación de caja ('+today()+')');
+    toast('Turno cerrado sin operación de caja', 'ok');
+  }
 }
 
 function startRecTraspaso() {
