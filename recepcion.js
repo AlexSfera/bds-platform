@@ -372,6 +372,7 @@ function submitRecKpi() {
 // ═══════════════════════════════════════════════════════════════════════
 function openRecCajaModal(existingId) {
   _recCajaEditId = existingId || null;
+  if(typeof renderRecLabCharges === 'function') renderRecLabCharges();
 
   // Reset todos los campos
   // Reset campos editables — fondo se carga del cierre anterior
@@ -611,6 +612,7 @@ async function submitRecCaja() {
       await dbInsert(REC_TABLE, record);
       await auditLog('REC_CAJA_SAVE', currentUser.nombre+' cerró caja recepción '+fecha+' turno '+turno);
       toast('Caja recepción guardada', 'ok');
+      if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
     }
     invalidateCache(REC_TABLE);
     closeRecCajaModal();
@@ -1101,6 +1103,7 @@ async function skipRecCajaOp() {
     auditLog('REC_CAJA_SKIP', currentUser.nombre+' cerró turno '+turno+' sin operación de caja ('+today()+')');
     toast('Turno cerrado sin operación de caja', 'ok');
   }
+  if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
 }
 
 function startRecTraspaso() {
@@ -1336,6 +1339,7 @@ async function submitRecTraspaso() {
       await dbInsert(REC_TABLE, record);
       await auditLog('REC_TRASPASO_SAVE', currentUser.nombre+' traspasó caja recepción '+fecha+' turno '+turno+' · fondo '+(fondoReal||0).toFixed(2)+'€');
       toast('Traspaso de caja guardado', 'ok');
+      if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
     }
     invalidateCache(REC_TABLE);
     closeRecTraspasoModal();
@@ -1344,4 +1348,63 @@ async function submitRecTraspaso() {
     if(errEl) errEl.textContent = 'Error al guardar: '+e.message;
     toast('Error al guardar traspaso', 'err');
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// CAJA-V2 · CARGOS SYNCROLAB PENDIENTES (conciliación en cierre Recepción)
+// Recepción ve los cargos que SYNCROLAB pidió cargar a habitación y confirma
+// si los cargó en MEWS (cargado) o no (no_cargado).
+// ═══════════════════════════════════════════════════════════════════════
+async function renderRecLabCharges() {
+  var block = document.getElementById('rec-lab-charges-block');
+  var list  = document.getElementById('rec-lab-charges-list');
+  if(!block || !list) return;
+  var rows = [];
+  try { rows = await getDB('syncrolab_room_charges'); } catch(e){ rows = []; }
+  var pend = rows.filter(function(r){ return r.estado === 'pendiente'; })
+                 .sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+  if(!pend.length){ block.style.display = 'none'; return; }
+  block.style.display = 'block';
+  list.innerHTML = pend.map(function(c){
+    var sysBadge = c.sistema === 'VirtuGym'
+      ? '<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid #10b981;">VirtuGym</span>'
+      : '<span class="badge" style="background:rgba(99,102,241,.15);color:#6366f1;border:1px solid #6366f1;">Nubimed</span>';
+    return '<div style="padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">'
+      + '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">'
+        + '<div style="font-size:13px;"><b>Hab. '+(c.habitacion||'—')+'</b> · '+(c.huesped_nombre||'—')+' '+sysBadge+'</div>'
+        + '<div style="font-family:var(--font-mono);font-weight:700;color:var(--text);">'+(parseFloat(c.importe)||0).toFixed(2)+' €</div>'
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">'+(c.concepto||'')+' <span style="color:var(--text3);">· '+fmtDate(c.fecha)+' · pidió '+(c.solicitado_por_nombre||'')+'</span></div>'
+      + '<div style="display:flex;gap:6px;">'
+        + '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="confirmarCargoLab(\''+c.id+'\',\'cargado\')">✓ Cargado en MEWS</button>'
+        + '<button class="btn btn-sm btn-warn" onclick="confirmarCargoLab(\''+c.id+'\',\'no_cargado\')">✗ No cargado</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+async function confirmarCargoLab(id, nuevoEstado) {
+  if(nuevoEstado === 'no_cargado'){
+    var motivo = prompt('Motivo de no cargar (queda registrado):');
+    if(motivo === null) return;
+    var coment = motivo || null;
+  }
+  try {
+    await fetch(SUPABASE_URL + '/rest/v1/syncrolab_room_charges?id=eq.' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        estado: nuevoEstado,
+        cargado_por: currentUser.nombre,
+        cargado_ts: localTs(),
+        comentario_recepcion: (typeof coment !== 'undefined') ? coment : null,
+        updated_at: localTs()
+      })
+    });
+    invalidateCache('syncrolab_room_charges');
+    if(typeof auditLog === 'function') auditLog('LAB_CARGO_' + (nuevoEstado === 'cargado' ? 'CARGADO' : 'NO_CARGADO'), currentUser.nombre + ' marcó cargo SYNCROLAB ' + id + ' como ' + nuevoEstado);
+    toast(nuevoEstado === 'cargado' ? 'Cargo confirmado en MEWS' : 'Cargo marcado como no cargado', 'ok');
+    renderRecLabCharges();
+  } catch(e){ toast('Error al actualizar cargo', 'err'); }
 }

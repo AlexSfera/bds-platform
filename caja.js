@@ -574,6 +574,7 @@ async function saveCajaForm() {
     closeModal('modal-caja');
     toast('Cierre de caja guardado ✓','ok');
     await renderCajaList();
+    if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
     // Refresh validation tab if open
     var valCajaEl = document.getElementById('val-caja-table');
     if(valCajaEl) await renderValCajaList();
@@ -639,6 +640,11 @@ function getServicioValue() {
   if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')){
     var hkChecked = document.querySelector('input[name="servicio-hk"]:checked');
     return hkChecked ? hkChecked.value : '';
+  }
+  // SYNCROLAB: return turno (Mañana/Tarde) desde radio servicio-lab
+  if(currentUser && /syncrolab|syncro lab|entrenador|fisio|cl\u00ednica|clinica/i.test((currentUser.area||'')+' '+(currentUser.puesto||''))){
+    var labChecked = document.querySelector('input[name="servicio-lab"]:checked');
+    return labChecked ? labChecked.value : '';
   }
   var isSala = currentUser && currentUser.area === 'Sala';
   if(isSala) {
@@ -1222,6 +1228,7 @@ async function skipSalaCajaOp() {
     if(typeof auditLog === 'function') auditLog('SALA_CAJA_SKIP', currentUser.nombre+' cerró turno Sala servicio '+serv+' sin operación de caja ('+today()+')');
     toast('Turno cerrado sin operación de caja', 'ok');
   }
+  if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
 }
 
 // ── TRASPASO SALA: modal ────────────────────────────────────────────────
@@ -1380,6 +1387,7 @@ async function submitSalaTraspaso() {
     closeSalaTraspasoModal();
     toast('Traspaso de caja guardado','ok');
     if(typeof renderCajaList === 'function') renderCajaList();
+    if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
   } catch(e){
     if(errEl) errEl.textContent = 'Error al guardar: '+e.message;
     toast('Error al guardar traspaso','err');

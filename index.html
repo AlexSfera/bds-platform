@@ -677,6 +677,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-sala" value="Evento" style="width:16px;height:16px;accent-color:#3b82f6;"> Evento</label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-sala" value="Otro" style="width:16px;height:16px;accent-color:#3b82f6;"> Otro</label>
               </div>
+              <!-- SYNCROLAB: Mañana / Tarde (domingo se detecta por fecha) -->
+              <div id="t-servicio-lab" style="display:none;flex-wrap:wrap;gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;"><input type="radio" name="servicio-lab" value="Mañana" style="width:16px;height:16px;accent-color:#a855f7;"> 🌅 Mañana</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;"><input type="radio" name="servicio-lab" value="Tarde" style="width:16px;height:16px;accent-color:#a855f7;"> 🌆 Tarde</label>
+              </div>
               <!-- Housekeeping: Mañana / Tarde -->
               <div id="t-servicio-hk" style="display:none;flex-wrap:wrap;gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background=''"><input type="radio" name="servicio-hk" value="Mañana" style="width:16px;height:16px;accent-color:#f97316;"> 🌅 Mañana</label>
@@ -894,6 +899,20 @@ tr:hover td{background:rgba(255,255,255,.018);}
             </select>
           </div>
           <div class="card"><div class="tbl-wrap" id="val-rec-caja-table"><div class="empty"><div class="empty-text">Cargando...</div></div></div></div>
+        </div>
+
+        <!-- CAJA-V2 SYNCROLAB: cierres + traspasos -->
+        <div id="val-lab-caja-block" style="display:none;margin-top:24px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#a855f7;letter-spacing:.15em;">🏋 SYNCROLAB · CIERRES Y TRASPASOS (Nubimed + VirtuGym)</div>
+            <select id="val-lab-caja-periodo" onchange="renderValCajaLab()" style="color:#111827;background:#ffffff;padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;">
+              <option value="hoy">Hoy</option>
+              <option value="semana" selected>Esta semana</option>
+              <option value="mes">Este mes</option>
+              <option value="todo">Todos</option>
+            </select>
+          </div>
+          <div class="card"><div class="tbl-wrap" id="val-lab-caja-table"><div class="empty"><div class="empty-text">Cargando...</div></div></div></div>
         </div>
       </div>
     </div>
@@ -1407,6 +1426,12 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <input type="number" id="rec-fondo-traspaso" min="0" step="0.01" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;">
     </div>
     <div id="rec-fondo-dif" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;">—</div>
+    <!-- CAJA-V2 · Cargos SYNCROLAB pendientes de cargar en MEWS -->
+    <div id="rec-lab-charges-block" style="display:none;border:2px solid #f59e0b;border-radius:10px;padding:14px;margin:12px 0;">
+      <div style="font-weight:700;color:#f59e0b;font-size:14px;margin-bottom:4px;">🏨 Cargos SYNCROLAB pendientes en MEWS</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">SYNCROLAB pidió cargar estos importes a habitación. Confirma si los has cargado en MEWS. No cierres dejando cargos sin revisar.</div>
+      <div id="rec-lab-charges-list"></div>
+    </div>
     <div id="rec-caja-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
     <div style="display:flex;gap:8px;">
       <button onclick="closeRecCaja()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">← Volver al KPI</button>
@@ -1813,6 +1838,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <script src="checklist.js"></script>
 <script src="sala.js"></script>
 <script src="caja.js"></script>
+<script src="syncrolab.js"></script>
 <script src="recepcion.js"></script>
 <script src="mi_turno.js"></script>
 <script src="incidencia_tipos.js"></script>

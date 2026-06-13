@@ -525,6 +525,7 @@ async function renderValCajaList() {
   // Recepción se pinta en su propio bloque (renderValCajaRecepcion).
   // Regla: Recepción solo si Departamento=Recepción · Sala si Sala/Todos.
   renderValCajaRecepcion(dept);
+  renderValCajaLab(dept);
 
   var salaCard = el.closest ? el.closest('.card') : null;
   if(dept === 'Recepción'){
@@ -679,6 +680,123 @@ async function renderValCajaRecepcion(deptArg) {
   el.innerHTML = html;
 }
 window.renderValCajaRecepcion = renderValCajaRecepcion;
+
+// ── CAJA-V2 · VALIDACIÓN CAJAS SYNCROLAB (Nubimed + VirtuGym) ───────────
+// Visible: admin + jefe_recepcion (validador) · Acciones: Ver / Validar / Corrección / Eliminar(admin)
+async function renderValCajaLab(deptArg){
+  var block = document.getElementById('val-lab-caja-block');
+  var el    = document.getElementById('val-lab-caja-table');
+  if(!block || !el) return;
+  var isAdminU  = currentUser && currentUser.rol === 'admin';
+  var isValidador = currentUser && (currentUser.rol === 'jefe_recepcion' || currentUser.rol === 'coord_recepcion_syncrolab');
+  if(!isAdminU && !isValidador){ block.style.display = 'none'; return; }
+  // Regla dept: mostrar si dept = SYNCROLAB o vacío (Todos)
+  var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
+  if(dept && dept.indexOf('SYNCROLAB') === -1 && dept !== 'Recepción SYNCROLAB'){ block.style.display = 'none'; return; }
+  block.style.display = 'block';
+  el.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
+
+  var rows = [];
+  try { rows = await getDB('syncrolab_cash_closures'); } catch(e){ rows = []; }
+  var periodo = (document.getElementById('val-lab-caja-periodo')||{value:'semana'}).value || 'semana';
+  var t = today();
+  rows = rows.filter(function(r){
+    if(periodo === 'hoy')    return r.fecha === t;
+    if(periodo === 'semana') return r.fecha >= startOfWeek();
+    if(periodo === 'mes')    return r.fecha >= startOfMonth();
+    return true;
+  });
+  rows.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||''); });
+
+  if(!rows.length){ el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin operaciones de caja SYNCROLAB en este periodo</div></div>'; return; }
+
+  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Responsable</th><th>Δ Nubimed</th><th>Δ VirtuGym</th><th>Δ Total</th><th>Estado</th><th>Acción</th></tr>';
+  rows.forEach(function(r){
+    var difN = parseFloat(r.diferencia_total_nubimed || 0);
+    var difV = parseFloat(r.diferencia_total_virtugym || 0);
+    var difT = parseFloat(r.diferencia_total_syncrolab || 0);
+    function dc(v){ return '<td style="font-family:var(--font-mono);color:'+(Math.abs(v)<0.01?'var(--green)':'var(--red)')+'">'+(v>=0?'+':'')+v.toFixed(2)+'€</td>'; }
+    var esTraspaso = r.tipo === 'traspaso';
+    var tipoBadge = esTraspaso
+      ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
+      : '<span class="badge" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7;">💰 Cierre</span>';
+    var est = r.estado || 'pendiente_validacion';
+    var estBadge = est === 'validado' ? '<span class="badge b-green">✓ Validado</span>'
+                 : est === 'correccion' ? '<span class="badge b-orange">↩ Corrección</span>'
+                 : est === 'cerrado' ? '<span class="badge b-gray">● Cerrado</span>'
+                 : '<span class="badge b-gray">● Pendiente</span>';
+    var verFn = esTraspaso ? 'openLabTraspasoModal' : 'openLabCierreModal';
+    var acc = '<div style="display:flex;flex-direction:column;gap:4px;">'
+      + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
+      + ((est !== 'validado') ? '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="validarCajaLab(\''+r.id+'\')">✓ Validar</button>' : '')
+      + ((est !== 'correccion' && est !== 'validado') ? '<button class="btn btn-warn btn-sm" onclick="correccionCajaLab(\''+r.id+'\')">↩ Corrección</button>' : '')
+      + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaLab(\''+r.id+'\')">🗑 Eliminar</button>' : '')
+      + '</div>';
+    html += '<tr>'
+      + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
+      + '<td>' + (r.turno || '—') + '</td>'
+      + '<td>' + tipoBadge + '</td>'
+      + '<td style="font-weight:600">' + (r.responsable_nombre || '—') + '</td>'
+      + dc(difN) + dc(difV) + dc(difT)
+      + '<td>' + estBadge + '</td>'
+      + '<td style="white-space:nowrap">' + acc + '</td>'
+      + '</tr>';
+  });
+  html += '</table>';
+  el.innerHTML = html;
+}
+window.renderValCajaLab = renderValCajaLab;
+
+async function validarCajaLab(id){
+  var rows = await getDB('syncrolab_cash_closures');
+  var row = rows.find(function(r){ return r.id === id; });
+  if(!row) return;
+  if(Math.abs(parseFloat(row.diferencia_total_syncrolab||0)) > 0.01 && !(row.explicacion_diferencia||'').trim()){
+    toast('No se puede validar: diferencia sin explicación','err'); return;
+  }
+  try{
+    await fetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
+      method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify({ estado:'validado', validado_por:currentUser.nombre, validado_ts:localTs(), updated_at:localTs() })
+    });
+    invalidateCache('syncrolab_cash_closures');
+    if(typeof auditLog==='function') auditLog('LAB_CAJA_VALIDAR', currentUser.nombre+' validó caja SYNCROLAB '+row.fecha+' turno '+row.turno);
+    toast('Caja SYNCROLAB validada','ok');
+    renderValCajaLab();
+  }catch(e){ toast('Error al validar','err'); }
+}
+
+async function correccionCajaLab(id){
+  var motivo = prompt('Motivo de la corrección (se enviará al responsable):');
+  if(motivo === null) return;
+  try{
+    await fetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
+      method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify({ estado:'correccion', comentario_validador:motivo||null, updated_at:localTs() })
+    });
+    invalidateCache('syncrolab_cash_closures');
+    if(typeof auditLog==='function') auditLog('LAB_CAJA_CORRECCION', currentUser.nombre+' envió a corrección caja SYNCROLAB '+id+' · '+(motivo||''));
+    toast('Enviado a corrección','ok');
+    renderValCajaLab();
+  }catch(e){ toast('Error','err'); }
+}
+
+async function eliminarCajaLab(id){
+  if(currentUser.rol !== 'admin'){ toast('Solo admin puede eliminar','err'); return; }
+  var motivo = prompt('Motivo de la eliminación (obligatorio, queda en auditoría):');
+  if(motivo === null) return;
+  if(!motivo.trim()){ toast('Motivo obligatorio','err'); return; }
+  if(!confirm('¿Eliminar definitivamente esta caja SYNCROLAB? No se puede deshacer.')) return;
+  try{
+    if(typeof auditLog==='function') await auditLog('LAB_CAJA_DELETE', currentUser.nombre+' eliminó caja SYNCROLAB '+id+' · motivo: '+motivo);
+    await fetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
+      method:'DELETE', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'}
+    });
+    invalidateCache('syncrolab_cash_closures');
+    toast('Caja eliminada — registrado en auditoría','ok');
+    renderValCajaLab();
+  }catch(e){ toast('Error al eliminar','err'); }
+}
 
 async function openCajaSummary(cajaId, showValidar) {
   var data = await dbGetAll('sala_cash_closures');

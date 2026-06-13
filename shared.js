@@ -329,6 +329,10 @@ async function pinOk(){
   }
   currentUser=found; currentPin=''; updPin(); startApp();
 }
+function autoLogoutAfterCaja(){
+  // CAJA-V2 C3 · logout automático tras guardar/cerrar caja (SYNCROLAB, Sala, Recepción)
+  setTimeout(function(){ if(typeof logout === 'function') logout(); }, 1200);
+}
 function logout(){
   currentUser=null;
   var ap=document.getElementById('app');
@@ -409,6 +413,7 @@ function getScreens(rol){
     ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
     cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
+    cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
     recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
     mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true},
     // ── HOUSEKEEPING ─────────────────────────────────────────────────
@@ -450,6 +455,7 @@ function getScreens(rol){
     }
   }
   if(isRecepcion) { dptoMod.push(ITEMS.cajaRec); dptoMod.push(ITEMS.recmod); }
+  if(isSyncrolab) { dptoMod.push(ITEMS.cajaLab); }
   if(isMant)      dptoMod.push(ITEMS.mantmod);
   // Admin ve también todas las pantallas HK
   if(isAdminU && !isHK){
@@ -863,6 +869,38 @@ async function initTurnoForm(){
     // CAJA-V2 Sala · servicio fijado si ya hizo caja hoy
     if(typeof lockSalaServIfCajaToday === 'function') lockSalaServIfCajaToday();
     // Default gestion/incidencia to 'no' for clean start
+    if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
+    if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
+  } else if(currentUser && /syncrolab|syncro lab|entrenador|fisio|cl[ií]nica/i.test((currentUser.area||'')+' '+(currentUser.puesto||''))) {
+    // ── SYNCROLAB (Training/Clínica/Recovery/Testing) ──────────────
+    if(salaBlock) salaBlock.style.display = 'none';
+    if(sub) sub.textContent = 'SYNCROLAB';
+    var mermaSecLab = document.getElementById('merma-section');
+    if(mermaSecLab) mermaSecLab.style.display = 'none';
+    var sinMermaLab = document.getElementById('sin-merma-block');
+    if(sinMermaLab) sinMermaLab.style.display = 'none';
+    // Ocultar todos los demás selectores
+    ['t-servicio','t-servicio-cocina','t-servicio-multi','t-servicio-hk'].forEach(function(id){
+      var el = document.getElementById(id); if(el) el.style.display = 'none';
+    });
+    var recTurnoLab = document.getElementById('rec-turno-block');
+    if(recTurnoLab) recTurnoLab.style.display = 'none';
+    // Mostrar selector SYNCROLAB (Mañana/Tarde)
+    var tservLab = document.getElementById('t-servicio-lab');
+    if(tservLab){ tservLab.style.display = 'flex'; tservLab.style.flexWrap = 'wrap'; }
+    var lblLab = document.getElementById('t-servicio-label');
+    if(lblLab) lblLab.innerHTML = 'Turno <span class="req">*</span>';
+    var servBlockLab = document.getElementById('servicio-fg-block');
+    if(servBlockLab) servBlockLab.style.display = 'block';
+    // Reset + limpiar aviso de bloqueo previo
+    var _oldLabLock = document.getElementById('lab-turno-locked-msg');
+    if(_oldLabLock) _oldLabLock.remove();
+    document.querySelectorAll('input[name="servicio-lab"]').forEach(function(r){ r.checked=false; r.disabled=false; });
+    // Mostrar responsable
+    var tRespLab = document.getElementById('t-responsable');
+    if(tRespLab && tRespLab.closest('.fg')) tRespLab.closest('.fg').style.display = 'block';
+    // CAJA-V2 SYNCROLAB · turno fijado si ya hizo caja hoy
+    if(typeof lockLabTurnoIfCajaToday === 'function') lockLabTurnoIfCajaToday();
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   } else if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')) {

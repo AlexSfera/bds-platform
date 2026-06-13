@@ -67,7 +67,11 @@ async function chkConfirm(){
   if(m) m.classList.remove('open');
   var isSala=currentUser&&currentUser.area==='Sala';
   var isRec=currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción');
-  if(isSala&&currentUser._activeDept!=='Recepción'){
+  var isLab=currentUser&&/syncrolab|syncro lab|entrenador|fisio|cl\u00ednica|clinica/i.test((currentUser.area||'')+' '+(currentUser.puesto||''));
+  if(isLab){
+    if(typeof openLabCajaChoice === 'function') openLabCajaChoice();
+    else await _doSaveTurno();
+  } else if(isSala&&currentUser._activeDept!=='Recepción'){
     if(typeof openSalaCajaChoice === 'function') openSalaCajaChoice();
     else openCajaOfferModal();
   } else if(isRec || currentUser._activeDept === 'Recepción'){
