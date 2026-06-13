@@ -434,7 +434,7 @@ function getScreens(rol){
     : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
 
   // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
-  if(isAdminU || isSyncrolab || isRecepcion) navComun.push(ITEMS.hypoxic);
+  if(isAdminU || isRecepcion) navComun.push(ITEMS.hypoxic);
 
   // Alertas Fichaje: todos los empleados ven sus propias; admin/adjunto ven todos
   navComun.push(ITEMS.fichaje);
@@ -602,7 +602,11 @@ async function showScreen(id){
   if(id==='readme' && typeof renderInfoScreen==='function'){ renderInfoScreen(); }
   if(id==='turno'){ initTurnoForm(); }
   if(id==='tareas'){ renderTareas(); }
-  if(id==='validacion'){ initValDeptFilter(); switchValTab('followup'); }
+  if(id==='validacion'){
+    initValDeptFilter();
+    var _startTab = (currentUser && currentUser.rol==='coord_recepcion_syncrolab') ? 'caja' : 'followup';
+    switchValTab(_startTab);
+  }
   if(id==='dashboard'){
     // Show dept filter for admin/fb
     var dw=document.getElementById('dash-dept-wrapper');
@@ -1412,7 +1416,8 @@ function saveTurno(){
   // Merma validation — ONLY for Cocina/Friegue. Sala, Recepción y Housekeeping exentos.
   var _isSalaUser = currentUser && currentUser.area === 'Sala';
   var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
-  if(!_isSalaUser && !_isRecepcion && !_isHKUser){
+  var _isLabUser = currentUser && /syncrolab|entrenador|fisioterapeuta/i.test(currentUser.area||'');
+  if(!_isSalaUser && !_isRecepcion && !_isHKUser && !_isLabUser){
     if(!sinMermaFlag&&mermaRows.length===0) errs.push('Declara merma o marca Sin merma');
     const mermaDataCheck=collectMerma();
     mermaDataCheck.forEach(function(m,i){if(!m.producto)errs.push('Merma #'+(i+1)+': producto');if(!m.cantidad||m.cantidad<=0)errs.push('Merma #'+(i+1)+': cantidad');if(!m.causa)errs.push('Merma #'+(i+1)+': causa');});
@@ -1523,6 +1528,8 @@ function initValDeptFilter(){
     sel.value='Cocina'; sel.disabled=true;
   } else if(currentUser.rol==='jefe_recepcion'){
     sel.value='Recepción'; sel.disabled=true;
+  } else if(currentUser.rol==='coord_recepcion_syncrolab'){
+    sel.value='Recepción SYNCROLAB'; sel.disabled=true;
   } else {
     sel.disabled=false;
   }

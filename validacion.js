@@ -259,7 +259,7 @@ async function openPostErrorModal(shiftId) {
   ['posterr-fio-si','posterr-fio-no'].forEach(function(id){var el=document.getElementById(id);if(el)el.className='tbtn';});
   var revalBtn=document.getElementById('pe-btn-revalidar');
   if(revalBtn){
-    var canReval=currentUser&&(canActAsAdmin(currentUser)||['fb','chef','jefe_recepcion'].indexOf(currentUser.rol)!==-1);
+    var canReval=currentUser&&(isAdmin(currentUser)||['fb','chef','jefe_recepcion'].indexOf(currentUser.rol)!==-1);
     revalBtn.style.display=canReval?'':'none';
   }
   document.getElementById('modal-post-error').classList.add('open');
@@ -690,9 +690,9 @@ async function renderValCajaLab(deptArg){
   var isAdminU  = currentUser && currentUser.rol === 'admin';
   var isValidador = currentUser && (currentUser.rol === 'jefe_recepcion' || currentUser.rol === 'coord_recepcion_syncrolab');
   if(!isAdminU && !isValidador){ block.style.display = 'none'; return; }
-  // Regla dept: mostrar si dept = SYNCROLAB o vacío (Todos)
+  // Regla dept: admin ve siempre; coordinadora solo en contexto SYNCROLAB
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
-  if(dept && dept.indexOf('SYNCROLAB') === -1 && dept !== 'Recepción SYNCROLAB'){ block.style.display = 'none'; return; }
+  if(!isAdminU && dept && dept.indexOf('SYNCROLAB') === -1 && dept !== 'Recepción SYNCROLAB'){ block.style.display = 'none'; return; }
   block.style.display = 'block';
   el.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
 

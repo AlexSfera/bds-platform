@@ -42,7 +42,7 @@ var CHK_REC_NOCHE_ITEMS = ["Fichaje realizado desde móvil","Revisado handover d
 
 // ── DATOS CHECKLIST SYNCROLAB MAÑANA ──
 var CHK_LAB_MANANA_SECTIONS = [
-  {title:'INICIO DE TURNO',count:11},
+  {title:'INICIO DE TURNO',count:10},
   {title:'TIENDA Y SISTEMAS',count:3},
   {title:'INSTALACIONES',count:2},
   {title:'DOCUMENTACIÓN Y FOLLOW-UP',count:3},
@@ -56,7 +56,6 @@ var CHK_LAB_MANANA_ITEMS = [
   'Encender música (rack)',
   'Log-in VirtuGym',
   'Log-in Nubimed',
-  'Log-in MasterYield',
   'Log-in MyWellness',
   'Arqueo de cajas Fitness y Clínica',
   'Agregar fondo caja en VirtuGym (manualmente)',
@@ -86,7 +85,7 @@ var CHK_LAB_MANANA_ITEMS = [
 
 // ── DATOS CHECKLIST SYNCROLAB TARDE ──
 var CHK_LAB_TARDE_SECTIONS = [
-  {title:'INICIO DE TURNO',count:9},
+  {title:'INICIO DE TURNO',count:8},
   {title:'DOCUMENTACIÓN Y FOLLOW-UP',count:4},
   {title:'INSTALACIONES',count:2},
   {title:'GESTIÓN COMERCIAL',count:7},
@@ -99,7 +98,6 @@ var CHK_LAB_TARDE_ITEMS = [
   'Arqueo de cajas Fitness y Clínica',
   'Log-in VirtuGym',
   'Log-in Nubimed',
-  'Log-in MasterYield',
   'Revisar si OneDrive está sincronizado (syncrolab@syncrosfera.com)',
   'Revisar si Google está sincronizado (syncrolab@gmail.com)',
   'Revisar AnyDesk conectado (torno principal y torno SPA)',
