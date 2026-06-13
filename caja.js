@@ -1068,10 +1068,10 @@ async function lockSalaServIfCajaToday() {
 }
 
 function getSalaTurnoServicio() {
-  // Servicio(s) marcados en Mi Turno Sala (checkbox servicio-sala)
+  // Servicio marcado en Mi Turno Sala (radio servicio-sala = selección única)
   var checked = [];
   document.querySelectorAll('input[name="servicio-sala"]:checked').forEach(function(cb){ checked.push(cb.value); });
-  return checked; // array
+  return checked; // array (0 o 1 elemento)
 }
 
 async function getSalaOpToday(servicio) {
