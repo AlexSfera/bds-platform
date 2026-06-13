@@ -518,14 +518,22 @@ window.renderValHypoxicList = renderValHypoxicList;
 async function renderValCajaList() {
   var el = document.getElementById('val-caja-table');
   if(!el) return;
-  renderValCajaRecepcion(); // CAJA-V2: independiente de Sala — debe pintarse aunque Sala esté vacía
 
-  // Filtrar por dept seleccionado: hoy solo Sala tiene cierres reales
-  var dept = (typeof _currentValDept !== 'undefined' && _currentValDept) || '';
+  // FIX: leer el filtro real de la UI (v-dept), no la variable fantasma _currentValDept
+  var dept = (document.getElementById('v-dept')||{}).value || '';
+
+  // Recepción se pinta en su propio bloque (renderValCajaRecepcion).
+  // Regla: Recepción solo si Departamento=Recepción · Sala si Sala/Todos.
+  renderValCajaRecepcion(dept);
+
+  var salaCard = el.closest ? el.closest('.card') : null;
   if(dept === 'Recepción'){
-    el.innerHTML = '<div class="empty"><div class="empty-icon">🛎</div><div class="empty-text">Cierre Caja Recepción · Próximamente (FEAT-01)</div></div>';
+    // Ocultar tabla de Sala: en Recepción no aplica
+    if(salaCard) salaCard.style.display = 'none';
     return;
   }
+  if(salaCard) salaCard.style.display = '';
+
   try {
     var data = await dbGetAll('sala_cash_closures');
     var periodo = (document.getElementById('val-caja-periodo')||{}).value||'hoy';
@@ -591,7 +599,7 @@ async function renderValCajaList() {
 // ── CAJA-V2 · VALIDACIÓN CAJAS RECEPCIÓN (cierres + traspasos) ──────────
 // Visible: admin + jefe_recepcion · Acciones: Ver / Reabrir / Eliminar(admin)
 // Reutiliza modales y funciones de recepcion.js (tabla recepcion_cash).
-async function renderValCajaRecepcion() {
+async function renderValCajaRecepcion(deptArg) {
   var block = document.getElementById('val-rec-caja-block');
   var el    = document.getElementById('val-rec-caja-table');
   if(!block || !el) return;
@@ -599,6 +607,10 @@ async function renderValCajaRecepcion() {
   var isAdminU  = currentUser && currentUser.rol === 'admin';
   var isJefeRec = currentUser && currentUser.rol === 'jefe_recepcion';
   if(!isAdminU && !isJefeRec){ block.style.display = 'none'; return; }
+
+  // Regla de departamento: mostrar solo cuando dept = Recepción o Todos (vacío)
+  var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
+  if(dept && dept !== 'Recepción'){ block.style.display = 'none'; return; }
   block.style.display = 'block';
   el.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
 

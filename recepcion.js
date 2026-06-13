@@ -939,16 +939,28 @@ async function getRecOpToday(turno) {
 }
 
 function openRecCajaChoice() {
+  // FIX UX: el turno se hereda de Mi Turno (radio rec-turno). NO se elige dos veces.
   _recTipoTurno = getRecTurnoValue() || null;
+
+  var fixedBox = document.getElementById('rec-tipo-turno-fixed');
+  var pickBox  = document.getElementById('rec-tipo-turno-pick');
+  var lblFixed = document.getElementById('rec-tipo-turno-label');
   ['manana','tarde','noche'].forEach(function(k){
     var b = document.getElementById('rec-tipo-turno-'+k);
     if(b) b.classList.remove('t-si');
   });
-  var map = { 'Mañana':'manana', 'Tarde':'tarde', 'Noche':'noche' };
-  if(_recTipoTurno && map[_recTipoTurno]){
-    var sel = document.getElementById('rec-tipo-turno-'+map[_recTipoTurno]);
-    if(sel) sel.classList.add('t-si');
+
+  if(_recTipoTurno){
+    // Heredado: rótulo fijo, sin selector
+    if(fixedBox) fixedBox.style.display = 'block';
+    if(pickBox)  pickBox.style.display  = 'none';
+    if(lblFixed) lblFixed.textContent   = _recTipoTurno;
+  } else {
+    // Fallback (entró por sidebar sin Mi Turno hoy): pedir turno una vez
+    if(fixedBox) fixedBox.style.display = 'none';
+    if(pickBox)  pickBox.style.display  = 'block';
   }
+
   var msg = document.getElementById('rec-tipo-msg');
   if(msg) msg.textContent = _recTipoTurno ? '' : 'Selecciona tu turno para continuar';
   setRecTipoBtns(false, false);

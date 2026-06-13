@@ -1461,6 +1461,11 @@ function onValDeptChange(){
   if(dept==='Recepción'){ if(label) label.textContent='Turno'; sel.innerHTML=rec; }
   else if(dept==='Cocina'||dept==='Sala'){ if(label) label.textContent='Servicio'; sel.innerHTML=cocSala; }
   else { if(label) label.textContent='Servicio'; sel.innerHTML=all; }
+  // CAJA-V2: si la pestaña CIERRE CAJA está activa, refrescar al cambiar dept
+  var cajaTab = document.getElementById('val-content-caja');
+  if(cajaTab && cajaTab.style.display !== 'none' && typeof renderValCajaList === 'function'){
+    renderValCajaList();
+  }
 }
 
 function initValDeptFilter(){
