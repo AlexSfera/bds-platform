@@ -826,9 +826,13 @@ async function initTurnoForm(){
     // Show TURNO selector
     var recTurnoDiv = document.getElementById('rec-turno-block');
     if(recTurnoDiv) { recTurnoDiv.style.display='block'; }
-    // Reset turno radios
-    document.querySelectorAll('input[name="rec-turno"]').forEach(function(r){ r.checked=false; });
+    // Reset turno radios + limpiar aviso de bloqueo previo
+    var _oldLock = document.getElementById('rec-turno-locked-msg');
+    if(_oldLock) _oldLock.remove();
+    document.querySelectorAll('input[name="rec-turno"]').forEach(function(r){ r.checked=false; r.disabled=false; });
     updateRecTurnoStyle();
+    // CAJA-V2 · Turno único por persona/día: si ya hizo caja hoy, fijar y bloquear
+    if(typeof lockRecTurnoIfCajaToday === 'function') lockRecTurnoIfCajaToday();
     // Hide responsable selector
     var tResp = document.getElementById('t-responsable');
     if(tResp && tResp.closest('.fg')) tResp.closest('.fg').style.display='none';

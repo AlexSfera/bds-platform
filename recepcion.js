@@ -931,6 +931,39 @@ var _recTipoTurno      = null;
 var _recTraspasoEditId = null;
 var _recTrasCF         = null;
 
+// CAJA-V2 · Si el usuario ya registró una operación de caja hoy (cualquier turno),
+// el turno de Mi Turno queda fijado a ese valor y no se puede cambiar.
+// Garantiza: traspaso y cierre de turno siempre el MISMO turno por persona/día.
+async function lockRecTurnoIfCajaToday() {
+  if(!currentUser) return;
+  var rows = [];
+  try { rows = await getDB(REC_TABLE); } catch(e){ return; }
+  var t = today();
+  var mine = rows.find(function(r){
+    return r.fecha === t && (r.responsable_id === currentUser.id || r.usuario_id === currentUser.id);
+  });
+  if(!mine || !mine.turno) return;
+
+  var map = { 'Mañana':'manana', 'Tarde':'tarde', 'Noche':'noche' };
+  var key = map[mine.turno];
+  document.querySelectorAll('input[name="rec-turno"]').forEach(function(r){
+    r.checked  = (r.value === mine.turno);
+    r.disabled = true;  // bloqueado: ya hay operación de caja hoy
+  });
+  if(typeof updateRecTurnoStyle === 'function') updateRecTurnoStyle();
+
+  // Aviso visible bajo el selector
+  var block = document.getElementById('rec-turno-block');
+  if(block && !document.getElementById('rec-turno-locked-msg')){
+    var note = document.createElement('div');
+    note.id = 'rec-turno-locked-msg';
+    note.style.cssText = 'font-size:12px;color:var(--text3);margin-top:8px;font-family:var(--font-mono);';
+    note.textContent = '🔒 Turno fijado a ' + mine.turno + ' — ya registraste ' +
+      (mine.tipo === 'traspaso' ? 'un traspaso' : 'un cierre') + ' de caja hoy.';
+    block.appendChild(note);
+  }
+}
+
 async function getRecOpToday(turno) {
   var rows = [];
   try { rows = await getDB(REC_TABLE); } catch(e){ rows = []; }
