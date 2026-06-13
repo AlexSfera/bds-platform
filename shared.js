@@ -1410,10 +1410,9 @@ function saveTurno(){
   }
   if(!toggleState.gestion) errs.push('Indica si queda alguna gestión pendiente');
   if(!toggleState.incidencia) errs.push('Indica si hubo incidencia operativa');
-  // Merma validation — ONLY for Cocina/Friegue. Sala, Recepción y Housekeeping exentos.
-  var _isSalaUser = currentUser && currentUser.area === 'Sala';
-  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
-  if(!_isSalaUser && !_isRecepcion && !_isHKUser){
+  // Merma: SOLO Cocina y Friegue. Todo lo demás (Sala, Recepción, HK, SYNCROLAB, Mantenimiento…) exento.
+  var _needsMerma = currentUser && (currentUser.area === 'Cocina' || currentUser.area === 'Friegue');
+  if(_needsMerma){
     if(!sinMermaFlag&&mermaRows.length===0) errs.push('Declara merma o marca Sin merma');
     const mermaDataCheck=collectMerma();
     mermaDataCheck.forEach(function(m,i){if(!m.producto)errs.push('Merma #'+(i+1)+': producto');if(!m.cantidad||m.cantidad<=0)errs.push('Merma #'+(i+1)+': cantidad');if(!m.causa)errs.push('Merma #'+(i+1)+': causa');});

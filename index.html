@@ -451,15 +451,15 @@ tr:hover td{background:rgba(255,255,255,.018);}
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
           <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#2ec4b6;margin:0 0 4px;">2</p>
+            <p style="font-size:20px;font-weight:700;color:#2ec4b6;margin:0 0 4px;">9</p>
             <p style="font-size:11px;color:#94a3b8;margin:0;">Activos</p>
           </div>
           <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#f59e0b;margin:0 0 4px;">8</p>
+            <p style="font-size:20px;font-weight:700;color:#f59e0b;margin:0 0 4px;">1</p>
             <p style="font-size:11px;color:#94a3b8;margin:0;">Próximamente</p>
           </div>
           <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#fff;margin:0 0 4px;">v3.0</p>
+            <p style="font-size:20px;font-weight:700;color:#fff;margin:0 0 4px;">v3.1</p>
             <p style="font-size:11px;color:#94a3b8;margin:0;">Versión</p>
           </div>
         </div>
@@ -567,11 +567,17 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Economato</h3>
         <p style="font-size:13px;color:#64748b;margin:0;">Stock · Compras · Control</p>
       </div>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">👔</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Recursos Humanos</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Personal · Gestión · Control</p>
-      </div>
+      <button onclick="pSel('administracion','Dirección · Administración · RRHH','#a855f7')" style="text-align:left;border-radius:16px;border:2px solid #a855f7;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
+          <div style="width:48px;height:48px;background:rgba(168,85,247,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">👔</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+        </div>
+        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Dirección · Administración · RRHH</h3>
+        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Gestión · Empleados · Control</p>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#a855f7;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        </div>
+      </button>
     </section>
 
     <!-- Footer -->
@@ -1829,7 +1835,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 </div>
 
 <div id="toast-c"></div>
-<div class="ver-badge">v3.0 · Schema 3.0 · Migración Supabase lista</div>
+<div class="ver-badge">v3.1 · Jun 2026 · Supabase</div>
 
 <script src="shared.js"></script>
 <script src="tareas.js"></script>
