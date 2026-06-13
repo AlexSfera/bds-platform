@@ -617,49 +617,45 @@ function buildInfoContent(area){
       + 'Tú la abres con qué ocurrió + acción tomada + si avisaste al responsable. <b>El jefe la cierra.</b>',
         '#10b981')
 
-    + _infoCard('🏦 Caja Recepción MEWS — Cómo rellenar',
-        '<b>¿Por qué se rellena?</b><br>Para verificar que el dinero <u>real</u> coincide con lo que dice <b>MEWS</b> (el sistema del hotel). '
-      + 'Si hay diferencia → o falta dinero, o sobra, y hay que saber por qué.<br><br>'
+    + _infoCard('🏦 Caja Recepción — Traspaso vs Cierre: ¿cuál hago?',
+        '<b>Tu turno marca qué puedes hacer:</b><br>'
+      + '• <b>Mañana y Tarde →</b> solo '+_tag('TRASPASO','#0891b2')+' (dejas la caja al siguiente turno).<br>'
+      + '• <b>Noche →</b> '+_tag('CIERRE','#8b5cf6')+' de caja del día (o traspaso si aún no toca cerrar).<br><br>'
+      + '<b>Regla de oro:</b> una sola operación de caja por turno y día. Si sois dos en el turno, <u>la hace uno</u> y el otro pulsa "Cerrar turno sin caja".<br><br>'
+      + '<b>El turno se elige una sola vez en Mi Turno.</b> La caja hereda ese turno automáticamente — no se elige dos veces.',
+        '#8b5cf6')
 
-      + '<b>1 · Fondo recibido del turno anterior (€)</b><br>'
-      + 'El dinero en caja que te dejó el turno anterior. Cuéntalo al empezar.<br><br>'
+    + _infoCard('🔁 Recepción · TRASPASO de caja (Mañana / Tarde) — Campo a campo',
+        '<b>Cuándo:</b> al terminar tu turno de Mañana o Tarde, para dejar el efectivo al siguiente compañero.<br><br>'
+      + '<b>1 · Fondo recibido del turno anterior (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
+      + 'Viene del último cierre o traspaso. <u>No se puede editar.</u> Cuéntalo al empezar para verificar que es correcto.<br><br>'
+      + '<b>2 · Ventas en efectivo según MEWS (€)</b> — '+_req('obligatorio')+'<br>'
+      + 'Lo que MEWS dice que cobraste en efectivo durante tu turno. (Si no hubo, pon 0.)<br><br>'
+      + '<b>3 · Cash real contado (€)</b> — '+_req('obligatorio')+'<br>'
+      + 'Cuenta físicamente los billetes y monedas que hay en el cajón ahora.<br><br>'
+      + '<b>4 · ¿Hay retiro para caja fuerte? SÍ / NO</b> — '+_req('obligatorio')+'<br>'
+      + 'Si sacaste dinero a la caja fuerte, marca SÍ e indica el importe.<br><br>'
+      + '<b>5 · Fondo esperado a traspasar (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
+      + 'El sistema calcula: <b>Fondo recibido + Ventas efectivo MEWS − Retiro caja fuerte</b>.<br><br>'
+      + '<b>6 · Fondo real a traspasar (€)</b> — '+_req('obligatorio')+'<br>'
+      + 'Cuenta el dinero que vas a dejar al siguiente turno e introdúcelo. '
+      + 'Si coincide con el esperado → <b style="color:#10b981;">✓ Fondo cuadrado</b>. '
+      + 'Si no → explica la diferencia (obligatorio).',
+        '#0891b2')
 
-      + '<b>2 · Bloque "SEGÚN PMS MEWS" — '+_req('obligatorios')+'</b><br>'
-      + '• <b>Cash según MEWS</b> — lo que MEWS dice que cobraste en efectivo<br>'
-      + '• <b>Tarjeta según MEWS</b> — lo que MEWS dice que cobraste por TPV<br>'
-      + '• <b>Stripe según MEWS</b> — lo que MEWS dice que se cobró por Stripe (reservas online)<br>'
-      + '<i>Estos números los sacas del informe de cierre de MEWS.</i><br><br>'
-
-      + '<b>3 · Transferencias</b><br>'
-      + '• <b>Transferencias según MEWS</b> — si hay alguna transferencia registrada<br>'
-      + '• <b>Transferencias Banco</b> — confirma si entró en el banco (con fecha)<br><br>'
-
-      + '<b>4 · Cargos Hotel</b><br>'
-      + '• <b>Room Charge</b> — consumos pasados a la habitación<br>'
-      + '• <b>SYNCROLAB Charge</b> — cargos del Lab a la habitación<br>'
-      + '• <b>Cargo Alexander</b> — cargos directos del propietario<br><br>'
-
-      + '<b>5 · Pensiones</b> <i>(informativo, no bloquea)</i><br>'
-      + 'nº pax desayunos · nº pax comida+cena · importes €. Para control de F&B.<br><br>'
-
-      + '<b>6 · Bloque "REAL / FÍSICO" — '+_req('obligatorios')+'</b><br>'
-      + '• <b>Cash real contado</b> — cuenta los billetes y monedas REALES en caja<br>'
-      + '• <b>TPV físico</b> — total que marca el datáfono al cierre<br>'
-      + '• <b>Stripe real (Stripe.com)</b> — total real del panel Stripe.com<br><br>'
-
-      + '<b>7 · Diferencias</b><br>El sistema calcula solo: Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia.<br>'
-      + '<b>Si todo es 0,00 € → perfecto, caja cuadra.</b><br><br>'
-
-      + '<b>⚠ Si hay diferencia → '+_req('OBLIGATORIO')+':</b><br>'
-      + '• <b>Explicación</b> — por qué hay diferencia<br>'
-      + '• <b>Acción tomada</b> — qué hiciste para resolverlo<br>'
-      + '• <b>¿Informado al responsable? SÍ/NO</b><br><br>'
-
-      + '<b>8 · Caja Fuerte — '+_req('obligatorio')+'</b><br>¿Retiraste dinero a caja fuerte? SÍ/NO. Si SÍ → importe.<br><br>'
-
-      + '<b>9 · Traspaso al siguiente turno — '+_req('obligatorio')+'</b><br>'
-      + 'El sistema calcula cuánto debes dejar al siguiente turno (Fondo recibido + Cash MEWS − Retiro caja fuerte). '
-      + 'Cuenta el dinero que dejas e introdúcelo en "Fondo real a traspasar". Si no coincide → diferencia.',
+    + _infoCard('💰 Recepción · CIERRE de caja (Noche) — Campo a campo',
+        '<b>Cuándo:</b> al cerrar el día, en el turno de Noche. Verifica que TODO el dinero real coincide con MEWS.<br><br>'
+      + '<b>El fondo recibido</b> viene del último cierre o traspaso del día (automático, no editable).<br><br>'
+      + '<b>Importante:</b> los importes MEWS (cash, tarjeta, Stripe) son <u>los de tu turno de Noche</u>, no el total del día. Filtra el informe MEWS por tu franja horaria.<br><br>'
+      + '<b>Bloque SEGÚN MEWS</b> — '+_req('obligatorios')+': Cash · Tarjeta · Stripe (del informe de cierre MEWS).<br>'
+      + '<b>Transferencias:</b> según MEWS + confirmación banco (con fecha).<br>'
+      + '<b>Cargos Hotel:</b> Room Charge · SYNCROLAB Charge · Cargo Alexander.<br>'
+      + '<b>Pensiones</b> <i>(informativo)</i>: pax desayuno · pax comida+cena + importes.<br>'
+      + '<b>Bloque REAL / FÍSICO</b> — '+_req('obligatorios')+': Cash contado · TPV físico · Stripe real (panel Stripe.com).<br><br>'
+      + '<b>Diferencias:</b> el sistema calcula Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia. '
+      + 'Si todo 0,00 € → caja cuadra. Si no → '+_req('OBLIGATORIO')+' Explicación + Acción tomada + ¿Informado al responsable?<br><br>'
+      + '<b>Caja Fuerte:</b> ¿retiraste dinero? SÍ/NO + importe.<br>'
+      + '<b>Fondo a traspasar:</b> lo que dejas para el día siguiente (Fondo recibido + Cash MEWS − Retiro). Cuéntalo y confírmalo.',
         '#8b5cf6')
 
     + _infoCard('🫁 Hypoxic Room — Solo si HAY problema',
@@ -873,22 +869,41 @@ function buildInfoContent(area){
       + '• <b>Motivo</b> — explicación breve (ej: "Cliente devolvió plato frío", "Invitación VIP autorizada por F&B")',
         '#3b82f6')
 
-    + _infoCard('🏦 Caja Sala (POSMEWS) — Cómo rellenar',
-        '<b>¿Por qué?</b> Para que el dinero contado en caja coincida con lo que <b>POSMEWS</b> (el TPV del restaurante) registró.<br><br>'
+    + _infoCard('🏦 Caja Sala — Traspaso vs Cierre: ¿cuál hago?',
+        '<b>Tu servicio marca qué puedes hacer:</b><br>'
+      + '• <b>Cena y Evento →</b> '+_tag('CIERRE','#3b82f6')+' de caja (o traspaso si aún no toca cerrar).<br>'
+      + '• <b>Desayuno, Comida, Otro →</b> solo '+_tag('TRASPASO','#0891b2')+' (dejas la caja al siguiente servicio).<br><br>'
+      + '<b>Regla de oro:</b> una sola operación de caja por servicio y día. Si sois varios camareros en el mismo servicio, <u>la hace uno</u> y el resto pulsa "Cerrar turno sin caja".<br><br>'
+      + '<b>El servicio se elige una sola vez en Mi Turno</b> (un único servicio por turno). La caja lo hereda automáticamente.<br><br>'
+      + '<b>Los camareros NO hacen retiro a caja fuerte en el traspaso</b> — eso es solo del cierre.',
+        '#3b82f6')
 
-      + '<b>Bloque "SEGÚN POSMEWS" — '+_req('obligatorios')+'</b><br>'
-      + '• <b>Cash POSMEWS</b> — efectivo que dice POSMEWS<br>'
-      + '• <b>Tarjeta POSMEWS</b> — tarjeta que dice POSMEWS<br>'
-      + '• <b>Stripe POSMEWS</b> — Stripe que dice POSMEWS<br><br>'
+    + _infoCard('🔁 Sala · TRASPASO de caja (Desayuno / Comida / Otro) — Campo a campo',
+        '<b>Cuándo:</b> al terminar tu servicio, para dejar el efectivo al siguiente. Es un traspaso <u>simple, solo de efectivo</u>.<br><br>'
+      + '<b>1 · Fondo recibido (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
+      + 'Viene del último cierre o traspaso. <u>No editable.</u> Cuéntalo al empezar para verificar.<br><br>'
+      + '<b>2 · Ventas en efectivo POSMEWS (€)</b> — '+_req('obligatorio')+'<br>'
+      + 'El efectivo que POSMEWS registró en tu servicio. (Si no hubo, pon 0.)<br><br>'
+      + '<b>3 · Cash real contado (€)</b> — '+_req('obligatorio')+'<br>'
+      + 'Cuenta físicamente los billetes y monedas del cajón ahora.<br><br>'
+      + '<b>4 · Fondo esperado a traspasar (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
+      + 'El sistema calcula: <b>Fondo recibido + Ventas efectivo POSMEWS</b>. (Sin retiro — los camareros no retiran.)<br><br>'
+      + '<b>5 · Fondo real a traspasar (€)</b> — '+_req('obligatorio')+'<br>'
+      + 'Cuenta el dinero que dejas al siguiente servicio. '
+      + 'Si coincide → <b style="color:#10b981;">✓ Fondo cuadrado</b>. Si no → explica la diferencia (obligatorio).<br><br>'
+      + '<b>El traspaso NO lleva tarjeta, Stripe ni cargos</b> — todo eso va solo en el cierre de Cena/Evento.',
+        '#0891b2')
 
-      + '<b>Cargos</b><br>Room Charge · SYNCROLAB · Cargo Alexander (consumos a habitación).<br><br>'
-
-      + '<b>Pensiones</b><br>pax desayuno · pax comida/cena + importes.<br><br>'
-
-      + '<b>Bloque "REAL" — '+_req('obligatorios')+'</b><br>'
-      + '• Cash contado · TPV físico · Stripe plataforma · Propinas TPV · Propinas efectivo<br><br>'
-
-      + '<b>⚠ Si hay diferencia → '+_req('OBLIGATORIO')+': Explicación + Acción tomada + ¿Informado al responsable?</b>',
+    + _infoCard('💰 Sala · CIERRE de caja (Cena / Evento) — Campo a campo',
+        '<b>Cuándo:</b> al cerrar el servicio de Cena o Evento. Cuadra TODO lo cobrado en el día contra POSMEWS.<br><br>'
+      + '<b>El fondo recibido</b> viene del último traspaso/cierre (automático, no editable).<br><br>'
+      + '<b>Bloque SEGÚN POSMEWS</b> — '+_req('obligatorios')+': Cash · Tarjeta · Stripe que registró el TPV del restaurante.<br>'
+      + '<b>Cargos:</b> Room Charge · SYNCROLAB Charge · Cargo Alexander (consumos a habitación).<br>'
+      + '<b>Pensiones</b> <i>(informativo)</i>: pax desayuno · pax comida/cena + importes.<br>'
+      + '<b>Bloque REAL</b> — '+_req('obligatorios')+': Cash contado · TPV físico · Stripe plataforma · Propinas TPV.<br>'
+      + '<b>Caja Fuerte:</b> ¿retiro? SÍ/NO + importe (esto sí, solo en el cierre).<br><br>'
+      + '<b>⚠ Si hay diferencia → '+_req('OBLIGATORIO')+': Explicación + Acción tomada + ¿Informado al responsable?</b><br><br>'
+      + '<b>Fondo a traspasar:</b> lo que dejas para el día siguiente. Cuéntalo y confírmalo.',
         '#3b82f6')
 
     + bloqueDiferencias
