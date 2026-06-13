@@ -6,6 +6,15 @@
 var _chkState = [];
 var _chkSavedState = [];
 var _chkPendingData = null;
+var _chkInitialized = false;
+
+function resetChkState(){
+  _chkInitialized = false;
+  _chkState = [];
+  _chkSavedState = [];
+  _chkPendingData = null;
+}
+function openChkMidDay(){ chkOpen(null); }
 
 // ── DATOS CHECKLIST COCINA ──
 var CHK_COCINA_ITEMS = ['Camaras y cuarto frio revisados','Temperaturas de camaras y congeladores OK','Producto sin fecha / en mal estado retirado','Buffet gestionado correctamente','Vitrina gestionada correctamente (montaje + retirada)','No quedan comandas pendientes','Fuegos, horno, plancha, freidoras apagados','Gas cerrado','Extractor / campana apagados','Fogones limpios sin grasa','Bancadas limpias','Paredes sin grasa visible','Faltas de stock anotadas'];
@@ -181,9 +190,10 @@ function buildChkHTML(sections,items){
   sections.forEach(function(s,si){
     html+='<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.12em;color:#2ec4b6;text-transform:uppercase;margin:'+(si===0?'0':'10px')+' 0 8px;">'+s.title+'</div>';
     for(var i=0;i<s.count;i++){
-      html+='<div class="chk-item" onclick="chkToggle('+idx+')">'
-        +'<div class="chk-box" id="chk-'+idx+'"></div>'
-        +'<div class="chk-text">'+items[idx]+'</div>'
+      var ticked=(_chkState[idx]===true);
+      html+='<div class="chk-item" onclick="chkToggle('+idx+')">' 
+        +'<div class="chk-box'+(ticked?' checked':'')+' " id="chk-'+idx+'"></div>'
+        +'<div class="chk-text" style="'+(ticked?'opacity:.5;text-decoration:line-through;':'')+'">'+items[idx]+'</div>'
         +'</div>';
       idx++;
     }
@@ -192,7 +202,7 @@ function buildChkHTML(sections,items){
 }
 
 function chkOpen(pendingData){
-  _chkPendingData=pendingData;
+  if(pendingData != null) _chkPendingData=pendingData;
   var isFriegue=(currentUser&&(currentUser.area==='Friegue'||currentUser.puesto==='Friegue'));
   var isSala=(currentUser&&currentUser.area==='Sala');
   var isFnB=(currentUser&&(currentUser.rol==='fb'||currentUser.area==='F&B'));
@@ -213,7 +223,10 @@ function chkOpen(pendingData){
     else{sections=CHK_LAB_MANANA_SECTIONS;items=CHK_LAB_MANANA_ITEMS;}
   }
   else{sections=CHK_COCINA_SECTIONS;items=CHK_COCINA_ITEMS;}
-  _chkState=Array(items.length).fill(false);
+  if(!_chkInitialized || _chkState.length !== items.length){
+    _chkState=Array(items.length).fill(false);
+    _chkInitialized=true;
+  }
   document.getElementById('chk-items').innerHTML=buildChkHTML(sections,items);
   var bar=document.getElementById('chk-bar');if(bar)bar.style.width='0%';
   var warn=document.getElementById('chk-warn');

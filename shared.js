@@ -229,12 +229,12 @@ function getSupervisorDepartments(user){
   return SUPERVISOR_DEPT_MAP[user.rol] || (user.area?[user.area]:[]);
 }
 function canViewDepartment(user,dept){
-  if(canActAsAdmin(user)) return true;  // admin + adjunto_directivo ven todos los dptos
+  if(isAdmin(user)) return true;
   var d=normalizeDeptName(dept);
   if(!d) return false;
   return getSupervisorDepartments(user).map(normalizeDeptName).indexOf(d)!==-1;
 }
-function canValidateDepartment(user,dept){ return canActAsAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,dept)); }
+function canValidateDepartment(user,dept){ return isAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,dept)); }
 function getRecordDepartment(record,shiftMap){
   if(!record) return '[NO DATA]';
   var direct = record.area || record.departamento || record.dept_destino || record.dept_origen;
@@ -367,6 +367,7 @@ function fixSelectColors(){
   });
 }
 async function startApp(){
+  if(typeof resetChkState === 'function') resetChkState();
   var ls2=document.getElementById('login-screen'); if(ls2) ls2.style.display='none';
   // Ensure portal is completely out of the way
   var _portal=document.getElementById('portal-screen');
@@ -391,8 +392,7 @@ function getScreens(rol){
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
   var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
-  var isAdjDir     = (rol === 'adjunto_directivo');
-  var isJefe       = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
+  var isJefe       = isAdminU || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
     || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
 
   // ── Definiciones de pantallas ─────────────────────────────────────
@@ -424,13 +424,14 @@ function getScreens(rol){
     hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
     hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
     fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
-    incentivos:  {id:'incentivos',  label:'💰 Incentivos'}
+    incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
+    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'}
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
   var navComun = isAdminU
     ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
-    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio];
+    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
 
   // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
   if(isAdminU || isSyncrolab || isRecepcion) navComun.push(ITEMS.hypoxic);
@@ -474,10 +475,8 @@ function getScreens(rol){
     gestion.push(ITEMS.validacion);
     gestion.push(ITEMS.dashboard);
   }
-  if(isAdminU || isAdjDir){
-    gestion.push(ITEMS.maestro);
-  }
   if(isAdminU){
+    gestion.push(ITEMS.maestro);
     gestion.push(ITEMS.export);
   }
   if(isJefe) gestion.push(ITEMS.fio);
@@ -607,7 +606,7 @@ async function showScreen(id){
   if(id==='dashboard'){
     // Show dept filter for admin/fb
     var dw=document.getElementById('dash-dept-wrapper');
-    if(dw) dw.style.display=(canActAsAdmin(currentUser)||currentUser.rol==='fb')?'block':'none';
+    if(dw) dw.style.display=(currentUser.rol==='admin'||currentUser.rol==='fb')?'block':'none';
     renderDashboard(); renderCostTable();
   }
   if(id==='rec-caja'){ renderRecepcionCajaList(); }
@@ -1410,9 +1409,10 @@ function saveTurno(){
   }
   if(!toggleState.gestion) errs.push('Indica si queda alguna gestión pendiente');
   if(!toggleState.incidencia) errs.push('Indica si hubo incidencia operativa');
-  // Merma: SOLO Cocina y Friegue. Todo lo demás (Sala, Recepción, HK, SYNCROLAB, Mantenimiento…) exento.
-  var _needsMerma = currentUser && (currentUser.area === 'Cocina' || currentUser.area === 'Friegue');
-  if(_needsMerma){
+  // Merma validation — ONLY for Cocina/Friegue. Sala, Recepción y Housekeeping exentos.
+  var _isSalaUser = currentUser && currentUser.area === 'Sala';
+  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
+  if(!_isSalaUser && !_isRecepcion && !_isHKUser){
     if(!sinMermaFlag&&mermaRows.length===0) errs.push('Declara merma o marca Sin merma');
     const mermaDataCheck=collectMerma();
     mermaDataCheck.forEach(function(m,i){if(!m.producto)errs.push('Merma #'+(i+1)+': producto');if(!m.cantidad||m.cantidad<=0)errs.push('Merma #'+(i+1)+': cantidad');if(!m.causa)errs.push('Merma #'+(i+1)+': causa');});
@@ -1519,16 +1519,10 @@ function onValDeptChange(){
 function initValDeptFilter(){
   var sel=document.getElementById('v-dept');
   if(!sel||!currentUser) return;
-  if(canActAsAdmin(currentUser)){
-    // Admin + adjunto_directivo: filtro libre
-    sel.disabled=false;
-  } else if(currentUser.rol==='chef'){
+  if(currentUser.rol==='chef'){
     sel.value='Cocina'; sel.disabled=true;
   } else if(currentUser.rol==='jefe_recepcion'){
     sel.value='Recepción'; sel.disabled=true;
-  } else if(typeof isSupervisor === 'function' && isSupervisor(currentUser)){
-    // Otros supervisores: datos ya filtrados a nivel JS; dejar en Todos y deshabilitar
-    sel.value=''; sel.disabled=true;
   } else {
     sel.disabled=false;
   }
@@ -1537,23 +1531,13 @@ function initValDeptFilter(){
 
 async function renderValidacion(){
   let shifts=await getDB('shifts');
-  // ── Filtro por rol ────────────────────────────────────────────────────
-  // Admin + adjunto_directivo: ven todo (sin filtro)
-  // Supervisor (chef, fb, jefe_recepcion, coord_*, gobernante…): solo sus dptos según SUPERVISOR_DEPT_MAP
-  // Empleado: solo sus propios turnos
-  if(currentUser && !canActAsAdmin(currentUser)){
-    if(typeof isSupervisor === 'function' && isSupervisor(currentUser)){
-      var _supDepts = (typeof getSupervisorDepartments === 'function') ? getSupervisorDepartments(currentUser) : [];
-      if(_supDepts && _supDepts.length && _supDepts[0] !== '*'){
-        var _sdLower = _supDepts.map(function(d){ return String(d||'').trim().toLowerCase(); });
-        shifts = shifts.filter(function(s){
-          return _sdLower.indexOf(String(s.area||'').trim().toLowerCase()) >= 0;
-        });
-      }
-    } else {
-      // Empleado: solo sus propios turnos
-      shifts = shifts.filter(function(s){ return s.employee_id===currentUser.id; });
-    }
+  // jefe_recepcion: only see Recepción shifts
+  if(currentUser && currentUser.rol==='jefe_recepcion'){
+    shifts = shifts.filter(function(s){ return s.area==='Recepción'; });
+  }
+  // Fix: empleado recepción solo ve sus propios turnos
+  if(currentUser && currentUser.area==='Recepción' && currentUser.rol==='empleado'){
+    shifts = shifts.filter(function(s){ return s.employee_id===currentUser.id; });
   }
   const desde=document.getElementById('v-desde').value;
   const hasta=document.getElementById('v-hasta').value;
@@ -2291,37 +2275,7 @@ async function saveEmpleado(){
     toast((_editEmpId?'Empleado actualizado':'Empleado creado')+' — coste: '+costeVal+'€/h','ok');
   }, 200);
 }
-async function toggleEmp(empId,newEstado){
-  if(!canActAsAdmin(currentUser)){ toast('Sin permisos','err'); return; }
-  var allEmps=await getDB('employees');
-  var emp=allEmps.find(function(e){ return e.id===empId; });
-  if(!emp){ toast('Empleado no encontrado','err'); return; }
-  if(emp.rol==='admin'&&!isAdmin(currentUser)){ toast('No puedes cambiar estado de administrador','err'); return; }
-  var patchRes=await fetch(SUPABASE_URL+'/rest/v1/employees?id=eq.'+encodeURIComponent(empId),{
-    method:'PATCH',
-    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-    body:JSON.stringify({estado:newEstado})
-  });
-  if(!patchRes.ok){ var errTxt=await patchRes.text(); toast('Error: '+patchRes.status+' — '+errTxt.substring(0,60),'err'); return; }
-  await auditLog('EMP_TOGGLE',empId+' | '+(emp.nombre||'')+' → '+newEstado);
-  invalidateCache('employees');
-  await renderMaestro();
-  toast('Estado: '+newEstado,'ok');
-}
-
-window.toggleEmp=toggleEmp;
-
-// ── Buscador en Maestro (filtra tabla ya renderizada) ──────────────────
-function filterMaestroList(q){
-  var q2=(q||'').toLowerCase().trim();
-  var rows=document.querySelectorAll('#maestro-table table tr');
-  rows.forEach(function(tr,i){
-    if(i===0){ tr.style.display=''; return; } // header siempre visible
-    var txt=(tr.textContent||'').toLowerCase();
-    tr.style.display=(q2===''||txt.indexOf(q2)!==-1)?'':'none';
-  });
-}
-window.filterMaestroList=filterMaestroList;
+async function toggleEmp(empId,newEstado){ const employees=await getDB('employees'); const idx=employees.findIndex(e=>e.id===empId); if(idx===-1) return; employees[idx].estado=newEstado; await setDB('employees',employees); renderMaestro(); toast('Estado: '+newEstado,'ok'); }
 
 // ═══════════════════════════════════════════════════════════════════════
 // EXPORT
@@ -2711,7 +2665,7 @@ async function renderGestionesScreen(){
   var dept = currentUser ? (currentUser.area||'—') : '—';
   var isAdminU = isAdmin(currentUser);
   var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
-  var verTodos = isAdminU || isAdjuntoDirectivo(currentUser);
+  var verTodos = isAdminU;
   var all = [];
   try { all = await getDB('gestiones'); } catch(e){}
   var list = verTodos ? all : all.filter(function(g){
@@ -2827,7 +2781,7 @@ async function renderIncidenciasScreen(){
   var dept = currentUser ? (currentUser.area||'—') : '—';
   var isAdminU = isAdmin(currentUser);
   var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
-  var canSeeList = isAdminU || isAdjuntoDirectivo(currentUser) || isSup;
+  var canSeeList = isAdminU || isSup;
 
   // ── Empleado: solo crear, sin lista ────────────────────────────────
   if(!canSeeList){
@@ -2843,7 +2797,7 @@ async function renderIncidenciasScreen(){
   }
 
   // ── Jefe / Admin: lista completa ───────────────────────────────────
-  var verTodos = isAdminU || isAdjuntoDirectivo(currentUser);
+  var verTodos = isAdminU;
   var all = [];
   try { all = await getDB('incidencias'); } catch(e){}
   var list = verTodos ? all : all.filter(function(i){
