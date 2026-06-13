@@ -856,8 +856,12 @@ async function initTurnoForm(){
     if(tservSingle) tservSingle.style.display = 'none';
     if(tservMulti){ tservMulti.style.display = 'flex'; tservMulti.style.flexWrap='wrap'; tservMulti.style.gap='4px'; }
     // Uncheck all
-    document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){ cb.checked=false; });
+    var _oldSalaLock = document.getElementById('sala-serv-locked-msg');
+    if(_oldSalaLock) _oldSalaLock.remove();
+    document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){ cb.checked=false; cb.disabled=false; });
   document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
+    // CAJA-V2 Sala · servicio fijado si ya hizo caja hoy
+    if(typeof lockSalaServIfCajaToday === 'function') lockSalaServIfCajaToday();
     // Default gestion/incidencia to 'no' for clean start
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');

@@ -551,6 +551,11 @@ async function renderValCajaList() {
     }
     var rows = data.map(function(c){
       var servs=displayServicio(c.servicios||'');
+      var _esTras = c.tipo === 'traspaso';
+      var _tipoBadge = _esTras
+        ? ' <span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;font-size:9px;">🔁 Traspaso</span>'
+        : '';
+      servs = servs + _tipoBadge;
       var difOp = c.diferencia_operativa_sala||0;
       var difColor = Math.abs(difOp)<0.01?'var(--green)':Math.abs(difOp)>5?'var(--red)':'var(--amber)';
       var isPendiente = c.estado!=='Validado final';

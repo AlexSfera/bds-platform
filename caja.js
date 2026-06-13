@@ -182,6 +182,80 @@
       <button onclick="declineCajaOffer()" style="width:100%;padding:14px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">No, solo guardar follow-up</button>
     </div>
   </div>
+</div>
+
+<!-- ══ CAJA-V2 SALA · MODAL ELECCIÓN: TRASPASO O CIERRE ══ -->
+<div id="modal-sala-tipo" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:710;padding:16px;">
+  <div style="background:var(--bg2);border:2px solid #3b82f6;border-radius:14px;padding:24px;width:100%;max-width:460px;">
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.2em;margin-bottom:6px;">SALA · OPERACIÓN DE CAJA</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">¿Traspaso o cierre de caja?</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Solo Cena y Evento pueden cerrar caja. El resto de servicios solo traspasa. Una operación de caja por servicio y día — si sois varios camareros, la hace uno y el resto cierra sin caja.</div>
+    <div class="fg" id="sala-tipo-serv-fixed" style="margin-bottom:12px;display:none;">
+      <label>Servicio</label>
+      <div id="sala-tipo-serv-label" style="font-size:16px;font-weight:700;color:var(--text);padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;">—</div>
+    </div>
+    <div class="fg" id="sala-tipo-serv-pick" style="margin-bottom:12px;display:none;">
+      <label>Servicio <span class="req">*</span></label>
+      <div style="font-size:11px;color:var(--text3);margin:2px 0 6px;">Indica el servicio de esta caja:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="tbtn" onclick="setSalaTipoServ('Desayuno',this)">Desayuno</button>
+        <button class="tbtn" onclick="setSalaTipoServ('Comida',this)">Comida</button>
+        <button class="tbtn" onclick="setSalaTipoServ('Cena',this)">Cena</button>
+        <button class="tbtn" onclick="setSalaTipoServ('Evento',this)">Evento</button>
+        <button class="tbtn" onclick="setSalaTipoServ('Otro',this)">Otro</button>
+      </div>
+    </div>
+    <div id="sala-tipo-msg" style="font-size:12px;color:var(--text3);min-height:18px;margin-bottom:12px;font-family:var(--font-mono);"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button id="sala-tipo-btn-traspaso" onclick="startSalaTraspaso()" disabled style="width:100%;padding:14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">🔁 Traspaso de caja al siguiente servicio</button>
+      <button id="sala-tipo-btn-cierre" onclick="startSalaCierre()" disabled style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (Cena / Evento)</button>
+      <button id="sala-tipo-btn-skip" onclick="skipSalaCajaOp()" style="width:100%;padding:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">✓ Cerrar turno sin caja (la gestiona mi compañero/a)</button>
+      <button onclick="closeSalaCajaChoice()" style="width:100%;padding:10px;background:transparent;color:var(--text3);border:none;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CAJA-V2 SALA · MODAL TRASPASO (solo efectivo, sin retiro) ══ -->
+<div id="modal-sala-traspaso" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
+  <div style="background:var(--bg2);border:2px solid #0891b2;border-radius:14px;padding:24px;width:100%;max-width:540px;margin:40px auto;">
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#0891b2;letter-spacing:.2em;margin-bottom:6px;">SALA · TRASPASO DE CAJA</div>
+    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Traspaso de caja — <span id="sala-tras-serv-label">Servicio</span></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px;">Traspaso simple de efectivo al siguiente servicio. Los camareros no hacen retiro. El fondo recibido viene del último cierre o traspaso y no es editable.</div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Fondo recibido (€)</label>
+      <input type="text" id="sala-tras-fondo-recibido" value="0.00" readonly style="color:#111827;background:#ffffff;opacity:.6;cursor:not-allowed;">
+    </div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Ventas en efectivo POSMEWS (€) <span class="req">*</span></label>
+      <input type="text" inputmode="decimal" id="sala-tras-cash-posmews" placeholder="0.00" oninput="calcSalaTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Cash real contado (€) <span class="req">*</span></label>
+      <input type="text" inputmode="decimal" id="sala-tras-cash-real" placeholder="0.00" oninput="calcSalaTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin:14px 0 8px;">TRASPASO AL SIGUIENTE SERVICIO</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--font-mono);">Calculado = Fondo recibido + Ventas efectivo POSMEWS</div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Fondo esperado a traspasar (€)</label>
+      <div id="sala-tras-fondo-esperado" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div>
+    </div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>Fondo real a traspasar (€) <span class="req">*</span></label>
+      <input type="text" inputmode="decimal" id="sala-tras-fondo-real" placeholder="0.00" oninput="calcSalaTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+    <div id="sala-tras-dif" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;">—</div>
+    <div id="sala-tras-dif-block" style="display:none;">
+      <div class="fg" style="margin-bottom:8px;">
+        <label>Explicación de la diferencia <span class="req">*</span></label>
+        <textarea id="sala-tras-dif-exp" rows="2" placeholder="Explica por qué no cuadra el fondo..." style="color:#111827;background:#ffffff;"></textarea>
+      </div>
+    </div>
+    <div id="sala-tras-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="closeSalaTraspasoModal()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>
+      <button onclick="submitSalaTraspaso()" style="flex:2;padding:12px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar traspaso</button>
+    </div>
+  </div>
 </div>`;
 })();
 
@@ -249,6 +323,12 @@ function openCajaForm(existingId) {
   document.querySelectorAll('#caja-servicios-check input[type=checkbox]').forEach(function(cb){ cb.checked = false; });
   calcCajaTotal();
   document.getElementById('modal-caja').classList.add('open');
+}
+
+// El servicio del cierre proviene de la elección (Cena/Evento) si existe
+function _cierreServicios(){
+  if(typeof _salaTipoServ === 'string' && _salaTipoServ) return [_salaTipoServ];
+  return getCajaServicios();
 }
 
 var _cajaInformado = false;
@@ -376,7 +456,15 @@ function getCajaServicios() {
 
 async function saveCajaForm() {
   var fecha = (document.getElementById('caja-fecha')||{}).value||today();
-  var servicios = getCajaServicios();
+  var servicios = _cierreServicios();
+  // CAJA-V2: una operación por servicio+fecha (admin exento, edición exenta)
+  if(!_editingCajaId && currentUser.rol !== 'admin' && servicios.length){
+    var dupServ = await getSalaOpToday(servicios[0]);
+    if(dupServ){
+      toast('El servicio '+servicios[0]+' ya registró una operación de caja hoy. Solo una por servicio.','err');
+      return;
+    }
+  }
   // servicios auto-filled
   // Calculate diferencia operativa from current form values
   var _efR=parseFloat((document.getElementById('caja-ef-real')||{}).value)||0;
@@ -423,6 +511,7 @@ async function saveCajaForm() {
     id: _editingCajaId || genId(),
     fecha: fecha,
     servicios: JSON.stringify(servicios),
+    tipo: 'cierre',
     responsable_id: currentUser.id,
     responsable_nombre: currentUser.nombre,
     // Payment fields
@@ -521,17 +610,23 @@ async function renderCajaList() {
     var rows = data.map(function(c){
       var servs = displayServicio(c.servicios||'');
       var diffColor = Math.abs(c.diferencia_caja||0)>5?'var(--red)':'var(--green)';
+      var esTraspaso = c.tipo === 'traspaso';
+      var tipoBadge = esTraspaso
+        ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
+        : '<span class="badge" style="background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid #3b82f6;">💰 Cierre</span>';
+      var verFn = esTraspaso ? 'openSalaTraspasoModal' : 'openCajaForm';
       return '<tr>'
         +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
+        +'<td>'+tipoBadge+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
         +'<td style="font-family:var(--font-mono);font-weight:700;color:#3b82f6">'+(c.subtotal_neto||0).toFixed(2)+' €</td>'
         +'<td style="font-family:var(--font-mono);color:'+diffColor+'">'+(c.diferencia_caja>=0?'+':'')+((c.diferencia_caja||0).toFixed(2))+' €</td>'
         +'<td>'+bEstado(c.estado)+'</td>'
-        +'<td><button class="btn btn-secondary btn-sm" onclick="openCajaForm(this.dataset.id)" data-id="'+c.id+'">✏️</button></td>'
+        +'<td><button class="btn btn-secondary btn-sm" onclick="'+verFn+'(this.dataset.id)" data-id="'+c.id+'">✏️</button></td>'
         +'</tr>';
     }).join('');
-    el.innerHTML='<table><tr><th>Fecha</th><th>Turno</th><th>Responsable</th><th>Total neto</th><th>Diferencia</th><th>Estado</th><th></th></tr>'+rows+'</table>';
+    el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Tipo</th><th>Responsable</th><th>Total neto</th><th>Diferencia</th><th>Estado</th><th></th></tr>'+rows+'</table>';
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">Tabla sala_cash_closures pendiente de crear en Supabase. Ejecuta el SQL de configuración.</div>';
   }
@@ -933,6 +1028,364 @@ async function declineCajaOffer() {
   document.getElementById('modal-caja-offer').style.display = 'none';
   await _doSaveTurno();
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// CAJA-V2 SALA · ELECCIÓN TRASPASO/CIERRE + TRASPASO (solo efectivo, sin retiro)
+// Reglas: Cena/Evento → traspaso o cierre · resto → solo traspaso
+//         Una operación por servicio+fecha · varios camareros: 1 hace caja
+// Requiere columna sala_cash_closures.tipo (default 'cierre').
+// ═══════════════════════════════════════════════════════════════════════
+var _salaTipoServ      = null;
+var _salaTraspasoEditId = null;
+var CIERRE_SERVICIOS   = ['Cena','Evento'];
+
+// CAJA-V2 Sala · Si el usuario ya hizo una operación de caja hoy, fija ese servicio
+// en Mi Turno (lo marca y bloquea) para que cierre de turno y caja coincidan.
+async function lockSalaServIfCajaToday() {
+  if(!currentUser) return;
+  var rows = [];
+  try { rows = await dbGetAll('sala_cash_closures'); } catch(e){ return; }
+  var t = today();
+  var mine = rows.find(function(r){ return r.fecha === t && r.responsable_id === currentUser.id; });
+  if(!mine) return;
+  var servs = [];
+  try { servs = JSON.parse(mine.servicios || '[]'); } catch(e){ servs = []; }
+  if(!servs.length) return;
+
+  document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){
+    cb.checked  = servs.indexOf(cb.value) !== -1;
+    cb.disabled = true;
+  });
+  var multi = document.getElementById('t-servicio-multi');
+  if(multi && !document.getElementById('sala-serv-locked-msg')){
+    var note = document.createElement('div');
+    note.id = 'sala-serv-locked-msg';
+    note.style.cssText = 'font-size:12px;color:var(--text3);margin-top:8px;font-family:var(--font-mono);width:100%;';
+    note.textContent = '🔒 Servicio fijado a ' + servs.join(', ') + ' — ya registraste ' +
+      (mine.tipo === 'traspaso' ? 'un traspaso' : 'un cierre') + ' de caja hoy.';
+    multi.parentElement.appendChild(note);
+  }
+}
+
+function getSalaTurnoServicio() {
+  // Servicio(s) marcados en Mi Turno Sala (checkbox servicio-sala)
+  var checked = [];
+  document.querySelectorAll('input[name="servicio-sala"]:checked').forEach(function(cb){ checked.push(cb.value); });
+  return checked; // array
+}
+
+async function getSalaOpToday(servicio) {
+  var rows = [];
+  try { rows = await dbGetAll('sala_cash_closures'); } catch(e){ rows = []; }
+  var t = today();
+  return rows.find(function(r){
+    if(r.fecha !== t) return false;
+    var servs = [];
+    try { servs = JSON.parse(r.servicios || '[]'); } catch(e){ servs = []; }
+    return servs.indexOf(servicio) !== -1;
+  }) || null;
+}
+
+function openSalaCajaChoice() {
+  var servs = getSalaTurnoServicio();
+  // Si Mi Turno tiene exactamente 1 servicio → fijo; si 0 o varios → pedir
+  _salaTipoServ = (servs.length === 1) ? servs[0] : null;
+
+  var fixedBox = document.getElementById('sala-tipo-serv-fixed');
+  var pickBox  = document.getElementById('sala-tipo-serv-pick');
+  var lblFixed = document.getElementById('sala-tipo-serv-label');
+  document.querySelectorAll('#sala-tipo-serv-pick .tbtn').forEach(function(b){ b.classList.remove('t-si'); });
+
+  if(_salaTipoServ){
+    if(fixedBox) fixedBox.style.display = 'block';
+    if(pickBox)  pickBox.style.display  = 'none';
+    if(lblFixed) lblFixed.textContent   = _salaTipoServ;
+  } else {
+    if(fixedBox) fixedBox.style.display = 'none';
+    if(pickBox)  pickBox.style.display  = 'block';
+  }
+
+  var msg = document.getElementById('sala-tipo-msg');
+  if(msg) msg.textContent = _salaTipoServ ? '' : 'Selecciona el servicio para continuar';
+  setSalaTipoBtns(false, false);
+  setSalaSkipBtn('none');
+  var m = document.getElementById('modal-sala-tipo');
+  if(m) m.style.display = 'flex';
+  if(_salaTipoServ) evalSalaCajaChoice();
+}
+
+function closeSalaCajaChoice() {
+  var m = document.getElementById('modal-sala-tipo');
+  if(m) m.style.display = 'none';
+}
+
+function setSalaTipoServ(s, btn) {
+  _salaTipoServ = s;
+  if(btn && btn.parentElement){
+    btn.parentElement.querySelectorAll('.tbtn').forEach(function(b){ b.classList.remove('t-si'); });
+    btn.classList.add('t-si');
+  }
+  evalSalaCajaChoice();
+}
+
+function setSalaTipoBtns(traspasoOn, cierreOn) {
+  var bt = document.getElementById('sala-tipo-btn-traspaso');
+  var bc = document.getElementById('sala-tipo-btn-cierre');
+  if(bt){ bt.disabled = !traspasoOn; bt.style.opacity = traspasoOn ? '1' : '.4'; bt.style.cursor = traspasoOn ? 'pointer' : 'not-allowed'; }
+  if(bc){ bc.disabled = !cierreOn;   bc.style.opacity = cierreOn   ? '1' : '.4'; bc.style.cursor = cierreOn   ? 'pointer' : 'not-allowed'; }
+}
+
+function setSalaSkipBtn(mode, opTipo) {
+  var b = document.getElementById('sala-tipo-btn-skip');
+  if(!b) return;
+  if(mode === 'self'){
+    b.style.display = 'block';
+    b.textContent = '✓ Cerrar turno — ' + (opTipo === 'traspaso' ? 'traspaso' : 'cierre') + ' de caja ya registrado por ti';
+  } else {
+    b.style.display = 'block';
+    b.textContent = '✓ Cerrar turno sin caja (la gestiona mi compañero/a)';
+  }
+}
+
+async function evalSalaCajaChoice() {
+  var msg = document.getElementById('sala-tipo-msg');
+  if(!_salaTipoServ){ setSalaTipoBtns(false, false); return; }
+  setSalaTipoBtns(false, false);
+  if(msg){ msg.textContent = 'Comprobando operaciones de hoy...'; msg.style.color = 'var(--text3)'; }
+
+  var isAdminU = currentUser && currentUser.rol === 'admin';
+  var dup = await getSalaOpToday(_salaTipoServ);
+  var dupEsMia = dup && (dup.responsable_id === currentUser.id);
+
+  if(dup && dupEsMia && !isAdminU){
+    if(msg){
+      msg.textContent = '✓ Ya registraste tu ' + (dup.tipo === 'traspaso' ? 'traspaso' : 'cierre') + ' de caja en el servicio ' + _salaTipoServ + '. Cierra el turno para terminar.';
+      msg.style.color = 'var(--green)';
+    }
+    setSalaTipoBtns(false, false);
+    setSalaSkipBtn('self', dup.tipo);
+    return;
+  }
+  if(dup && !dupEsMia && !isAdminU){
+    if(msg){
+      msg.textContent = '⛔ El servicio '+_salaTipoServ+' ya registró '+(dup.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy ('+(dup.responsable_nombre || '')+'). Cierra el turno sin caja.';
+      msg.style.color = 'var(--red)';
+    }
+    setSalaTipoBtns(false, false);
+    setSalaSkipBtn('mate');
+    return;
+  }
+
+  setSalaSkipBtn('none');
+  var puedeCerrar = isAdminU || CIERRE_SERVICIOS.indexOf(_salaTipoServ) !== -1;
+  setSalaTipoBtns(true, puedeCerrar);
+  if(msg){
+    if(dup && isAdminU){
+      msg.textContent = '⚠ Ya existe una operación de este servicio hoy. Como admin puedes duplicar — revisa antes de guardar.';
+      msg.style.color = 'var(--amber)';
+    } else if(!puedeCerrar){
+      msg.textContent = 'Servicio '+_salaTipoServ+': solo traspaso. El cierre lo hace Cena o Evento.';
+      msg.style.color = 'var(--text3)';
+    } else {
+      msg.textContent = '';
+    }
+  }
+}
+
+function startSalaTraspaso() {
+  var b = document.getElementById('sala-tipo-btn-traspaso');
+  if(b && b.disabled) return;
+  if(!_salaTipoServ){ toast('Selecciona el servicio','err'); return; }
+  closeSalaCajaChoice();
+  openSalaTraspasoModal();
+}
+
+async function startSalaCierre() {
+  var b = document.getElementById('sala-tipo-btn-cierre');
+  if(b && b.disabled) return;
+  if(!_salaTipoServ){ toast('Selecciona el servicio','err'); return; }
+  closeSalaCajaChoice();
+  // Abrir el cierre completo existente (formulario actual)
+  if(typeof showScreen === 'function') showScreen('caja');
+  setTimeout(function(){ if(typeof openCajaForm === 'function') openCajaForm(); }, 150);
+}
+
+async function skipSalaCajaOp() {
+  var serv = _salaTipoServ || '—';
+  closeSalaCajaChoice();
+  await _doSaveTurno();
+  var dup = await getSalaOpToday(serv);
+  var dupEsMia = dup && (dup.responsable_id === currentUser.id);
+  if(dupEsMia){
+    toast('Turno cerrado — caja ya registrada', 'ok');
+  } else {
+    if(typeof auditLog === 'function') auditLog('SALA_CAJA_SKIP', currentUser.nombre+' cerró turno Sala servicio '+serv+' sin operación de caja ('+today()+')');
+    toast('Turno cerrado sin operación de caja', 'ok');
+  }
+}
+
+// ── TRASPASO SALA: modal ────────────────────────────────────────────────
+function openSalaTraspasoModal(existingId) {
+  _salaTraspasoEditId = existingId || null;
+  ['sala-tras-cash-posmews','sala-tras-cash-real','sala-tras-fondo-real','sala-tras-dif-exp'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  var difBlock = document.getElementById('sala-tras-dif-block');
+  if(difBlock) difBlock.style.display = 'none';
+  var difEl = document.getElementById('sala-tras-dif');
+  if(difEl){ difEl.textContent = '—'; difEl.style.color = 'var(--text3)'; }
+  var errEl = document.getElementById('sala-tras-err');
+  if(errEl) errEl.textContent = '';
+  var fondoEl = document.getElementById('sala-tras-fondo-recibido');
+  if(fondoEl) fondoEl.value = '0.00';
+  var label = document.getElementById('sala-tras-serv-label');
+
+  if(!existingId){
+    if(label) label.textContent = _salaTipoServ || '—';
+    dbGetAll('sala_cash_closures').then(function(rows){
+      var sorted = rows
+        .filter(function(r){ return r.fondo_real_sala != null || r.fondo_final != null; })
+        .sort(function(a,b){
+          return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||'');
+        });
+      var ultimo = sorted[0];
+      if(fondoEl && ultimo){
+        fondoEl.value = parseFloat(ultimo.fondo_real_sala || ultimo.fondo_final || 0).toFixed(2);
+        calcSalaTraspaso();
+      }
+    });
+  } else {
+    dbGetAll('sala_cash_closures').then(function(rows){
+      var row = rows.find(function(r){ return r.id === existingId; });
+      if(!row) return;
+      try { var s = JSON.parse(row.servicios||'[]'); _salaTipoServ = s[0] || _salaTipoServ; } catch(e){}
+      if(label) label.textContent = _salaTipoServ || '—';
+      function set(id, val){ var el = document.getElementById(id); if(el && val != null) el.value = val; }
+      set('sala-tras-fondo-recibido', (parseFloat(row.fondo_inicial)||0).toFixed(2));
+      set('sala-tras-cash-posmews',   row.efectivo_posmews);
+      set('sala-tras-cash-real',      row.efectivo_real);
+      set('sala-tras-fondo-real',     row.fondo_real_sala);
+      set('sala-tras-dif-exp',        row.comentario);
+      calcSalaTraspaso();
+    });
+  }
+  var m = document.getElementById('modal-sala-traspaso');
+  if(m) m.style.display = 'flex';
+}
+
+function closeSalaTraspasoModal() {
+  var m = document.getElementById('modal-sala-traspaso');
+  if(m) m.style.display = 'none';
+}
+
+function calcSalaTraspaso() {
+  function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  var fondoRec = gv('sala-tras-fondo-recibido');
+  var ventas   = gv('sala-tras-cash-posmews');
+  // Sin retiro: esperado = fondo recibido + ventas efectivo POSMEWS
+  var esperado = fondoRec + ventas;
+  var espEl = document.getElementById('sala-tras-fondo-esperado');
+  if(espEl){ espEl.textContent = esperado.toFixed(2) + ' €'; espEl.style.color = esperado >= 0 ? 'var(--green)' : 'var(--red)'; }
+
+  var realRaw = (document.getElementById('sala-tras-fondo-real')||{value:''}).value;
+  var difEl    = document.getElementById('sala-tras-dif');
+  var difBlock = document.getElementById('sala-tras-dif-block');
+  if(realRaw === '' || isNaN(parseFloat(realRaw))){
+    if(difEl){ difEl.textContent = '—'; difEl.style.color = 'var(--text3)'; }
+    if(difBlock) difBlock.style.display = 'none';
+    return;
+  }
+  var dif = (parseFloat(realRaw)||0) - esperado;
+  var cuadrado = Math.abs(dif) < 0.01;
+  if(difEl){
+    difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + (dif>=0?'+':'') + dif.toFixed(2) + '€';
+    difEl.style.color = cuadrado ? 'var(--green)' : 'var(--red)';
+  }
+  if(difBlock) difBlock.style.display = cuadrado ? 'none' : 'block';
+}
+
+async function submitSalaTraspaso() {
+  function gv(id){ return parseFloat((document.getElementById(id)||{}).value); }
+  var errs = [];
+  var serv     = _salaTipoServ || '';
+  var fondoRec = gv('sala-tras-fondo-recibido') || 0;
+  var ventas   = gv('sala-tras-cash-posmews');
+  var cashReal = gv('sala-tras-cash-real');
+  var fondoReal= gv('sala-tras-fondo-real');
+
+  if(!serv)               errs.push('Selecciona servicio');
+  if(isNaN(ventas) || ventas < 0) errs.push('Ventas efectivo POSMEWS obligatorio (0 si no hubo)');
+  if(isNaN(cashReal))     errs.push('Cash real contado obligatorio');
+  if(isNaN(fondoReal))    errs.push('Fondo real a traspasar obligatorio');
+
+  var esperado = fondoRec + (ventas||0);
+  var dif      = (fondoReal||0) - esperado;
+  var exp      = (document.getElementById('sala-tras-dif-exp')||{value:''}).value.trim();
+  if(!isNaN(fondoReal) && Math.abs(dif) > 0.01 && !exp) errs.push('Fondo no cuadrado: explicación obligatoria');
+
+  var errEl = document.getElementById('sala-tras-err');
+  if(errs.length){ if(errEl) errEl.textContent = errs.join(' · '); toast(errs[0],'err'); return; }
+  if(errEl) errEl.textContent = '';
+
+  if(!_salaTraspasoEditId && currentUser.rol !== 'admin'){
+    var dup = await getSalaOpToday(serv);
+    if(dup){
+      var m = 'El servicio '+serv+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por servicio.';
+      if(errEl) errEl.textContent = m; toast(m,'err'); return;
+    }
+  }
+
+  var ts = localTs();
+  var record = {
+    id: _salaTraspasoEditId || genId(),
+    fecha: today(),
+    servicios: JSON.stringify([serv]),
+    tipo: 'traspaso',
+    responsable_id: currentUser.id,
+    responsable_nombre: currentUser.nombre,
+    // Efectivo (sin retiro)
+    efectivo_posmews: ventas,
+    efectivo_real: cashReal,
+    fondo_inicial: fondoRec,
+    fondo_final: fondoReal,
+    fondo_real_sala: fondoReal,
+    retiro_caja_fuerte: 0,
+    diferencia_efectivo: dif,
+    diferencia_operativa_sala: dif,
+    diferencia_caja: dif,
+    // resto a 0 (no aplica en traspaso)
+    tarjeta_posmews: 0, tarjeta_tpv: 0, propinas_tpv: 0, propinas: 0, diferencia_tarjeta: 0,
+    stripe_posmews: 0, stripe_real: 0, diferencia_stripe: 0,
+    room_charge: 0, cargo_alexander: 0, pension_desayuno: 0, media_pension: 0, pension_completa: 0,
+    subtotal_neto: 0, total_bruto: 0, total_medios_pago: cashReal, total_ajustes: 0,
+    comentario: exp || null,
+    estado: 'Pendiente validación',
+    updated_at: ts
+  };
+  if(!_salaTraspasoEditId) record.created_at = ts;
+
+  try {
+    var url = SUPABASE_URL + '/rest/v1/sala_cash_closures';
+    var method = _salaTraspasoEditId ? 'PATCH' : 'POST';
+    var fetchUrl = _salaTraspasoEditId ? url + '?id=eq.' + encodeURIComponent(_salaTraspasoEditId) : url;
+    var res = await fetch(fetchUrl, {
+      method: method,
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(record)
+    });
+    if(!res.ok){ throw new Error('HTTP '+res.status+' '+(await res.text())); }
+    invalidateCache('sala_cash_closures');
+    if(typeof auditLog === 'function') auditLog(_salaTraspasoEditId ? 'SALA_TRASPASO_EDIT' : 'SALA_TRASPASO_SAVE', currentUser.nombre+' '+(_salaTraspasoEditId?'editó':'traspasó')+' caja Sala '+today()+' servicio '+serv+' · fondo '+(fondoReal||0).toFixed(2)+'€');
+    await _doSaveTurno();
+    closeSalaTraspasoModal();
+    toast('Traspaso de caja guardado','ok');
+    if(typeof renderCajaList === 'function') renderCajaList();
+  } catch(e){
+    if(errEl) errEl.textContent = 'Error al guardar: '+e.message;
+    toast('Error al guardar traspaso','err');
+  }
+}
+
 
 // renderCostTable() — defined in dashboard.js (respects _dashCurrentDept)
 

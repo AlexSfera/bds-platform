@@ -68,7 +68,8 @@ async function chkConfirm(){
   var isSala=currentUser&&currentUser.area==='Sala';
   var isRec=currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción');
   if(isSala&&currentUser._activeDept!=='Recepción'){
-    openCajaOfferModal();
+    if(typeof openSalaCajaChoice === 'function') openSalaCajaChoice();
+    else openCajaOfferModal();
   } else if(isRec || currentUser._activeDept === 'Recepción'){
     openRecKpiModal();
   } else {
