@@ -31,6 +31,101 @@ var CHK_REC_TARDE_ITEMS = ["Fichaje realizado desde móvil","Revisado handover d
 var CHK_REC_NOCHE_SECTIONS = [{"title":"INICIO DE TURNO","count":4},{"title":"OPERACION NOCTURNA","count":6},{"title":"CAJA Y CIERRE","count":6},{"title":"PREPARACION DIA SIGUIENTE","count":3},{"title":"CIERRE FINAL","count":3}];
 var CHK_REC_NOCHE_ITEMS = ["Fichaje realizado desde móvil","Revisado handover del turno tarde","Revisadas llegadas pendientes","Revisadas incidencias abiertas","Revisadas llegadas tardías","Revisados no-shows","Revisadas reservas del día siguiente","Revisadas salidas tempranas","Incidencias nocturnas registradas","Situaciones de seguridad comunicadas si aplica","Cash MEWS comparado con cash físico","Tarjeta MEWS comparada con TPV","Stripe MEWS comparado con Stripe real","Cobros pendientes revisados","Facturación pendiente identificada","Diferencias explicadas si existen","Llegadas del día siguiente revisadas","Habitaciones prioritarias identificadas","Peticiones especiales preparadas","Handover preparado para turno mañana","Follow-up refleja situación real","Fichaje de salida realizado desde móvil"];
 
+// ── DATOS CHECKLIST SYNCROLAB MAÑANA ──
+var CHK_LAB_MANANA_SECTIONS = [
+  {title:'INICIO DE TURNO',count:11},
+  {title:'TIENDA Y SISTEMAS',count:3},
+  {title:'INSTALACIONES',count:2},
+  {title:'DOCUMENTACIÓN Y FOLLOW-UP',count:3},
+  {title:'GESTIÓN ADMINISTRATIVA',count:8},
+  {title:'CAMBIO DE TURNO',count:5}
+];
+var CHK_LAB_MANANA_ITEMS = [
+  'Log-in Bitrix personal',
+  'Fichar entrada Bitrix',
+  'Encender ordenadores (6785)',
+  'Encender música (rack)',
+  'Log-in VirtuGym',
+  'Log-in Nubimed',
+  'Log-in MasterYield',
+  'Log-in MyWellness',
+  'Arqueo de cajas Fitness y Clínica',
+  'Agregar fondo caja en VirtuGym (manualmente)',
+  'Revisar si hay suficiente cambio (pedir a Recepción SYNCROSFERA si es necesario)',
+  'Revisar tienda: 6 camisetas rojas / 3 conjuntos cycling de cada color / 3 multi',
+  'Revisar si OneDrive está sincronizado (syncrolab@syncrosfera.com)',
+  'Entrar en AnyDesk y mantenerlo conectado (torno principal y SPA)',
+  '8:30 — Encender sauna',
+  'Comprobar esencia baño turco (si no hay, avisar a Mantenimiento)',
+  'Revisar documento cambio de turno en Bitrix (registrar incidencias durante el día)',
+  'Revisar FollowUp Recepción SYNCROLAB en OneDrive (revisar y registrar)',
+  'Revisar FollowUp Recepción SYNCROSFERA en Bitrix',
+  'Comprobar y gestionar email SYNCROLAB (no gestionado: dejar como no leído)',
+  'Comprobar y gestionar email personal (no gestionado: dejar como no leído)',
+  'Contar y reponer productos de tienda',
+  'Revisar y enviar facturas y pro-formas VirtuGym',
+  'Revisar y gestionar tareas pendientes Bitrix personal',
+  'Gestionar leads columna Nuevo (gestionados: cambiar responsable a sí mismo)',
+  'Revisar que todos los cobros del día estén facturados (Fitness y Clínica)',
+  'Comprobar documento de pulseras y que estén todas',
+  'Cambio de turno / arqueo de caja',
+  'Subir sobres a Recepción SYNCROSFERA — caja negra (nombre, apellido, fecha)',
+  'Fichar salida en Bitrix',
+  'Log-out en todos los perfiles',
+  'Domingos sin entrenadores: activar música en sala y quitar candados puertas emergencia'
+];
+
+// ── DATOS CHECKLIST SYNCROLAB TARDE ──
+var CHK_LAB_TARDE_SECTIONS = [
+  {title:'INICIO DE TURNO',count:9},
+  {title:'DOCUMENTACIÓN Y FOLLOW-UP',count:4},
+  {title:'INSTALACIONES',count:2},
+  {title:'GESTIÓN COMERCIAL',count:7},
+  {title:'CIERRE DE CAJA',count:5},
+  {title:'CIERRE DE TURNO',count:12}
+];
+var CHK_LAB_TARDE_ITEMS = [
+  'Log-in Bitrix personal',
+  'Fichar entrada Bitrix',
+  'Arqueo de cajas Fitness y Clínica',
+  'Log-in VirtuGym',
+  'Log-in Nubimed',
+  'Log-in MasterYield',
+  'Revisar si OneDrive está sincronizado (syncrolab@syncrosfera.com)',
+  'Revisar si Google está sincronizado (syncrolab@gmail.com)',
+  'Revisar AnyDesk conectado (torno principal y torno SPA)',
+  'Revisar Excel cambio de turno (agregar si algo sucede durante el día)',
+  'Revisar Excel FollowUp Recepción SYNCROLAB',
+  'Revisar Excel FollowUp Recepción SYNCROSFERA',
+  'Revisar email SYNCROLAB / email personal (no respondidos: dejar como no leído)',
+  'Revisar sauna y baño turco funcionan con normalidad',
+  'Revisar agua del SPA (si hay que reponer, llamar ext. 300)',
+  'Revisar y enviar facturas y pro-formas VirtuGym',
+  'Revisar y gestionar leads nuevos en Bitrix (agregar responsable SYNCROLAB y a sí mismo)',
+  'Revisar y gestionar tareas personales',
+  'Revisar y gestionar leads primer contacto y segundo contacto',
+  'Revisar WhatsApps pendientes (en Bitrix)',
+  'Enviar recordatorios citas fisioterapia del siguiente día',
+  'Enviar recordatorios citas Welcome Fit (Fitness)',
+  'Revisar que todos los cobros de la tarde estén facturados (Fitness y Clínica)',
+  '8 PM — Retirar ingresos del día caja Nubimed',
+  'Contar y reponer productos en tienda (registrar unidades en Excel al cierre)',
+  'Retirar ingresos del día caja VirtuGym',
+  'Cierre de caja Clínica / Fitness',
+  'Revisar y gestionar pulseras (Incidencias / Experience / Clínica / Tour)',
+  'Revisar que instalaciones estén apagadas (Ludoteca / Meeting Room / Clínica)',
+  'Revisar que AACC estén apagados',
+  'Dejar cargando los datáfonos',
+  'Enviar follow-up a través de Bitrix',
+  'Enviar al grupo "Cierre SYNCROLAB" el cierre de cajas Clínica y Fitness',
+  'Revisar taquillas de vestuarios',
+  'Ordenar y limpiar Recepción',
+  'Candados puertas emergencia sala Fitness (sábados y domingos)',
+  'Salir de todos los perfiles (VirtuGym / Nubimed...)',
+  'Subir estuches de llaves y sobre de cierre de caja a Recepción SYNCROSFERA',
+  'Fichar salida en Bitrix'
+];
+
 // ── FUNCIONES ──
 function chkToggle(idx){
   _chkState[idx]=!_chkState[idx];
@@ -103,6 +198,8 @@ function chkOpen(pendingData){
   var isFnB=(currentUser&&(currentUser.rol==='fb'||currentUser.area==='F&B'));
   var isRec=(currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción'));
   var recTurno=isRec?getRecTurnoValue():'';
+  var isLabRec=(currentUser&&/syncrolab/i.test(currentUser.area||''));
+  var labTurno=isLabRec?(function(){var r=document.querySelector('input[name="servicio-lab"]:checked');return r?r.value:'';})():'';
   var sections,items;
   if(isRec){
     if(recTurno==='Tarde'){sections=CHK_REC_TARDE_SECTIONS;items=CHK_REC_TARDE_ITEMS;}
@@ -111,6 +208,10 @@ function chkOpen(pendingData){
   } else if(isFriegue){sections=CHK_FRIEGUE_SECTIONS;items=CHK_FRIEGUE_ITEMS;}
   else if(isSala){sections=CHK_SALA_SECTIONS;items=CHK_SALA_ITEMS;}
   else if(isFnB){sections=CHK_FNB_SECTIONS;items=CHK_FNB_ITEMS;}
+  else if(isLabRec){
+    if(labTurno==='Tarde'){sections=CHK_LAB_TARDE_SECTIONS;items=CHK_LAB_TARDE_ITEMS;}
+    else{sections=CHK_LAB_MANANA_SECTIONS;items=CHK_LAB_MANANA_ITEMS;}
+  }
   else{sections=CHK_COCINA_SECTIONS;items=CHK_COCINA_ITEMS;}
   _chkState=Array(items.length).fill(false);
   document.getElementById('chk-items').innerHTML=buildChkHTML(sections,items);

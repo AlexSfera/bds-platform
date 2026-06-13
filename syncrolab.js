@@ -21,21 +21,34 @@ function renderLabCharges(containerId){
     c.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Sin cargos a habitación. Añade uno si SYNCROLAB cobra contra la factura de un huésped vía MEWS.</div>';
     return;
   }
+  // Listado de habitaciones disponibles
+  var _habNums = [];
+  var _r; for(_r=101;_r<=117;_r++) _habNums.push(_r);
+  for(_r=201;_r<=217;_r++) _habNums.push(_r);
+  for(_r=301;_r<=312;_r++) _habNums.push(_r);
+  var habOptsBase = '<option value="">— Hab. —</option>' + _habNums.map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join('');
+
   var rows = _labCharges.map(function(ch, i){
+    var habOpts = _habNums.map(function(n){
+      return '<option value="'+n+'"'+(String(ch.habitacion)===String(n)?' selected':'')+'>'+n+'</option>';
+    }).join('');
     return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">'
       + '<select onchange="_labChargeSet('+i+',\'sistema\',this.value)" style="color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
         + '<option value="Nubimed"'+(ch.sistema==='Nubimed'?' selected':'')+'>Nubimed</option>'
         + '<option value="VirtuGym"'+(ch.sistema==='VirtuGym'?' selected':'')+'>VirtuGym</option>'
       + '</select>'
-      + '<input type="text" placeholder="Habitación" value="'+(ch.habitacion||'')+'" oninput="_labChargeSet('+i+',\'habitacion\',this.value)" style="width:80px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
-      + '<input type="text" placeholder="Huésped" value="'+(ch.huesped||'')+'" oninput="_labChargeSet('+i+',\'huesped\',this.value)" style="width:120px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
-      + '<input type="text" placeholder="Concepto" value="'+(ch.concepto||'')+'" oninput="_labChargeSet('+i+',\'concepto\',this.value)" style="flex:1;min-width:120px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
-      + '<input type="text" inputmode="decimal" placeholder="€" value="'+(ch.importe||'')+'" oninput="_labChargeSet('+i+',\'importe\',this.value)" style="width:70px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
+      + '<select onchange="_labChargeSet('+i+',\'habitacion\',this.value)" style="color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;width:80px;">'
+        + '<option value=""'+(!(ch.habitacion)?' selected':'')+'>— Hab. —</option>'
+        + habOpts
+      + '</select>'
+      + '<input type="text" placeholder="Huésped" value="'+(ch.huesped||'')+'" oninput="_labInputFilter(this,\'letters\','+i+',\'huesped\',\''+containerId+'\')" style="width:120px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
+      + '<input type="text" placeholder="Concepto" value="'+(ch.concepto||'')+'" oninput="_labInputFilter(this,\'letters\','+i+',\'concepto\',\''+containerId+'\')" style="flex:1;min-width:120px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
+      + '<input type="text" inputmode="decimal" placeholder="€" value="'+(ch.importe||'')+'" oninput="_labInputFilter(this,\'decimal\','+i+',\'importe\',\''+containerId+'\')" style="width:70px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
       + '<button onclick="_labChargeDel('+i+',\''+containerId+'\')" style="background:var(--red);color:#fff;border:none;border-radius:5px;width:28px;height:28px;cursor:pointer;font-weight:700;">×</button>'
       + '</div>';
   }).join('');
   var total = _labCharges.reduce(function(s,ch){ return s + (parseFloat(ch.importe)||0); }, 0);
-  c.innerHTML = rows + '<div style="text-align:right;font-size:12px;font-family:var(--font-mono);color:var(--text2);margin-top:4px;">Total cargos a habitación: <b>'+total.toFixed(2)+' €</b></div>';
+  c.innerHTML = rows + '<div id="lab-total-'+containerId+'" style="text-align:right;font-size:12px;font-family:var(--font-mono);color:var(--text2);margin-top:4px;">Total cargos a habitación: <b>'+total.toFixed(2)+' €</b></div>';
 }
 function _labChargeAdd(containerId){
   var defSys = _labTipoTurno ? 'Nubimed' : 'Nubimed';
@@ -44,6 +57,26 @@ function _labChargeAdd(containerId){
 }
 function _labChargeSet(i, k, v){ if(_labCharges[i]) _labCharges[i][k] = v; }
 function _labChargeDel(i, containerId){ _labCharges.splice(i,1); renderLabCharges(containerId); }
+
+// ── Actualiza solo el total sin re-renderizar las filas ──────────────────
+function _labUpdateTotal(containerId){
+  var total = _labCharges.reduce(function(s,ch){ return s + (parseFloat(ch.importe)||0); }, 0);
+  var el = document.getElementById('lab-total-'+containerId);
+  if(el) el.innerHTML = 'Total cargos a habitación: <b>'+total.toFixed(2)+' €</b>';
+}
+// ── Filtro de entrada: letters = solo letras/espacios; decimal = solo números ──
+function _labInputFilter(el, mode, idx, key, containerId){
+  if(mode === 'letters'){
+    el.value = el.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/g,'');
+  }
+  if(mode === 'decimal'){
+    el.value = el.value.replace(/[^0-9.]/g,'');
+    var p = el.value.split('.');
+    if(p.length > 2) el.value = p[0]+'.'+p.slice(1).join('');
+  }
+  _labChargeSet(idx, key, el.value);
+  if(key === 'importe') _labUpdateTotal(containerId);
+}
 function _labChargesValid(){
   // cada cargo debe tener habitación, concepto e importe > 0
   for(var i=0;i<_labCharges.length;i++){
