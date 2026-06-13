@@ -29,13 +29,13 @@ var FIO_STATUS = {
 // ── Permisos ──────────────────────────────────────────────────────────
 function canCreateFIO(u){
   if(!u) return false;
-  if(isAdmin(u)) return true;
+  if(typeof canActAsAdmin === 'function' && canActAsAdmin(u)) return true;
   if(typeof isSupervisor === 'function' && isSupervisor(u)) return true;
   return false;
 }
 function canValidateFIO(u){
   if(!u) return false;
-  if(isAdmin(u)) return true;
+  if(typeof canActAsAdmin === 'function' && canActAsAdmin(u)) return true;
   if(['fb','jefe_recepcion','chef','supervisor'].indexOf(u.rol) >= 0) return true;
   return false;
 }
@@ -46,7 +46,7 @@ function canValidateCritical(u){
 // Departamentos visibles para el usuario actual (admin = todos)
 function _fioViewableDepts(u){
   if(!u) return [];
-  if(isAdmin(u)) return [];  // [] = sin filtro = ver todos
+  if(isAdmin(u) || (typeof canActAsAdmin === 'function' && canActAsAdmin(u))) return [];  // [] = sin filtro = ver todos
   // Reusa SUPERVISOR_DEPT_MAP de shared.js
   if(typeof getSupervisorDepartments === 'function'){
     var arr = getSupervisorDepartments(u);

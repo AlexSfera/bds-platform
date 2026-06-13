@@ -42,11 +42,13 @@ function _isOperationalIncident(i) {
 
 // ── PERMISOS ──────────────────────────────────────────────────────────
 function canCloseIncident(user,incident){
-  return isAdmin(user) || (isSupervisor(user) && canViewDepartment(user,getRecordDepartment(incident)));
+  if(typeof canActAsAdmin === 'function' && canActAsAdmin(user)) return true;
+  return isSupervisor(user) && canViewDepartment(user,getRecordDepartment(incident));
 }
 
 function canValidateIncident(user,incident){
-  return isAdmin(user) && normalizeIncidentState(incident&&incident.estado)===INCIDENT_STATES.CERRADA;
+  var isAdm = typeof canActAsAdmin === 'function' ? canActAsAdmin(user) : isAdmin(user);
+  return isAdm && normalizeIncidentState(incident&&incident.estado)===INCIDENT_STATES.CERRADA;
 }
 
 // ── BADGE ─────────────────────────────────────────────────────────────

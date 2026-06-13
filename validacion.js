@@ -259,7 +259,7 @@ async function openPostErrorModal(shiftId) {
   ['posterr-fio-si','posterr-fio-no'].forEach(function(id){var el=document.getElementById(id);if(el)el.className='tbtn';});
   var revalBtn=document.getElementById('pe-btn-revalidar');
   if(revalBtn){
-    var canReval=currentUser&&(isAdmin(currentUser)||['fb','chef','jefe_recepcion'].indexOf(currentUser.rol)!==-1);
+    var canReval=currentUser&&(canActAsAdmin(currentUser)||['fb','chef','jefe_recepcion'].indexOf(currentUser.rol)!==-1);
     revalBtn.style.display=canReval?'':'none';
   }
   document.getElementById('modal-post-error').classList.add('open');

@@ -59,11 +59,12 @@ function _tareaActiva(t) {
 
 // ── PERMISOS ──────────────────────────────────────────────────────────
 function canValidateTask(user,task){
-  return isAdmin(user) && normalizeTaskState(task&&task.estado)===TASK_STATES.CERRADA;
+  var isAdm = typeof canActAsAdmin === 'function' ? canActAsAdmin(user) : isAdmin(user);
+  return isAdm && normalizeTaskState(task&&task.estado)===TASK_STATES.CERRADA;
 }
 
 function canCloseTask(user,task){
-  if(isAdmin(user)) return true;
+  if(typeof canActAsAdmin === 'function' && canActAsAdmin(user)) return true;
   if(isSupervisor(user)) return canViewDepartment(user,task&&task.dept_destino);
   return false;
 }
@@ -71,7 +72,7 @@ function canCloseTask(user,task){
 function canProgressTask(t){
   var state=normalizeTaskState(t&&t.estado);
   if(state===TASK_STATES.VALIDADA || state===TASK_STATES.CERRADA) return false;
-  if(isAdmin(currentUser)) return true;
+  if(typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser)) return true;
   if(isSupervisor(currentUser)) return canViewDepartment(currentUser,t&&t.dept_destino);
   return currentUser.area===t.dept_destino; // Empleado puede avanzar tarea de su dpto
 }

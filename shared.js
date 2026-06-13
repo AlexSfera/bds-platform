@@ -229,12 +229,12 @@ function getSupervisorDepartments(user){
   return SUPERVISOR_DEPT_MAP[user.rol] || (user.area?[user.area]:[]);
 }
 function canViewDepartment(user,dept){
-  if(isAdmin(user)) return true;
+  if(canActAsAdmin(user)) return true;  // admin + adjunto_directivo ven todos los dptos
   var d=normalizeDeptName(dept);
   if(!d) return false;
   return getSupervisorDepartments(user).map(normalizeDeptName).indexOf(d)!==-1;
 }
-function canValidateDepartment(user,dept){ return isAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,dept)); }
+function canValidateDepartment(user,dept){ return canActAsAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,dept)); }
 function getRecordDepartment(record,shiftMap){
   if(!record) return '[NO DATA]';
   var direct = record.area || record.departamento || record.dept_destino || record.dept_origen;
@@ -607,7 +607,7 @@ async function showScreen(id){
   if(id==='dashboard'){
     // Show dept filter for admin/fb
     var dw=document.getElementById('dash-dept-wrapper');
-    if(dw) dw.style.display=(currentUser.rol==='admin'||currentUser.rol==='fb')?'block':'none';
+    if(dw) dw.style.display=(canActAsAdmin(currentUser)||currentUser.rol==='fb')?'block':'none';
     renderDashboard(); renderCostTable();
   }
   if(id==='rec-caja'){ renderRecepcionCajaList(); }
@@ -2696,7 +2696,7 @@ async function renderGestionesScreen(){
   var dept = currentUser ? (currentUser.area||'—') : '—';
   var isAdminU = isAdmin(currentUser);
   var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
-  var verTodos = isAdminU;
+  var verTodos = isAdminU || isAdjuntoDirectivo(currentUser);
   var all = [];
   try { all = await getDB('gestiones'); } catch(e){}
   var list = verTodos ? all : all.filter(function(g){
@@ -2812,7 +2812,7 @@ async function renderIncidenciasScreen(){
   var dept = currentUser ? (currentUser.area||'—') : '—';
   var isAdminU = isAdmin(currentUser);
   var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
-  var canSeeList = isAdminU || isSup;
+  var canSeeList = isAdminU || isAdjuntoDirectivo(currentUser) || isSup;
 
   // ── Empleado: solo crear, sin lista ────────────────────────────────
   if(!canSeeList){
@@ -2828,7 +2828,7 @@ async function renderIncidenciasScreen(){
   }
 
   // ── Jefe / Admin: lista completa ───────────────────────────────────
-  var verTodos = isAdminU;
+  var verTodos = isAdminU || isAdjuntoDirectivo(currentUser);
   var all = [];
   try { all = await getDB('incidencias'); } catch(e){}
   var list = verTodos ? all : all.filter(function(i){
