@@ -848,7 +848,8 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <div class="screen" id="screen-validacion">
       <div class="page-header"><div class="page-title">✅ Validación</div><div class="page-sub">Validar · Pedir corrección · Costes de merma</div>
       <div style="display:flex;gap:8px;margin-top:14px;">
-        <button id="val-tab-followup" onclick="switchValTab('followup')" style="padding:8px 18px;border-radius:6px;border:2px solid #2ec4b6;background:rgba(46,196,182,.15);color:#2ec4b6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">FOLLOW-UP</button>
+        <button id="val-tab-followup" onclick="switchValTab('followup')" style="padding:8px 18px;border-radius:6px;border:2px solid #2ec4b6;background:rgba(46,196,182,.15);color:#2ec4b6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">TURNOS</button>
+        <button id="val-tab-operativo" onclick="switchValTab('operativo')" style="padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">OPERATIVO</button>
         <button id="val-tab-caja" onclick="switchValTab('caja')" style="padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">CIERRE CAJA</button>
       </div>
       </div>
@@ -867,24 +868,37 @@ tr:hover td{background:rgba(255,255,255,.018);}
           </select></div>
         <div><button class="btn btn-secondary" style="margin-top:20px" onclick="renderValidacion()">🔍 Filtrar</button></div>
       </div>
-      <!-- FOLLOW-UP TAB -->
+      <!-- TURNOS TAB -->
       <div id="val-content-followup">
+        <div id="val-turnos-kpis" style="margin-bottom:12px;"></div>
         <div id="val-alerts"></div>
         <div class="card"><div class="tbl-wrap" id="validacion-table"></div></div>
+      </div>
 
-        <!-- Incidencias abiertas -->
-        <div id="val-followup-incidencias" style="margin-top:24px;">
-          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#ef4444;letter-spacing:.15em;margin-bottom:12px;">⚠ INCIDENCIAS ABIERTAS</div>
+      <!-- OPERATIVO TAB -->
+      <div id="val-content-operativo" style="display:none;">
+        <!-- Incidencias -->
+        <div id="val-followup-incidencias">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#ef4444;letter-spacing:.15em;">⚠ INCIDENCIAS</div>
+          </div>
+          <div id="val-op-inci-kpis" style="margin-bottom:10px;"></div>
           <div class="card"><div class="tbl-wrap" id="val-incidencias-table"></div></div>
         </div>
-        <!-- Gestiones pendientes -->
-        <div id="val-followup-gestiones" style="margin-top:16px;">
-          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#f59e0b;letter-spacing:.15em;margin-bottom:12px;">📌 GESTIONES PENDIENTES</div>
+        <!-- Gestiones -->
+        <div id="val-followup-gestiones" style="margin-top:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#f59e0b;letter-spacing:.15em;">📌 GESTIONES</div>
+          </div>
+          <div id="val-op-gest-kpis" style="margin-bottom:10px;"></div>
           <div class="card"><div class="tbl-wrap" id="val-gestiones-table"></div></div>
         </div>
-        <!-- Tareas pendientes -->
-        <div id="val-followup-tareas" style="margin-top:16px;">
-          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:12px;">🔗 TAREAS PENDIENTES</div>
+        <!-- Tareas -->
+        <div id="val-followup-tareas" style="margin-top:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#3b82f6;letter-spacing:.15em;">🔗 TAREAS</div>
+          </div>
+          <div id="val-op-tar-kpis" style="margin-bottom:10px;"></div>
           <div class="card"><div class="tbl-wrap" id="val-tareas-table"></div></div>
         </div>
       </div>
@@ -1172,20 +1186,20 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <div id="modal-ajustes" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:650;padding:16px;">
   <div style="background:var(--bg3);border:1px solid #3b82f6;border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;">
     <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:4px;">SALA · ANTES DE CERRAR EL TURNO</div>
-    <div style="font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--text);margin-bottom:4px;">¿Hubo ajustes en este turno?</div>
+    <div style="font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--text);margin-bottom:4px;">¿Hubo ajustes de caja en este turno?</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:18px;">Descuentos, anulaciones, invitaciones, devoluciones, errores de cobro, etc.</div>
 
     <div style="display:flex;gap:10px;margin-bottom:18px;">
       <button id="ajustes-no-btn" onclick="ajustesChoice('no')" style="flex:1;padding:14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;">
-        ✓ No hubo ajustes
+        ✓ No hubo ajustes de caja
       </button>
       <button id="ajustes-si-btn" onclick="ajustesChoice('si')" style="flex:1;padding:14px;border-radius:8px;border:1px solid #3b82f6;background:rgba(59,130,246,.1);color:#3b82f6;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;">
-        ⚡ Sí hubo ajustes
+        ⚡ Sí hubo ajustes de caja
       </button>
     </div>
 
     <div id="ajustes-lines-block" style="display:none;">
-      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">LÍNEAS DE AJUSTE</div>
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">LÍNEAS DE AJUSTE DE CAJA</div>
       <div id="ajustes-lines"></div>
       <button onclick="addAjusteLine()" style="width:100%;padding:10px;background:none;border:1px dashed #3b82f6;border-radius:6px;color:#3b82f6;font-size:13px;cursor:pointer;margin-top:8px;">+ Añadir línea</button>
     </div>

@@ -514,7 +514,7 @@ function buildNav(){
     'hypoxic':   _svg('<path d="M12 2a3 3 0 0 0-3 3c0 1.5 1 2.5 1 4v3a4 4 0 0 1-2 3.5L7 16a3 3 0 0 0 0 4.5 3 3 0 0 0 4 0l1-1 1 1a3 3 0 0 0 4 0 3 3 0 0 0 0-4.5l-1-.5a4 4 0 0 1-2-3.5V9c0-1.5 1-2.5 1-4a3 3 0 0 0-3-3z"/>'),
     'rec-caja-op': _svg('<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 10h.01"/><path d="M2 10h20"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Ajustes','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
 
   // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
   const sideb = document.getElementById('sidebar-nav');
@@ -1474,6 +1474,18 @@ async function renderFollowUpExtras(dept){
     .sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
 
   // Incidencias
+  // ── KPIs de incidencias ──
+  var _allIncis=incis.filter(function(i){return !dept||(i.area||'')=== dept;});
+  var _inciAb=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='abierta'||s==='abierto';}).length;
+  var _inciPr=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='en proceso';}).length;
+  var _inciCe=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado';}).length;
+  var inciKpiEl=document.getElementById('val-op-inci-kpis');
+  if(inciKpiEl) inciKpiEl.innerHTML='<div class="kpi-grid" style="margin-bottom:0;">'
+    +'<div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-lbl">Abiertas</div><div class="kpi-val" style="color:var(--red)">'+_inciAb+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-lbl">En proceso</div><div class="kpi-val" style="color:var(--amber)">'+_inciPr+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-lbl">Cerradas</div><div class="kpi-val" style="color:var(--green)">'+_inciCe+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--text3)"><div class="kpi-lbl">Total</div><div class="kpi-val">'+_allIncis.length+'</div></div>'
+    +'</div>';
   var inciEl=document.getElementById('val-incidencias-table');
   if(inciEl){
     if(!openIncis.length){
@@ -1494,6 +1506,18 @@ async function renderFollowUpExtras(dept){
   }
 
   // Gestiones
+  // ── KPIs de gestiones ──
+  var _allGests=gests.filter(function(g){return !dept||((g.departamento||g.area||'')=== dept);});
+  var _gestAb=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='abierta'||s==='abierto'||!s;}).length;
+  var _gestPr=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='en proceso';}).length;
+  var _gestCe=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado';}).length;
+  var gestKpiEl=document.getElementById('val-op-gest-kpis');
+  if(gestKpiEl) gestKpiEl.innerHTML='<div class="kpi-grid" style="margin-bottom:0;">'
+    +'<div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-lbl">Abiertas</div><div class="kpi-val" style="color:var(--red)">'+_gestAb+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-lbl">En proceso</div><div class="kpi-val" style="color:var(--amber)">'+_gestPr+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-lbl">Cerradas</div><div class="kpi-val" style="color:var(--green)">'+_gestCe+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--text3)"><div class="kpi-lbl">Total</div><div class="kpi-val">'+_allGests.length+'</div></div>'
+    +'</div>';
   var gestEl=document.getElementById('val-gestiones-table');
   if(gestEl){
     if(!pendGests.length){
@@ -1514,6 +1538,18 @@ async function renderFollowUpExtras(dept){
   }
 
   // Tareas
+  // ── KPIs de tareas ──
+  var _allTasks=tasks.filter(function(t){return !dept||(t.dept_destino||'')=== dept;});
+  var _taskAb=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='abierta'||s==='abierto'||!s;}).length;
+  var _taskPr=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='en proceso';}).length;
+  var _taskCe=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado'||s==='completada';}).length;
+  var tarKpiEl=document.getElementById('val-op-tar-kpis');
+  if(tarKpiEl) tarKpiEl.innerHTML='<div class="kpi-grid" style="margin-bottom:0;">'
+    +'<div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-lbl">Abiertas</div><div class="kpi-val" style="color:var(--red)">'+_taskAb+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-lbl">En proceso</div><div class="kpi-val" style="color:var(--amber)">'+_taskPr+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-lbl">Cerradas</div><div class="kpi-val" style="color:var(--green)">'+_taskCe+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--text3)"><div class="kpi-lbl">Total</div><div class="kpi-val">'+_allTasks.length+'</div></div>'
+    +'</div>';
   var tarEl=document.getElementById('val-tareas-table');
   if(tarEl){
     if(!pendTasks.length){
@@ -1579,6 +1615,19 @@ async function renderMisTurnos(){
 // ═══════════════════════════════════════════════════════════════════════
 // BADGE HELPERS
 function bFU(v){if(v==='si')return'<span class="badge b-green">SÍ</span>';if(v==='no')return'<span class="badge b-red">NO</span>';if(v==='na')return'<span class="badge b-blue">N/A</span>';return'<span class="badge b-gray">—</span>';}
+function renderTurnosKpis(shifts){
+  var el=document.getElementById('val-turnos-kpis');
+  if(!el) return;
+  var pend=shifts.filter(function(s){return s.estado==='Pendiente';}).length;
+  var valid=shifts.filter(function(s){return s.estado==='Validado'||s.estado==='Validado con FIO';}).length;
+  var corr=shifts.filter(function(s){return s.estado==='En corrección';}).length;
+  el.innerHTML='<div class="kpi-grid" style="margin-bottom:0;">'
+    +'<div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-lbl">Pendientes</div><div class="kpi-val" style="color:var(--red)">'+pend+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-lbl">Validados</div><div class="kpi-val" style="color:var(--green)">'+valid+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-lbl">Corrección</div><div class="kpi-val" style="color:var(--amber)">'+corr+'</div></div>'
+    +'<div class="kpi" style="border-top:3px solid var(--text3)"><div class="kpi-lbl">Total</div><div class="kpi-val">'+shifts.length+'</div></div>'
+    +'</div>';
+}
 function bEstado(e){const m={'Validado':'b-green ✓ Validado','Pendiente':'b-red ● Pendiente','En corrección':'b-orange ↩ Corrección','Rechazado':'b-gray ✗ Rechazado'};const[cls,...r]=(m[e]||'b-gray '+e).split(' ');return`<span class="badge ${cls}">${r.join(' ')}</span>`;}
 function bSev(s){if(s==='Crítica')return'<span class="badge b-red">⛔ CRÍTICA</span>';if(s==='Alta')return'<span class="badge b-red">🔴 Alta</span>';if(s==='Media')return'<span class="badge b-orange">🟠 Media</span>';return'<span class="badge b-blue">🟡 Baja</span>';}
 function bPrio(p){if(p==='Alta')return'<span class="badge b-red">Alta</span>';if(p==='Media')return'<span class="badge b-orange">Media</span>';return'<span class="badge b-blue">Baja</span>';}
@@ -1739,8 +1788,8 @@ async function renderValidacion(){
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
   el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
-  // Extras: incidencias abiertas, gestiones y tareas pendientes
-  if(typeof renderFollowUpExtras==='function') renderFollowUpExtras(dept);
+  if(typeof renderTurnosKpis==='function') renderTurnosKpis(shifts);
+  // OPERATIVO tab se carga desde switchValTab('operativo')
 }
 // valAdvanceGestion, valShowCloseGestionForm, valSaveCloseGestion,
 // valAdvanceGestionNew, valShowCloseGestionNewForm, valSaveCloseGestionNew → gestiones.js

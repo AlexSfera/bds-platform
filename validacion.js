@@ -397,21 +397,25 @@ function _valTabStyleInactive(btn){
 }
 
 function switchValTab(tab) {
-  var followupDiv = document.getElementById('val-content-followup');
-  var cajaDiv     = document.getElementById('val-content-caja');
-  var hypoxicDiv  = document.getElementById('val-content-hypoxic');
+  var followupDiv  = document.getElementById('val-content-followup');
+  var operativoDiv = document.getElementById('val-content-operativo');
+  var cajaDiv      = document.getElementById('val-content-caja');
+  var hypoxicDiv   = document.getElementById('val-content-hypoxic');
   var btnF = document.getElementById('val-tab-followup');
+  var btnO = document.getElementById('val-tab-operativo');
   var btnC = document.getElementById('val-tab-caja');
   var btnH = document.getElementById('val-tab-hypoxic');
   if(!followupDiv||!cajaDiv) { console.warn('Tab divs not found'); return; }
 
   // Hide all
   followupDiv.style.display = 'none';
+  if(operativoDiv) operativoDiv.style.display = 'none';
   cajaDiv.style.display = 'none';
   if(hypoxicDiv) hypoxicDiv.style.display = 'none';
 
   // Reset all buttons inactive
   _valTabStyleInactive(btnF);
+  if(btnO) _valTabStyleInactive(btnO);
   _valTabStyleInactive(btnC);
   _valTabStyleInactive(btnH);
 
@@ -423,6 +427,11 @@ function switchValTab(tab) {
     if(hypoxicDiv) hypoxicDiv.style.display = 'block';
     _valTabStyleActive(btnH, '#a855f7');
     if(typeof renderValHypoxicList === 'function') renderValHypoxicList();
+  } else if(tab === 'operativo'){
+    if(operativoDiv) operativoDiv.style.display = 'block';
+    if(btnO) _valTabStyleActive(btnO, '#10b981');
+    var _opDept = (document.getElementById('v-dept')||{}).value||'';
+    if(typeof renderFollowUpExtras === 'function') renderFollowUpExtras(_opDept);
   } else {
     followupDiv.style.display = 'block';
     _valTabStyleActive(btnF, '#2ec4b6');
@@ -529,12 +538,9 @@ async function renderValCajaList() {
   renderValAjustes(dept);
 
   var salaCard = el.closest ? el.closest('.card') : null;
-  if(dept === 'Recepción'){
-    // Ocultar tabla de Sala: en Recepción no aplica
-    if(salaCard) salaCard.style.display = 'none';
-    return;
-  }
-  if(salaCard) salaCard.style.display = '';
+  var _hideSala = dept === 'Recepción' || (dept && dept.indexOf('SYNCROLAB') !== -1);
+  if(salaCard) salaCard.style.display = _hideSala ? 'none' : '';
+  if(dept === 'Recepción') return; // early return: Recepción solo tiene su propio bloque
 
   try {
     var data = await dbGetAll('sala_cash_closures');
