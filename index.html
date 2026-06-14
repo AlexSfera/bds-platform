@@ -1894,5 +1894,20 @@ tr:hover td{background:rgba(255,255,255,.018);}
   </div>
 </div>
 
+
+<!-- ══ MODAL VALIDACIÓN CAJA RECEPCIÓN (solo lectura) ══ -->
+<div id="modal-rec-caja-val" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:flex-start;justify-content:center;z-index:800;padding:16px;overflow-y:auto;">
+  <div style="background:var(--bg3);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:600px;margin:40px auto;">
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · VALIDACIÓN DE CAJA</div>
+    <div id="rec-val-body" style="font-size:13px;"></div>
+    <div id="rec-val-err" style="color:var(--red);font-size:12px;min-height:14px;margin:8px 0;font-family:var(--font-mono);"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button onclick="validarRecCajaAction()" style="flex:2;min-width:120px;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Validar</button>
+      <button onclick="marcarErrorRecCajaAction()" style="flex:1;min-width:100px;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✗ Error</button>
+      <button onclick="document.getElementById('modal-rec-caja-val').style.display='none'" style="flex:1;min-width:80px;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

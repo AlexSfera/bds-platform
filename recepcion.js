@@ -370,43 +370,8 @@ function submitRecKpi() {
 // ═══════════════════════════════════════════════════════════════════════
 // CAJA RECEPCIÓN — Abrir modal
 // ═══════════════════════════════════════════════════════════════════════
-function openRecCajaModal(existingId, readOnly) {
+function openRecCajaModal(existingId) {
   _recCajaEditId = existingId || null;
-  var _viewOnly = !!readOnly;
-  window._recCajaValId = existingId || null;
-  // Ocultar/mostrar botones por texto — robusto ante duplicados en DOM
-  setTimeout(function(){
-    var m2 = document.getElementById('modal-rec-caja');
-    if(!m2) return;
-    m2.querySelectorAll('button').forEach(function(btn){
-      var t = (btn.textContent||'').trim();
-      if(t.indexOf('Volver al KPI')>=0 || t.indexOf('Guardar y cerrar')>=0)
-        btn.style.display = _viewOnly ? 'none' : '';
-    });
-    // Bloquear inputs en modo lectura
-    ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
-     'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
-     'rec-fondo-traspaso','rec-fondo-real','rec-cf-importe','rec-room-charge',
-     'rec-syncrolab-charge','rec-dif-exp','rec-dif-accion'].forEach(function(id){
-      var el=document.getElementById(id); if(!el) return;
-      if(_viewOnly){ el.setAttribute('readonly','readonly'); el.style.opacity='0.65'; el.style.cursor='not-allowed'; }
-      else{ el.removeAttribute('readonly'); el.style.opacity=''; el.style.cursor=''; }
-    });
-    ['rec-cf-si','rec-cf-no'].forEach(function(id){
-      var el=document.getElementById(id); if(!el) return;
-      el.disabled=_viewOnly; el.style.opacity=_viewOnly?'0.5':''; el.style.cursor=_viewOnly?'not-allowed':'';
-    });
-    // Footer validador dinámico
-    var existVF = m2.querySelector('#rec-caja-vf-dyn');
-    if(_viewOnly && !existVF){
-      var vf=document.createElement('div'); vf.id='rec-caja-vf-dyn';
-      vf.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;';
-      vf.innerHTML='<button onclick="validarRecCajaAction()" style="flex:2;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Validar</button>'
-        +'<button onclick="marcarErrorRecCajaAction()" style="flex:1;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✗ Error</button>'
-        +'<button onclick="closeRecCajaModal()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;">Cerrar</button>';
-      m2.querySelector('div').appendChild(vf);
-    } else if(!_viewOnly && existVF){ existVF.remove(); }
-  }, 50);
   if(typeof renderRecLabCharges === 'function') renderRecLabCharges();
 
   // Reset todos los campos
@@ -713,7 +678,8 @@ async function renderRecepcionCajaList() {
       ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
       : '<span class="badge" style="background:rgba(139,92,246,.15);color:#8b5cf6;border:1px solid #8b5cf6;">💰 Cierre</span>';
     var verFn    = esTraspaso ? 'openRecTraspasoModal' : 'openRecCajaModal';
-    var acciones = '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\',true)">Ver</button>';
+    var verViewFn = esTraspaso ? 'openRecTraspasoValView' : 'openRecCajaValView';
+    var acciones = '<button class="btn btn-secondary btn-sm" onclick="'+verViewFn+'(\''+r.id+'\')"  >Ver</button>';
     if(canReopen && estado !== 'reabierto')
       acciones += ' <button class="btn btn-secondary btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">Reabrir</button>';
     if(isAdminU)
@@ -1464,6 +1430,100 @@ async function validarRecCajaAction(){
     if(typeof renderValCajaRecepcion === 'function') renderValCajaRecepcion();
   }catch(e){ toast('Error al validar: '+e.message,'err'); }
 }
+
+// ── Vista de validación de caja (solo lectura) ──────────────────────────
+async function openRecCajaValView(id){
+  window._recCajaValId = id;
+  var body = document.getElementById('rec-val-body');
+  var errEl = document.getElementById('rec-val-err');
+  var m = document.getElementById('modal-rec-caja-val');
+  if(!m) { openRecCajaModal(id); return; } // fallback si no existe el modal
+  if(errEl) errEl.textContent='';
+  if(body) body.innerHTML='<div style="color:var(--text3);font-style:italic;">Cargando...</div>';
+  m.style.display='flex';
+  try{
+    var rows = await getDB(REC_TABLE);
+    var r = (rows||[]).find(function(x){ return x.id===id; });
+    if(!r){ if(body) body.innerHTML='<div style="color:var(--red);">Registro no encontrado.</div>'; return; }
+    var fmt = function(v){ return (v!=null&&v!=='')?parseFloat(v).toFixed(2)+' €':'—'; };
+    var dCell = function(v){ var n=parseFloat(v||0); return '<span style="color:'+(Math.abs(n)<0.01?'var(--green)':'var(--red)')+';">'+(n>=0?'+':'')+n.toFixed(2)+' €</span>'; };
+    var estadoBadge = r.estado==='validado'?'<span class="badge b-green">✓ Validado</span>'
+      :r.estado==='con_error'?'<span class="badge b-red">✗ Con error</span>'
+      :r.estado==='reabierto'?'<span class="badge b-orange">↩ Reabierto</span>'
+      :'<span class="badge" style="background:var(--bg2);border:1px solid var(--border);color:var(--text3);">● Pdte. validar</span>';
+    var tipoBadge = r.tipo==='traspaso'
+      ?'<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
+      :'<span class="badge" style="background:rgba(139,92,246,.15);color:#8b5cf6;border:1px solid #8b5cf6;">💰 Cierre</span>';
+    var cfSi = parseFloat(r.retiro_caja_fuerte||0)>0;
+    body.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:14px;">'
+      +'<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(r.fecha)+'</strong></div>'
+      +'<div><span style="color:var(--text3)">Turno: </span><strong>'+(r.turno||'—')+'</strong></div>'
+      +'<div><span style="color:var(--text3)">Tipo: </span>'+tipoBadge+'</div>'
+      +'<div><span style="color:var(--text3)">Estado: </span>'+estadoBadge+'</div>'
+      +'<div><span style="color:var(--text3)">Responsable: </span>'+(r.responsable_nombre||r.usuario_nombre||'—')+'</div>'
+      +(r.validado_por?'<div><span style="color:var(--text3)">Validado por: </span>'+r.validado_por+'</div>':'<div></div>')
+      +'</div>'
+      +'<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">'
+      +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.12em;margin-bottom:8px;">FONDOS</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;">'
+      +'<div><span style="color:var(--text3)">Fondo recibido: </span>'+fmt(r.fondo_recibido)+'</div>'
+      +'<div><span style="color:var(--text3)">Fondo traspasado: </span>'+fmt(r.fondo_traspasado)+'</div>'
+      +'</div></div>'
+      +'<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">'
+      +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.12em;margin-bottom:8px;">DIFERENCIAS</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;text-align:center;">'
+      +'<div>Cash<br>'+dCell(r.dif_cash)+'</div>'
+      +'<div>Tarjeta<br>'+dCell(r.dif_tarjeta)+'</div>'
+      +'<div>Stripe<br>'+dCell(r.dif_stripe)+'</div>'
+      +'<div>Transfer.<br>'+dCell(r.dif_transferencia)+'</div>'
+      +'</div></div>'
+      +'<div style="background:var(--bg);border:1px solid '+(cfSi?'var(--amber)':'var(--border)')+';border-radius:8px;padding:12px;margin-bottom:10px;">'
+      +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+(cfSi?'var(--amber)':'var(--text3)')+';letter-spacing:.12em;margin-bottom:6px;">CAJA FUERTE</div>'
+      +'<div style="font-size:13px;">'
+      +(cfSi?'<span class="badge b-yellow">SÍ</span> Importe: <strong>'+fmt(r.retiro_caja_fuerte)+'</strong>'
+             :'<span class="badge b-gray">NO</span> Sin retiro')
+      +'</div></div>'
+      +(r.explicacion_diferencia?'<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;"><span style="color:var(--text3)">Explicación diferencia: </span>'+r.explicacion_diferencia+'</div>':'')
+      +(r.comentario?'<div style="background:var(--bg);border:1px solid var(--red);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;"><span style="color:var(--red)">Comentario error: </span>'+r.comentario+'</div>':'');
+  }catch(e){ if(body) body.innerHTML='<div style="color:var(--red);">Error: '+e.message+'</div>'; }
+}
+window.openRecCajaValView = openRecCajaValView;
+
+async function openRecTraspasoValView(id){
+  window._recCajaValId = id;
+  var m = document.getElementById('modal-rec-caja-val');
+  if(!m){ openRecTraspasoModal(id); return; }
+  m.style.display='flex';
+  var body = document.getElementById('rec-val-body');
+  if(body) body.innerHTML='<div style="color:var(--text3);font-style:italic;">Cargando traspaso...</div>';
+  try{
+    var rows = await getDB(REC_TABLE);
+    var r = (rows||[]).find(function(x){ return x.id===id; });
+    if(!r){ if(body) body.innerHTML='<div style="color:var(--red);">No encontrado.</div>'; return; }
+    var fmt = function(v){ return (v!=null&&v!=='')?parseFloat(v).toFixed(2)+' €':'—'; };
+    var dCell = function(v){ var n=parseFloat(v||0); return '<span style="color:'+(Math.abs(n)<0.01?'var(--green)':'var(--red)')+';">'+(n>=0?'+':'')+n.toFixed(2)+' €</span>'; };
+    var estadoBadge = r.estado==='validado'?'<span class="badge b-green">✓ Validado</span>'
+      :r.estado==='con_error'?'<span class="badge b-red">✗ Con error</span>'
+      :'<span class="badge" style="background:var(--bg2);border:1px solid var(--border);color:var(--text3);">● Pdte. validar</span>';
+    body.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:14px;">'
+      +'<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(r.fecha)+'</strong></div>'
+      +'<div><span style="color:var(--text3)">Turno: </span><strong>'+(r.turno||'—')+'</strong></div>'
+      +'<div><span style="color:var(--text3)">Responsable: </span>'+(r.responsable_nombre||r.usuario_nombre||'—')+'</div>'
+      +'<div><span style="color:var(--text3)">Estado: </span>'+estadoBadge+'</div>'
+      +'</div>'
+      +'<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">'
+      +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.12em;margin-bottom:8px;">TRASPASO</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;">'
+      +'<div><span style="color:var(--text3)">Fondo recibido: </span>'+fmt(r.fondo_recibido)+'</div>'
+      +'<div><span style="color:var(--text3)">Ventas efectivo MEWS: </span>'+fmt(r.cash_mews)+'</div>'
+      +'<div><span style="color:var(--text3)">Efectivo real: </span>'+fmt(r.cash_real)+'</div>'
+      +'<div><span style="color:var(--text3)">Δ Total: </span>'+dCell(r.dif_total)+'</div>'
+      +'<div><span style="color:var(--text3)">Fondo traspasado: </span>'+fmt(r.fondo_traspasado)+'</div>'
+      +'</div></div>';
+  }catch(e){ if(body) body.innerHTML='<div style="color:var(--red);">Error: '+e.message+'</div>'; }
+}
+window.openRecTraspasoValView = openRecTraspasoValView;
+
 window.validarRecCajaAction = validarRecCajaAction;
 
 async function marcarErrorRecCajaAction(){
