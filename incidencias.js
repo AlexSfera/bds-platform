@@ -209,7 +209,7 @@ function _renderIncidencias(incis, shiftMap) {
         + '<td><span class="badge ' + sevColor + '">' + formatDisplayValue(i.severidad) + '</span></td>'
         + '<td style="max-width:180px;font-size:12px">' + formatDisplayValue(i.descripcion) + '</td>'
         + '<td style="max-width:160px;font-size:12px;color:var(--text3)">' + accionTomada + '</td>'
-        + '<td>' + bIncidentEstado(i.estado) + '</td>'
+        + '<td>' + (canCloseIncident(currentUser, i) ? bIncidentEstadoClick(i.estado, i.id) : bIncidentEstado(i.estado)) + '</td>'
         + '<td style="white-space:nowrap">' + acciones + '</td>'
         + '</tr>';
     }).join('')
