@@ -519,7 +519,7 @@ function _esJefe(){
   return r === 'admin' || r === 'chef' || r === 'fb' || r === 'jefe_recepcion'
       || r === 'gobernante' || r === 'jefe_departamento'
       || r === 'coord_recepcion_syncrolab' || r === 'coord_entrenadores' || r === 'coord_fisioterapeutas'
-      || r === 'supervisor';
+      || r === 'supervisor' || r === 'jefe';
 }
 
 function _bloqueJefe(area){

@@ -146,6 +146,22 @@ const SUPERVISOR_DEPT_MAP = {
   coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab']
 };
 
+// Grupos de área para el rol 'jefe': su `area` expande a los departamentos que cubre.
+// Si el area no es clave aquí, cubre solo su propio nombre.
+const AREA_GROUPS = {
+  'F&B':             ['Sala', 'Cocina', 'Friegue', 'FnB', 'Food & Beverage'],
+  'Food & Beverage': ['Sala', 'Cocina', 'Friegue', 'FnB', 'Food & Beverage'],
+  'Cocina':          ['Cocina', 'Friegue'],
+  'Sala':            ['Sala'],
+  'Recepción':       ['Recepción', 'Recepción SFERA'],
+  'Housekeeping':    ['Housekeeping', 'Limpieza'],
+  'Limpieza':        ['Housekeeping', 'Limpieza'],
+  'SYNCROLAB':       ['SYNCROLAB', 'SyncroLab', 'Recepción SYNCROLAB', 'Entrenadores', 'Fisioterapeutas', 'Clínica'],
+  'Mantenimiento':   ['Mantenimiento'],
+  'Economato':       ['Economato'],
+  'Administración':  ['Administración']
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 let currentUser = null;
@@ -217,15 +233,19 @@ function toYMD(date){
 // normalizeIncidentState, isIncidentOpen → incidencias.js
 function normalizeDeptName(dept){ return String(dept||'').trim().toLowerCase(); }
 function isAdmin(user){ return !!user && user.rol==='admin'; }
-function isAdjuntoDirectivo(user){ return !!user && user.rol==='adjunto_directivo'; }
+function isAdjuntoDirectivo(user){ return !!user && (user.rol==='adjunto' || user.rol==='adjunto_directivo'); }
 // Quién puede hacer cosas de admin operativo (todo salvo gestionar al usuario admin):
 function canActAsAdmin(user){ return isAdmin(user) || isAdjuntoDirectivo(user); }
 // Quién puede gestionar usuarios con rol=admin (solo el propio admin):
 function canManageAdminUsers(user){ return isAdmin(user); }
-function isSupervisor(user){ return !!user && Object.prototype.hasOwnProperty.call(SUPERVISOR_DEPT_MAP,user.rol); }
+function isSupervisor(user){ return !!user && (user.rol==='jefe' || Object.prototype.hasOwnProperty.call(SUPERVISOR_DEPT_MAP,user.rol)); }
 function getSupervisorDepartments(user){
   if(!user) return [];
   if(isAdmin(user)) return ['*'];
+  if(user.rol==='jefe'){
+    var a=user.area||'';
+    return AREA_GROUPS[a] || (a?[a]:[]);
+  }
   return SUPERVISOR_DEPT_MAP[user.rol] || (user.area?[user.area]:[]);
 }
 function canViewDepartment(user,dept){
@@ -374,7 +394,7 @@ async function startApp(){
   if(_portal){ _portal.style.display='none'; _portal.style.pointerEvents='none'; _portal.style.visibility='hidden'; }
   document.getElementById('app').style.display='block';
   var unTop=document.getElementById('user-name-top'); if(unTop) unTop.textContent=currentUser.nombre;
-  const rl={admin:'ADMIN',adjunto_directivo:'ADJ.DIR',chef:'CHEF',fb:'F&B',jefe_recepcion:'JEF.REC',supervisor:'SUPERV.',mantenimiento:'MANT.',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
+  const rl={admin:'ADMIN',adjunto:'ADJ.DIR/RRHH',adjunto_directivo:'ADJ.DIR',jefe:(currentUser.area?'JEFE · '+currentUser.area.toUpperCase():'JEFE'),chef:'CHEF',fb:'F&B',jefe_recepcion:'JEF.REC',supervisor:'SUPERV.',mantenimiento:'MANT.',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
   var urTop=document.getElementById('user-role-top'); if(urTop) urTop.textContent=rl[currentUser.rol]||currentUser.rol.toUpperCase();
   buildNav();
   // Show loading state
@@ -394,7 +414,7 @@ function getScreens(rol){
   var isAdminU     = (rol === 'admin');
   var isAdjDir     = typeof isAdjuntoDirectivo === 'function' && isAdjuntoDirectivo(currentUser);
   var isJefe       = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
-    || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
+    || ['chef','fb','jefe_recepcion','supervisor','jefe'].indexOf(rol) >= 0;
 
   // ── Definiciones de pantallas ─────────────────────────────────────
   var ITEMS = {
@@ -1453,6 +1473,10 @@ function saveTurno(){
 // ── Validación · incidencias: filtro por contador + estado clicable que guarda (vía openItemModal) ──
 var _valInciCache = [];
 var _valInciFilter = '';
+var _valGestCache = [];
+var _valGestFilter = '';
+var _valTaskCache = [];
+var _valTaskFilter = '';
 function valInciRenderTable(){
   var inciEl=document.getElementById('val-incidencias-table');
   if(!inciEl) return;
@@ -1493,6 +1517,81 @@ function valInciFilterBy(state, el){
 }
 window.valInciFilterBy = valInciFilterBy;
 window.valInciRenderTable = valInciRenderTable;
+
+function valGestRenderTable(){
+  var gestEl=document.getElementById('val-gestiones-table');
+  if(!gestEl) return;
+  var f=_valGestFilter;
+  var list=(_valGestCache||[]).filter(function(g){
+    var s=(g.estado||'').toLowerCase();
+    if(f==='abierta')    return s==='abierta'||s==='abierto'||!s;
+    if(f==='en proceso') return s==='en proceso';
+    if(f==='cerrada')    return s==='cerrada'||s==='cerrado';
+    return s!=='cerrada'&&s!=='cerrado';   // Total / sin filtro → no cerradas
+  });
+  if(!list.length){
+    gestEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin gestiones en este filtro</div></div>';
+    return;
+  }
+  var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
+  list.forEach(function(g){
+    h+='<tr>'
+      +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((g.fecha||(g.created_at||'').slice(0,10)))+'</td>'
+      +'<td style="font-size:12px">'+(g.nombre_empleado||g.employee_name||g.nombre||'—')+'</td>'
+      +'<td>'+deptBadge(g.departamento||g.area||'—')+'</td>'
+      +'<td style="max-width:260px;font-size:12px">'+(g.descripcion||g.description||'—').slice(0,80)+'</td>'
+      +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(g.estado):bEstado(g.estado))+'</td>'
+      +'</tr>';
+  });
+  gestEl.innerHTML=h+'</table>';
+}
+function valGestFilterBy(state, el){
+  _valGestFilter = (_valGestFilter===state) ? '' : state;
+  var k=document.getElementById('val-op-gest-kpis');
+  if(k){ var cs=k.querySelectorAll('.kpi'); for(var j=0;j<cs.length;j++){ cs[j].style.outline=''; } }
+  if(el && _valGestFilter){ el.style.outline='2px solid currentColor'; el.style.outlineOffset='-1px'; }
+  valGestRenderTable();
+}
+window.valGestFilterBy = valGestFilterBy;
+window.valGestRenderTable = valGestRenderTable;
+
+function valTaskRenderTable(){
+  var tarEl=document.getElementById('val-tareas-table');
+  if(!tarEl) return;
+  var f=_valTaskFilter;
+  var list=(_valTaskCache||[]).filter(function(t){
+    var s=(t.estado||'').toLowerCase();
+    if(f==='abierta')    return s==='abierta'||s==='abierto'||!s;
+    if(f==='en proceso') return s==='en proceso';
+    if(f==='cerrada')    return s==='cerrada'||s==='cerrado'||s==='completada';
+    return s!=='cerrada'&&s!=='cerrado'&&s!=='completada';   // Total / sin filtro → pendientes
+  });
+  if(!list.length){
+    tarEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin tareas en este filtro</div></div>';
+    return;
+  }
+  var h='<table><tr><th>Creada</th><th>Título</th><th>Dept. Destino</th><th>Deadline</th><th>Estado</th></tr>';
+  list.forEach(function(t){
+    var dlStyle=(typeof isOverdue==='function'&&isOverdue(t.deadline))?'color:var(--red);font-weight:700':'';
+    h+='<tr>'
+      +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate((t.created_at||'').slice(0,10))+'</td>'
+      +'<td style="font-size:12px;font-weight:600">'+(t.titulo||'—').slice(0,60)+'</td>'
+      +'<td>'+deptBadge(t.dept_destino||'—')+'</td>'
+      +'<td style="font-family:var(--font-mono);font-size:11px;'+dlStyle+'">'+(t.deadline?fmtDate(t.deadline):'—')+'</td>'
+      +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(t.estado):bEstado(t.estado))+'</td>'
+      +'</tr>';
+  });
+  tarEl.innerHTML=h+'</table>';
+}
+function valTaskFilterBy(state, el){
+  _valTaskFilter = (_valTaskFilter===state) ? '' : state;
+  var k=document.getElementById('val-op-tar-kpis');
+  if(k){ var cs=k.querySelectorAll('.kpi'); for(var j=0;j<cs.length;j++){ cs[j].style.outline=''; } }
+  if(el && _valTaskFilter){ el.style.outline='2px solid currentColor'; el.style.outlineOffset='-1px'; }
+  valTaskRenderTable();
+}
+window.valTaskFilterBy = valTaskFilterBy;
+window.valTaskRenderTable = valTaskRenderTable;
 
 async function renderFollowUpExtras(dept){
   var incis=[]; var gests=[]; var tasks=[];
@@ -1546,31 +1645,22 @@ async function renderFollowUpExtras(dept){
   var _gestAb=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='abierta'||s==='abierto'||!s;}).length;
   var _gestPr=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='en proceso';}).length;
   var _gestCe=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado';}).length;
+  // Contadores clicables = filtro
+  _valGestCache = _allGests.slice().sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
+  var _vkGest=function(lbl,val,col,filt){
+    var act=(_valGestFilter===filt);
+    return '<div class="kpi" onclick="valGestFilterBy(\''+filt+'\',this)" title="Clic para filtrar" '
+      +'style="cursor:pointer;border-top:3px solid '+col+';'+(act?'outline:2px solid '+col+';outline-offset:-1px;':'')+'">'
+      +'<div class="kpi-lbl">'+lbl+'</div><div class="kpi-val" style="color:'+col+'">'+val+'</div></div>';
+  };
   var gestKpiEl=document.getElementById('val-op-gest-kpis');
   if(gestKpiEl) gestKpiEl.innerHTML='<div class="kpi-grid" style="margin-bottom:0;">'
-    +'<div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-lbl">Abiertas</div><div class="kpi-val" style="color:var(--red)">'+_gestAb+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-lbl">En proceso</div><div class="kpi-val" style="color:var(--amber)">'+_gestPr+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-lbl">Cerradas</div><div class="kpi-val" style="color:var(--green)">'+_gestCe+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--text3)"><div class="kpi-lbl">Total</div><div class="kpi-val">'+_allGests.length+'</div></div>'
+    +_vkGest('Abiertas',_gestAb,'var(--red)','abierta')
+    +_vkGest('En proceso',_gestPr,'var(--amber)','en proceso')
+    +_vkGest('Cerradas',_gestCe,'var(--green)','cerrada')
+    +_vkGest('Total',_allGests.length,'var(--text3)','')
     +'</div>';
-  var gestEl=document.getElementById('val-gestiones-table');
-  if(gestEl){
-    if(!pendGests.length){
-      gestEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin gestiones pendientes</div></div>';
-    }else{
-      var h2='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
-      pendGests.forEach(function(g){
-        h2+='<tr>'
-          +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((g.fecha||(g.created_at||'').slice(0,10)))+'</td>'
-          +'<td style="font-size:12px">'+(g.nombre_empleado||g.employee_name||g.nombre||'—')+'</td>'
-          +'<td>'+deptBadge(g.departamento||g.area||'—')+'</td>'
-          +'<td style="max-width:260px;font-size:12px">'+(g.descripcion||g.description||'—').slice(0,80)+'</td>'
-          +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(g.estado):bEstado(g.estado))+'</td>'
-          +'</tr>';
-      });
-      gestEl.innerHTML=h2+'</table>';
-    }
-  }
+  valGestRenderTable();
 
   // Tareas
   // ── KPIs de tareas ──
@@ -1578,32 +1668,22 @@ async function renderFollowUpExtras(dept){
   var _taskAb=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='abierta'||s==='abierto'||!s;}).length;
   var _taskPr=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='en proceso';}).length;
   var _taskCe=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado'||s==='completada';}).length;
+  // Contadores clicables = filtro
+  _valTaskCache = _allTasks.slice().sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
+  var _vkTask=function(lbl,val,col,filt){
+    var act=(_valTaskFilter===filt);
+    return '<div class="kpi" onclick="valTaskFilterBy(\''+filt+'\',this)" title="Clic para filtrar" '
+      +'style="cursor:pointer;border-top:3px solid '+col+';'+(act?'outline:2px solid '+col+';outline-offset:-1px;':'')+'">'
+      +'<div class="kpi-lbl">'+lbl+'</div><div class="kpi-val" style="color:'+col+'">'+val+'</div></div>';
+  };
   var tarKpiEl=document.getElementById('val-op-tar-kpis');
   if(tarKpiEl) tarKpiEl.innerHTML='<div class="kpi-grid" style="margin-bottom:0;">'
-    +'<div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-lbl">Abiertas</div><div class="kpi-val" style="color:var(--red)">'+_taskAb+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-lbl">En proceso</div><div class="kpi-val" style="color:var(--amber)">'+_taskPr+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-lbl">Cerradas</div><div class="kpi-val" style="color:var(--green)">'+_taskCe+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--text3)"><div class="kpi-lbl">Total</div><div class="kpi-val">'+_allTasks.length+'</div></div>'
+    +_vkTask('Abiertas',_taskAb,'var(--red)','abierta')
+    +_vkTask('En proceso',_taskPr,'var(--amber)','en proceso')
+    +_vkTask('Cerradas',_taskCe,'var(--green)','cerrada')
+    +_vkTask('Total',_allTasks.length,'var(--text3)','')
     +'</div>';
-  var tarEl=document.getElementById('val-tareas-table');
-  if(tarEl){
-    if(!pendTasks.length){
-      tarEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin tareas pendientes</div></div>';
-    }else{
-      var h3='<table><tr><th>Creada</th><th>Título</th><th>Dept. Destino</th><th>Deadline</th><th>Estado</th></tr>';
-      pendTasks.forEach(function(t){
-        var dlStyle=isOverdue&&isOverdue(t.deadline)?'color:var(--red);font-weight:700':'';
-        h3+='<tr>'
-          +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate((t.created_at||'').slice(0,10))+'</td>'
-          +'<td style="font-size:12px;font-weight:600">'+(t.titulo||'—').slice(0,60)+'</td>'
-          +'<td>'+deptBadge(t.dept_destino||'—')+'</td>'
-          +'<td style="font-family:var(--font-mono);font-size:11px;'+dlStyle+'">'+(t.deadline?fmtDate(t.deadline):'—')+'</td>'
-          +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(t.estado):bEstado(t.estado))+'</td>'
-          +'</tr>';
-      });
-      tarEl.innerHTML=h3+'</table>';
-    }
-  }
+  valTaskRenderTable();
 }
 window.renderFollowUpExtras = renderFollowUpExtras;
 
@@ -1837,7 +1917,11 @@ function onValDeptChange(){
 function initValDeptFilter(){
   var sel=document.getElementById('v-dept');
   if(!sel||!currentUser) return;
-  if(currentUser.rol==='chef'){
+  if(currentUser.rol==='jefe'){
+    var _deps=getSupervisorDepartments(currentUser);
+    if(_deps.length===1){ sel.value=_deps[0]; sel.disabled=true; }
+    else { sel.disabled=false; }
+  } else if(currentUser.rol==='chef'){
     sel.value='Cocina'; sel.disabled=true;
   } else if(currentUser.rol==='jefe_recepcion'){
     sel.value='Recepción'; sel.disabled=true;
@@ -2539,7 +2623,7 @@ async function saveEmpleado(){
         toast('F&B Manager solo puede asignar roles base/supervisor/jefe_departamento','err'); return;
       }
     } else if(isSupervisor(currentUser)){
-      var allowedAreas = (typeof SUPERVISOR_DEPT_MAP !== 'undefined' && SUPERVISOR_DEPT_MAP[currentUser.rol]) ? SUPERVISOR_DEPT_MAP[currentUser.rol] : [];
+      var allowedAreas = getSupervisorDepartments(currentUser);
       var sa = String(selectedArea||'').trim().toLowerCase();
       var ok = allowedAreas.some(function(d){ return String(d||'').trim().toLowerCase() === sa; });
       if(!ok){
@@ -2990,6 +3074,12 @@ function rerenderActiveScreen(){
     for(var i=0;i<fns.length;i++){
       var f = window[fns[i]];
       if(typeof f === 'function'){ try{ f(); }catch(_){} }
+    }
+    // Tab Operativo de Validación: re-pintar incidencias/gestiones/tareas con su dept (preserva filtro)
+    var _opDiv = document.getElementById('val-content-operativo');
+    if(typeof renderFollowUpExtras === 'function' && _opDiv && _opDiv.style.display !== 'none'){
+      var _vd = (document.getElementById('v-dept')||{}).value||'';
+      try{ renderFollowUpExtras(_vd); }catch(_){}
     }
   }catch(_){}
 }

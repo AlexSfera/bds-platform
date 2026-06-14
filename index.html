@@ -1158,6 +1158,13 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="page-header"><div class="page-title">🫁 Hypoxic Room</div><div class="page-sub">Cargando...</div></div>
     </div>
 
+
+    <!-- ══ MI RUTA (módulo HK) ══ -->
+    <div class="screen" id="screen-ruta-mod">
+      <div class="page-header"><div class="page-title">🧹 Mi Ruta</div><div class="page-sub" id="hk-ruta-sub">Cargando...</div></div>
+      <div id="hk-ruta-content" style="padding:0 16px 80px;"></div>
+    </div>
+
     <!-- ══ MERMA (módulo Cocina) ══ -->
     <div class="screen" id="screen-merma-mod">
       <div class="page-header"><div class="page-title">📦 Merma</div><div class="page-sub">Cargando...</div></div>
@@ -1230,9 +1237,8 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="fg"><label>Nuevas reservas gestionadas</label><input type="number" id="kpi-reservas" min="0" placeholder="0" style="color:#111827;background:#ffffff;"></div>
     </div>
 
-
-    <!-- UPSELL DESAYUNOS -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">DESAYUNOS / UPSELL</div>
+    <!-- CROSS-SELL DESAYUNO (incentivo 10% s/neto · IVA 10%) -->
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">CROSS-SELL · DESAYUNO</div>
     <div class="fg" style="margin-bottom:8px;">
       <label>¿Ofertaste desayunos a clientes sin desayuno incluido?</label>
       <div style="display:flex;gap:8px;margin-top:6px;">
@@ -1241,9 +1247,26 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <button class="tbtn" id="kpi-upsell-na" onclick="setRecKpi('upsell_desayuno','na',this)">No aplica</button>
       </div>
     </div>
-    <div id="kpi-upsell-detail" style="display:none;" class="grid2">
-      <div class="fg"><label>¿A cuántos clientes se ofreció?</label><input type="number" id="kpi-desal-ofertados" min="0" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>¿Cuántos desayunos se vendieron?</label><input type="number" id="kpi-desal-vendidos" min="0" placeholder="0" style="color:#111827;background:#ffffff;"></div>
+    <div id="desayuno-ventas-block" style="display:none;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:8px;">
+      <div style="font-size:11px;color:#f59e0b;font-family:var(--font-mono);font-weight:700;margin-bottom:8px;">DESAYUNOS VENDIDOS — una línea por venta (importe con IVA 10%)</div>
+      <div id="desayuno-ventas-container"></div>
+      <button onclick="addDesayunoVenta()" style="display:flex;align-items:center;gap:6px;background:rgba(245,158,11,.1);border:1px dashed #f59e0b;color:#f59e0b;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;width:100%;justify-content:center;margin-top:6px;">+ Añadir desayuno</button>
+    </div>
+
+    <!-- CROSS-SELL CENA (incentivo 10% s/neto · IVA 10%) -->
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#ef4444;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">CROSS-SELL · CENA</div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>¿Ofertaste cena a clientes sin pensión incluida?</label>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="tbtn" id="kpi-cena-si" onclick="setRecKpi('upsell_cena','si',this)">SÍ</button>
+        <button class="tbtn" id="kpi-cena-no" onclick="setRecKpi('upsell_cena','no',this)">NO</button>
+        <button class="tbtn" id="kpi-cena-na" onclick="setRecKpi('upsell_cena','na',this)">No aplica</button>
+      </div>
+    </div>
+    <div id="cena-ventas-block" style="display:none;border:1px solid #ef4444;border-radius:8px;padding:12px;margin-bottom:8px;">
+      <div style="font-size:11px;color:#ef4444;font-family:var(--font-mono);font-weight:700;margin-bottom:8px;">CENAS VENDIDAS — una línea por venta (importe con IVA 10%)</div>
+      <div id="cena-ventas-container"></div>
+      <button onclick="addCenaVenta()" style="display:flex;align-items:center;gap:6px;background:rgba(239,68,68,.1);border:1px dashed #ef4444;color:#ef4444;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;width:100%;justify-content:center;margin-top:6px;">+ Añadir cena</button>
     </div>
 
     <!-- VENTAS SYNCROLAB -->
@@ -1263,17 +1286,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- BITRIX24 / COMUNICACIÓN -->
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">BITRIX24 / COMUNICACIÓN</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Revisaste WhatsApp / email / llamadas pendientes en Bitrix24?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-comms-si" onclick="setRecKpi('comms_revisadas','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-comms-no" onclick="setRecKpi('comms_revisadas','no',this)">NO</button>
-      </div>
-    </div>
-    <div id="kpi-comms-no-block" style="display:none;" class="fg">
-      <label>Motivo de no revisión <span class="req">*</span></label>
-      <textarea id="kpi-comms-no-exp" rows="2" placeholder="¿Por qué no pudiste revisar?"></textarea>
-    </div>
     <div class="fg" style="margin-bottom:8px;">
       <label>¿Queda algún lead pendiente en Bitrix24?</label>
       <div style="display:flex;gap:8px;margin-top:6px;">
@@ -1444,16 +1456,9 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div id="rec-lab-charges-list"></div>
     </div>
     <div id="rec-caja-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
-    <!-- Footer empleado (crear/editar propio) -->
-    <div id="rec-caja-footer-emp" style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;">
       <button onclick="closeRecCaja()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">← Volver al KPI</button>
       <button onclick="submitRecCaja()" style="flex:2;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar y cerrar turno</button>
-    </div>
-    <!-- Footer validador (solo lectura + validar) -->
-    <div id="rec-caja-footer-val" style="display:none;gap:8px;flex-wrap:wrap;">
-      <button onclick="validarRecCajaAction()" style="flex:2;min-width:120px;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Validar</button>
-      <button onclick="marcarErrorRecCajaAction()" style="flex:1;min-width:120px;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✗ Marcar error</button>
-      <button onclick="closeRecCajaModal()" style="flex:1;min-width:100px;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Cerrar</button>
     </div>
   </div>
 </div>
@@ -1816,25 +1821,10 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="fg"><label>Responsable de turno</label><select id="emp-resp"><option value="1">Sí</option><option value="0">No</option></select></div>
       <div class="fg"><label>Puede validar</label><select id="emp-val"><option value="0">No</option><option value="1">Sí</option></select></div>
       <div class="fg"><label>Rol sistema</label><select id="emp-rol">
-        <optgroup label="Base">
-          <option value="empleado">Empleado</option>
-        </optgroup>
-        <optgroup label="Jefes de departamento">
-          <option value="chef">Jefe de Cocina</option>
-          <option value="fb">F&amp;B Manager</option>
-          <option value="jefe_recepcion">Jefe Recepción</option>
-          <option value="gobernante">Gobernanta (Jefa HK)</option>
-          <option value="mantenimiento">Mantenimiento</option>
-          <option value="coord_recepcion_syncrolab">Coord. Recepción SYNCROLAB</option>
-          <option value="coord_entrenadores">Coord. Entrenadores</option>
-          <option value="coord_fisioterapeutas">Coord. Fisioterapeutas</option>
-          <option value="jefe_departamento">Jefe de Departamento (genérico)</option>
-          <option value="supervisor">Supervisor</option>
-        </optgroup>
-        <optgroup label="Gestión central">
-          <option value="adjunto_directivo">Adjunto Directivo RRHH</option>
-          <option value="admin">Administrador</option>
-        </optgroup>
+        <option value="empleado">Empleado</option>
+        <option value="jefe">Jefe / Coordinador</option>
+        <option value="adjunto">Adjunto Directivo / RRHH</option>
+        <option value="admin">Administrador</option>
       </select></div>
       <div class="fg sp2"><label>Observaciones</label><textarea id="emp-obs" rows="2"></textarea></div>
     </div>
@@ -1866,48 +1856,5 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <script src="fio.js"></script>
 <script src="incentivos.js"></script>
 <script src="fichaje.js"></script>
-
-<!-- ══ MODAL ESTADO INCIDENCIA (Operativo / Validación) ══ -->
-<div id="modal-inci-op" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:900;padding:16px;">
-  <div style="background:var(--bg3);border:2px solid var(--red);border-radius:14px;padding:24px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;">
-    <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--red);letter-spacing:.15em;margin-bottom:6px;">INCIDENCIA</div>
-    <div id="modal-inci-op-info" style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;"></div>
-    <hr style="border:none;border-top:1px solid var(--border);margin:0 0 16px;">
-    <div class="fg" style="margin-bottom:12px;">
-      <label>Comentario (opcional)</label>
-      <textarea id="modal-inci-op-comment" rows="2" placeholder="Añade un comentario..." style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;width:100%;font-size:13px;resize:vertical;"></textarea>
-    </div>
-    <div id="modal-inci-op-accion-block" style="display:none;" class="fg" style="margin-bottom:12px;">
-      <label>Acción tomada <span class="req">*</span></label>
-      <textarea id="modal-inci-op-accion" rows="2" placeholder="Describe la acción tomada para cerrar esta incidencia..." style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;width:100%;font-size:13px;resize:vertical;"></textarea>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
-      <button id="inci-op-btn-proceso" onclick="selectInciOpEstado('En proceso')" style="flex:1;padding:10px;border-radius:7px;border:1px solid var(--amber);background:var(--bg2);color:var(--amber);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;">En proceso</button>
-      <button id="inci-op-btn-cerrada" onclick="selectInciOpEstado('Cerrada')" style="flex:1;padding:10px;border-radius:7px;border:1px solid var(--green);background:var(--bg2);color:var(--green);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;">Cerrada</button>
-    </div>
-    <div id="modal-inci-op-err" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px;font-family:var(--font-mono);"></div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="closeInciOpModal()" style="flex:1;padding:11px;background:none;border:1px solid var(--border);color:var(--text3);border-radius:7px;cursor:pointer;font-size:13px;">Cancelar</button>
-      <button id="modal-inci-op-delete-btn" onclick="deleteInciOp()" style="display:none;flex:1;padding:11px;background:var(--red);border:none;color:#fff;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700;">Eliminar</button>
-      <button onclick="saveInciOpEstado()" style="flex:2;padding:11px;background:#8b5cf6;border:none;color:#fff;border-radius:7px;cursor:pointer;font-size:14px;font-weight:700;">Guardar</button>
-    </div>
-  </div>
-</div>
-
-
-<!-- ══ MODAL VALIDACIÓN CAJA RECEPCIÓN (solo lectura) ══ -->
-<div id="modal-rec-caja-val" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:flex-start;justify-content:center;z-index:800;padding:16px;overflow-y:auto;">
-  <div style="background:var(--bg3);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:600px;margin:40px auto;">
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · VALIDACIÓN DE CAJA</div>
-    <div id="rec-val-body" style="font-size:13px;"></div>
-    <div id="rec-val-err" style="color:var(--red);font-size:12px;min-height:14px;margin:8px 0;font-family:var(--font-mono);"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-      <button onclick="validarRecCajaAction()" style="flex:2;min-width:120px;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Validar</button>
-      <button onclick="marcarErrorRecCajaAction()" style="flex:1;min-width:100px;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✗ Error</button>
-      <button onclick="document.getElementById('modal-rec-caja-val').style.display='none'" style="flex:1;min-width:80px;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;">Cerrar</button>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>
