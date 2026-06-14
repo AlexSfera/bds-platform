@@ -1450,6 +1450,50 @@ function saveTurno(){
 }
 
 // ── FOLLOW-UP EXTRAS: Incidencias abiertas · Gestiones pendientes · Tareas pendientes ─
+// ── Validación · incidencias: filtro por contador + estado clicable que guarda (vía openItemModal) ──
+var _valInciCache = [];
+var _valInciFilter = '';
+function valInciRenderTable(){
+  var inciEl=document.getElementById('val-incidencias-table');
+  if(!inciEl) return;
+  var f=_valInciFilter;
+  var list=(_valInciCache||[]).filter(function(i){
+    var s=(i.estado||'').toLowerCase();
+    if(f==='abierta')    return s==='abierta'||s==='abierto';
+    if(f==='en proceso') return s==='en proceso';
+    if(f==='cerrada')    return s==='cerrada'||s==='cerrado';
+    return s!=='cerrada'&&s!=='cerrado';   // Total / sin filtro → no cerradas (vista por defecto)
+  });
+  if(!list.length){
+    inciEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias en este filtro</div></div>';
+    return;
+  }
+  var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
+  list.forEach(function(i){
+    var canChg = typeof canValidateDepartment==='function' && canValidateDepartment(currentUser, i.area||'');
+    var badge = canChg
+      ? bIncidentEstadoClick(i.estado, i.id)
+      : (typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado));
+    h+='<tr>'
+      +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((i.fecha||(i.created_at||'').slice(0,10)))+'</td>'
+      +'<td style="font-size:12px">'+(i.nombre_empleado||i.employee_name||i.nombre||'—')+'</td>'
+      +'<td>'+deptBadge(i.area||'—')+'</td>'
+      +'<td style="max-width:240px;font-size:12px">'+(i.descripcion||'—').slice(0,80)+'</td>'
+      +'<td>'+badge+'</td>'
+      +'</tr>';
+  });
+  inciEl.innerHTML=h+'</table>';
+}
+function valInciFilterBy(state, el){
+  _valInciFilter = (_valInciFilter===state) ? '' : state;
+  var k=document.getElementById('val-op-inci-kpis');
+  if(k){ var cs=k.querySelectorAll('.kpi'); for(var j=0;j<cs.length;j++){ cs[j].style.outline=''; } }
+  if(el && _valInciFilter){ el.style.outline='2px solid currentColor'; el.style.outlineOffset='-1px'; }
+  valInciRenderTable();
+}
+window.valInciFilterBy = valInciFilterBy;
+window.valInciRenderTable = valInciRenderTable;
+
 async function renderFollowUpExtras(dept){
   var incis=[]; var gests=[]; var tasks=[];
   try{ incis=await getDB('incidencias'); }catch(e){}
@@ -1479,35 +1523,22 @@ async function renderFollowUpExtras(dept){
   var _inciAb=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='abierta'||s==='abierto';}).length;
   var _inciPr=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='en proceso';}).length;
   var _inciCe=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado';}).length;
+  // Contadores clicables = filtro (Abiertas / En proceso / Cerradas / Total)
+  _valInciCache = _allIncis.slice().sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
+  var _vkInci=function(lbl,val,col,filt){
+    var act=(_valInciFilter===filt);
+    return '<div class="kpi" onclick="valInciFilterBy(\''+filt+'\',this)" title="Clic para filtrar" '
+      +'style="cursor:pointer;border-top:3px solid '+col+';'+(act?'outline:2px solid '+col+';outline-offset:-1px;':'')+'">'
+      +'<div class="kpi-lbl">'+lbl+'</div><div class="kpi-val" style="color:'+col+'">'+val+'</div></div>';
+  };
   var inciKpiEl=document.getElementById('val-op-inci-kpis');
   if(inciKpiEl) inciKpiEl.innerHTML='<div class="kpi-grid" style="margin-bottom:0;">'
-    +'<div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-lbl">Abiertas</div><div class="kpi-val" style="color:var(--red)">'+_inciAb+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-lbl">En proceso</div><div class="kpi-val" style="color:var(--amber)">'+_inciPr+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-lbl">Cerradas</div><div class="kpi-val" style="color:var(--green)">'+_inciCe+'</div></div>'
-    +'<div class="kpi" style="border-top:3px solid var(--text3)"><div class="kpi-lbl">Total</div><div class="kpi-val">'+_allIncis.length+'</div></div>'
+    +_vkInci('Abiertas',_inciAb,'var(--red)','abierta')
+    +_vkInci('En proceso',_inciPr,'var(--amber)','en proceso')
+    +_vkInci('Cerradas',_inciCe,'var(--green)','cerrada')
+    +_vkInci('Total',_allIncis.length,'var(--text3)','')
     +'</div>';
-  var inciEl=document.getElementById('val-incidencias-table');
-  if(inciEl){
-    if(!openIncis.length){
-      inciEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias abiertas</div></div>';
-    }else{
-      var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
-      openIncis.forEach(function(i){
-        var _canChgInci = typeof canValidateDepartment==='function'&&canValidateDepartment(currentUser,i.area||'');
-        var _inciStateBadge = _canChgInci
-          ? (typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado)).replace('<span class="badge','<span onclick="openInciOpModal(\''+i.id+'\')" title="Haz clic para gestionar" style="cursor:pointer;" class="badge')
-          : (typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado));
-        h+='<tr>'
-          +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((i.fecha||(i.created_at||'').slice(0,10)))+'</td>'
-          +'<td style="font-size:12px">'+(i.nombre_empleado||i.employee_name||i.nombre||'—')+'</td>'
-          +'<td>'+deptBadge(i.area||'—')+'</td>'
-          +'<td style="max-width:240px;font-size:12px">'+(i.descripcion||'—').slice(0,80)+'</td>'
-          +'<td>'+_inciStateBadge+'</td>'
-          +'</tr>';
-      });
-      inciEl.innerHTML=h+'</table>';
-    }
-  }
+  valInciRenderTable();
 
   // Gestiones
   // ── KPIs de gestiones ──
