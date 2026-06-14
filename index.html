@@ -1866,5 +1866,33 @@ tr:hover td{background:rgba(255,255,255,.018);}
 <script src="fio.js"></script>
 <script src="incentivos.js"></script>
 <script src="fichaje.js"></script>
+
+<!-- ══ MODAL ESTADO INCIDENCIA (Operativo / Validación) ══ -->
+<div id="modal-inci-op" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:900;padding:16px;">
+  <div style="background:var(--bg3);border:2px solid var(--red);border-radius:14px;padding:24px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;">
+    <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--red);letter-spacing:.15em;margin-bottom:6px;">INCIDENCIA</div>
+    <div id="modal-inci-op-info" style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;"></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:0 0 16px;">
+    <div class="fg" style="margin-bottom:12px;">
+      <label>Comentario (opcional)</label>
+      <textarea id="modal-inci-op-comment" rows="2" placeholder="Añade un comentario..." style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;width:100%;font-size:13px;resize:vertical;"></textarea>
+    </div>
+    <div id="modal-inci-op-accion-block" style="display:none;" class="fg" style="margin-bottom:12px;">
+      <label>Acción tomada <span class="req">*</span></label>
+      <textarea id="modal-inci-op-accion" rows="2" placeholder="Describe la acción tomada para cerrar esta incidencia..." style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;width:100%;font-size:13px;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button id="inci-op-btn-proceso" onclick="selectInciOpEstado('En proceso')" style="flex:1;padding:10px;border-radius:7px;border:1px solid var(--amber);background:var(--bg2);color:var(--amber);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;">En proceso</button>
+      <button id="inci-op-btn-cerrada" onclick="selectInciOpEstado('Cerrada')" style="flex:1;padding:10px;border-radius:7px;border:1px solid var(--green);background:var(--bg2);color:var(--green);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;">Cerrada</button>
+    </div>
+    <div id="modal-inci-op-err" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px;font-family:var(--font-mono);"></div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="closeInciOpModal()" style="flex:1;padding:11px;background:none;border:1px solid var(--border);color:var(--text3);border-radius:7px;cursor:pointer;font-size:13px;">Cancelar</button>
+      <button id="modal-inci-op-delete-btn" onclick="deleteInciOp()" style="display:none;flex:1;padding:11px;background:var(--red);border:none;color:#fff;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700;">Eliminar</button>
+      <button onclick="saveInciOpEstado()" style="flex:2;padding:11px;background:#8b5cf6;border:none;color:#fff;border-radius:7px;cursor:pointer;font-size:14px;font-weight:700;">Guardar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

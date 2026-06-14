@@ -370,8 +370,43 @@ function submitRecKpi() {
 // ═══════════════════════════════════════════════════════════════════════
 // CAJA RECEPCIÓN — Abrir modal
 // ═══════════════════════════════════════════════════════════════════════
-function openRecCajaModal(existingId) {
+function openRecCajaModal(existingId, readOnly) {
   _recCajaEditId = existingId || null;
+  var _viewOnly = !!readOnly;
+  window._recCajaValId = existingId || null;
+  // Ocultar/mostrar botones por texto — robusto ante duplicados en DOM
+  setTimeout(function(){
+    var m2 = document.getElementById('modal-rec-caja');
+    if(!m2) return;
+    m2.querySelectorAll('button').forEach(function(btn){
+      var t = (btn.textContent||'').trim();
+      if(t.indexOf('Volver al KPI')>=0 || t.indexOf('Guardar y cerrar')>=0)
+        btn.style.display = _viewOnly ? 'none' : '';
+    });
+    // Bloquear inputs en modo lectura
+    ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
+     'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
+     'rec-fondo-traspaso','rec-fondo-real','rec-cf-importe','rec-room-charge',
+     'rec-syncrolab-charge','rec-dif-exp','rec-dif-accion'].forEach(function(id){
+      var el=document.getElementById(id); if(!el) return;
+      if(_viewOnly){ el.setAttribute('readonly','readonly'); el.style.opacity='0.65'; el.style.cursor='not-allowed'; }
+      else{ el.removeAttribute('readonly'); el.style.opacity=''; el.style.cursor=''; }
+    });
+    ['rec-cf-si','rec-cf-no'].forEach(function(id){
+      var el=document.getElementById(id); if(!el) return;
+      el.disabled=_viewOnly; el.style.opacity=_viewOnly?'0.5':''; el.style.cursor=_viewOnly?'not-allowed':'';
+    });
+    // Footer validador dinámico
+    var existVF = m2.querySelector('#rec-caja-vf-dyn');
+    if(_viewOnly && !existVF){
+      var vf=document.createElement('div'); vf.id='rec-caja-vf-dyn';
+      vf.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;';
+      vf.innerHTML='<button onclick="validarRecCajaAction()" style="flex:2;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Validar</button>'
+        +'<button onclick="marcarErrorRecCajaAction()" style="flex:1;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✗ Error</button>'
+        +'<button onclick="closeRecCajaModal()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;">Cerrar</button>';
+      m2.querySelector('div').appendChild(vf);
+    } else if(!_viewOnly && existVF){ existVF.remove(); }
+  }, 50);
   if(typeof renderRecLabCharges === 'function') renderRecLabCharges();
 
   // Reset todos los campos
@@ -1419,6 +1454,7 @@ async function validarRecCajaAction(){
   if(!id){ toast('No hay registro seleccionado','err'); return; }
   if(!confirm('¿Validar este cierre/traspaso?')) return;
   try{
+    // Solo escribe campos confirmados en recepcion_cash
     await dbUpdate(REC_TABLE, id, { estado:'validado', validado_por: currentUser.nombre, validado_ts: localTs(), updated_at: localTs() });
     await auditLog('REC_CAJA_VALIDAR', (currentUser.nombre||'—')+' validó caja recepción ID '+id);
     invalidateCache(REC_TABLE);
@@ -1436,8 +1472,9 @@ async function marcarErrorRecCajaAction(){
   var motivo = prompt('Describe el error encontrado (obligatorio):');
   if(!motivo || !motivo.trim()){ toast('El motivo es obligatorio','err'); return; }
   try{
-    await dbUpdate(REC_TABLE, id, { estado:'con_error', comentario_error: motivo.trim(), validado_por: currentUser.nombre, validado_ts: localTs(), updated_at: localTs() });
-    await auditLog('REC_CAJA_ERROR', (currentUser.nombre||'—')+' marcó error en caja recepción ID '+id+' — '+motivo.trim());
+    // Solo escribe campos confirmados en recepcion_cash
+    await dbUpdate(REC_TABLE, id, { estado:'con_error', comentario: motivo.trim(), validado_por: currentUser.nombre, validado_ts: localTs(), updated_at: localTs() });
+    await auditLog('REC_CAJA_ERROR', (currentUser.nombre||'—')+' marcó error caja ID '+id+' — '+motivo.trim());
     invalidateCache(REC_TABLE);
     toast('Marcado como error','ok');
     closeRecCajaModal();

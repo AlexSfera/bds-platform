@@ -1491,24 +1491,18 @@ async function renderFollowUpExtras(dept){
     if(!openIncis.length){
       inciEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias abiertas</div></div>';
     }else{
-      var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th><th>Acción</th></tr>';
+      var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
       openIncis.forEach(function(i){
         var _canChgInci = typeof canValidateDepartment==='function'&&canValidateDepartment(currentUser,i.area||'');
-        var _inciActions = _canChgInci
-          ? '<select onchange="cambiarEstadoIncidenciaOp(\''+i.id+'\',this.value,this)" style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);">'
-            +'<option value="">(cambiar)</option>'
-            +'<option value="Abierta">Abierta</option>'
-            +'<option value="En proceso">En proceso</option>'
-            +'<option value="Cerrada">Cerrada</option>'
-            +'</select>'
-          : '';
+        var _inciStateBadge = _canChgInci
+          ? (typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado)).replace('<span class="badge','<span onclick="openInciOpModal(\''+i.id+'\')" title="Haz clic para gestionar" style="cursor:pointer;" class="badge')
+          : (typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado));
         h+='<tr>'
           +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((i.fecha||(i.created_at||'').slice(0,10)))+'</td>'
           +'<td style="font-size:12px">'+(i.nombre_empleado||i.employee_name||i.nombre||'—')+'</td>'
           +'<td>'+deptBadge(i.area||'—')+'</td>'
           +'<td style="max-width:240px;font-size:12px">'+(i.descripcion||'—').slice(0,80)+'</td>'
-          +'<td>'+(typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado))+'</td>'
-          +'<td>'+_inciActions+'</td>'
+          +'<td>'+_inciStateBadge+'</td>'
           +'</tr>';
       });
       inciEl.innerHTML=h+'</table>';
@@ -1583,7 +1577,123 @@ async function renderFollowUpExtras(dept){
 window.renderFollowUpExtras = renderFollowUpExtras;
 
 
-// ── Cambio de estado de incidencia desde tab Operativo ─────────────────
+// ── Modal de gestión de incidencia (Operativo / Validación) ────────────
+var _inciOpData = {};
+var _inciOpEstado = null;
+
+function openInciOpModal(inciId){
+  _inciOpData = {}; _inciOpEstado = null;
+  getDB('incidencias').then(function(all){
+    var inci = (all||[]).find(function(x){ return x.id===inciId; });
+    if(!inci){ toast('Incidencia no encontrada','err'); return; }
+    _inciOpData = inci;
+    var infoEl = document.getElementById('modal-inci-op-info');
+    var errEl  = document.getElementById('modal-inci-op-err');
+    var comentEl = document.getElementById('modal-inci-op-comment');
+    var accionBlock = document.getElementById('modal-inci-op-accion-block');
+    var accionEl = document.getElementById('modal-inci-op-accion');
+    var delBtn = document.getElementById('modal-inci-op-delete-btn');
+    var m = document.getElementById('modal-inci-op');
+    if(!m) return;
+    if(errEl) errEl.textContent='';
+    if(comentEl) comentEl.value='';
+    if(accionEl) accionEl.value='';
+    if(accionBlock) accionBlock.style.display='none';
+    // Reset botones de estado
+    ['inci-op-btn-proceso','inci-op-btn-cerrada'].forEach(function(id){
+      var b=document.getElementById(id);
+      if(b){ b.style.background='var(--bg2)'; b.style.fontWeight='700'; }
+    });
+    if(infoEl){
+      var estadoBadge = typeof bIncidentEstado==='function'?bIncidentEstado(inci.estado):'<span class="badge">'+inci.estado+'</span>';
+      infoEl.innerHTML = '<div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+formatDisplayValue(inci.descripcion)+'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'
+        +'<div><span style="color:var(--text3)">Área: </span>'+(inci.area||'—')+'</div>'
+        +'<div><span style="color:var(--text3)">Estado: </span>'+estadoBadge+'</div>'
+        +'<div><span style="color:var(--text3)">Empleado: </span>'+(inci.nombre_empleado||inci.nombre||'—')+'</div>'
+        +'<div><span style="color:var(--text3)">Fecha: </span>'+fmtDate((inci.fecha||(inci.created_at||'').slice(0,10)))+'</div>'
+        +(inci.accion_inmediata?'<div style="grid-column:span 2"><span style="color:var(--text3)">Acción previa: </span>'+formatDisplayValue(inci.accion_inmediata)+'</div>':'')
+        +'</div>';
+    }
+    // Admin: mostrar botón eliminar
+    var isAdmU = currentUser && currentUser.rol==='admin';
+    if(delBtn) delBtn.style.display = isAdmU ? '' : 'none';
+    // Si incidencia ya cerrada: mostrar solo info
+    if((inci.estado||'').toLowerCase()==='cerrada'){
+      ['inci-op-btn-proceso','inci-op-btn-cerrada'].forEach(function(id){
+        var b=document.getElementById(id); if(b){ b.disabled=true; b.style.opacity='0.4'; }
+      });
+    } else {
+      ['inci-op-btn-proceso','inci-op-btn-cerrada'].forEach(function(id){
+        var b=document.getElementById(id); if(b){ b.disabled=false; b.style.opacity=''; }
+      });
+    }
+    m.style.display='flex';
+  }).catch(function(e){ toast('Error: '+e.message,'err'); });
+}
+window.openInciOpModal = openInciOpModal;
+
+function selectInciOpEstado(estado){
+  _inciOpEstado = estado;
+  var btnPr = document.getElementById('inci-op-btn-proceso');
+  var btnCe = document.getElementById('inci-op-btn-cerrada');
+  var accionBlock = document.getElementById('modal-inci-op-accion-block');
+  if(btnPr){ btnPr.style.background = estado==='En proceso'?'rgba(245,158,11,.2)':'var(--bg2)'; }
+  if(btnCe){ btnCe.style.background = estado==='Cerrada'?'rgba(22,163,74,.2)':'var(--bg2)'; }
+  if(accionBlock) accionBlock.style.display = estado==='Cerrada' ? '' : 'none';
+}
+window.selectInciOpEstado = selectInciOpEstado;
+
+async function saveInciOpEstado(){
+  var errEl = document.getElementById('modal-inci-op-err');
+  if(errEl) errEl.textContent='';
+  if(!_inciOpEstado){ if(errEl) errEl.textContent='Selecciona un estado.'; return; }
+  var comment = (document.getElementById('modal-inci-op-comment')||{}).value||'';
+  var accion  = (document.getElementById('modal-inci-op-accion')||{}).value||'';
+  if(_inciOpEstado==='Cerrada' && !accion.trim()){ if(errEl) errEl.textContent='Acción tomada obligatoria al cerrar.'; return; }
+  var canChange = typeof canValidateDepartment==='function' && canValidateDepartment(currentUser, _inciOpData.area||'');
+  if(!canChange){ if(errEl) errEl.textContent='Sin permisos para este departamento.'; return; }
+  try{
+    var ts = localTs();
+    var patch = { estado: _inciOpEstado, updated_at: ts };
+    if(comment.trim()) patch.comentario_supervisor = comment.trim();
+    if(_inciOpEstado==='Cerrada'){
+      patch.accion_inmediata = accion.trim();
+      patch.cerrado_ts = ts;
+      patch.tiempo_gestion = Math.round((Date.now()-new Date(_inciOpData.created_at||ts).getTime())/60000);
+    }
+    await dbUpdate('incidencias', _inciOpData.id, patch);
+    await auditLog('INCIDENCIA_ESTADO', currentUser.nombre+' → '+_inciOpEstado+' | incidencia '+_inciOpData.id+(comment?' | '+comment:''));
+    invalidateCache('incidencias');
+    toast('Estado actualizado','ok');
+    closeInciOpModal();
+    var opDept = (document.getElementById('v-dept')||{}).value||'';
+    if(typeof renderFollowUpExtras==='function') renderFollowUpExtras(opDept);
+  }catch(e){ if(errEl) errEl.textContent='Error: '+e.message; }
+}
+window.saveInciOpEstado = saveInciOpEstado;
+
+function closeInciOpModal(){
+  var m=document.getElementById('modal-inci-op'); if(m) m.style.display='none';
+}
+window.closeInciOpModal = closeInciOpModal;
+
+async function deleteInciOp(){
+  if(currentUser.rol!=='admin'){ toast('Solo admin puede eliminar incidencias','err'); return; }
+  if(!confirm('¿Eliminar esta incidencia? No se puede deshacer.')) return;
+  try{
+    await auditLog('INCIDENCIA_DELETE', currentUser.nombre+' eliminó incidencia '+_inciOpData.id+' — '+(_inciOpData.descripcion||''));
+    await dbDelete('incidencias', _inciOpData.id);
+    invalidateCache('incidencias');
+    toast('Incidencia eliminada','ok');
+    closeInciOpModal();
+    var opDept = (document.getElementById('v-dept')||{}).value||'';
+    if(typeof renderFollowUpExtras==='function') renderFollowUpExtras(opDept);
+  }catch(e){ toast('Error: '+e.message,'err'); }
+}
+window.deleteInciOp = deleteInciOp;
+
+// ── Cambio de estado de incidencia desde tab Operativo (obsoleto — ahora vía modal) ────────────
 async function cambiarEstadoIncidenciaOp(inciId, nuevoEstado, selectEl){
   if(!nuevoEstado) return;
   var canChange = typeof canValidateDepartment === 'function';
