@@ -1083,6 +1083,7 @@ async function _doSaveTurno(){
     observacion: obs,
     checklist_items: JSON.stringify(_chkSavedState),
     ajustes_sala: JSON.stringify(_ajustesLines||[]),
+    kpis_recepcion: (_isRecSave && typeof _recKpiState !== 'undefined') ? JSON.stringify(_recKpiState) : null,
     // Sala fields
     descuentos_si: salaData.descuentos_si||false,
     descuentos_num: salaData.descuentos_num||0,
@@ -1118,6 +1119,7 @@ async function _doSaveTurno(){
       incidencia_declarada: toggleState.incidencia||'no',
       observacion: obs,
       checklist_items: JSON.stringify(_chkSavedState),
+      kpis_recepcion: (_isRecSave && typeof _recKpiState !== 'undefined') ? JSON.stringify(_recKpiState) : null,
       estado: 'Pendiente',
       validado_por: null, validado_ts: null,
       comentario_validador: null,

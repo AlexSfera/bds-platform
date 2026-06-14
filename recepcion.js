@@ -43,14 +43,15 @@ function setRecKpi(key, val, btn) {
     else btn.classList.add('t-na');
   }
   var deps = {
-    upsell_desayuno:     'kpi-upsell-detail',
+    upsell_desayuno:     'desayuno-ventas-block',
+    upsell_cena:         'cena-ventas-block',
     clientes_insatisfechos: 'kpi-clientes-detail',
     syncrolab_ventas:    'syncro-ventas-container',
     lead_pendiente:      'kpi-lead-block'
   };
   if(deps[key]){
     var bl = document.getElementById(deps[key]);
-    if(bl) bl.style.display = val==='si' ? (key==='upsell_desayuno'?'grid':'block') : 'none';
+    if(bl) bl.style.display = val==='si' ? 'block' : 'none';
   }
 }
 
@@ -60,10 +61,14 @@ function setRecKpi(key, val, btn) {
 function openRecKpiModal() {
   _recKpiState = {};
   document.querySelectorAll('#modal-rec-kpi .tbtn').forEach(function(b){ b.classList.remove('t-si','t-no','t-na'); });
-  ['kpi-upsell-detail','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
+  ['desayuno-ventas-block','cena-ventas-block','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.style.display='none';
   });
-  ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-desal-ofertados','kpi-desal-vendidos','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
+  ['desayuno-ventas-container','cena-ventas-container'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.innerHTML='';
+  });
+  _csIdx = { desayuno:0, cena:0 };
+  ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
   var errEl = document.getElementById('kpi-err');
@@ -80,7 +85,11 @@ function closeRecKpiModal() {
 function submitRecKpi() {
   var errs = [];
   if(!_recKpiState.upsell_desayuno)     errs.push('Indica si ofertaste desayunos');
+  if(!_recKpiState.upsell_cena)         errs.push('Indica si ofertaste cena');
   if(!_recKpiState.clientes_insatisfechos) errs.push('Indica si hubo clientes insatisfechos');
+
+  if(_recKpiState.upsell_desayuno === 'si') _validateCrossSell('desayuno','Desayuno', errs);
+  if(_recKpiState.upsell_cena     === 'si') _validateCrossSell('cena','Cena', errs);
 
   if(_recKpiState.syncrolab_ventas === 'si'){
     var ventas = collectSyncroVentas();
@@ -107,6 +116,8 @@ function submitRecKpi() {
   _recKpiState.checkins  = parseInt((document.getElementById('kpi-checkins')||{}).value)||0;
   _recKpiState.checkouts = parseInt((document.getElementById('kpi-checkouts')||{}).value)||0;
   _recKpiState.reservas  = parseInt((document.getElementById('kpi-reservas')||{}).value)||0;
+  _recKpiState.desayuno_ventas = collectDesayunoVentas();
+  _recKpiState.cena_ventas     = collectCenaVentas();
   _recKpiState.syncrolab_ventas_data = collectSyncroVentas();
   _recKpiState.lead_desc   = (document.getElementById('kpi-lead-desc')||{}).value||'';
   _recKpiState.lead_resp   = (document.getElementById('kpi-lead-resp')||{}).value||'';
@@ -598,6 +609,69 @@ function collectSyncroVentas() {
   });
   return result;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// CROSS-SELL DESAYUNO / CENA — captura para incentivo recepción
+// Incentivo = 10% de la venta NETA. IVA restaurante 10% (neto = importe/1.10).
+// El cálculo se hace en el módulo de incentivos; aquí solo se captura el bruto.
+// ═══════════════════════════════════════════════════════════════════════
+var REC_ROOMS = (function(){
+  var r = [], i;
+  for(i=101;i<=117;i++) r.push(i);
+  for(i=201;i<=217;i++) r.push(i);
+  for(i=301;i<=312;i++) r.push(i);
+  return r;
+})();
+function _recRoomOptions(){
+  return '<option value="">— Hab. —</option>' + REC_ROOMS.map(function(n){ return '<option>'+n+'</option>'; }).join('');
+}
+var _csIdx = { desayuno:0, cena:0 };
+
+function _addCrossSell(kind, color){
+  var idx = _csIdx[kind]++;
+  var c = document.getElementById(kind+'-ventas-container');
+  if(!c) return;
+  var div = document.createElement('div');
+  div.id = kind+'-venta-'+idx;
+  div.style.cssText = 'border:1px solid '+color+';border-radius:6px;padding:10px;margin-bottom:8px;position:relative;';
+  div.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+    + '<div class="fg"><label>Habitación <span class="req">*</span></label><select id="'+kind+'-hab-'+idx+'" style="color:#111827;background:#ffffff;">'+_recRoomOptions()+'</select></div>'
+    + '<div class="fg"><label>Cantidad</label><input type="text" inputmode="numeric" id="'+kind+'-cant-'+idx+'" placeholder="1" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Importe € (con IVA) <span class="req">*</span></label><input type="text" inputmode="decimal" id="'+kind+'-imp-'+idx+'" placeholder="0.00" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Nº reserva <span class="req">*</span></label><input type="text" id="'+kind+'-res-'+idx+'" placeholder="Nº reserva MEWS" style="color:#111827;background:#ffffff;"></div>'
+    + '</div>'
+    + '<button onclick="_removeCrossSell(\''+kind+'\','+idx+')" style="position:absolute;top:8px;right:8px;background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">✕</button>';
+  c.appendChild(div);
+}
+function _removeCrossSell(kind, idx){
+  var el = document.getElementById(kind+'-venta-'+idx);
+  if(el) el.remove();
+}
+function _collectCrossSell(kind){
+  var result = [];
+  document.querySelectorAll('#'+kind+'-ventas-container > div').forEach(function(div){
+    var id   = div.id.replace(kind+'-venta-','');
+    var hab  = (document.getElementById(kind+'-hab-'+id)||{value:''}).value;
+    var cant = parseInt((document.getElementById(kind+'-cant-'+id)||{value:''}).value)||1;
+    var imp  = parseFloat((document.getElementById(kind+'-imp-'+id)||{value:''}).value)||0;
+    var res  = (document.getElementById(kind+'-res-'+id)||{value:''}).value;
+    if(hab || imp || res) result.push({habitacion:hab, cantidad:cant, importe:imp, reserva:res});
+  });
+  return result;
+}
+function _validateCrossSell(kind, label, errs){
+  var lines = _collectCrossSell(kind);
+  if(lines.length===0){ errs.push(label+': añade al menos una venta'); return; }
+  lines.forEach(function(v,i){
+    if(!v.habitacion)            errs.push(label+' #'+(i+1)+': selecciona habitación');
+    if(!v.importe || v.importe<=0) errs.push(label+' #'+(i+1)+': importe obligatorio');
+    if(!v.reserva)               errs.push(label+' #'+(i+1)+': nº reserva obligatorio');
+  });
+}
+function addDesayunoVenta(){ _addCrossSell('desayuno','#f59e0b'); }
+function addCenaVenta(){ _addCrossSell('cena','#ef4444'); }
+function collectDesayunoVentas(){ return _collectCrossSell('desayuno'); }
+function collectCenaVentas(){ return _collectCrossSell('cena'); }
 
 // ═══════════════════════════════════════════════════════════════════════
 // INIT
