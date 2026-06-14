@@ -5,6 +5,31 @@
 //           portal PIN de entrada, funciones de navegación
 // ═══════════════════════════════════════════════════════════════
 
+// Devuelve el array de items de checklist correcto para un turno `s`,
+// según el departamento REAL del turno (no el usuario logado ni Cocina por defecto).
+// Devuelve null si no hay checklist configurado para ese departamento.
+function _valChecklistItems(s){
+  var area   = (s.area || s.departamento || '').trim();
+  var puesto = (s.puesto || '').trim();
+  var turno  = (function(){
+    var v = s.servicio;
+    try{ var a = Array.isArray(v) ? v : JSON.parse(v); if(Array.isArray(a)) v = a[0] || ''; }catch(e){}
+    return (v || '').toString();
+  })();
+  if(area === 'Recepción'){
+    if(/tarde/i.test(turno)) return CHK_REC_TARDE_ITEMS;
+    if(/noche/i.test(turno)) return CHK_REC_NOCHE_ITEMS;
+    return CHK_REC_MANANA_ITEMS;
+  }
+  if(area === 'Friegue' || puesto === 'Friegue') return CHK_FRIEGUE_ITEMS;
+  if(area === 'Sala')                            return CHK_SALA_ITEMS;
+  if(area === 'F&B' || s.rol === 'fb')           return CHK_FNB_ITEMS;
+  if(/syncrolab/i.test(area))                    return /tarde/i.test(turno) ? CHK_LAB_TARDE_ITEMS : CHK_LAB_MANANA_ITEMS;
+  if(area === 'Cocina')                          return CHK_COCINA_ITEMS;
+  return null; // Housekeeping/Limpieza u otros sin checklist configurado
+}
+
+
 // ── DELETE SHIFT (admin only) ──
 async function deleteShift(shiftId){
   if(currentUser.rol!=='admin') return;
@@ -54,11 +79,13 @@ async function openShiftDetail(shiftId){
   if(s.checklist_items){
     try{
       var chk = JSON.parse(s.checklist_items);
-      var isFriegue = s.area==='Friegue'||s.puesto==='Friegue';
-      var items = isFriegue ? CHK_FRIEGUE_ITEMS : CHK_COCINA_ITEMS;
+      var items = _valChecklistItems(s);
       var done = chk.filter(Boolean).length;
       html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">';
       html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:10px;">2 · CHECKLIST ('+done+'/'+chk.length+' completados)</div>';
+      if(!items){
+        html += '<div style="color:var(--text3);font-size:12px;">No hay checklist configurado para este departamento.</div>';
+      } else {
       html += '<div style="display:flex;flex-direction:column;gap:4px;">';
       chk.forEach(function(checked,i){
         if(i<items.length){
@@ -68,7 +95,9 @@ async function openShiftDetail(shiftId){
             +'</div>';
         }
       });
-      html += '</div></div>';
+      html += '</div>';
+      }
+      html += '</div>';
     }catch(e){}
   }
 
