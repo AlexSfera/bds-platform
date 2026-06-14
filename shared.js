@@ -392,7 +392,8 @@ function getScreens(rol){
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
   var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
-  var isJefe       = isAdminU || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
+  var isAdjDir     = typeof isAdjuntoDirectivo === 'function' && isAdjuntoDirectivo(currentUser);
+  var isJefe       = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
     || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
 
   // ── Definiciones de pantallas ─────────────────────────────────────
