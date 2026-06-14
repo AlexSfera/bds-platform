@@ -1,245 +1,7 @@
 
-// ── HTML INJECTION ─────────────────────────────────────────
-(function injectRecHTML() {
-  var root = document.getElementById('rec-root');
-  if(!root) { root = document.createElement('div'); root.id='rec-root'; document.body.appendChild(root); }
-  root.innerHTML = `<div id="modal-rec-kpi" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
-  <div style="background:var(--bg2);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:580px;margin:40px auto;">
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · KPI DE TURNO</div>
-    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Cierre de turno — Preguntas de control</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:20px;">Responde antes de pasar al cuadre de caja.</div>
-
-    <!-- OPERACIÓN -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px;">OPERACIÓN</div>
-    <div class="grid2" style="margin-bottom:12px;">
-      <div class="fg"><label>Check-ins realizados</label><input type="text" inputmode="decimal" id="kpi-checkins" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>Check-outs realizados</label><input type="text" inputmode="decimal" id="kpi-checkouts" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>Reservas gestionadas</label><input type="text" inputmode="decimal" id="kpi-reservas" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-    </div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Quedan reservas pendientes para el siguiente turno?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-reserv-pend-si" onclick="setRecKpi('reservas_pendientes','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-reserv-pend-no" onclick="setRecKpi('reservas_pendientes','no',this)">NO</button>
-      </div>
-    </div>
-    <div id="kpi-reserv-pend-exp-block" style="display:none;" class="fg">
-      <label>Explicación reservas pendientes <span class="req">*</span></label>
-      <textarea id="kpi-reserv-pend-exp" rows="2" placeholder="Detalla las reservas pendientes..."></textarea>
-    </div>
-
-    <!-- UPSELL DESAYUNOS -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">DESAYUNOS / UPSELL</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Ofertaste desayunos a clientes sin desayuno incluido?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-upsell-si" onclick="setRecKpi('upsell_desayuno','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-upsell-no" onclick="setRecKpi('upsell_desayuno','no',this)">NO</button>
-        <button class="tbtn" id="kpi-upsell-na" onclick="setRecKpi('upsell_desayuno','na',this)">No aplica</button>
-      </div>
-    </div>
-    <div id="kpi-upsell-detail" style="display:none;" class="grid2">
-      <div class="fg"><label>¿A cuántos clientes se ofreció?</label><input type="text" inputmode="decimal" id="kpi-desal-ofertados" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>¿Cuántos desayunos se vendieron?</label><input type="text" inputmode="decimal" id="kpi-desal-vendidos" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-    </div>
-
-    <!-- VENTAS SYNCROLAB -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#06b6d4;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">VENTAS SYNCROLAB</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Has vendido servicios SYNCROLAB?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-syncro-si" onclick="setRecKpi('syncrolab_ventas','si',this);document.getElementById('kpi-syncro-block').style.display='block'">SÍ</button>
-        <button class="tbtn" id="kpi-syncro-no" onclick="setRecKpi('syncrolab_ventas','no',this);document.getElementById('kpi-syncro-block').style.display='none'">NO</button>
-      </div>
-    </div>
-    <div id="kpi-syncro-block" style="display:none;border:1px solid #06b6d4;border-radius:8px;padding:12px;margin-bottom:8px;">
-      <div style="font-size:11px;color:#06b6d4;font-family:var(--font-mono);font-weight:700;margin-bottom:8px;">VENTAS SYNCROLAB — añade una línea por venta</div>
-      <div id="syncro-ventas-container"></div>
-      <button onclick="addSyncroVenta()" style="display:flex;align-items:center;gap:6px;background:rgba(6,182,212,.1);border:1px dashed #06b6d4;color:#06b6d4;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;width:100%;justify-content:center;margin-top:6px;">+ Añadir venta</button>
-    </div>
-
-    <!-- BITRIX24 / COMUNICACIÓN -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">BITRIX24 / COMUNICACIÓN</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Revisaste WhatsApp / email / llamadas pendientes en Bitrix24?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-comms-si" onclick="setRecKpi('comms_revisadas','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-comms-no" onclick="setRecKpi('comms_revisadas','no',this)">NO</button>
-      </div>
-    </div>
-    <div id="kpi-comms-no-block" style="display:none;" class="fg">
-      <label>Motivo de no revisión <span class="req">*</span></label>
-      <textarea id="kpi-comms-no-exp" rows="2" placeholder="¿Por qué no pudiste revisar?"></textarea>
-    </div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Queda algún lead pendiente en Bitrix24?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-lead-si" onclick="setRecKpi('lead_pendiente','si',this);document.getElementById('kpi-lead-block').style.display='block'">SÍ</button>
-        <button class="tbtn" id="kpi-lead-no" onclick="setRecKpi('lead_pendiente','no',this);document.getElementById('kpi-lead-block').style.display='none'">NO</button>
-      </div>
-    </div>
-    <div id="kpi-lead-block" style="display:none;border:1px solid #8b5cf6;border-radius:8px;padding:12px;margin-bottom:8px;">
-      <div class="grid2">
-        <div class="fg"><label>Descripción del lead <span class="req">*</span></label><textarea id="kpi-lead-desc" rows="2" placeholder="Describe el lead pendiente..."></textarea></div>
-        <div class="fg"><label>¿Registrado en Bitrix24?</label>
-          <div style="display:flex;gap:8px;margin-top:6px;">
-            <button class="tbtn" id="kpi-lead-bitrix-si" onclick="setRecKpi('lead_en_bitrix','si',this)">SÍ</button>
-            <button class="tbtn" id="kpi-lead-bitrix-no" onclick="setRecKpi('lead_en_bitrix','no',this)">NO</button>
-          </div>
-        </div>
-        <div class="fg"><label>Responsable</label><input type="text" id="kpi-lead-resp" placeholder="Nombre del responsable" style="color:#111827;background:#ffffff;"></div>
-        <div class="fg"><label>Fecha/hora seguimiento</label><input type="datetime-local" id="kpi-lead-fecha" style="color:#111827;background:#ffffff;"></div>
-      </div>
-    </div>
-
-    <!-- CLIENTES / INCIDENCIAS -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">CLIENTES / INCIDENCIAS</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Hubo clientes insatisfechos durante el turno?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-clientes-si" onclick="setRecKpi('clientes_insatisfechos','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-clientes-no" onclick="setRecKpi('clientes_insatisfechos','no',this)">NO</button>
-      </div>
-    </div>
-    <div id="kpi-clientes-detail" style="display:none;" class="grid2">
-      <div class="fg"><label>¿Cuántos clientes insatisfechos?</label><input type="text" inputmode="decimal" id="kpi-clientes-num" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>¿Informado al responsable?</label>
-        <div style="display:flex;gap:8px;margin-top:6px;">
-          <button class="tbtn" id="kpi-resp-inf-si" onclick="setRecKpi('clientes_resp_informado','si',this)">SÍ</button>
-          <button class="tbtn" id="kpi-resp-inf-no" onclick="setRecKpi('clientes_resp_informado','no',this)">NO</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="kpi-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
-    <button onclick="submitRecKpi()" style="width:100%;padding:14px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">Continuar al cuadre de caja →</button>
-  </div>
-</div>
-<div id="modal-rec-caja" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
-  <div style="background:var(--bg2);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:560px;margin:40px auto;">
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · CUADRE DE CAJA MEWS</div>
-    <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Control de caja — <span id="rec-caja-turno-label">Turno</span></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:20px;">Compara los datos de MEWS con los valores reales. Si hay diferencia, es obligatorio explicarla.</div>
-
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:8px;">TRASPASO</div>
-    <div class="fg" style="margin-bottom:12px;">
-      <label>Fondo recibido del turno anterior (€)</label>
-      <input type="text" inputmode="decimal" id="rec-fondo-recibido" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;">
-    </div>
-
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">SEGÚN PMS MEWS</div>
-    <div class="grid2" style="margin-bottom:12px;">
-      <div class="fg"><label>Cash según MEWS (€) <span class="req">*</span></label><input type="text" inputmode="decimal" id="rec-cash-mews" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>Tarjeta según MEWS (€) <span class="req">*</span></label><input type="text" inputmode="decimal" id="rec-tarjeta-mews" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>Stripe según MEWS (€) <span class="req">*</span></label><input type="text" inputmode="decimal" id="rec-stripe-mews" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
-    </div>
-
-    <!-- TRANSFERENCIAS -->
-    <div class="sec-div" style="margin-top:10px;">Transferencias</div>
-    <div class="grid2">
-      <div class="fg"><label>Transferencias según MEWS (€)</label>
-        <input type="text" inputmode="decimal" id="rec-trans-mews" placeholder="0.00" oninput="calcRecDifs()"></div>
-      <div class="fg"><label>Transferencias Banco (€)</label>
-        <input type="text" inputmode="decimal" id="rec-trans-real" placeholder="0.00" oninput="calcRecDifs();setTransferDate()">
-        <div id="rec-trans-fecha" style="font-size:10px;color:var(--text3);margin-top:3px;font-family:var(--font-mono);display:none;"></div>
-      </div>
-
-    </div>
-
-    <!-- CARGOS HOTEL -->
-    <div class="sec-div" style="margin-top:10px;">Cargos Hotel</div>
-    <div class="grid2">
-      <div class="fg"><label>Room Charge (€)</label>
-        <input type="text" inputmode="decimal" id="rec-room-charge" placeholder="0.00"></div>
-      <div class="fg"><label>SYNCROLAB Charge (€)</label>
-        <input type="text" inputmode="decimal" id="rec-syncrolab-charge" placeholder="0.00"></div>
-      <div class="fg"><label>Cargo Alexander (€)</label>
-        <input type="text" inputmode="decimal" id="rec-cargo-alexander" placeholder="0.00"></div>
-    </div>
-
-    <!-- PENSIONES -->
-    <div class="sec-div" style="margin-top:10px;">Pensiones <span style="font-size:10px;color:var(--text3);font-weight:400;">— Informativo · no bloquea validación</span></div>
-    <div class="grid2">
-      <div class="fg"><label>Pensiones desayunos (nº pax)</label>
-        <input type="text" inputmode="decimal" id="rec-pension-desayuno-pax" placeholder="0"></div>
-      <div class="fg"><label>Pensiones comida+cena (nº pax)</label>
-        <input type="text" inputmode="decimal" id="rec-pension-comidacena-pax" placeholder="0"></div>
-      <div class="fg"><label>€ Pensiones Desayunos (importe)</label>
-        <input type="text" inputmode="decimal" id="rec-eur-pension-desayuno" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
-      <div class="fg"><label>€ Pensiones Comidas+Cenas (importe)</label>
-        <input type="text" inputmode="decimal" id="rec-eur-pension-comidacena" placeholder="0.00" oninput="fixLeadingZeros(this)"></div>
-    </div>
-
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">REAL / FÍSICO</div>
-    <div class="grid2" style="margin-bottom:12px;">
-      <div class="fg"><label>Cash real contado (€) <span class="req">*</span></label><input type="text" inputmode="decimal" id="rec-cash-real" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>TPV físico (€) <span class="req">*</span></label><input type="text" inputmode="decimal" id="rec-tpv-real" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>Stripe real — Stripe.com (€) <span class="req">*</span></label><input type="text" inputmode="decimal" id="rec-stripe-real" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;"></div>
-    </div>
-
-    <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:12px;">
-      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">DIFERENCIAS CALCULADAS</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
-        <div><div style="font-size:11px;color:var(--text3);">Δ Cash</div><div id="rec-dif-cash" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
-        <div><div style="font-size:11px;color:var(--text3);">Δ Tarjeta</div><div id="rec-dif-tarjeta" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
-        <div><div style="font-size:11px;color:var(--text3);">Δ Stripe</div><div id="rec-dif-stripe" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
-        <div><div style="font-size:11px;color:var(--text3);">Δ Transferencia</div><div id="rec-dif-trans" style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--green);">0.00 €</div></div>
-      </div>
-      <div style="text-align:center;padding:10px;background:var(--bg4);border-radius:6px;">
-        <div style="font-size:11px;color:var(--text3);">Diferencia operativa total</div>
-        <div id="rec-dif-total" style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:var(--green);">0.00 €</div>
-      </div>
-    </div>
-
-    <div id="rec-dif-alert" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:10px;color:#dc2626;font-size:12px;margin-bottom:12px;font-family:var(--font-mono);">⚠ Diferencia detectada — explicación obligatoria antes de cerrar</div>
-
-    <div id="rec-dif-exp-block" style="display:none;">
-      <div class="fg"><label>Explicación de la diferencia <span class="req">*</span></label>
-        <textarea id="rec-dif-exp" rows="2" placeholder="Explica el motivo de la diferencia detectada..." style="color:#111827;background:#ffffff;"></textarea></div>
-      <div class="fg"><label>Acción tomada <span class="req">*</span></label>
-        <textarea id="rec-dif-accion" rows="2" placeholder="¿Qué hiciste para resolver la diferencia?" style="color:#111827;background:#ffffff;"></textarea></div>
-      <div class="fg"><label>¿Informado al responsable?</label>
-        <div style="display:flex;gap:8px;margin-top:6px;">
-          <button class="tbtn" id="rec-dif-resp-si" onclick="setRecKpi('dif_informado','si',this)">SÍ</button>
-          <button class="tbtn" id="rec-dif-resp-no" onclick="setRecKpi('dif_informado','no',this)">NO</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Retiro caja fuerte -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin:14px 0 8px;">CAJA FUERTE</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Hay retiro para caja fuerte? <span class="req">*</span></label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="rec-cf-si" onclick="setRecKpi('caja_fuerte','si',this);document.getElementById('rec-cf-block').style.display='block';calcRecDifs()">SÍ</button>
-        <button class="tbtn" id="rec-cf-no" onclick="setRecKpi('caja_fuerte','no',this);document.getElementById('rec-cf-block').style.display='none';document.getElementById('rec-cf-importe').value='0';calcRecDifs()">NO</button>
-      </div>
-    </div>
-    <div id="rec-cf-block" style="display:none;" class="fg">
-      <label>Importe retirado a caja fuerte (€) <span class="req">*</span></label>
-      <input type="text" inputmode="decimal" id="rec-cf-importe" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;">
-    </div>
-
-    <!-- Traspaso fondo -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin:14px 0 8px;">TRASPASO AL SIGUIENTE TURNO</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--font-mono);">Calculado = Fondo recibido + Cash MEWS − Retiro caja fuerte</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>Fondo esperado a traspasar (€)</label>
-      <div id="rec-fondo-esperado" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);padding:8px 0;">—</div>
-    </div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>Fondo real a traspasar (€) <span class="req">*</span></label>
-      <input type="text" inputmode="decimal" id="rec-fondo-traspaso" placeholder="0.00" oninput="calcRecDifs()" style="color:#111827;background:#ffffff;">
-    </div>
-    <div id="rec-fondo-dif" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;">—</div>
-    <div id="rec-caja-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="closeRecCaja()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">← Volver al KPI</button>
-      <button onclick="submitRecCaja()" style="flex:2;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar y cerrar turno</button>
-    </div>
-  </div>
-</div>`;
-})();
+// ── HTML: el markup de los modales de Recepción (modal-rec-kpi, modal-rec-caja,
+//    modal-rec-tipo, modal-rec-traspaso) vive en index.html. recepcion.js NO
+//    inyecta HTML para evitar IDs duplicados. Aquí solo va la lógica.
 
 // ═══════════════════════════════════════════════════
 // RECEPCIÓN — Funciones específicas
@@ -281,9 +43,7 @@ function setRecKpi(key, val, btn) {
     else btn.classList.add('t-na');
   }
   var deps = {
-    reservas_pendientes: 'kpi-reserv-pend-exp-block',
     upsell_desayuno:     'kpi-upsell-detail',
-    comms_pendientes:    'kpi-comms-pend-exp-block',
     clientes_insatisfechos: 'kpi-clientes-detail',
     syncrolab_ventas:    'syncro-ventas-container',
     lead_pendiente:      'kpi-lead-block'
@@ -300,7 +60,7 @@ function setRecKpi(key, val, btn) {
 function openRecKpiModal() {
   _recKpiState = {};
   document.querySelectorAll('#modal-rec-kpi .tbtn').forEach(function(b){ b.classList.remove('t-si','t-no','t-na'); });
-  ['kpi-reserv-pend-exp-block','kpi-upsell-detail','kpi-comms-pend-exp-block','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
+  ['kpi-upsell-detail','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.style.display='none';
   });
   ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-desal-ofertados','kpi-desal-vendidos','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
@@ -319,9 +79,7 @@ function closeRecKpiModal() {
 
 function submitRecKpi() {
   var errs = [];
-  if(!_recKpiState.reservas_pendientes) errs.push('Indica si quedan reservas pendientes');
   if(!_recKpiState.upsell_desayuno)     errs.push('Indica si ofertaste desayunos');
-  if(!_recKpiState.comms_revisadas)     errs.push('Indica si revisaste comunicaciones');
   if(!_recKpiState.clientes_insatisfechos) errs.push('Indica si hubo clientes insatisfechos');
 
   if(_recKpiState.syncrolab_ventas === 'si'){
@@ -353,7 +111,6 @@ function submitRecKpi() {
   _recKpiState.lead_desc   = (document.getElementById('kpi-lead-desc')||{}).value||'';
   _recKpiState.lead_resp   = (document.getElementById('kpi-lead-resp')||{}).value||'';
   _recKpiState.lead_fecha  = (document.getElementById('kpi-lead-fecha')||{}).value||'';
-  _recKpiState.comms_no_exp = (document.getElementById('kpi-comms-no-exp')||{}).value||'';
   _recKpiState.clientes_num = parseInt((document.getElementById('kpi-clientes-num')||{}).value)||0;
 
   closeRecKpiModal();
