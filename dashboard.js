@@ -946,7 +946,13 @@ async function _dashShowDetail(id, table) {
   var overlay = document.getElementById('dash-detail-overlay');
   if (!overlay) return;
   var body = overlay.querySelector('.dash-detail-body');
-  if (body) body.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Cargando…</div>';
+  if (!body) {
+    // Estructura perdida (modal huérfano): reconstruir el cuerpo antes de mostrar.
+    var inner = overlay.firstElementChild;
+    if (inner) { body = document.createElement('div'); body.className = 'dash-detail-body'; inner.appendChild(body); }
+  }
+  if (!body) return; // Sin cuerpo no se muestra: imposible un modal vacío.
+  body.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Cargando…</div>';
   overlay.style.display = 'flex';
   try {
     var records = await getDB(table);
