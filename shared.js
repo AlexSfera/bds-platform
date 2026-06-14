@@ -385,112 +385,110 @@ async function startApp(){
   setTimeout(fixSelectColors, 200);
 }
 function getScreens(rol){
-  var isSala      = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
-  var isRecepcion = currentUser && (currentUser.area === 'Recepción' || currentUser.area === 'Recepción SFERA');
-  var isCocina    = currentUser && currentUser.area === 'Cocina';
-  var isHK        = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
-  var isMant      = currentUser && currentUser.area === 'Mantenimiento';
-  var isSyncrolab = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
-  var isAdminU    = (rol === 'admin');
-  var isAdjDir    = typeof isAdjuntoDirectivo === 'function' && isAdjuntoDirectivo(currentUser);
-  var isJefe      = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
+  var isSala       = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
+  var isRecepcion  = currentUser && currentUser.area === 'Recepción';
+  var isCocina     = currentUser && currentUser.area === 'Cocina';
+  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
+  var isMant       = currentUser && currentUser.area === 'Mantenimiento';
+  var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
+  var isAdminU     = (rol === 'admin');
+  var isAdjDir     = typeof isAdjuntoDirectivo === 'function' && isAdjuntoDirectivo(currentUser);
+  var isJefe       = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
     || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
-  var isGob       = typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
 
-  // ── Definición de ítems ─────────────────────────────────────────────
+  // ── Definiciones de pantallas ─────────────────────────────────────
   var ITEMS = {
-    // MI DÍA
-    readme:        {id:'readme',      label:'📋 Info'},
-    turno:         {id:'turno',       label:'🕐 Mi Turno'},
-    checklist:     {id:'chk-mod',     label:'✅ Mi Checklist',      action:'openChkMidDay'},
-    incidencias:   {id:'incidencias', label:'⚠ Incidencias'},
-    gestiones:     {id:'gestiones',   label:'📌 Gestiones'},
-    tareas:        {id:'tareas',      label:'🔗 Tareas'},
-    ruta:          {id:'ruta-mod',    label:'🧹 Mi Ruta'},
-    hypoxic:       {id:'hypoxic',     label:'🫁 Hypoxic Room'},
-    merma:         {id:'merma-mod',   label:'📦 Merma'},
-    cajaSala:      {id:'ajustes-mod', label:'💰 Caja Sala'},
-    cajaRec:       {id:'rec-caja-op', label:'💰 Caja Recepción',    action:'openRecCajaChoice'},
-    cajaLab:       {id:'lab-caja-op', label:'💰 Caja SYNCROLAB',    action:'openLabCajaChoice'},
-    recmod:        {id:'rec-mod',     label:'🏨 Recepción',          pending:true},
-    mantmod:       {id:'mant-mod',    label:'🔧 Mantenimiento',      pending:true},
-    // RESUMEN PERSONAL
-    fichaje:       {id:'fichaje',     label:'📋 Alertas Fichaje'},
-    misfio:        {id:'mis-fio',     label:'⚖ Mis FIO'},
-    misincentivos: {id:'incentivos',  label:'💰 Mis Incentivos'},
-    // OPERATIVIDAD
-    validacion:    {id:'validacion',  label:'✅ Validación'},
-    fio:           {id:'fio',         label:'⚖ FIO'},
-    hkPlan:        {id:'hk-plan',     label:'📅 Planificación Ruta'},
-    // DASHBOARDS
-    dashboard:     {id:'dashboard',   label:'📊 Dashboard'},
-    hkDash:        {id:'hk-dash',     label:'📊 Dashboard HK'},
-    incentivos:    {id:'incentivos',  label:'💰 Incentivos'},
-    // CONFIGURACIÓN
-    maestro:       {id:'maestro',     label:'👥 Maestro'},
-    export:        {id:'export',      label:'⬇ Exportar'},
-    hkZonas:       {id:'hk-zonas',    label:'🧽 Zonas públicas'},
-    hkRevision:    {id:'hk-revision', label:'✅ Revisión HK'},
-    hkConfig:      {id:'hk-config',   label:'⚙ Config HK'}
+    readme:      {id:'readme',      label:'📋 Info'},
+    turno:       {id:'turno',       label:'🕐 Mi Turno'},
+    gestiones:   {id:'gestiones',   label:'📌 Gestiones'},
+    tareas:      {id:'tareas',      label:'🔗 Tareas'},
+    incidencias: {id:'incidencias', label:'⚠ Incidencias'},
+    hypoxic:     {id:'hypoxic',     label:'🫁 Hypoxic Room'},
+    validacion:  {id:'validacion',  label:'✅ Validación'},
+    dashboard:   {id:'dashboard',   label:'📊 Dashboard'},
+    maestro:     {id:'maestro',     label:'👥 Maestro'},
+    export:      {id:'export',      label:'⬇ Exportar'},
+    fio:         {id:'fio',         label:'⚖ FIO'},
+    misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
+    // Módulos por dpto (placeholders)
+    merma:       {id:'merma-mod',   label:'📦 Merma'},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes de Caja'},
+    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
+    cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
+    cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
+    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true},
+    // ── HOUSEKEEPING ─────────────────────────────────────────────────
+    hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
+    hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
+    hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
+    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
+    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
+    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
+    incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
+    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'}
   };
 
-  // ── GRUPO 1: MI DÍA ─────────────────────────────────────────────────
-  var miDia = [ITEMS.readme];
-  if(!isAdminU)               miDia.push(ITEMS.turno);
-  if(!isAdminU)               miDia.push(ITEMS.checklist); // admin no usa checklist de turno
-  miDia.push(ITEMS.incidencias);
-  miDia.push(ITEMS.gestiones);
-  miDia.push(ITEMS.tareas);
-  if(isHK)                    miDia.push(ITEMS.ruta);
-  if(isAdminU || isRecepcion) miDia.push(ITEMS.hypoxic);
-  if(isCocina)                miDia.push(ITEMS.merma);
-  if(isSala)                  miDia.push(ITEMS.cajaSala);
-  if(isRecepcion)             { miDia.push(ITEMS.cajaRec); miDia.push(ITEMS.recmod); }
-  if(isSyncrolab)             miDia.push(ITEMS.cajaLab);
-  if(isMant)                  miDia.push(ITEMS.mantmod);
+  // ── ZONA 1: Navegación común (todos) ──────────────────────────────
+  var navComun = isAdminU
+    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
+    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
 
-  // ── GRUPO 2: RESUMEN PERSONAL ────────────────────────────────────────
-  var resumen = [ITEMS.fichaje];
-  if(!isAdminU)               resumen.push(ITEMS.misfio);
-  if(isSala && !isJefe)       resumen.push(ITEMS.misincentivos); // Sala lineal: su bonus personal
+  // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
+  if(isAdminU || isRecepcion) navComun.push(ITEMS.hypoxic);
 
-  // ── GRUPO 3: OPERATIVIDAD (jefes / admin) ────────────────────────────
-  var operatividad = [];
-  if(isJefe) {
-    operatividad.push(ITEMS.validacion);
-    operatividad.push(ITEMS.fio);
-    if(isGob) operatividad.push(ITEMS.hkPlan); // Gobernanta / Admin planifica rutas
+  // Alertas Fichaje: todos los empleados ven sus propias; admin/adjunto ven todos
+  navComun.push(ITEMS.fichaje);
+
+  // ── ZONA 2: Módulo de departamento (varía) ────────────────────────
+  var dptoMod = [];
+  if(isCocina)    dptoMod.push(ITEMS.merma);
+  if(isSala)      dptoMod.push(ITEMS.ajustes);
+  if(isSala)      dptoMod.push(ITEMS.incentivos); // empleados Sala ven su bonus
+  if(isHK)        {
+    dptoMod.push(ITEMS.ruta);
+    // Gobernanta/Subgobernanta ven planificación + zonas + revisión + dashboard + config
+    var _isGob = typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
+    if(_isGob){
+      dptoMod.push(ITEMS.hkPlan);
+      dptoMod.push(ITEMS.hkZonas);
+      dptoMod.push(ITEMS.hkRevision);
+      dptoMod.push(ITEMS.hkDash);
+      dptoMod.push(ITEMS.hkConfig);
+    }
+  }
+  if(isRecepcion) { dptoMod.push(ITEMS.cajaRec); dptoMod.push(ITEMS.recmod); }
+  if(isSyncrolab) { dptoMod.push(ITEMS.cajaLab); }
+  if(isMant)      dptoMod.push(ITEMS.mantmod);
+  // Admin ve también todas las pantallas HK
+  if(isAdminU && !isHK){
+    dptoMod.push({sep:true,label:'HOUSEKEEPING'});
+    dptoMod.push(ITEMS.hkPlan);
+    dptoMod.push(ITEMS.hkZonas);
+    dptoMod.push(ITEMS.hkRevision);
+    dptoMod.push(ITEMS.hkDash);
+    dptoMod.push(ITEMS.hkConfig);
   }
 
-  // ── GRUPO 4: DASHBOARDS (jefes / admin) ──────────────────────────────
-  var dashboards = [];
-  if(isJefe) {
-    dashboards.push(ITEMS.dashboard);
-    if(isAdminU || isGob)     dashboards.push(ITEMS.hkDash);
-    dashboards.push(ITEMS.incentivos); // vista gestión de incentivos
+  // ── ZONA 3: Gestión (solo jefe/admin) ─────────────────────────────
+  var gestion = [];
+  if(isJefe){
+    gestion.push(ITEMS.validacion);
+    gestion.push(ITEMS.dashboard);
   }
-
-  // ── GRUPO 5: CONFIGURACIÓN (admin + gobernanta) ───────────────────────
-  var config = [];
-  if(isAdminU) {
-    config.push(ITEMS.maestro);
-    config.push(ITEMS.export);
-    config.push(ITEMS.hkZonas);
-    config.push(ITEMS.hkRevision);
-    config.push(ITEMS.hkConfig);
-  } else if(isGob) {
-    config.push(ITEMS.hkZonas);
-    config.push(ITEMS.hkRevision);
-    config.push(ITEMS.hkConfig);
+  if(isAdminU){
+    gestion.push(ITEMS.maestro);
+    gestion.push(ITEMS.export);
   }
+  if(isJefe) gestion.push(ITEMS.fio);
+  if(isJefe) gestion.push(ITEMS.incentivos);
 
-  // ── Ensamblar ────────────────────────────────────────────────────────
-  var out = [{sep:true, label:'MI DÍA'}].concat(miDia);
-  out.push({sep:true, label:'RESUMEN PERSONAL'});
-  out = out.concat(resumen);
-  if(operatividad.length) { out.push({sep:true, label:'OPERATIVIDAD'}); out = out.concat(operatividad); }
-  if(dashboards.length)   { out.push({sep:true, label:'DASHBOARDS'}); out = out.concat(dashboards); }
-  if(config.length)       { out.push({sep:true, label:'CONFIGURACIÓN'}); out = out.concat(config); }
+  // Devolvemos array plano con separadores marcados para buildNav
+  var out = [].concat(navComun);
+  if(dptoMod.length){ out.push({sep:true,label:'MI DEPARTAMENTO'}); out = out.concat(dptoMod); }
+  if(gestion.length){ out.push({sep:true,label:'GESTIÓN'});         out = out.concat(gestion); }
+  // Info siempre primero
+  out.unshift(ITEMS.readme);
   return out;
 }
 
@@ -1083,7 +1081,6 @@ async function _doSaveTurno(){
     observacion: obs,
     checklist_items: JSON.stringify(_chkSavedState),
     ajustes_sala: JSON.stringify(_ajustesLines||[]),
-    kpis_recepcion: (_isRecSave && typeof _recKpiState !== 'undefined') ? JSON.stringify(_recKpiState) : null,
     // Sala fields
     descuentos_si: salaData.descuentos_si||false,
     descuentos_num: salaData.descuentos_num||0,
@@ -1119,7 +1116,6 @@ async function _doSaveTurno(){
       incidencia_declarada: toggleState.incidencia||'no',
       observacion: obs,
       checklist_items: JSON.stringify(_chkSavedState),
-      kpis_recepcion: (_isRecSave && typeof _recKpiState !== 'undefined') ? JSON.stringify(_recKpiState) : null,
       estado: 'Pendiente',
       validado_por: null, validado_ts: null,
       comentario_validador: null,
@@ -1495,14 +1491,24 @@ async function renderFollowUpExtras(dept){
     if(!openIncis.length){
       inciEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias abiertas</div></div>';
     }else{
-      var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
+      var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th><th>Acción</th></tr>';
       openIncis.forEach(function(i){
+        var _canChgInci = typeof canValidateDepartment==='function'&&canValidateDepartment(currentUser,i.area||'');
+        var _inciActions = _canChgInci
+          ? '<select onchange="cambiarEstadoIncidenciaOp(\''+i.id+'\',this.value,this)" style="font-size:11px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);">'
+            +'<option value="">(cambiar)</option>'
+            +'<option value="Abierta">Abierta</option>'
+            +'<option value="En proceso">En proceso</option>'
+            +'<option value="Cerrada">Cerrada</option>'
+            +'</select>'
+          : '';
         h+='<tr>'
           +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((i.fecha||(i.created_at||'').slice(0,10)))+'</td>'
           +'<td style="font-size:12px">'+(i.nombre_empleado||i.employee_name||i.nombre||'—')+'</td>'
           +'<td>'+deptBadge(i.area||'—')+'</td>'
-          +'<td style="max-width:260px;font-size:12px">'+(i.descripcion||'—').slice(0,80)+'</td>'
+          +'<td style="max-width:240px;font-size:12px">'+(i.descripcion||'—').slice(0,80)+'</td>'
           +'<td>'+(typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado))+'</td>'
+          +'<td>'+_inciActions+'</td>'
           +'</tr>';
       });
       inciEl.innerHTML=h+'</table>';
@@ -1575,6 +1581,30 @@ async function renderFollowUpExtras(dept){
   }
 }
 window.renderFollowUpExtras = renderFollowUpExtras;
+
+
+// ── Cambio de estado de incidencia desde tab Operativo ─────────────────
+async function cambiarEstadoIncidenciaOp(inciId, nuevoEstado, selectEl){
+  if(!nuevoEstado) return;
+  var canChange = typeof canValidateDepartment === 'function';
+  if(!canChange){ toast('Sin permisos','err'); if(selectEl) selectEl.value=''; return; }
+  try{
+    var all = await getDB('incidencias');
+    var inci = (all||[]).find(function(x){ return x.id===inciId; });
+    if(!inci){ toast('Incidencia no encontrada','err'); return; }
+    if(!canValidateDepartment(currentUser, inci.area||'')){ toast('Sin permisos para este departamento','err'); if(selectEl) selectEl.value=''; return; }
+    var patch = { estado: nuevoEstado, updated_at: localTs() };
+    if(nuevoEstado === 'Cerrada') patch.closed_at = localTs();
+    await dbUpdate('incidencias', inciId, patch);
+    await auditLog('INCIDENCIA_ESTADO', (currentUser.nombre||'—')+' cambió incidencia '+inciId+' a '+nuevoEstado);
+    invalidateCache('incidencias');
+    toast('Estado actualizado','ok');
+    // Refrescar tabla operativo si está visible
+    var opDept = (document.getElementById('v-dept')||{}).value||'';
+    if(typeof renderFollowUpExtras === 'function') renderFollowUpExtras(opDept);
+  }catch(e){ toast('Error: '+e.message,'err'); if(selectEl) selectEl.value=''; }
+}
+window.cambiarEstadoIncidenciaOp = cambiarEstadoIncidenciaOp;
 
 // buildInciObj → incidencias.js
 async function renderMisTurnos(){
@@ -1839,19 +1869,38 @@ async function openValidarModal(shiftId){
   if(s.checklist_items){
     try{
       var chk=JSON.parse(s.checklist_items);
-      var isFriegueS=s.area==='Friegue'||s.puesto==='Friegue';
-      var chkItems=isFriegueS?CHK_FRIEGUE_ITEMS:CHK_COCINA_ITEMS;
+      // ── Seleccionar checklist correcto según departamento y turno ──
+      var _sa=s.area||''; var _ss=(s.servicio||'').toLowerCase();
+      var chkItems=(function(){
+        if(_sa==='Friegue'||s.puesto==='Friegue') return typeof CHK_FRIEGUE_ITEMS!=='undefined'?CHK_FRIEGUE_ITEMS:null;
+        if(_sa==='Sala') return typeof CHK_SALA_ITEMS!=='undefined'?CHK_SALA_ITEMS:null;
+        if(_sa==='F&B') return typeof CHK_FNB_ITEMS!=='undefined'?CHK_FNB_ITEMS:null;
+        if(_sa==='Recepción'){
+          if(_ss.indexOf('noche')>=0) return typeof CHK_REC_NOCHE_ITEMS!=='undefined'?CHK_REC_NOCHE_ITEMS:null;
+          if(_ss.indexOf('tarde')>=0) return typeof CHK_REC_TARDE_ITEMS!=='undefined'?CHK_REC_TARDE_ITEMS:null;
+          return typeof CHK_REC_MANANA_ITEMS!=='undefined'?CHK_REC_MANANA_ITEMS:null;
+        }
+        if(/syncrolab/i.test(_sa)){
+          if(_ss.indexOf('tarde')>=0) return typeof CHK_LAB_TARDE_ITEMS!=='undefined'?CHK_LAB_TARDE_ITEMS:null;
+          return typeof CHK_LAB_MANANA_ITEMS!=='undefined'?CHK_LAB_MANANA_ITEMS:null;
+        }
+        return typeof CHK_COCINA_ITEMS!=='undefined'?CHK_COCINA_ITEMS:null;
+      })();
       var chkDone=chk.filter(Boolean).length;
       info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">';
       info += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:8px;">CHECKLIST ('+chkDone+'/'+chk.length+')</div>';
-      chk.forEach(function(c,i){
-        if(i<chkItems.length){
-          info += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;">'
-            +'<span style="color:'+(c?'var(--green)':'var(--red)')+';font-size:14px;">'+(c?'✓':'✗')+'</span>'
-            +'<span style="color:'+(c?'var(--text)':'var(--text3)')+'">'+chkItems[i]+'</span>'
-            +'</div>';
-        }
-      });
+      if(!chkItems){
+        info += '<div style="color:var(--text3);font-style:italic;font-size:12px;">No hay checklist configurado para este departamento.</div>';
+      } else {
+        chk.forEach(function(c,i){
+          if(i<chkItems.length){
+            info += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;">'
+              +'<span style="color:'+(c?'var(--green)':'var(--red)')+';font-size:14px;">'+(c?'✓':'✗')+'</span>'
+              +'<span style="color:'+(c?'var(--text)':'var(--text3)')+'">'+chkItems[i]+'</span>'
+              +'</div>';
+          }
+        });
+      }
       info += '</div>';
     }catch(e){}
   }

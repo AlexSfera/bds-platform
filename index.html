@@ -1158,13 +1158,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="page-header"><div class="page-title">🫁 Hypoxic Room</div><div class="page-sub">Cargando...</div></div>
     </div>
 
-
-    <!-- ══ MI RUTA (módulo HK) ══ -->
-    <div class="screen" id="screen-ruta-mod">
-      <div class="page-header"><div class="page-title">🧹 Mi Ruta</div><div class="page-sub" id="hk-ruta-sub">Cargando...</div></div>
-      <div id="hk-ruta-content" style="padding:0 16px 80px;"></div>
-    </div>
-
     <!-- ══ MERMA (módulo Cocina) ══ -->
     <div class="screen" id="screen-merma-mod">
       <div class="page-header"><div class="page-title">📦 Merma</div><div class="page-sub">Cargando...</div></div>
@@ -1237,8 +1230,9 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="fg"><label>Nuevas reservas gestionadas</label><input type="number" id="kpi-reservas" min="0" placeholder="0" style="color:#111827;background:#ffffff;"></div>
     </div>
 
-    <!-- CROSS-SELL DESAYUNO (incentivo 10% s/neto · IVA 10%) -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">CROSS-SELL · DESAYUNO</div>
+
+    <!-- UPSELL DESAYUNOS -->
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">DESAYUNOS / UPSELL</div>
     <div class="fg" style="margin-bottom:8px;">
       <label>¿Ofertaste desayunos a clientes sin desayuno incluido?</label>
       <div style="display:flex;gap:8px;margin-top:6px;">
@@ -1247,26 +1241,9 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <button class="tbtn" id="kpi-upsell-na" onclick="setRecKpi('upsell_desayuno','na',this)">No aplica</button>
       </div>
     </div>
-    <div id="desayuno-ventas-block" style="display:none;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:8px;">
-      <div style="font-size:11px;color:#f59e0b;font-family:var(--font-mono);font-weight:700;margin-bottom:8px;">DESAYUNOS VENDIDOS — una línea por venta (importe con IVA 10%)</div>
-      <div id="desayuno-ventas-container"></div>
-      <button onclick="addDesayunoVenta()" style="display:flex;align-items:center;gap:6px;background:rgba(245,158,11,.1);border:1px dashed #f59e0b;color:#f59e0b;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;width:100%;justify-content:center;margin-top:6px;">+ Añadir desayuno</button>
-    </div>
-
-    <!-- CROSS-SELL CENA (incentivo 10% s/neto · IVA 10%) -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#ef4444;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">CROSS-SELL · CENA</div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Ofertaste cena a clientes sin pensión incluida?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-cena-si" onclick="setRecKpi('upsell_cena','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-cena-no" onclick="setRecKpi('upsell_cena','no',this)">NO</button>
-        <button class="tbtn" id="kpi-cena-na" onclick="setRecKpi('upsell_cena','na',this)">No aplica</button>
-      </div>
-    </div>
-    <div id="cena-ventas-block" style="display:none;border:1px solid #ef4444;border-radius:8px;padding:12px;margin-bottom:8px;">
-      <div style="font-size:11px;color:#ef4444;font-family:var(--font-mono);font-weight:700;margin-bottom:8px;">CENAS VENDIDAS — una línea por venta (importe con IVA 10%)</div>
-      <div id="cena-ventas-container"></div>
-      <button onclick="addCenaVenta()" style="display:flex;align-items:center;gap:6px;background:rgba(239,68,68,.1);border:1px dashed #ef4444;color:#ef4444;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;width:100%;justify-content:center;margin-top:6px;">+ Añadir cena</button>
+    <div id="kpi-upsell-detail" style="display:none;" class="grid2">
+      <div class="fg"><label>¿A cuántos clientes se ofreció?</label><input type="number" id="kpi-desal-ofertados" min="0" placeholder="0" style="color:#111827;background:#ffffff;"></div>
+      <div class="fg"><label>¿Cuántos desayunos se vendieron?</label><input type="number" id="kpi-desal-vendidos" min="0" placeholder="0" style="color:#111827;background:#ffffff;"></div>
     </div>
 
     <!-- VENTAS SYNCROLAB -->
@@ -1286,6 +1263,17 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- BITRIX24 / COMUNICACIÓN -->
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">BITRIX24 / COMUNICACIÓN</div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>¿Revisaste WhatsApp / email / llamadas pendientes en Bitrix24?</label>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="tbtn" id="kpi-comms-si" onclick="setRecKpi('comms_revisadas','si',this)">SÍ</button>
+        <button class="tbtn" id="kpi-comms-no" onclick="setRecKpi('comms_revisadas','no',this)">NO</button>
+      </div>
+    </div>
+    <div id="kpi-comms-no-block" style="display:none;" class="fg">
+      <label>Motivo de no revisión <span class="req">*</span></label>
+      <textarea id="kpi-comms-no-exp" rows="2" placeholder="¿Por qué no pudiste revisar?"></textarea>
+    </div>
     <div class="fg" style="margin-bottom:8px;">
       <label>¿Queda algún lead pendiente en Bitrix24?</label>
       <div style="display:flex;gap:8px;margin-top:6px;">
@@ -1456,9 +1444,16 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div id="rec-lab-charges-list"></div>
     </div>
     <div id="rec-caja-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
-    <div style="display:flex;gap:8px;">
+    <!-- Footer empleado (crear/editar propio) -->
+    <div id="rec-caja-footer-emp" style="display:flex;gap:8px;">
       <button onclick="closeRecCaja()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">← Volver al KPI</button>
       <button onclick="submitRecCaja()" style="flex:2;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar y cerrar turno</button>
+    </div>
+    <!-- Footer validador (solo lectura + validar) -->
+    <div id="rec-caja-footer-val" style="display:none;gap:8px;flex-wrap:wrap;">
+      <button onclick="validarRecCajaAction()" style="flex:2;min-width:120px;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✓ Validar</button>
+      <button onclick="marcarErrorRecCajaAction()" style="flex:1;min-width:120px;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✗ Marcar error</button>
+      <button onclick="closeRecCajaModal()" style="flex:1;min-width:100px;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Cerrar</button>
     </div>
   </div>
 </div>
