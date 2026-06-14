@@ -871,6 +871,22 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div id="val-content-followup">
         <div id="val-alerts"></div>
         <div class="card"><div class="tbl-wrap" id="validacion-table"></div></div>
+
+        <!-- Incidencias abiertas -->
+        <div id="val-followup-incidencias" style="margin-top:24px;">
+          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#ef4444;letter-spacing:.15em;margin-bottom:12px;">⚠ INCIDENCIAS ABIERTAS</div>
+          <div class="card"><div class="tbl-wrap" id="val-incidencias-table"></div></div>
+        </div>
+        <!-- Gestiones pendientes -->
+        <div id="val-followup-gestiones" style="margin-top:16px;">
+          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#f59e0b;letter-spacing:.15em;margin-bottom:12px;">📌 GESTIONES PENDIENTES</div>
+          <div class="card"><div class="tbl-wrap" id="val-gestiones-table"></div></div>
+        </div>
+        <!-- Tareas pendientes -->
+        <div id="val-followup-tareas" style="margin-top:16px;">
+          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:12px;">🔗 TAREAS PENDIENTES</div>
+          <div class="card"><div class="tbl-wrap" id="val-tareas-table"></div></div>
+        </div>
       </div>
 
       <!-- CIERRE CAJA TAB -->
@@ -887,31 +903,21 @@ tr:hover td{background:rgba(255,255,255,.018);}
         </div>
         <div class="card"><div class="tbl-wrap" id="val-caja-table"></div></div>
 
+        <!-- CAJA-V2: Ajustes de Caja — visible admin / adjunto / fb / supervisor -->
+        <div id="val-ajustes-caja-block" style="display:none;margin-top:24px;">
+          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:12px;">💳 AJUSTES DE CAJA</div>
+          <div class="card"><div class="tbl-wrap" id="val-ajustes-caja-table"><div class="empty"><div class="empty-text">Cargando...</div></div></div></div>
+        </div>
+
         <!-- CAJA-V2: cajas Recepción (cierres + traspasos) — visible admin / jefe_recepcion -->
         <div id="val-rec-caja-block" style="display:none;margin-top:24px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;">🏨 RECEPCIÓN · CIERRES Y TRASPASOS DE CAJA</div>
-            <select id="val-rec-caja-periodo" onchange="renderValCajaRecepcion()" style="color:#111827;background:#ffffff;padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;">
-              <option value="hoy">Hoy</option>
-              <option value="semana" selected>Esta semana</option>
-              <option value="mes">Este mes</option>
-              <option value="todo">Todos</option>
-            </select>
-          </div>
+          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:12px;">🏨 RECEPCIÓN · CIERRES Y TRASPASOS DE CAJA</div>
           <div class="card"><div class="tbl-wrap" id="val-rec-caja-table"><div class="empty"><div class="empty-text">Cargando...</div></div></div></div>
         </div>
 
         <!-- CAJA-V2 SYNCROLAB: cierres + traspasos -->
         <div id="val-lab-caja-block" style="display:none;margin-top:24px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#a855f7;letter-spacing:.15em;">🏋 SYNCROLAB · CIERRES Y TRASPASOS (Nubimed + VirtuGym)</div>
-            <select id="val-lab-caja-periodo" onchange="renderValCajaLab()" style="color:#111827;background:#ffffff;padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;">
-              <option value="hoy">Hoy</option>
-              <option value="semana" selected>Esta semana</option>
-              <option value="mes">Este mes</option>
-              <option value="todo">Todos</option>
-            </select>
-          </div>
+          <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#a855f7;letter-spacing:.15em;margin-bottom:12px;">🏋 SYNCROLAB · CIERRES Y TRASPASOS (Nubimed + VirtuGym)</div>
           <div class="card"><div class="tbl-wrap" id="val-lab-caja-table"><div class="empty"><div class="empty-text">Cargando...</div></div></div></div>
         </div>
       </div>
@@ -1051,8 +1057,9 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <button class="btn btn-primary" onclick="openEmpModal()">+ Nuevo Empleado</button>
         <button class="btn btn-secondary" onclick="exportCSV('employees')">⬇ CSV</button>
       </div>
+      <input type="search" id="maestro-search" placeholder="Buscar por nombre, área, puesto, rol..." autocomplete="off" oninput="filterMaestro(this.value)" style="width:100%;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;margin-bottom:12px;">
       <div class="card"><div class="tbl-wrap" id="maestro-table"></div></div>
-    
+    </div>
     <!-- ══ RECEPCIÓN CAJA SCREEN ══ -->
     <div id="screen-rec-caja" class="screen">
       <div class="page-header">
@@ -1152,16 +1159,16 @@ tr:hover td{background:rgba(255,255,255,.018);}
       <div class="page-header"><div class="page-title">⚖ Mis FIO</div><div class="page-sub">Cargando...</div></div>
     </div>
 
-    <!-- ══ AJUSTES (módulo Sala) ══ -->
+    <!-- ══ AJUSTES DE CAJA (módulo Sala) ══ -->
     <div class="screen" id="screen-ajustes-mod">
-      <div class="page-header"><div class="page-title">⚙ Ajustes</div><div class="page-sub">Cargando...</div></div>
+      <div class="page-header"><div class="page-title">⚙ Ajustes de Caja</div><div class="page-sub">Cargando...</div></div>
     </div>
 
   </div><!-- /main -->
   </div><!-- /app-shell -->
 </div><!-- /app -->
 
-<!-- ══ MODAL AJUSTES SALA (before checklist) ══ -->
+<!-- ══ MODAL AJUSTES DE CAJA SALA (before checklist) ══ -->
 <div id="modal-ajustes" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:650;padding:16px;">
   <div style="background:var(--bg3);border:1px solid #3b82f6;border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;">
     <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:4px;">SALA · ANTES DE CERRAR EL TURNO</div>

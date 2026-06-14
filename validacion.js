@@ -526,6 +526,7 @@ async function renderValCajaList() {
   // Regla: Recepción solo si Departamento=Recepción · Sala si Sala/Todos.
   renderValCajaRecepcion(dept);
   renderValCajaLab(dept);
+  renderValAjustes(dept);
 
   var salaCard = el.closest ? el.closest('.card') : null;
   if(dept === 'Recepción'){
@@ -616,14 +617,16 @@ async function renderValCajaRecepcion(deptArg) {
 
   // Regla de departamento: mostrar solo cuando dept = Recepción o Todos (vacío)
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
-  if(dept && dept !== 'Recepción'){ block.style.display = 'none'; return; }
+  var _isAdminRec = currentUser && currentUser.rol === 'admin';
+  // Admin: show solo con Todos o Recepción; jefe: solo Recepción
+  if(dept && dept !== 'Recepción' && !(_isAdminRec && dept === '')){ block.style.display = 'none'; return; }
   block.style.display = 'block';
   el.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
 
   var rows = [];
   try { rows = await getDB('recepcion_cash'); } catch(e){ rows = []; }
 
-  var periodo = (document.getElementById('val-rec-caja-periodo')||{value:'semana'}).value || 'semana';
+  var periodo = (document.getElementById('val-caja-periodo')||{value:'semana'}).value || 'semana';
   var t = today();
   rows = rows.filter(function(r){
     if(periodo === 'hoy')    return r.fecha === t;
@@ -698,7 +701,7 @@ async function renderValCajaLab(deptArg){
 
   var rows = [];
   try { rows = await getDB('syncrolab_cash_closures'); } catch(e){ rows = []; }
-  var periodo = (document.getElementById('val-lab-caja-periodo')||{value:'semana'}).value || 'semana';
+  var periodo = (document.getElementById('val-caja-periodo')||{value:'semana'}).value || 'semana';
   var t = today();
   rows = rows.filter(function(r){
     if(periodo === 'hoy')    return r.fecha === t;
@@ -1125,3 +1128,50 @@ document.addEventListener('keydown',function(e){
     showScreen._inciPatched = true;
   }
 })();
+
+// ── VALIDACIÓN AJUSTES DE CAJA ──────────────────────────────────────────
+async function renderValAjustes(deptArg){
+  var block = document.getElementById('val-ajustes-caja-block');
+  var el    = document.getElementById('val-ajustes-caja-table');
+  if(!block || !el) return;
+  var isAdminU = currentUser && currentUser.rol === 'admin';
+  var isAdjDir = typeof isAdjuntoDirectivo === 'function' && isAdjuntoDirectivo(currentUser);
+  var isSalaJefe = currentUser && ['fb','supervisor','chef'].indexOf(currentUser.rol) >= 0;
+  if(!isAdminU && !isAdjDir && !isSalaJefe){ block.style.display='none'; return; }
+  var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value||'');
+  // Ajustes son de Sala: mostrar si Todos, Sala o admin/adjunto
+  if(dept && dept !== 'Sala' && !isAdminU && !isAdjDir){ block.style.display='none'; return; }
+  block.style.display='block';
+  el.innerHTML='<div class="empty"><div class="empty-text">Cargando...</div></div>';
+  var periodo=(document.getElementById('val-caja-periodo')||{value:'semana'}).value||'semana';
+  var t=today();
+  var rows=[];
+  try{ rows=await getDB('ajustes'); }catch(e){ rows=[]; }
+  rows=rows.filter(function(r){
+    if(periodo==='hoy')    return r.fecha===t;
+    if(periodo==='semana') return r.fecha>=startOfWeek();
+    if(periodo==='mes')    return r.fecha>=startOfMonth();
+    return true;
+  });
+  if(dept && dept!=='') rows=rows.filter(function(r){ return (r.area||'')=== dept; });
+  rows.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'')||(b.created_at||'').localeCompare(a.created_at||''); });
+  if(!rows.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">💳</div><div class="empty-text">Sin ajustes de caja en este periodo</div></div>';
+    return;
+  }
+  var html='<table><tr><th>Fecha</th><th>Empleado</th><th>Tipo</th><th>Importe</th><th>Motivo</th></tr>';
+  rows.forEach(function(r){
+    var imp=parseFloat(r.importe)||0;
+    var col=imp<0?'var(--red)':imp>0?'var(--green)':'var(--text3)';
+    html+='<tr>'
+      +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(r.fecha)+'</td>'
+      +'<td style="font-weight:600">'+(r.nombre||'—')+'</td>'
+      +'<td><span class="badge b-gray">'+(r.tipo||'—')+'</span></td>'
+      +'<td style="font-family:var(--font-mono);color:'+col+'">'+(imp>=0?'+':'')+imp.toFixed(2)+' €</td>'
+      +'<td style="font-size:12px;color:var(--text3)">'+(r.motivo||'—').slice(0,60)+'</td>'
+      +'</tr>';
+  });
+  html+='</table>';
+  el.innerHTML=html;
+}
+window.renderValAjustes = renderValAjustes;

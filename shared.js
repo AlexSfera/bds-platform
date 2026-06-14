@@ -234,7 +234,7 @@ function canViewDepartment(user,dept){
   if(!d) return false;
   return getSupervisorDepartments(user).map(normalizeDeptName).indexOf(d)!==-1;
 }
-function canValidateDepartment(user,dept){ return isAdmin(user) || (isSupervisor(user)&&canViewDepartment(user,dept)); }
+function canValidateDepartment(user,dept){ return isAdmin(user) || isAdjuntoDirectivo(user) || (isSupervisor(user)&&canViewDepartment(user,dept)); }
 function getRecordDepartment(record,shiftMap){
   if(!record) return '[NO DATA]';
   var direct = record.area || record.departamento || record.dept_destino || record.dept_origen;
@@ -412,7 +412,7 @@ function getScreens(rol){
     misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
     // Módulos por dpto (placeholders)
     merma:       {id:'merma-mod',   label:'📦 Merma'},
-    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes'},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes de Caja'},
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
     cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
     cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
@@ -1448,6 +1448,94 @@ function saveTurno(){
     chkOpen({});
   }
 }
+
+// ── FOLLOW-UP EXTRAS: Incidencias abiertas · Gestiones pendientes · Tareas pendientes ─
+async function renderFollowUpExtras(dept){
+  var incis=[]; var gests=[]; var tasks=[];
+  try{ incis=await getDB('incidencias'); }catch(e){}
+  try{ gests=await getDB('gestiones'); }catch(e){}
+  try{ tasks=await getDB('tareas'); }catch(e){}
+
+  var openIncis=incis.filter(function(i){
+    var s=(i.estado||'').toLowerCase();
+    return s!=='cerrada'&&s!=='cerrado'&&s!=='closed';
+  }).filter(function(i){ return !dept||(i.area||'')=== dept; })
+    .sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
+
+  var pendGests=gests.filter(function(g){
+    var s=(g.estado||'').toLowerCase();
+    return s!=='cerrada'&&s!=='cerrado'&&s!=='closed';
+  }).filter(function(g){ return !dept||((g.departamento||g.area||'')=== dept); })
+    .sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
+
+  var pendTasks=tasks.filter(function(t){
+    return typeof isTaskOpen==='function'?isTaskOpen(t):(function(){var s=(t.estado||'').toLowerCase();return s!=='cerrada'&&s!=='completada'&&s!=='closed';})();
+  }).filter(function(t){ return !dept||(t.dept_destino||'')=== dept; })
+    .sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
+
+  // Incidencias
+  var inciEl=document.getElementById('val-incidencias-table');
+  if(inciEl){
+    if(!openIncis.length){
+      inciEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias abiertas</div></div>';
+    }else{
+      var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
+      openIncis.forEach(function(i){
+        h+='<tr>'
+          +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((i.fecha||(i.created_at||'').slice(0,10)))+'</td>'
+          +'<td style="font-size:12px">'+(i.nombre_empleado||i.employee_name||i.nombre||'—')+'</td>'
+          +'<td>'+deptBadge(i.area||'—')+'</td>'
+          +'<td style="max-width:260px;font-size:12px">'+(i.descripcion||'—').slice(0,80)+'</td>'
+          +'<td>'+(typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado))+'</td>'
+          +'</tr>';
+      });
+      inciEl.innerHTML=h+'</table>';
+    }
+  }
+
+  // Gestiones
+  var gestEl=document.getElementById('val-gestiones-table');
+  if(gestEl){
+    if(!pendGests.length){
+      gestEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin gestiones pendientes</div></div>';
+    }else{
+      var h2='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
+      pendGests.forEach(function(g){
+        h2+='<tr>'
+          +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((g.fecha||(g.created_at||'').slice(0,10)))+'</td>'
+          +'<td style="font-size:12px">'+(g.nombre_empleado||g.employee_name||g.nombre||'—')+'</td>'
+          +'<td>'+deptBadge(g.departamento||g.area||'—')+'</td>'
+          +'<td style="max-width:260px;font-size:12px">'+(g.descripcion||g.description||'—').slice(0,80)+'</td>'
+          +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(g.estado):bEstado(g.estado))+'</td>'
+          +'</tr>';
+      });
+      gestEl.innerHTML=h2+'</table>';
+    }
+  }
+
+  // Tareas
+  var tarEl=document.getElementById('val-tareas-table');
+  if(tarEl){
+    if(!pendTasks.length){
+      tarEl.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin tareas pendientes</div></div>';
+    }else{
+      var h3='<table><tr><th>Creada</th><th>Título</th><th>Dept. Destino</th><th>Deadline</th><th>Estado</th></tr>';
+      pendTasks.forEach(function(t){
+        var dlStyle=isOverdue&&isOverdue(t.deadline)?'color:var(--red);font-weight:700':'';
+        h3+='<tr>'
+          +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate((t.created_at||'').slice(0,10))+'</td>'
+          +'<td style="font-size:12px;font-weight:600">'+(t.titulo||'—').slice(0,60)+'</td>'
+          +'<td>'+deptBadge(t.dept_destino||'—')+'</td>'
+          +'<td style="font-family:var(--font-mono);font-size:11px;'+dlStyle+'">'+(t.deadline?fmtDate(t.deadline):'—')+'</td>'
+          +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(t.estado):bEstado(t.estado))+'</td>'
+          +'</tr>';
+      });
+      tarEl.innerHTML=h3+'</table>';
+    }
+  }
+}
+window.renderFollowUpExtras = renderFollowUpExtras;
+
 // buildInciObj → incidencias.js
 async function renderMisTurnos(){
   const shifts=(await getDB('shifts')).filter(s=>s.employee_id===currentUser.id).sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,12);
@@ -1464,7 +1552,7 @@ async function renderMisTurnos(){
     if(i.categoria==='Gestión pendiente') gestionMap[i.shift_id]=true;
     else inciMap[i.shift_id]=true;
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Horas</th>'+(isSalaDept?'<th>Ajustes</th>':'<th>Mermas</th>')+'<th>Gestión</th><th>Incid.</th><th>Estado</th></tr>'
+  el.innerHTML='<table><tr><th>Fecha</th><th>Servicio</th><th>Horas</th>'+(isSalaDept?'<th>Ajustes de Caja</th>':'<th>Mermas</th>')+'<th>Gestión</th><th>Incid.</th><th>Estado</th></tr>'
   +shifts.map(function(s){
     const mc=mermas.filter(m=>m.shift_id===s.id).length;
     var ajustesS = ajustesAll.filter(function(a){ return a.shift_id===s.id; });
@@ -1650,7 +1738,9 @@ async function renderValidacion(){
       })()+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  // Extras: incidencias abiertas, gestiones y tareas pendientes
+  if(typeof renderFollowUpExtras==='function') renderFollowUpExtras(dept);
 }
 // valAdvanceGestion, valShowCloseGestionForm, valSaveCloseGestion,
 // valAdvanceGestionNew, valShowCloseGestionNewForm, valSaveCloseGestionNew → gestiones.js
@@ -2282,6 +2372,16 @@ async function saveEmpleado(){
     await renderMaestro();
     toast((_editEmpId?'Empleado actualizado':'Empleado creado')+' — coste: '+costeVal+'€/h','ok');
   }, 200);
+}
+function filterMaestro(q){
+  var query=(q||'').toLowerCase();
+  var table=document.getElementById('maestro-table');
+  if(!table) return;
+  table.querySelectorAll('tbody tr, tr').forEach(function(row,i){
+    if(i===0) return; // header
+    var txt=(row.textContent||'').toLowerCase();
+    row.style.display=(query===''||txt.indexOf(query)!==-1)?'':'none';
+  });
 }
 async function toggleEmp(empId,newEstado){ const employees=await getDB('employees'); const idx=employees.findIndex(e=>e.id===empId); if(idx===-1) return; employees[idx].estado=newEstado; await setDB('employees',employees); renderMaestro(); toast('Estado: '+newEstado,'ok'); }
 
