@@ -385,110 +385,112 @@ async function startApp(){
   setTimeout(fixSelectColors, 200);
 }
 function getScreens(rol){
-  var isSala       = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
-  var isRecepcion  = currentUser && currentUser.area === 'Recepción';
-  var isCocina     = currentUser && currentUser.area === 'Cocina';
-  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
-  var isMant       = currentUser && currentUser.area === 'Mantenimiento';
-  var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
-  var isAdminU     = (rol === 'admin');
-  var isAdjDir     = typeof isAdjuntoDirectivo === 'function' && isAdjuntoDirectivo(currentUser);
-  var isJefe       = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
+  var isSala      = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
+  var isRecepcion = currentUser && (currentUser.area === 'Recepción' || currentUser.area === 'Recepción SFERA');
+  var isCocina    = currentUser && currentUser.area === 'Cocina';
+  var isHK        = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
+  var isMant      = currentUser && currentUser.area === 'Mantenimiento';
+  var isSyncrolab = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
+  var isAdminU    = (rol === 'admin');
+  var isAdjDir    = typeof isAdjuntoDirectivo === 'function' && isAdjuntoDirectivo(currentUser);
+  var isJefe      = isAdminU || isAdjDir || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
     || ['chef','fb','jefe_recepcion','supervisor'].indexOf(rol) >= 0;
+  var isGob       = typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
 
-  // ── Definiciones de pantallas ─────────────────────────────────────
+  // ── Definición de ítems ─────────────────────────────────────────────
   var ITEMS = {
-    readme:      {id:'readme',      label:'📋 Info'},
-    turno:       {id:'turno',       label:'🕐 Mi Turno'},
-    gestiones:   {id:'gestiones',   label:'📌 Gestiones'},
-    tareas:      {id:'tareas',      label:'🔗 Tareas'},
-    incidencias: {id:'incidencias', label:'⚠ Incidencias'},
-    hypoxic:     {id:'hypoxic',     label:'🫁 Hypoxic Room'},
-    validacion:  {id:'validacion',  label:'✅ Validación'},
-    dashboard:   {id:'dashboard',   label:'📊 Dashboard'},
-    maestro:     {id:'maestro',     label:'👥 Maestro'},
-    export:      {id:'export',      label:'⬇ Exportar'},
-    fio:         {id:'fio',         label:'⚖ FIO'},
-    misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
-    // Módulos por dpto (placeholders)
-    merma:       {id:'merma-mod',   label:'📦 Merma'},
-    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes de Caja'},
-    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
-    cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
-    cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
-    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
-    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true},
-    // ── HOUSEKEEPING ─────────────────────────────────────────────────
-    hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
-    hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
-    hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
-    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
-    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
-    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
-    incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
-    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'}
+    // MI DÍA
+    readme:        {id:'readme',      label:'📋 Info'},
+    turno:         {id:'turno',       label:'🕐 Mi Turno'},
+    checklist:     {id:'chk-mod',     label:'✅ Mi Checklist',      action:'openChkMidDay'},
+    incidencias:   {id:'incidencias', label:'⚠ Incidencias'},
+    gestiones:     {id:'gestiones',   label:'📌 Gestiones'},
+    tareas:        {id:'tareas',      label:'🔗 Tareas'},
+    ruta:          {id:'ruta-mod',    label:'🧹 Mi Ruta'},
+    hypoxic:       {id:'hypoxic',     label:'🫁 Hypoxic Room'},
+    merma:         {id:'merma-mod',   label:'📦 Merma'},
+    cajaSala:      {id:'ajustes-mod', label:'💰 Caja Sala'},
+    cajaRec:       {id:'rec-caja-op', label:'💰 Caja Recepción',    action:'openRecCajaChoice'},
+    cajaLab:       {id:'lab-caja-op', label:'💰 Caja SYNCROLAB',    action:'openLabCajaChoice'},
+    recmod:        {id:'rec-mod',     label:'🏨 Recepción',          pending:true},
+    mantmod:       {id:'mant-mod',    label:'🔧 Mantenimiento',      pending:true},
+    // RESUMEN PERSONAL
+    fichaje:       {id:'fichaje',     label:'📋 Alertas Fichaje'},
+    misfio:        {id:'mis-fio',     label:'⚖ Mis FIO'},
+    misincentivos: {id:'incentivos',  label:'💰 Mis Incentivos'},
+    // OPERATIVIDAD
+    validacion:    {id:'validacion',  label:'✅ Validación'},
+    fio:           {id:'fio',         label:'⚖ FIO'},
+    hkPlan:        {id:'hk-plan',     label:'📅 Planificación Ruta'},
+    // DASHBOARDS
+    dashboard:     {id:'dashboard',   label:'📊 Dashboard'},
+    hkDash:        {id:'hk-dash',     label:'📊 Dashboard HK'},
+    incentivos:    {id:'incentivos',  label:'💰 Incentivos'},
+    // CONFIGURACIÓN
+    maestro:       {id:'maestro',     label:'👥 Maestro'},
+    export:        {id:'export',      label:'⬇ Exportar'},
+    hkZonas:       {id:'hk-zonas',    label:'🧽 Zonas públicas'},
+    hkRevision:    {id:'hk-revision', label:'✅ Revisión HK'},
+    hkConfig:      {id:'hk-config',   label:'⚙ Config HK'}
   };
 
-  // ── ZONA 1: Navegación común (todos) ──────────────────────────────
-  var navComun = isAdminU
-    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
-    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
+  // ── GRUPO 1: MI DÍA ─────────────────────────────────────────────────
+  var miDia = [ITEMS.readme];
+  if(!isAdminU)               miDia.push(ITEMS.turno);
+  if(!isAdminU)               miDia.push(ITEMS.checklist); // admin no usa checklist de turno
+  miDia.push(ITEMS.incidencias);
+  miDia.push(ITEMS.gestiones);
+  miDia.push(ITEMS.tareas);
+  if(isHK)                    miDia.push(ITEMS.ruta);
+  if(isAdminU || isRecepcion) miDia.push(ITEMS.hypoxic);
+  if(isCocina)                miDia.push(ITEMS.merma);
+  if(isSala)                  miDia.push(ITEMS.cajaSala);
+  if(isRecepcion)             { miDia.push(ITEMS.cajaRec); miDia.push(ITEMS.recmod); }
+  if(isSyncrolab)             miDia.push(ITEMS.cajaLab);
+  if(isMant)                  miDia.push(ITEMS.mantmod);
 
-  // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
-  if(isAdminU || isRecepcion) navComun.push(ITEMS.hypoxic);
+  // ── GRUPO 2: RESUMEN PERSONAL ────────────────────────────────────────
+  var resumen = [ITEMS.fichaje];
+  if(!isAdminU)               resumen.push(ITEMS.misfio);
+  if(isSala && !isJefe)       resumen.push(ITEMS.misincentivos); // Sala lineal: su bonus personal
 
-  // Alertas Fichaje: todos los empleados ven sus propias; admin/adjunto ven todos
-  navComun.push(ITEMS.fichaje);
-
-  // ── ZONA 2: Módulo de departamento (varía) ────────────────────────
-  var dptoMod = [];
-  if(isCocina)    dptoMod.push(ITEMS.merma);
-  if(isSala)      dptoMod.push(ITEMS.ajustes);
-  if(isSala)      dptoMod.push(ITEMS.incentivos); // empleados Sala ven su bonus
-  if(isHK)        {
-    dptoMod.push(ITEMS.ruta);
-    // Gobernanta/Subgobernanta ven planificación + zonas + revisión + dashboard + config
-    var _isGob = typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
-    if(_isGob){
-      dptoMod.push(ITEMS.hkPlan);
-      dptoMod.push(ITEMS.hkZonas);
-      dptoMod.push(ITEMS.hkRevision);
-      dptoMod.push(ITEMS.hkDash);
-      dptoMod.push(ITEMS.hkConfig);
-    }
-  }
-  if(isRecepcion) { dptoMod.push(ITEMS.cajaRec); dptoMod.push(ITEMS.recmod); }
-  if(isSyncrolab) { dptoMod.push(ITEMS.cajaLab); }
-  if(isMant)      dptoMod.push(ITEMS.mantmod);
-  // Admin ve también todas las pantallas HK
-  if(isAdminU && !isHK){
-    dptoMod.push({sep:true,label:'HOUSEKEEPING'});
-    dptoMod.push(ITEMS.hkPlan);
-    dptoMod.push(ITEMS.hkZonas);
-    dptoMod.push(ITEMS.hkRevision);
-    dptoMod.push(ITEMS.hkDash);
-    dptoMod.push(ITEMS.hkConfig);
+  // ── GRUPO 3: OPERATIVIDAD (jefes / admin) ────────────────────────────
+  var operatividad = [];
+  if(isJefe) {
+    operatividad.push(ITEMS.validacion);
+    operatividad.push(ITEMS.fio);
+    if(isGob) operatividad.push(ITEMS.hkPlan); // Gobernanta / Admin planifica rutas
   }
 
-  // ── ZONA 3: Gestión (solo jefe/admin) ─────────────────────────────
-  var gestion = [];
-  if(isJefe){
-    gestion.push(ITEMS.validacion);
-    gestion.push(ITEMS.dashboard);
+  // ── GRUPO 4: DASHBOARDS (jefes / admin) ──────────────────────────────
+  var dashboards = [];
+  if(isJefe) {
+    dashboards.push(ITEMS.dashboard);
+    if(isAdminU || isGob)     dashboards.push(ITEMS.hkDash);
+    dashboards.push(ITEMS.incentivos); // vista gestión de incentivos
   }
-  if(isAdminU){
-    gestion.push(ITEMS.maestro);
-    gestion.push(ITEMS.export);
-  }
-  if(isJefe) gestion.push(ITEMS.fio);
-  if(isJefe) gestion.push(ITEMS.incentivos);
 
-  // Devolvemos array plano con separadores marcados para buildNav
-  var out = [].concat(navComun);
-  if(dptoMod.length){ out.push({sep:true,label:'MI DEPARTAMENTO'}); out = out.concat(dptoMod); }
-  if(gestion.length){ out.push({sep:true,label:'GESTIÓN'});         out = out.concat(gestion); }
-  // Info siempre primero
-  out.unshift(ITEMS.readme);
+  // ── GRUPO 5: CONFIGURACIÓN (admin + gobernanta) ───────────────────────
+  var config = [];
+  if(isAdminU) {
+    config.push(ITEMS.maestro);
+    config.push(ITEMS.export);
+    config.push(ITEMS.hkZonas);
+    config.push(ITEMS.hkRevision);
+    config.push(ITEMS.hkConfig);
+  } else if(isGob) {
+    config.push(ITEMS.hkZonas);
+    config.push(ITEMS.hkRevision);
+    config.push(ITEMS.hkConfig);
+  }
+
+  // ── Ensamblar ────────────────────────────────────────────────────────
+  var out = [{sep:true, label:'MI DÍA'}].concat(miDia);
+  out.push({sep:true, label:'RESUMEN PERSONAL'});
+  out = out.concat(resumen);
+  if(operatividad.length) { out.push({sep:true, label:'OPERATIVIDAD'}); out = out.concat(operatividad); }
+  if(dashboards.length)   { out.push({sep:true, label:'DASHBOARDS'}); out = out.concat(dashboards); }
+  if(config.length)       { out.push({sep:true, label:'CONFIGURACIÓN'}); out = out.concat(config); }
   return out;
 }
 
