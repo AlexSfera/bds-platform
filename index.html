@@ -1744,16 +1744,20 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <div class="grid2" style="gap:12px;">
       <div class="fg sp2"><label>Nombre <span class="req">*</span></label><input type="text" id="emp-nombre"></div>
       <div class="fg"><label>Área</label><select id="emp-area">
-        <optgroup label="Restaurante">
+        <optgroup label="Restaurante / F&amp;B">
           <option>Sala</option>
           <option>Cocina</option>
           <option>Friegue</option>
         </optgroup>
-        <optgroup label="Hotel">
+        <optgroup label="Recepción / Hotel">
           <option>Recepción</option>
           <option>Recepción SFERA</option>
+        </optgroup>
+        <optgroup label="Housekeeping">
           <option>Housekeeping</option>
           <option>Limpieza</option>
+        </optgroup>
+        <optgroup label="Mantenimiento">
           <option>Mantenimiento</option>
         </optgroup>
         <optgroup label="SYNCROLAB">
@@ -1784,17 +1788,12 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <option>Ayudante camarero</option>
     <option>Ayudante camarera</option>
   </optgroup>
-  <optgroup label="Dirección / F&amp;B">
-    <option>F&amp;B Manager</option>
-    <option>Administrador</option>
-    <option>Responsable</option>
-  </optgroup>
-  <optgroup label="Otros">
-    <option>Técnico</option>
+  <optgroup label="Recepción / Hotel">
+    <option>Jefe de Recepción</option>
+    <option>Subjefe de Recepción</option>
     <option>Recepcionista</option>
-    <option>Entrenador</option>
-    <option>Fisioterapeuta</option>
-    <option>Otro</option>
+    <option>Ayudante de Recepción</option>
+    <option>Auditor de Noche</option>
   </optgroup>
   <optgroup label="Housekeeping">
     <option>Gobernanta</option>
@@ -1805,6 +1804,10 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <option>Ayudante camarera de pisos</option>
     <option>Lavandería</option>
   </optgroup>
+  <optgroup label="Mantenimiento">
+    <option>Jefe de Mantenimiento</option>
+    <option>Técnico</option>
+  </optgroup>
   <optgroup label="SYNCROLAB">
     <option>Club Manager</option>
     <option>Coordinador(a) de Atención al Cliente</option>
@@ -1813,6 +1816,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <option>Atención al Cliente</option>
     <option>Entrenador(a)</option>
     <option>Fisioterapeuta</option>
+  </optgroup>
+  <optgroup label="Dirección / F&amp;B">
+    <option>F&amp;B Manager</option>
+    <option>Administrador</option>
+    <option>Responsable</option>
   </optgroup>
 </select></div>
       <div class="fg"><label>PIN (4-6 dígitos) <span class="req">*</span></label><input type="text" id="emp-pin" maxlength="6"></div>

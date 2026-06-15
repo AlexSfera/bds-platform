@@ -157,6 +157,7 @@ const AREA_GROUPS = {
   'Housekeeping':    ['Housekeeping', 'Limpieza'],
   'Limpieza':        ['Housekeeping', 'Limpieza'],
   'SYNCROLAB':       ['SYNCROLAB', 'SyncroLab', 'Recepción SYNCROLAB', 'Entrenadores', 'Fisioterapeutas', 'Clínica'],
+  'Recepción SYNCROLAB': ['SYNCROLAB', 'SyncroLab', 'Recepción SYNCROLAB', 'Entrenadores', 'Fisioterapeutas', 'Clínica'],
   'Mantenimiento':   ['Mantenimiento'],
   'Economato':       ['Economato'],
   'Administración':  ['Administración']
