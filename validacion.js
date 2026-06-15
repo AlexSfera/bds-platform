@@ -5,6 +5,7 @@
 //           portal PIN de entrada, funciones de navegación
 // ═══════════════════════════════════════════════════════════════
 
+
 // ── DELETE SHIFT (admin only) ──
 async function deleteShift(shiftId){
   if(currentUser.rol!=='admin') return;
@@ -54,41 +55,25 @@ async function openShiftDetail(shiftId){
   if(s.checklist_items){
     try{
       var chk = JSON.parse(s.checklist_items);
-      // ── Etiquetas de checklist según departamento real del turno ──
-      var _va = s.area||''; var _vs = (s.servicio||'').toLowerCase();
-      var items = (function(){
-        if(_va==='Friegue'||s.puesto==='Friegue') return typeof CHK_FRIEGUE_ITEMS!=='undefined'?CHK_FRIEGUE_ITEMS:null;
-        if(_va==='Sala') return typeof CHK_SALA_ITEMS!=='undefined'?CHK_SALA_ITEMS:null;
-        if(_va==='F&B') return typeof CHK_FNB_ITEMS!=='undefined'?CHK_FNB_ITEMS:null;
-        if(_va==='Recepción'){
-          if(_vs.indexOf('noche')>=0) return typeof CHK_REC_NOCHE_ITEMS!=='undefined'?CHK_REC_NOCHE_ITEMS:null;
-          if(_vs.indexOf('tarde')>=0) return typeof CHK_REC_TARDE_ITEMS!=='undefined'?CHK_REC_TARDE_ITEMS:null;
-          return typeof CHK_REC_MANANA_ITEMS!=='undefined'?CHK_REC_MANANA_ITEMS:null;
-        }
-        if(/syncrolab/i.test(_va)){
-          if(_vs.indexOf('tarde')>=0) return typeof CHK_LAB_TARDE_ITEMS!=='undefined'?CHK_LAB_TARDE_ITEMS:null;
-          return typeof CHK_LAB_MANANA_ITEMS!=='undefined'?CHK_LAB_MANANA_ITEMS:null;
-        }
-        if(/housekeeping|\bhk\b|limpieza/i.test(_va)) return null; // sin checklist HK
-        return typeof CHK_COCINA_ITEMS!=='undefined'?CHK_COCINA_ITEMS:null;
-      })();
+      var items = _valChecklistItems(s);
       var done = chk.filter(Boolean).length;
       html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">';
       html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:10px;">2 · CHECKLIST ('+done+'/'+chk.length+' completados)</div>';
-      html += '<div style="display:flex;flex-direction:column;gap:4px;">';
       if(!items){
-        html += '<div style="font-size:12px;color:var(--text3);font-style:italic;">No hay checklist configurado para este departamento.</div>';
+        html += '<div style="color:var(--text3);font-size:12px;">No hay checklist configurado para este departamento.</div>';
       } else {
-        chk.forEach(function(checked,i){
-          if(i<items.length){
-            html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);">'
-              +'<div style="width:18px;height:18px;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:'+(checked?'var(--green)':'var(--bg4)')+';border:1px solid '+(checked?'var(--green)':'var(--border)')+';font-size:11px;">'+(checked?'✓':'')+'</div>'
-              +'<span style="color:'+(checked?'var(--text)':'var(--text3)')+'">'+items[i]+'</span>'
-              +'</div>';
-          }
-        });
+      html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+      chk.forEach(function(checked,i){
+        if(i<items.length){
+          html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);">'
+            +'<div style="width:18px;height:18px;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:'+(checked?'var(--green)':'var(--bg4)')+';border:1px solid '+(checked?'var(--green)':'var(--border)')+';font-size:11px;">'+(checked?'✓':'')+'</div>'
+            +'<span style="color:'+(checked?'var(--text)':'var(--text3)')+'">'+items[i]+'</span>'
+            +'</div>';
+        }
+      });
+      html += '</div>';
       }
-      html += '</div></div>';
+      html += '</div>';
     }catch(e){}
   }
 
@@ -402,7 +387,7 @@ async function saveReopenShift() {
 function canSeeHypoxicTab(user){
   if(!user) return false;
   if(typeof isAdmin === 'function' && isAdmin(user)) return true;
-  if(user.rol === 'jefe_recepcion') return true;
+  if(typeof canValidateDepartment==='function' && canValidateDepartment(user,'Recepción')) return true;
   if((user.area||'').toLowerCase() === 'mantenimiento') return true;
   return false;
 }
@@ -481,8 +466,7 @@ async function renderValHypoxicList(){
   }
 
   var isAdminU = (typeof isAdmin === 'function') && isAdmin(currentUser);
-  var isJefeRec = currentUser && currentUser.rol === 'jefe_recepcion';
-  var canEdit = isAdminU || isJefeRec;
+  var canEdit = isAdminU || (typeof canValidateDepartment==='function' && canValidateDepartment(currentUser,'Recepción'));
 
   var rows = all.map(function(h){
     var types = '';
@@ -588,7 +572,7 @@ async function renderValCajaList() {
       var difColor = Math.abs(difOp)<0.01?'var(--green)':Math.abs(difOp)>5?'var(--red)':'var(--amber)';
       var isPendiente = c.estado!=='Validado final';
       var isAdmin = currentUser.rol==='admin';
-      var canValidar = isAdmin||currentUser.rol==='fb';
+      var canValidar = isAdmin || (typeof canValidateDepartment==='function' && canValidateDepartment(currentUser,'Sala'));
       var totalPens = (parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0);
       // BUG-CAJ-04: Total ajustes
       var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2)+'€' : '—';
@@ -638,8 +622,8 @@ async function renderValCajaRecepcion(deptArg) {
   if(!block || !el) return;
 
   var isAdminU  = currentUser && currentUser.rol === 'admin';
-  var isJefeRec = currentUser && currentUser.rol === 'jefe_recepcion';
-  if(!isAdminU && !isJefeRec){ block.style.display = 'none'; return; }
+  var canValRec = (typeof canValidateDepartment==='function') && canValidateDepartment(currentUser,'Recepción');
+  if(!isAdminU && !canValRec){ block.style.display = 'none'; return; }
 
   // Regla de departamento: mostrar solo cuando dept = Recepción o Todos (vacío)
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
@@ -717,7 +701,7 @@ async function renderValCajaLab(deptArg){
   var el    = document.getElementById('val-lab-caja-table');
   if(!block || !el) return;
   var isAdminU  = currentUser && currentUser.rol === 'admin';
-  var isValidador = currentUser && (currentUser.rol === 'jefe_recepcion' || currentUser.rol === 'coord_recepcion_syncrolab');
+  var isValidador = (typeof canValidateDepartment==='function') && canValidateDepartment(currentUser,'SYNCROLAB');
   if(!isAdminU && !isValidador){ block.style.display = 'none'; return; }
   // Regla dept: admin ve siempre; coordinadora solo en contexto SYNCROLAB
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
@@ -921,7 +905,7 @@ async function validarCierre(cajaId) {
   var currentEstado = c ? c.estado : 'Pendiente';
   var nextEstado = 'Cuadrado Sala';
   if(currentEstado === 'Cuadrado Sala') nextEstado = 'Validado final';
-  else if(currentUser.rol==='admin'||currentUser.rol==='fb') nextEstado = 'Cuadrado Sala';
+  else if(typeof canValidateDepartment==='function' && canValidateDepartment(currentUser,'Sala')) nextEstado = 'Cuadrado Sala';
 
   await dbUpdate('sala_cash_closures', cajaId, {
     estado: nextEstado,
