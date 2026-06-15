@@ -774,14 +774,26 @@ var HK_INCI_TIPOS = [
 
 function hkToggleInciPanel(){
   var panel = document.getElementById('hk-exec-inci-panel');
-  if(!panel) return;
-  var isHidden = panel.style.display === 'none' || panel.style.display === '';
-  panel.style.display = isHidden ? 'block' : 'none';
+  if(!panel){
+    // Panel no existe — reconstruir el modal completo
+    var oldModal = document.getElementById('modal-hk-exec');
+    if(oldModal) oldModal.parentNode.removeChild(oldModal);
+    injectHKHTML && injectHKHTML();
+    toast('Recarga la página (Cmd+Shift+R) y vuelve a intentarlo','warn');
+    return;
+  }
+  var isHidden = (panel.style.display === 'none' || panel.style.display === '');
   if(isHidden){
-    // Scroll al panel para que sea visible
-    setTimeout(function(){
-      panel.scrollIntoView({behavior:'smooth', block:'nearest'});
-    }, 50);
+    panel.style.display = 'block';
+    // Scroll dentro del modal container
+    var modalInner = panel.closest('[style*="overflow-y"]') || panel.parentElement;
+    if(modalInner){
+      setTimeout(function(){
+        modalInner.scrollTop = modalInner.scrollHeight;
+      }, 30);
+    }
+  } else {
+    panel.style.display = 'none';
   }
 }
 
