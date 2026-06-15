@@ -11,6 +11,7 @@ var LAB_CHARGES_TABLE = 'syncrolab_room_charges';
 var _labTipoTurno = null;
 var _labTraspasoEditId = null;
 var _labCierreEditId = null;
+var _labPrevEstado = null; // estado del registro al abrir en edición
 var _labCharges = [];   // cargos a habitación vía MEWS (pendientes de conciliar en Recepción)
 
 // ── Editor de cargos a habitación (MEWS) ─────────────────────────────────
@@ -301,6 +302,7 @@ function openLabTraspasoModal(existingId){
   } else {
     dbGetAll(LAB_TABLE).then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; }); if(!row) return;
+      _labPrevEstado = row.estado || null;
       _labTipoTurno = row.turno || _labTipoTurno;
       if(label) label.textContent = _labTipoTurno || '—';
       function set(id,v){ var el=document.getElementById(id); if(el&&v!=null) el.value=v; }
@@ -378,7 +380,7 @@ async function submitLabTraspaso(){
     comentario_traspaso:(document.getElementById('lab-tras-comentario')||{value:''}).value.trim()||null,
     diferencia_total_syncrolab:dif,
     explicacion_diferencia:exp||null,
-    estado:'pendiente_validacion', updated_at:ts
+    estado:(_labTraspasoEditId && _labPrevEstado==='correccion') ? 'corregido' : 'pendiente_validacion', updated_at:ts
   };
   if(!_labTraspasoEditId) record.created_at=ts;
   try{
@@ -426,6 +428,7 @@ function openLabCierreModal(existingId){
   } else {
     dbGetAll(LAB_TABLE).then(function(rows){
       var row=rows.find(function(r){ return r.id===existingId; }); if(!row) return;
+      _labPrevEstado = row.estado || null;
       _labTipoTurno=row.turno||_labTipoTurno; if(label) label.textContent=_labTipoTurno||'—';
       function set(id,v){ var el=document.getElementById(id); if(el&&v!=null) el.value=v; }
       set('lab-c-nub-fondo',(parseFloat(row.fondo_recibido_nubimed)||0).toFixed(2));
@@ -504,7 +507,7 @@ async function submitLabCierre(){
     fecha:today(), turno:turno, tipo:'cierre',
     responsable_id:currentUser.id, responsable_nombre:currentUser.nombre,
     explicacion_diferencia:exp||null,
-    estado:'pendiente_validacion', updated_at:ts
+    estado:(_labCierreEditId && _labPrevEstado==='correccion') ? 'corregido' : 'pendiente_validacion', updated_at:ts
   });
   if(!_labCierreEditId) rec.created_at=ts;
   try{

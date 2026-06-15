@@ -734,9 +734,10 @@ async function renderValCajaLab(deptArg){
       ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
       : '<span class="badge" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7;">💰 Cierre</span>';
     var est = r.estado || 'pendiente_validacion';
-    var estBadge = est === 'validado' ? '<span class="badge b-green">✓ Validado</span>'
+    var estBadge = est === 'validado'    ? '<span class="badge b-green">✓ Validado</span>'
                  : est === 'correccion' ? '<span class="badge b-orange">↩ Corrección</span>'
-                 : est === 'cerrado' ? '<span class="badge b-gray">● Cerrado</span>'
+                 : est === 'corregido'  ? '<span class="badge b-blue">✔ Corregido</span>'
+                 : est === 'cerrado'    ? '<span class="badge b-gray">● Cerrado</span>'
                  : '<span class="badge b-gray">● Pendiente</span>';
     var verFn = esTraspaso ? 'openLabTraspasoModal' : 'openLabCierreModal';
     var acc = '<div style="display:flex;flex-direction:column;gap:4px;">'

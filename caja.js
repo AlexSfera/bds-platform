@@ -301,6 +301,7 @@ function openCajaForm(existingId) {
       }
     });
   } else {
+      window._cajaPrevEstado = row ? (row.estado || null) : null;
     dbGetAll('sala_cash_closures').then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
       if(!row) return;
@@ -544,7 +545,7 @@ async function saveCajaForm() {
     total_medios_pago: mediosPago,
     total_ajustes: ajustes,
     comentario: comentario,
-    estado: 'Pendiente validación',
+    estado: (_editingCajaId && (window._cajaPrevEstado==='A revisar' || window._cajaPrevEstado==='En corrección')) ? 'corregido' : 'Pendiente validación',
     created_at: localTs(),
     updated_at: localTs()
   };
@@ -1460,6 +1461,7 @@ function bCajaEstado(e){
   if(e==='sin_control') return '<span class="badge b-gray">◐ Sin control</span>';
   if(e==='validado'||e==='Validado') return '<span class="badge b-green">✓ Validado</span>';
   if(e==='reabierto') return '<span class="badge b-orange">↩ Reabierto</span>';
+  if(e==='corregido') return '<span class="badge b-blue">✔ Corregido</span>';
   if(e==='pendiente_validacion') return '<span class="badge b-gray">● Pendiente validación</span>';
   return '<span class="badge b-gray">'+e+'</span>';
 }
