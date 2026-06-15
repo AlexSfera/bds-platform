@@ -723,7 +723,11 @@ async function renderValCajaLab(deptArg){
 
   if(!rows.length){ el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin operaciones de caja SYNCROLAB en este periodo</div></div>'; return; }
 
-  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Responsable</th><th>Δ Nubimed</th><th>Δ VirtuGym</th><th>Δ Total</th><th>Estado</th><th>Acción</th></tr>';
+  // Precargar cargos MEWS para mostrar total por cierre
+  var allCharges = [];
+  try { allCharges = await getDB('syncrolab_room_charges'); } catch(e){ allCharges = []; }
+
+  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Responsable</th><th>Cargos MEWS</th><th>Δ Nubimed</th><th>Δ VirtuGym</th><th>Δ Total</th><th>Estado</th><th>Acción</th></tr>';
   rows.forEach(function(r){
     var difN = parseFloat(r.diferencia_total_nubimed || 0);
     var difV = parseFloat(r.diferencia_total_virtugym || 0);
@@ -734,16 +738,26 @@ async function renderValCajaLab(deptArg){
       ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
       : '<span class="badge" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid #a855f7;">💰 Cierre</span>';
     var est = r.estado || 'pendiente_validacion';
-    var estBadge = est === 'validado'    ? '<span class="badge b-green">✓ Validado</span>'
-                 : est === 'correccion' ? '<span class="badge b-orange">↩ Corrección</span>'
-                 : est === 'corregido'  ? '<span class="badge b-blue">✔ Corregido</span>'
-                 : est === 'cerrado'    ? '<span class="badge b-gray">● Cerrado</span>'
-                 : '<span class="badge b-gray">● Pendiente</span>';
+    var estBadge = est === 'validado'
+      ? '<span class="badge b-green">✓ Validado</span>'
+      : est === 'correccion' ? '<span class="badge b-orange">↩ Corrección</span>'
+      : est === 'corregido'  ? '<span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid #ef4444;">✔ Corregido</span>'
+      : est === 'cerrado'    ? '<span class="badge b-gray">● Cerrado</span>'
+      : '<span class="badge b-gray">● Pendiente</span>';
+    // Cargos MEWS vinculados a este cierre/traspaso
+    var cargosDelCierre = allCharges.filter(function(c){
+      return c.syncrolab_cash_closure_id === r.id || c.cash_closure_id === r.id;
+    });
+    var totalCargos = cargosDelCierre.reduce(function(s,c){ return s + (parseFloat(c.importe)||0); }, 0);
+    var cargosCell = cargosDelCierre.length
+      ? '<td style="font-family:var(--font-mono);font-size:11px;color:#f59e0b;" title="'+cargosDelCierre.length+' cargo(s) a habitación">'+totalCargos.toFixed(2)+'€ ('+cargosDelCierre.length+')</td>'
+      : '<td style="color:var(--text3);font-size:11px;">—</td>';
     var verFn = esTraspaso ? 'openLabTraspasoModal' : 'openLabCierreModal';
+    var puedeValidar = isValidador && est !== 'validado';
     var acc = '<div style="display:flex;flex-direction:column;gap:4px;">'
       + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
-      + ((est !== 'validado') ? '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="validarCajaLab(\''+r.id+'\')">✓ Validar</button>' : '')
-      + ((est !== 'correccion' && est !== 'validado') ? '<button class="btn btn-warn btn-sm" onclick="correccionCajaLab(\''+r.id+'\')">↩ Corrección</button>' : '')
+      + (puedeValidar ? '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="validarCajaLab(\''+r.id+'\')">✓ Validar</button>' : '')
+      + (isAdminU && est !== 'validado' ? '<button class="btn btn-warn btn-sm" onclick="correccionCajaLab(\''+r.id+'\')">↩ Corrección</button>' : '')
       + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaLab(\''+r.id+'\')">🗑 Eliminar</button>' : '')
       + '</div>';
     html += '<tr>'
@@ -751,6 +765,7 @@ async function renderValCajaLab(deptArg){
       + '<td>' + (r.turno || '—') + '</td>'
       + '<td>' + tipoBadge + '</td>'
       + '<td style="font-weight:600">' + (r.responsable_nombre || '—') + '</td>'
+      + cargosCell
       + dc(difN) + dc(difV) + dc(difT)
       + '<td>' + estBadge + '</td>'
       + '<td style="white-space:nowrap">' + acc + '</td>'
@@ -771,7 +786,7 @@ async function validarCajaLab(id){
   try{
     await fetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
       method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body: JSON.stringify({ estado:'validado', validado_por:currentUser.nombre, validado_ts:localTs(), updated_at:localTs() })
+      body: JSON.stringify({ estado:'validado', updated_at:localTs() })
     });
     invalidateCache('syncrolab_cash_closures');
     if(typeof auditLog==='function') auditLog('LAB_CAJA_VALIDAR', currentUser.nombre+' validó caja SYNCROLAB '+row.fecha+' turno '+row.turno);

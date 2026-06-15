@@ -315,6 +315,11 @@ function openLabTraspasoModal(existingId){
       set('lab-tras-comentario', row.comentario_traspaso);
       set('lab-tras-dif-exp', row.explicacion_diferencia);
       calcLabTraspaso();
+      // Cargar cargos MEWS vinculados
+      dbGetAll(LAB_CHARGES_TABLE).then(function(charges){
+        _labCharges = charges.filter(function(c){ return c.syncrolab_cash_closure_id === existingId || c.cash_closure_id === existingId; });
+        renderLabCharges('lab-tras-charges');
+      });
     });
   }
   var m = document.getElementById('modal-lab-traspaso'); if(m) m.style.display = 'flex';
@@ -442,6 +447,11 @@ function openLabCierreModal(existingId){
       });
       set('lab-c-dif-exp', row.explicacion_diferencia);
       calcLabCierre();
+      // Cargar cargos MEWS vinculados
+      dbGetAll(LAB_CHARGES_TABLE).then(function(charges){
+        _labCharges = charges.filter(function(c){ return c.syncrolab_cash_closure_id === existingId || c.cash_closure_id === existingId; });
+        renderLabCharges('lab-c-charges');
+      });
     });
   }
   var m=document.getElementById('modal-lab-cierre'); if(m) m.style.display='flex';
