@@ -1451,6 +1451,11 @@ function bCajaEstado(e){
   if(e==='Confirmado PMS') return '<span class="badge b-green">✓ Confirmado PMS</span>';
   if(e==='Validado final') return '<span class="badge b-green" style="font-weight:700;">✓✓ Validado Final</span>';
   if(e==='A revisar') return '<span class="badge b-red">↩ A revisar</span>';
+  if(e==='con_error') return '<span class="badge b-red">⚠ Con error</span>';
+  if(e==='sin_control') return '<span class="badge b-gray">◐ Sin control</span>';
+  if(e==='validado'||e==='Validado') return '<span class="badge b-green">✓ Validado</span>';
+  if(e==='reabierto') return '<span class="badge b-orange">↩ Reabierto</span>';
+  if(e==='pendiente_validacion') return '<span class="badge b-gray">● Pendiente validación</span>';
   return '<span class="badge b-gray">'+e+'</span>';
 }
 

@@ -878,7 +878,9 @@ async function openCajaSummary(cajaId, showValidar) {
     + '</div>'
     + '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">'
     + (showValidar && c.estado !== 'Validado final'
-        ? '<button class="btn btn-success" onclick="validarCierre(\''+cajaId+'\');closeModal(\'modal-caja-summary\')">✓ Confirmar Validación</button>'
+        ? '<button class="btn btn-success" onclick="validarCierre(\''+cajaId+'\');closeModal(\'modal-caja-summary\')">✓ Validar</button>'
+          + '<button class="btn btn-warn" onclick="marcarCajaError(\'sala_cash_closures\',\''+cajaId+'\')">⚠ Marcar error</button>'
+          + '<button class="btn btn-secondary" onclick="marcarCajaSinControl(\'sala_cash_closures\',\''+cajaId+'\')">◐ Sin control</button>'
         : '')
     + '<button class="btn btn-secondary" onclick="var m=document.getElementById(\'modal-caja-summary\');if(m)m.style.display=\'none\'">Cerrar</button>'
     + '</div>';
@@ -898,6 +900,32 @@ async function openCajaSummary(cajaId, showValidar) {
   overlay.style.display = 'flex';
   document.getElementById('modal-caja-summary-body').innerHTML = html;
 }
+
+// Acciones de validación de caja (genéricas: sirven para Sala/Recepción/SYNCROLAB)
+async function marcarCajaError(table, id){
+  var c = prompt('Marcar CON ERROR — describe el error (obligatorio):');
+  if(c===null) return;
+  if(!c.trim()){ toast('Comentario obligatorio','err'); return; }
+  await dbUpdate(table, id, { estado:'con_error', validado_por:currentUser.nombre, validado_ts:localTs(), updated_at:localTs() });
+  invalidateCache(table);
+  if(typeof auditLog==='function') await auditLog('CAJA_CON_ERROR', currentUser.nombre+' · '+table+' · '+id+' · '+c.trim());
+  toast('Cierre marcado CON ERROR','ok');
+  var m=document.getElementById('modal-caja-summary'); if(m) m.style.display='none';
+  if(typeof renderValCajaList==='function') await renderValCajaList();
+}
+async function marcarCajaSinControl(table, id){
+  var c = prompt('SIN CONTROL — motivo (obligatorio):');
+  if(c===null) return;
+  if(!c.trim()){ toast('Motivo obligatorio','err'); return; }
+  await dbUpdate(table, id, { estado:'sin_control', validado_por:currentUser.nombre, validado_ts:localTs(), updated_at:localTs() });
+  invalidateCache(table);
+  if(typeof auditLog==='function') await auditLog('CAJA_SIN_CONTROL', currentUser.nombre+' · '+table+' · '+id+' · '+c.trim());
+  toast('Cierre marcado SIN CONTROL','ok');
+  var m=document.getElementById('modal-caja-summary'); if(m) m.style.display='none';
+  if(typeof renderValCajaList==='function') await renderValCajaList();
+}
+window.marcarCajaError = marcarCajaError;
+window.marcarCajaSinControl = marcarCajaSinControl;
 
 async function validarCierre(cajaId) {
   var data = await dbGetAll('sala_cash_closures');
