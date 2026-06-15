@@ -687,11 +687,6 @@ tr:hover td{background:rgba(255,255,255,.018);}
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background=''"><input type="radio" name="servicio-hk" value="Mañana" style="width:16px;height:16px;accent-color:#f97316;"> 🌅 Mañana</label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background=''"><input type="radio" name="servicio-hk" value="Tarde" style="width:16px;height:16px;accent-color:#f97316;"> 🌆 Tarde</label>
               </div>
-              <!-- Administración: Mañana / Tarde -->
-              <div id="t-servicio-adm" style="display:none;flex-wrap:wrap;gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
-                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Mañana" style="width:16px;height:16px;accent-color:#a855f7;"> 🌅 Mañana</label>
-                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Tarde" style="width:16px;height:16px;accent-color:#a855f7;"> 🌆 Tarde</label>
-              </div>
             </div></div>
           <div class="fg"><label>Horas trabajadas <span class="req">*</span></label><input type="number" id="t-horas" min="0.5" max="16" step="0.5" placeholder="8"></div>
           <div class="fg"><label>Responsable de turno <span class="req">*</span></label><select id="t-responsable" style="color:#111827;background:#ffffff;border:1px solid #d1d5db;"><option value="">— Seleccionar —</option></select></div>
@@ -1444,7 +1439,8 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
     <!-- Traspaso fondo -->
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin:14px 0 8px;">TRASPASO AL SIGUIENTE TURNO</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--font-mono);">Calculado = Fondo recibido + Cash MEWS − Retiro caja fuerte</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--font-mono);">Calculado = Fondo recibido + Cash MEWS − Retiro caja fuerte</div>
+    <div id="rec-retiro-resumen" style="display:none;font-family:var(--font-mono);font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:6px 10px;">⬇ Retiro caja fuerte: <span id="rec-retiro-resumen-val">0.00</span> €</div>
     <div class="fg" style="margin-bottom:8px;">
       <label>Fondo esperado a traspasar (€)</label>
       <div id="rec-fondo-esperado" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);padding:8px 0;">—</div>
@@ -1462,8 +1458,8 @@ tr:hover td{background:rgba(255,255,255,.018);}
     </div>
     <div id="rec-caja-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
     <div style="display:flex;gap:8px;">
-      <button onclick="closeRecCaja()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">← Volver al KPI</button>
-      <button onclick="submitRecCaja()" style="flex:2;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar y cerrar turno</button>
+      <button onclick="closeRecCajaModal()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">✕ Cancelar</button>
+      <button id="rec-caja-btn-guardar" onclick="submitRecCaja()" style="flex:2;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar cierre</button>
     </div>
   </div>
 </div>

@@ -234,8 +234,8 @@
     <div id="rec-fondo-dif" style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;">—</div>
     <div id="rec-caja-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
     <div style="display:flex;gap:8px;">
-      <button onclick="closeRecCaja()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">← Volver al KPI</button>
-      <button onclick="submitRecCaja()" style="flex:2;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar y cerrar turno</button>
+      <button onclick="closeRecCajaModal()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">✕ Cancelar</button>
+      <button id="rec-caja-btn-guardar" onclick="submitRecCaja()" style="flex:2;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💾 Guardar cierre</button>
     </div>
   </div>
 </div>`;
@@ -270,8 +270,10 @@ function updateRecTurnoStyle() {
 // KPI STATE
 // ═══════════════════════════════════════════════════════════════════════
 var _recKpiState = {};
+// ── alias: closeRecCaja no estaba definida — fix de producción ──
+function closeRecCaja(){ closeRecCajaModal(); }
+
 var _recCajaEditId = null;
-var _recPrevEstado = null; // estado del registro al abrir en edición
 
 function setRecKpi(key, val, btn) {
   _recKpiState[key] = val;
@@ -428,10 +430,8 @@ function openRecCajaModal(existingId) {
   if(existingId){
     getDB(REC_TABLE).then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
-      _recPrevEstado = row ? (row.estado || null) : null;
       if(!row) return;
       function set(id, val){ var el=document.getElementById(id); if(el && val!=null) el.value=val; }
-      // Campos reales de recepcion_cash
       set('rec-fondo-recibido',    row.fondo_recibido);
       set('rec-cash-mews',         row.cash_mews);
       set('rec-tarjeta-mews',      row.tarjeta_mews);
@@ -454,6 +454,39 @@ function openRecCajaModal(existingId) {
       set('rec-dif-exp',           row.explicacion_diferencia);
       set('rec-dif-accion',        row.accion_diferencia);
       calcRecDifs();
+
+      // Readonly: jefe_recepcion puede leer siempre; edita solo si estado='reabierto'
+      // Admin y fb pueden editar siempre
+      var esAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol === 'fb');
+      var estaReabierto = row.estado === 'reabierto';
+      var soloLectura = !esAdmin && !estaReabierto;
+
+      var btnGuardar = document.getElementById('rec-caja-btn-guardar');
+      if(soloLectura){
+        document.querySelectorAll('#modal-rec-caja input, #modal-rec-caja textarea').forEach(function(el){
+          if(!el.id || el.id !== 'rec-fondo-recibido') {
+            el.setAttribute('readonly', 'readonly');
+            el.style.opacity = '0.65';
+            el.style.cursor  = 'not-allowed';
+            el.style.pointerEvents = 'none';
+          }
+        });
+        document.querySelectorAll('#modal-rec-caja .tbtn').forEach(function(b){ b.style.pointerEvents='none'; b.style.opacity='0.5'; });
+        if(btnGuardar) btnGuardar.style.display = 'none';
+      } else {
+        // Edición activa: restaurar estado normal
+        document.querySelectorAll('#modal-rec-caja input, #modal-rec-caja textarea').forEach(function(el){
+          el.removeAttribute('readonly');
+          el.style.opacity = '';
+          el.style.cursor  = '';
+          el.style.pointerEvents = '';
+        });
+        document.querySelectorAll('#modal-rec-caja .tbtn').forEach(function(b){ b.style.pointerEvents=''; b.style.opacity=''; });
+        if(btnGuardar){ btnGuardar.style.display = ''; btnGuardar.textContent = '💾 Guardar corrección'; }
+        // Re-aplicar readonly al fondo recibido (siempre bloqueado)
+        var fondoRO = document.getElementById('rec-fondo-recibido');
+        if(fondoRO){ fondoRO.setAttribute('readonly','readonly'); fondoRO.style.opacity='0.6'; fondoRO.style.cursor='not-allowed'; }
+      }
     });
   }
 
@@ -560,7 +593,7 @@ async function submitRecCaja() {
     responsable_nombre:        currentUser.nombre,
     usuario_id:                currentUser.id,
     usuario_nombre:            currentUser.nombre,
-    estado: (_recCajaEditId && (_recPrevEstado==='reabierto' || _recPrevEstado==='En corrección')) ? 'corregido' : 'cerrado',
+    estado:                    'cerrado',
     tipo:                      'cierre',
     // Fondos
     fondo_recibido:            fondoRec,
@@ -669,7 +702,6 @@ async function renderRecepcionCajaList() {
     var estado = r.estado || 'cerrado';
     var estadoBadge = estado === 'validado'      ? '<span class="badge b-green">✓ Validado</span>'
                     : estado === 'reabierto'     ? '<span class="badge b-orange">↩ Reabierto</span>'
-                    : estado === 'corregido'     ? '<span class="badge b-blue">✔ Corregido</span>'
                     : estado === 'con_error'     ? '<span class="badge b-red">✗ Con error</span>'
                     : estado === 'sin_control'   ? '<span class="badge b-gray">~ Sin control</span>'
                     : (estado === 'cerrado' || estado === 'Cerrado' || estado === 'CERRADO')
@@ -919,6 +951,14 @@ function calcRecDifs() {
   if(fondoDifEl){
     fondoDifEl.textContent = Math.abs(difFondo2)<0.01 ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: '+(difFondo2>=0?'+':'')+difFondo2.toFixed(2)+'€';
     fondoDifEl.style.color = Math.abs(difFondo2)<0.01 ? 'var(--green)' : 'var(--red)';
+  }
+
+  // Banner retiro caja fuerte — visible si importe > 0
+  var retiroRes = document.getElementById('rec-retiro-resumen');
+  var retiroVal = document.getElementById('rec-retiro-resumen-val');
+  if(retiroRes && retiroVal){
+    retiroRes.style.display = cfImporte > 0 ? 'block' : 'none';
+    retiroVal.textContent = cfImporte.toFixed(2);
   }
 
   var hasError = Math.abs(difTotal)>0.01;
@@ -1175,7 +1215,6 @@ function openRecTraspasoModal(existingId) {
   } else {
     getDB(REC_TABLE).then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
-      _recPrevEstado = row ? (row.estado || null) : null;
       if(!row) return;
       _recTipoTurno = row.turno || _recTipoTurno;
       if(label) label.textContent = row.turno || '—';
@@ -1306,7 +1345,7 @@ async function submitRecTraspaso() {
     fecha:                   fecha,
     turno:                   turno,
     tipo:                    'traspaso',
-    estado: (_recTraspasoEditId && (_recPrevEstado==='reabierto' || _recPrevEstado==='En corrección')) ? 'corregido' : 'cerrado',
+    estado:                  'cerrado',
     responsable_id:          currentUser.id,
     responsable_nombre:      currentUser.nombre,
     usuario_id:              currentUser.id,
