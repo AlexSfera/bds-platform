@@ -1119,7 +1119,67 @@ function buildInfoContent(area){
   }
 
   // ════════════════════════════════════════════════════════════════════
-  // ─── ADMINISTRACIÓN / OTROS ─────────────────────────────────────────
+  // ─── ADMINISTRACIÓN ──────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  if(area === 'Administración'){
+    return ''
+    + _infoCard('📋 Administración / RRHH — ¿Para qué rellenas tu turno?',
+        'Para que la dirección tenga trazabilidad real de la jornada administrativa: '
+      + '<b>qué gestiones quedan abiertas</b> (nóminas, contratos, proveedores, fichajes), '
+      + '<b>qué incidencias ocurrieron</b> (disciplinarias, laborales, de sistema) '
+      + 'y <b>qué tareas se delegan</b> a otros departamentos. '
+      + 'Sin registro no hay control — sin control no hay empresa.',
+        '#a855f7')
+
+    + _infoCard('📝 Mi Turno — Campo a campo',
+        '<b>'+_req('Fecha')+'</b><br>Día de la jornada que estás cerrando. Por defecto hoy.<br><br>'
+      + '<b>'+_req('Turno')+'</b><br>Mañana (hasta ~14:00) o Tarde (14:00+). Solo uno por registro.<br><br>'
+      + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales de la jornada.<br><br>'
+      + '<b>'+_req('Responsable de turno')+'</b><br>Quién cubrió la jornada. Normalmente tú mismo.<br><br>'
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
+      + '<u>SÍ</u> si queda algo abierto que debe continuar en la próxima jornada administrativa. '
+      + 'Ej: "Contrato de Nombre pendiente de firma", "Factura proveedor X por confirmar", "Fichaje de Nombre por revisar". '
+      + '<i>Si la acción la debe tomar otro dpto → crea TAREA, no gestión.</i><br><br>'
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
+      + '<u>SÍ</u> si ocurrió algo que requiere <b>decisión de dirección</b>. '
+      + 'Ej: ausencia no justificada, conflicto interno, error de nómina, acceso no autorizado a sistema. '
+      + 'Tú la abres con descripción + acción tomada. <b>La cierra el director.</b>',
+        '#a855f7')
+
+    + bloqueDiferencias
+
+    + _infoCard('📌 Tipos de gestión más frecuentes en Administración',
+        '• Documentación / contrato pendiente<br>'
+      + '• Factura / pago pendiente<br>'
+      + '• Nómina / variable pendiente<br>'
+      + '• Gestión con proveedor pendiente<br>'
+      + '• Alta / baja / gestión RRSS pendiente<br>'
+      + '• Incidencia de fichaje<br>'
+      + '• Seguimiento de incidencia disciplinaria',
+        '#a855f7')
+
+    + _infoCard('⚠ Tipos de incidencia más frecuentes en Administración',
+        '• Ausencia no justificada / fichaje incorrecto<br>'
+      + '• Incidencia disciplinaria / conflicto interno<br>'
+      + '• Error de datos de empleado<br>'
+      + '• Nómina / variable incorrecta<br>'
+      + '• Acceso a sistema pendiente / error<br>'
+      + '• Factura / pago con problema<br>'
+      + '• Proveedor que incumple',
+        '#f59e0b')
+
+    + _infoCard('✅ Checklist antes de guardar',
+        '☐ Turno (Mañana/Tarde) seleccionado<br>'
+      + '☐ Horas y responsable correctos<br>'
+      + '☐ Gestión SÍ/NO marcada<br>'
+      + '☐ Incidencia SÍ/NO marcada<br>'
+      + '☐ Si la acción la hace otro dpto → tarea creada al destinatario correcto',
+        '#10b981')
+    + jefe;
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // ─── OTROS / FALLBACK ────────────────────────────────────────────────
   // ════════════════════════════════════════════════════════════════════
   return ''
     + _infoCard('📋 '+area+' — ¿Para qué rellenas tu turno?',

@@ -186,6 +186,23 @@ var INCIDENCIA_TIPOS = {
     'Nómina / variable pendiente',
     'Retraso',
     'Otro'
+  ],
+
+  'Administración': [
+    'Documentación / contrato pendiente',
+    'Factura / pago pendiente',
+    'Nómina / variable pendiente',
+    'Alta / baja / gestión RRSS',
+    'Incidencia de fichaje',
+    'Error de datos empleado',
+    'Incidencia disciplinaria / conflicto interno',
+    'Proveedor / presupuesto pendiente',
+    'Comunicación interna pendiente',
+    'Revisión de desempeño',
+    'Formación pendiente',
+    'Acceso / sistema pendiente',
+    'Retraso',
+    'Otro'
   ]
 
 };
@@ -291,6 +308,17 @@ var GESTION_TIPOS = {
     'Documentación pendiente',
     'Comunicación pendiente',
     'Gestión administrativa pendiente',
+    'Otro'
+  ],
+
+  'Administración': [
+    'Documentación / contrato pendiente',
+    'Factura / pago pendiente',
+    'Nómina / variable pendiente',
+    'Gestión con proveedor pendiente',
+    'Gestión RRSS / alta / baja pendiente',
+    'Comunicación pendiente',
+    'Seguimiento de incidencia disciplinaria',
     'Otro'
   ]
 

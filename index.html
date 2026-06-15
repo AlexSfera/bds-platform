@@ -687,6 +687,11 @@ tr:hover td{background:rgba(255,255,255,.018);}
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background=''"><input type="radio" name="servicio-hk" value="Mañana" style="width:16px;height:16px;accent-color:#f97316;"> 🌅 Mañana</label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background=''"><input type="radio" name="servicio-hk" value="Tarde" style="width:16px;height:16px;accent-color:#f97316;"> 🌆 Tarde</label>
               </div>
+              <!-- Administración: Mañana / Tarde -->
+              <div id="t-servicio-adm" style="display:none;flex-wrap:wrap;gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Mañana" style="width:16px;height:16px;accent-color:#a855f7;"> 🌅 Mañana</label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Tarde" style="width:16px;height:16px;accent-color:#a855f7;"> 🌆 Tarde</label>
+              </div>
             </div></div>
           <div class="fg"><label>Horas trabajadas <span class="req">*</span></label><input type="number" id="t-horas" min="0.5" max="16" step="0.5" placeholder="8"></div>
           <div class="fg"><label>Responsable de turno <span class="req">*</span></label><select id="t-responsable" style="color:#111827;background:#ffffff;border:1px solid #d1d5db;"><option value="">— Seleccionar —</option></select></div>
@@ -784,7 +789,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
               <div class="task-gen-hdr">🔗 TAREA INTER-DEPARTAMENTO desde merma</div>
               <div class="grid2">
                 <div class="fg"><label>Departamento destinatario <span class="req">*</span></label>
-                  <select id="mt-dept"><option value="">— Seleccionar —</option><option>Cocina</option><option>Sala</option><option>Mantenimiento</option><option>Recepción</option><option>Administración</option><option>Economato</option><option>Housekeeping</option></select></div>
+                  <select id="mt-dept"><option value="">— Seleccionar —</option><option>Cocina</option><option>Sala</option><option>Mantenimiento</option><option>Recepción</option><option>Administración</option><option>Economato</option><option>Limpieza</option></select></div>
                 <div class="fg"><label>Prioridad <span class="req">*</span></label>
                   <select id="mt-prio"><option value="">— Seleccionar —</option><option>Alta</option><option>Media</option><option>Baja</option></select></div>
                 
@@ -831,7 +836,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
         <div class="fg"><label>Estado</label>
           <select id="tk-estado" onchange="renderTareas()"><option value="">Todos</option><option>Abierta</option><option>En proceso</option><option>Cerrada</option><option>Validada</option></select></div>
         <div class="fg"><label>Departamento</label>
-          <select id="tk-dept" onchange="renderTareas()"><option value="">Todos</option><option>Cocina</option><option>Sala</option><option>Mantenimiento</option><option>Recepción</option><option>Administración</option><option>Economato</option><option>Housekeeping</option></select></div>
+          <select id="tk-dept" onchange="renderTareas()"><option value="">Todos</option><option>Cocina</option><option>Sala</option><option>Mantenimiento</option><option>Recepción</option><option>Administración</option><option>Economato</option><option>Limpieza</option></select></div>
         <div class="fg"><label>Prioridad</label>
           <select id="tk-prio" onchange="renderTareas()"><option value="">Todas</option><option>Alta</option><option>Media</option><option>Baja</option></select></div>
         <div class="fg"><label>Origen</label>
@@ -1722,12 +1727,12 @@ tr:hover td{background:rgba(255,255,255,.018);}
     <div class="grid2" style="gap:12px;">
       
       <div class="fg"><label>Departamento destinatario <span class="req">*</span></label>
-        <select id="task-dept"><option value="">— Seleccionar —</option><option>Cocina</option><option>Sala</option><option>Mantenimiento</option><option>Recepción</option><option>Administración</option><option>Economato</option><option>Housekeeping</option></select></div>
+        <select id="task-dept"><option value="">— Seleccionar —</option><option>Cocina</option><option>Sala</option><option>Mantenimiento</option><option>Recepción</option><option>Administración</option><option>Economato</option><option>Limpieza</option></select></div>
       <div class="fg"><label>Prioridad <span class="req">*</span></label>
         <select id="task-prio"><option value="">— Seleccionar —</option><option>Alta</option><option>Media</option><option>Baja</option></select></div>
       <div class="fg"><label>Deadline <span class="req">*</span></label><input type="date" id="task-deadline" min=""></div>
       <div class="fg"><label>Departamento origen</label>
-        <select id="task-dept-origen"><option value="Cocina">Cocina</option><option value="Sala">Sala</option><option value="Mantenimiento">Mantenimiento</option><option value="Recepción">Recepción</option><option value="Administración">Administración</option><option value="Economato">Economato</option><option value="Housekeeping">Housekeeping</option></select></div>
+        <select id="task-dept-origen"><option value="Cocina">Cocina</option><option value="Sala">Sala</option><option value="Mantenimiento">Mantenimiento</option><option value="Recepción">Recepción</option><option value="Administración">Administración</option><option value="Economato">Economato</option><option value="Limpieza">Limpieza</option></select></div>
       <div class="fg sp2"><label>Descripción detallada</label><textarea id="task-desc" rows="3" placeholder="Qué debe hacer el departamento destinatario, con qué materiales, etc."></textarea></div>
     </div>
     <div class="modal-footer">
@@ -1753,6 +1758,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
         </optgroup>
         <optgroup label="Housekeeping">
           <option>Housekeeping</option>
+          <option>Limpieza</option>
         </optgroup>
         <optgroup label="Mantenimiento">
           <option>Mantenimiento</option>
