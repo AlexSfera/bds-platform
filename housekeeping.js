@@ -777,7 +777,14 @@ var HK_INCI_TIPOS = [
 function hkToggleInciPanel(){
   var panel = document.getElementById('hk-exec-inci-panel');
   if(!panel) return;
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  var isHidden = panel.style.display === 'none' || panel.style.display === '';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if(isHidden){
+    // Scroll al panel para que sea visible
+    setTimeout(function(){
+      panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }, 50);
+  }
 }
 
 async function hkGuardarIncidencia(){
@@ -823,8 +830,15 @@ async function hkGuardarIncidencia(){
   invalidateCache('incidencias');
   await dbUpdate('housekeeping_assignments', a.id, { incidencia_id: inc.id });
   invalidateCache('housekeeping_assignments');
-  toast('Incidencia registrada','ok');
-  hkCloseExec();
+  toast('⚠ Incidencia registrada · la Gobernanta la revisará','ok');
+  // Cerrar panel de incidencia, mantener modal abierto
+  var panel = document.getElementById('hk-exec-inci-panel');
+  if(panel) panel.style.display = 'none';
+  // Refrescar Revisión HK si está activa
+  if(typeof renderHKRevision === 'function'){
+    var revScreen = document.getElementById('screen-hk-revision');
+    if(revScreen && revScreen.classList.contains('active')) renderHKRevision();
+  }
 }
 
 async function hkCrearIncidencia(asigId){
