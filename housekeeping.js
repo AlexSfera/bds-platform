@@ -355,8 +355,8 @@ async function renderHKMiRuta(){
   var habCount = mias.filter(function(a){ return a.tipo_objeto === 'habitacion'; }).length;
   if(sub) sub.textContent = habCount + ' hab. · ' + hoy;
 
-  // Quitar loader
-  wrap.removeChild(loader);
+  // Quitar loader (si aún es hijo de wrap)
+  if(loader.parentNode === wrap) wrap.removeChild(loader);
 
   if(!mias.length){
     var empty = document.createElement('div');
@@ -602,20 +602,7 @@ async function hkOpenExec(asigId){
     var tiposOpts = HK_INCI_TIPOS.map(function(t){
       return '<option value="'+t+'">'+t+'</option>';
     }).join('');
-    inciPanel.innerHTML = '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:10px;">⚠ NUEVA INCIDENCIA · HOUSEKEEPING</div>'
-      + '<div class="fg" style="margin-bottom:8px;">'
-      + '<label>Tipo de incidencia</label>'
-      + '<select id="hk-exec-inci-tipo">'+tiposOpts+'</select>'
-      + '</div>'
-      + '<div class="fg" style="margin-bottom:8px;">'
-      + '<label>Descripción <span style="color:#ef4444;">*</span></label>'
-      + '<textarea id="hk-exec-inci-desc" rows="2" placeholder="Describe el problema encontrado…"></textarea>'
-      + '</div>'
-      + '<div class="fg" style="margin-bottom:10px;">'
-      + '<label>Acción tomada / inmediata</label>'
-      + '<textarea id="hk-exec-inci-accion" rows="2" placeholder="Qué hiciste para resolverlo (si aplica)…"></textarea>'
-      + '</div>'
-      + '<button class="tbtn" style="background:#ef4444;color:white;width:100%;" onclick="hkGuardarIncidencia()">Guardar incidencia</button>';
+    inciPanel.innerHTML = ''; // contenido lo maneja el modal secundario
   }
 
   document.getElementById('modal-hk-exec').style.display = 'flex';
