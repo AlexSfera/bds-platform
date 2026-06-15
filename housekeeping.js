@@ -1037,10 +1037,11 @@ let _hkAsigPeriodic = [];
 let _hkAsigEmps     = [];
 
 async function hkOpenAsignar(tipo){
+  try {
   _hkAsignarTipo = tipo;
   var plans = await getDB('housekeeping_plans');
   var plan = plans.find(function(p){ return p.fecha===_hkPlanFecha && p.turno===_hkPlanTurno; });
-  if(!plan){ toast('Crea primero el plan','warn'); return; }
+  if(!plan){ toast('Sin plan para hoy · '+_hkPlanFecha+' · '+_hkPlanTurno,'warn'); return; }
   _hkAsigPlanObj = plan;
 
   var results = await Promise.all([
@@ -1241,6 +1242,10 @@ async function hkOpenAsignar(tipo){
   }
 
   document.getElementById('modal-hk-asignar').style.display = 'flex';
+  } catch(e) {
+    console.error('[hkOpenAsignar] Error:', e);
+    toast('Error al abrir modal: ' + (e.message||String(e)), 'error');
+  }
 }
 
 // Helper: añade campos Tiempo estimado + Prioridad al form
