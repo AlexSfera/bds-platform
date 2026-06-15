@@ -799,21 +799,21 @@ async function hkGuardarIncidencia(){
   var inc = {
     id: hkGenId('inc'),
     fecha: today(),
-    ts: localTs(),
-    departamento: 'Housekeeping',
-    tipo_incidencia: tipo,
-    descripcion: desc,
-    accion_inmediata: accion,
-    severidad: 'Media',
-    categoria: 'Reportada por empleado',
-    estado: 'Abierta',
+    created_at: localTs(),
+    shift_id: null,
+    servicio: '[]',
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
-    requiere_formacion: 'No',
-    requiere_disciplina: 'No',
+    categoria: 'Reportada por empleado',
+    severidad: 'Media',
+    descripcion: desc,
+    accion_inmediata: accion,
     staff_implicado_ids: '[]',
     staff_implicado_nombres: '[]',
-    created_at: localTs()
+    tipo_incidencia: tipo,
+    requiere_formacion: 'No',
+    requiere_disciplina: 'No',
+    estado: 'Abierta'
   };
 
   var res = await dbInsert('incidencias', inc);
