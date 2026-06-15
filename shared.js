@@ -409,7 +409,7 @@ function getScreens(rol){
   var isSala       = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
   var isRecepcion  = currentUser && currentUser.area === 'Recepción';
   var isCocina     = currentUser && currentUser.area === 'Cocina';
-  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza' || currentUser.rol === 'gobernante');
+  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza' || currentUser.rol === 'gobernante' || (currentUser.rol === 'jefe' && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')));
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
   var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
@@ -468,10 +468,13 @@ function getScreens(rol){
   if(isSala)      dptoMod.push(ITEMS.incentivos); // empleados Sala ven su bonus
   if(isHK)        {
     dptoMod.push(ITEMS.ruta);
-    // Gobernanta: rol gobernante, admin, o jefe_departamento con área HK
+    // Gobernanta: rol gobernante, admin, jefe con área HK, o jefe_departamento con área HK
     var _isGob = currentUser && (
       currentUser.rol === 'admin' ||
       currentUser.rol === 'gobernante' ||
+      (currentUser.rol === 'jefe' && (
+        currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza'
+      )) ||
       (currentUser.rol === 'jefe_departamento' && (
         currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza'
       ))
@@ -1443,7 +1446,7 @@ function saveTurno(){
   if(!toggleState.incidencia) errs.push('Indica si hubo incidencia operativa');
   // Merma validation — ONLY for Cocina/Friegue. Sala, Recepción y Housekeeping exentos.
   var _isSalaUser = currentUser && currentUser.area === 'Sala';
-  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza' || currentUser.rol === 'gobernante');
+  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza' || currentUser.rol === 'gobernante' || (currentUser.rol === 'jefe' && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')));
   var _isLabUser = currentUser && /syncrolab|entrenador|fisioterapeuta/i.test(currentUser.area||'');
   if(!_isSalaUser && !_isRecepcion && !_isHKUser && !_isLabUser){
     if(!sinMermaFlag&&mermaRows.length===0) errs.push('Declara merma o marca Sin merma');
