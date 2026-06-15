@@ -832,117 +832,117 @@ function buildInfoContent(area){
   // ════════════════════════════════════════════════════════════════════
   if(area === 'Sala'){
     return ''
-    + _infoCard('🍽 Sala — ¿Para qué rellenas tu turno?',
-        'Para registrar qué servicios cubriste, ajustes en POSMEWS, cierre de caja y cualquier incidencia con cliente. '
-      + 'Caja descuadrada, ajuste sin registrar o queja sin gestionar = turno no validado.',
+    + _infoCard('🍽 ¿Para qué rellenas tu turno?',
+        'SYNCRO HUB registra todo lo que pasa en tu servicio: qué hiciste, cómo quedó la caja, si hubo algún problema.<br><br>'
+      + '<b>Si no lo registras, para el sistema no ocurrió. Y lo que no ocurrió, no cuenta a tu favor.</b><br><br>'
+      + 'Tu bonus mensual depende directamente de lo que registres aquí.',
         '#3b82f6')
 
-    + _infoCard('📝 Mi Turno — Campo a campo',
-        '<b>'+_req('Fecha')+'</b><br>Día del turno.<br><br>'
-      + '<b>'+_req('Servicio')+'</b><br>Desayuno · Comida · Cena · Evento · Otro. Puedes marcar <u>VARIOS</u>.<br><br>'
-      + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales.<br><br>'
-      + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando.<br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto de Sala que continúa el siguiente turno tuyo o tu equipo. Ej: "Reserva especial 21h con menú celíaco", "Repasar montaje para evento mañana". <i>Si pide acción de Cocina/Economato → TAREA, no gestión.</i><br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que requiere <b>decisión del jefe de F&B</b>: queja seria de cliente, conflicto cliente-personal, error grave en cobro, daño material relevante. Tú la abres, <b>el jefe la cierra</b>.',
+    + _infoCard('📝 Paso 1 — Rellena tu turno',
+        '<b>'+_req('Fecha')+'</b><br>El día del turno que estás cerrando.<br><br>'
+
+      + '<b>'+_req('Servicios')+'</b><br>'
+      + 'Marca todos los que hiciste: Desayuno · Comida · Cena · Evento · Otro. Puedes marcar varios.<br><br>'
+
+      + '<b>'+_req('Horas trabajadas')+'</b><br>'
+      + 'Las horas reales del día. No las del contrato — las que realmente estuviste.<br><br>'
+
+      + '<b>'+_req('Responsable de turno')+'</b><br>'
+      + 'El nombre de quien estuvo al mando del servicio.<br><br>'
+
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
+      + 'Algo de Sala que queda abierto para el siguiente turno de tu equipo.<br>'
+      + '<i>Ejemplos: "Confirmar menú especial para la cena de mañana" · "Cliente mesa 5 quiere factura mañana"</i><br>'
+      + '<i>⚠ Si necesita que actúe otro departamento (Cocina, Mantenimiento…) → crea una TAREA, no una gestión.</i><br><br>'
+
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
+      + 'Algo grave que requiere decisión de tu jefe: queja seria, conflicto con cliente, error de cobro relevante, daño material.<br>'
+      + '<i>Tú la abres. Tu jefe la resuelve y cierra.</i>',
         '#3b82f6')
 
-    + _infoCard('⚡ Ajustes — Obligatorio en Sala',
-        '<b>¿Qué es un ajuste?</b><br>'
-      + 'Cualquier operación en POSMEWS que modifica una venta original: anulación, devolución, invitación, error de TPV o de cobro, cargo incorrecto. '
-      + 'Es decir, dinero que <u>no entró</u> aunque se generó ticket, o cargos que se rectificaron.<br><br>'
+    + _infoCard('⚡ Paso 2 — Confirma los ajustes',
+        'Al guardar el turno, el sistema te pregunta: <b>"¿Hubo ajustes en este turno?"</b><br>'
+      + 'Esto es '+_req('obligatorio')+'. No puedes saltártelo.<br><br>'
 
-      + '<b>¿Por qué se rellena?</b><br>'
-      + '• Sin registro de ajustes, la caja parece descuadrada cuando no lo está realmente.<br>'
-      + '• Es la <u>única forma</u> de demostrar que un faltante tiene explicación legítima.<br>'
-      + '• Sin ajuste registrado, contabilidad asume pérdida = penalización al turno.<br><br>'
+      + '<b>¿Qué es un ajuste?</b><br>'
+      + 'Cualquier operación que cambia una venta ya registrada en POSMEWS:<br>'
+      + '• Anulaste un ticket · Devolviste dinero · Hiciste una invitación (cortesía)<br>'
+      + '• Corregiste un cobro incorrecto · Hubo un error de TPV<br><br>'
 
-      + '<b>Flujo:</b><br>'
-      + 'Al cerrar turno, el sistema pregunta <b>"¿Hubo ajustes en este turno?"</b><br>'
-      + '• Si NO hubo → pulsa <b>"✓ No hubo ajustes"</b> (es '+_req('obligatorio')+' confirmarlo)<br>'
-      + '• Si SÍ hubo → pulsa <b>"⚡ Sí hubo ajustes"</b> y añade una línea por cada ajuste<br><br>'
+      + '→ <b>Si NO hubo ajustes:</b> pulsa <b>"✓ No hubo ajustes"</b>. Listo.<br>'
+      + '→ <b>Si SÍ hubo:</b> pulsa <b>"⚡ Sí hubo ajustes"</b> y añade una línea por cada tipo:<br><br>'
 
-      + '<b>Campo a campo de cada línea:</b><br>'
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-top:4px;font-size:12px;">'
       + '• <b>Tipo</b> — Anulación · Devolución · Invitación · Error TPV · Error cobro · Cargo incorrecto · Otro<br>'
-      + '• <b>Nº operaciones</b> — cuántas veces ocurrió ese ajuste (mínimo 1)<br>'
-      + '• <b>Importe estimado (€)</b> — cuánto suma ese ajuste<br>'
-      + '• <b>¿Comunicado al responsable? SÍ/NO</b> — si avisaste al jefe en el momento<br>'
-      + '• <b>Motivo</b> — explicación breve (ej: "Cliente devolvió plato frío", "Invitación VIP autorizada por F&B")',
+      + '• <b>Nº de veces</b> que ocurrió ese tipo (mínimo 1)<br>'
+      + '• <b>Importe (€)</b> — cuánto suma<br>'
+      + '• <b>¿Avisaste al responsable en el momento?</b> SÍ o NO<br>'
+      + '• <b>Motivo</b> — breve explicación. Ej: "Cliente devolvió plato frío" · "Invitación autorizada por F&B"'
+      + '</div><br>'
+
+      + '<b>¿Por qué importa tanto?</b><br>'
+      + 'Sin este registro la caja aparece descuadrada aunque no lo esté. Si el faltante se detecta después y tú no lo registraste → <b>penalización doble</b>.',
         '#3b82f6')
 
-    + _infoCard('🏦 Caja Sala — Traspaso vs Cierre: ¿cuál hago?',
-        '<b>Tu servicio marca qué puedes hacer:</b><br>'
-      + '• <b>Cena y Evento →</b> '+_tag('CIERRE','#3b82f6')+' de caja (o traspaso si aún no toca cerrar).<br>'
-      + '• <b>Desayuno, Comida, Otro →</b> solo '+_tag('TRASPASO','#0891b2')+' (dejas la caja al siguiente servicio).<br><br>'
-      + '<b>Regla de oro:</b> una sola operación de caja por servicio y día. Si sois varios camareros en el mismo servicio, <u>la hace uno</u> y el resto pulsa "Cerrar turno sin caja".<br><br>'
-      + '<b>El servicio se elige una sola vez en Mi Turno</b> (un único servicio por turno). La caja lo hereda automáticamente.<br><br>'
-      + '<b>Los camareros NO hacen retiro a caja fuerte en el traspaso</b> — eso es solo del cierre.',
-        '#3b82f6')
+    + _infoCard('🏦 Paso 3 — Caja: ¿Traspaso o Cierre?',
+        '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:12px;">'
+      + '<b>Tu servicio determina qué haces:</b><br><br>'
+      + '• Desayuno / Comida / Otro → solo '+_tag('TRASPASO','#0891b2')+' — dejas el efectivo al siguiente servicio<br>'
+      + '• Cena / Evento → '+_tag('CIERRE','#3b82f6')+' de caja del día (o traspaso si aún no toca)<br>'
+      + '• Varios camareros en el mismo servicio → <b>uno hace la caja</b>, el resto pulsa "Cerrar turno sin caja"'
+      + '</div>'
 
-    + _infoCard('🔁 Sala · TRASPASO de caja (Desayuno / Comida / Otro) — Campo a campo',
-        '<b>Cuándo:</b> al terminar tu servicio, para dejar el efectivo al siguiente. Es un traspaso <u>simple, solo de efectivo</u>.<br><br>'
-      + '<b>1 · Fondo recibido (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
-      + 'Viene del último cierre o traspaso. <u>No editable.</u> Cuéntalo al empezar para verificar.<br><br>'
-      + '<b>2 · Ventas en efectivo POSMEWS (€)</b> — '+_req('obligatorio')+'<br>'
-      + 'El efectivo que POSMEWS registró en tu servicio. (Si no hubo, pon 0.)<br><br>'
-      + '<b>3 · Cash real contado (€)</b> — '+_req('obligatorio')+'<br>'
-      + 'Cuenta físicamente los billetes y monedas del cajón ahora.<br><br>'
-      + '<b>4 · Fondo esperado a traspasar (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
-      + 'El sistema calcula: <b>Fondo recibido + Ventas efectivo POSMEWS</b>. (Sin retiro — los camareros no retiran.)<br><br>'
-      + '<b>5 · Fondo real a traspasar (€)</b> — '+_req('obligatorio')+'<br>'
-      + 'Cuenta el dinero que dejas al siguiente servicio. '
-      + 'Si coincide → <b style="color:#10b981;">✓ Fondo cuadrado</b>. Si no → explica la diferencia (obligatorio).<br><br>'
-      + '<b>El traspaso NO lleva tarjeta, Stripe ni cargos</b> — todo eso va solo en el cierre de Cena/Evento.',
+      + '<b>TRASPASO</b> — Solo efectivo. Sin tarjeta, sin Stripe, sin retiro a caja fuerte.<br>'
+      + '1. <b>Fondo recibido</b> → aparece solo. Cuéntalo para verificar.<br>'
+      + '2. <b>Ventas efectivo POSMEWS</b> → lo que POSMEWS registró. Pon 0 si no hubo.<br>'
+      + '3. <b>Cash real contado</b> → cuenta el cajón ahora mismo.<br>'
+      + '4. <b>Fondo esperado</b> → el sistema lo calcula solo (fondo recibido + ventas POSMEWS).<br>'
+      + '5. <b>Fondo real a traspasar</b> '+_req('*')+' → el dinero que dejas físicamente. Debe coincidir con el esperado.<br>'
+      + '<i>Si no cuadra → el sistema te pide explicación. Es obligatorio darla.</i><br><br>'
+
+      + '<b>CIERRE</b> — Cuadras todo el día. El fondo recibido aparece automáticamente.<br><br>'
+      + '<u>Lo que traes de POSMEWS:</u> Cash · Tarjeta · Stripe<br>'
+      + '<u>Lo que cuentas físicamente:</u> Billetes y monedas · Ticket del TPV · Confirmación Stripe · Propinas<br>'
+      + '<u>Cargos internos:</u> Room Charge · SYNCROLAB Charge · Cargo Alexander<br>'
+      + '<u>Pensiones:</u> solo informativo, no afecta al cuadre<br><br>'
+
+      + 'El sistema calcula la diferencia en tiempo real. Si hay diferencia el sistema te pide:<br>'
+      + _req('Explicación')+'  '+_req('Acción tomada')+'  '+_req('¿Informado al responsable?')+'<br><br>'
+
+      + '<b>Retiro a caja fuerte</b> → solo en el cierre. Indica el importe que retiras.',
         '#0891b2')
-
-    + _infoCard('💰 Sala · CIERRE de caja (Cena / Evento) — Campo a campo',
-        '<b>Cuándo:</b> al cerrar el servicio de Cena o Evento. Cuadra TODO lo cobrado en el día contra POSMEWS.<br><br>'
-      + '<b>El fondo recibido</b> viene del último traspaso/cierre (automático, no editable).<br><br>'
-      + '<b>Bloque SEGÚN POSMEWS</b> — '+_req('obligatorios')+': Cash · Tarjeta · Stripe que registró el TPV del restaurante.<br>'
-      + '<b>Cargos:</b> Room Charge · SYNCROLAB Charge · Cargo Alexander (consumos a habitación).<br>'
-      + '<b>Pensiones</b> <i>(informativo)</i>: pax desayuno · pax comida/cena + importes.<br>'
-      + '<b>Bloque REAL</b> — '+_req('obligatorios')+': Cash contado · TPV físico · Stripe plataforma · Propinas TPV.<br>'
-      + '<b>Caja Fuerte:</b> ¿retiro? SÍ/NO + importe (esto sí, solo en el cierre).<br><br>'
-      + '<b>⚠ Si hay diferencia → '+_req('OBLIGATORIO')+': Explicación + Acción tomada + ¿Informado al responsable?</b><br><br>'
-      + '<b>Fondo a traspasar:</b> lo que dejas para el día siguiente. Cuéntalo y confírmalo.',
-        '#3b82f6')
 
     + bloqueDiferencias
 
-    + _infoCard('🚨 Evaluación objetiva — Por qué importa que registres TODO',
-        '<b>Lo que NO se registra, NO existe en el sistema. Y lo que no existe en el sistema, NO cuenta a tu favor.</b><br><br>'
-
-      + 'El sistema mide automáticamente cada turno:<br>'
-      + '• ¿Cerraste turno con ajustes confirmados (SÍ o NO)?<br>'
-      + '• ¿Reportaste incidencias o marcaste "sin incidencias"?<br>'
+    + _infoCard('🚨 Tu registro = tu evaluación = tu bonus',
+        '<b>El sistema mide automáticamente cada turno:</b><br>'
+      + '• ¿Confirmaste los ajustes (SÍ o NO)?<br>'
       + '• ¿Tu caja cuadró o explicaste la diferencia?<br>'
-      + '• ¿Comunicaste los ajustes al responsable en su momento?<br><br>'
+      + '• ¿Reportaste las incidencias que hubo?<br>'
+      + '• ¿Comunicaste los ajustes al responsable en el momento?<br><br>'
 
-      + '<b>Estos datos generan tu evaluación objetiva mensual.</b><br>'
-      + 'Esa evaluación impacta directamente en <u>tus incentivos económicos</u>.<br><br>'
+      + '<b>Lo que penaliza:</b><br>'
+      + '• Turno cerrado sin confirmar ajustes<br>'
+      + '• Caja descuadrada sin justificar<br>'
+      + '• Ajuste detectado después que tú no registraste → penalización doble<br>'
+      + '• Incidencia que detectó el supervisor o el cliente, y tú no reportaste<br><br>'
 
-      + '<b>Qué penaliza:</b><br>'
-      + '• Turnos cerrados sin confirmar ajustes → penalización<br>'
-      + '• Caja descuadrada sin justificar → penalización<br>'
-      + '• Ajustes detectados a posteriori (no registrados por ti) → penalización doble<br>'
-      + '• Incidencias detectadas por cliente o supervisor que tú no reportaste → penalización<br><br>'
+      + '<b>Lo que premia:</b><br>'
+      + '• Registro completo y caja cuadrada<br>'
+      + '• Ajustes comunicados en el momento, no al cierre<br>'
+      + '• Incidencias documentadas con acción tomada<br><br>'
 
-      + '<b>Qué premia:</b><br>'
-      + '• Turnos con registro completo y caja cuadrada<br>'
-      + '• Ajustes comunicados al responsable en el momento (no al cierre)<br>'
-      + '• Incidencias documentadas con acción tomada clara<br><br>'
-
-      + '<b>La regla es simple: registrar = transparencia = confianza = incentivo. '
-      + 'No registrar = opacidad = riesgo = penalización.</b>',
+      + '<b>Registrar = transparencia = confianza = incentivo.<br>No registrar = opacidad = penalización.</b>',
         '#ef4444')
 
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Servicios marcados<br>'
-      + '☐ Ajustes confirmados (SÍ con líneas, o NO explícito)<br>'
-      + '☐ Cada ajuste con tipo, importe, motivo y "comunicado al responsable"<br>'
-      + '☐ Caja cuadrada o diferencia explicada<br>'
-      + '☐ Si producto roto/falta → tarea a Economato o Cocina<br>'
-      + '☐ Queja sin resolver → incidencia + responsable informado<br>'
-      + '☐ Gestión / Incidencia marcadas',
+        '☐ Servicios marcados correctamente<br>'
+      + '☐ Ajustes confirmados — SÍ con todas las líneas, o NO explícito<br>'
+      + '☐ Cada ajuste tiene: tipo, importe, motivo y si fue comunicado al responsable<br>'
+      + '☐ Caja cuadrada, o diferencia explicada con acción tomada<br>'
+      + '☐ Si hubo producto roto o falta de género → Tarea a Economato o Cocina<br>'
+      + '☐ Si hubo queja sin resolver → Incidencia abierta, responsable informado<br>'
+      + '☐ Gestión marcada si queda algo pendiente para el siguiente turno',
         '#10b981')
     + jefe;
   }
