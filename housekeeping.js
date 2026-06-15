@@ -62,7 +62,10 @@
 
   // Modal de ejecución (iniciar / pausar / finalizar)
   // Modal asignación — debe estar en body, NO dentro de content (se destruiría en re-render)
-  if(!document.getElementById('modal-hk-asignar')){
+  // Garantizar que el modal de asignación existe en body con todos sus elementos internos
+  if(!document.getElementById('hk-asig-title')){
+    var existingAsigModal = document.getElementById('modal-hk-asignar');
+    if(existingAsigModal) existingAsigModal.parentNode.removeChild(existingAsigModal);
     var modalAsig = document.createElement('div');
     modalAsig.id = 'modal-hk-asignar';
     modalAsig.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:680;padding:16px;';
@@ -443,6 +446,17 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
   var gruposOrdenados = Object.keys(grupos).sort();
 
   gruposOrdenados.forEach(function(g){
+    // Empleado: filtrar para mostrar solo zonas asignadas a él
+    var zonasDelGrupo = isGob ? grupos[g] : grupos[g].filter(function(z){
+      var asigMia = asigs.find(function(a){
+        if(a.tipo_objeto !== 'zona_publica' || a.objeto_id !== z.id) return false;
+        if(a.ad_hoc) return (a.hora_inicio||a.created_at||'').slice(0,10) === hoy;
+        return planIdsHoy.indexOf(a.plan_id) >= 0;
+      });
+      return asigMia && asigMia.employee_id === currentUser.id;
+    });
+    if(!zonasDelGrupo.length) return; // saltar grupo si no hay zonas para este empleado
+
     var gLabel = document.createElement('div');
     gLabel.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.15em;margin:14px 0 6px;';
     gLabel.textContent = g;
@@ -451,7 +465,7 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
     var gList = document.createElement('div');
     gList.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
 
-    grupos[g].forEach(function(z){
+    zonasDelGrupo.forEach(function(z){
       var dm = hkParseDiasMin(z.dias_minutos);
       var minHoy = dm[dow] || 0;
       var asigHoy = asigs.find(function(a){
