@@ -1915,19 +1915,26 @@ function onValDeptChange(){
   }
 }
 
+// Departamentos (valores de v-dept) que corresponden al área de un jefe
+function _jefeDeptOptions(user){
+  var a = (user && user.area) || '';
+  if(a.indexOf('SYNCROLAB')>=0 || a.indexOf('Syncrolab')>=0) return ['Recepción SYNCROLAB'];
+  if(a.indexOf('Recepción')>=0 || a.indexOf('Recepcion')>=0)  return ['Recepción'];
+  if(a==='Sala')                       return ['Sala'];
+  if(a==='Cocina' || a==='Friegue')    return ['Cocina'];
+  if(a==='F&B' || a==='Food & Beverage' || a==='Restaurante') return ['Sala','Cocina'];
+  return a ? [a] : [];
+}
 function initValDeptFilter(){
   var sel=document.getElementById('v-dept');
   if(!sel||!currentUser) return;
-  if(currentUser.rol==='jefe'){
-    var _deps=getSupervisorDepartments(currentUser);
-    if(_deps.length===1){ sel.value=_deps[0]; sel.disabled=true; }
-    else { sel.disabled=false; }
-  } else if(currentUser.rol==='chef'){
-    sel.value='Cocina'; sel.disabled=true;
-  } else if(currentUser.rol==='jefe_recepcion'){
-    sel.value='Recepción'; sel.disabled=true;
-  } else if(currentUser.rol==='coord_recepcion_syncrolab'){
-    sel.value='Recepción SYNCROLAB'; sel.disabled=true;
+  if(typeof isAdmin==='function' && isAdmin(currentUser)){ sel.disabled=false; onValDeptChange(); return; }
+  // Jefe / coordinador: el selector SOLO ofrece sus departamentos (sin "Todos"); bloqueado si es uno.
+  var opts=_jefeDeptOptions(currentUser);
+  if(opts.length){
+    sel.innerHTML = opts.map(function(d){return '<option>'+d+'</option>';}).join('');
+    sel.value = opts[0];
+    sel.disabled = (opts.length===1);
   } else {
     sel.disabled=false;
   }
