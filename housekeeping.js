@@ -773,25 +773,38 @@ var HK_INCI_TIPOS = [
 ];
 
 function hkToggleInciPanel(){
-  var panel = document.getElementById('hk-exec-inci-panel');
-  if(!panel){ toast('Actualiza la página (Cmd+Shift+R)','warn'); return; }
-  var isHidden = (panel.style.display === 'none' || panel.style.display === '');
-  panel.style.display = isHidden ? 'block' : 'none';
-  if(isHidden){
-    // Scroll al panel — buscar el contenedor scrollable del modal
-    setTimeout(function(){
-      var container = panel.parentElement;
-      while(container && container !== document.body){
-        if(container.scrollHeight > container.clientHeight){ break; }
-        container = container.parentElement;
-      }
-      if(container && container !== document.body){
-        container.scrollTop = container.scrollHeight;
-      } else {
-        panel.scrollIntoView({behavior:'smooth', block:'start'});
-      }
-    }, 50);
-  }
+  // Abrir modal secundario de incidencia
+  var tiposOpts = HK_INCI_TIPOS.map(function(t){
+    return '<option value="'+t+'">'+t+'</option>';
+  }).join('');
+
+  var existing = document.getElementById('modal-hk-inci');
+  if(existing) existing.parentNode.removeChild(existing);
+
+  var m = document.createElement('div');
+  m.id = 'modal-hk-inci';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:700;padding:16px;';
+  m.innerHTML = '<div style="background:var(--bg2);border:2px solid #ef4444;border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;">'
+    + '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:12px;">⚠ NUEVA INCIDENCIA · HOUSEKEEPING</div>'
+    + '<div class="fg" style="margin-bottom:10px;">'
+    + '<label>Tipo de incidencia</label>'
+    + '<select id="hk-inci-tipo">'+tiposOpts+'</select>'
+    + '</div>'
+    + '<div class="fg" style="margin-bottom:10px;">'
+    + '<label>Descripción <span style="color:#ef4444;">*</span></label>'
+    + '<textarea id="hk-inci-desc" rows="3" placeholder="Describe el problema encontrado…"></textarea>'
+    + '</div>'
+    + '<div class="fg" style="margin-bottom:14px;">'
+    + '<label>Acción tomada / inmediata</label>'
+    + '<textarea id="hk-inci-accion" rows="2" placeholder="Qué hiciste para resolverlo (si aplica)…"></textarea>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;">'
+    + '<button class="tbtn" style="flex:1;" id="hk-inci-cancel">Cancelar</button>'
+    + '<button class="tbtn" style="flex:2;background:#ef4444;color:white;" onclick="hkGuardarIncidencia()">Guardar incidencia</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(m);
+  document.getElementById('hk-inci-cancel').addEventListener('click', function(){ m.remove(); });
 }
 
 async function hkGuardarIncidencia(){
@@ -800,9 +813,9 @@ async function hkGuardarIncidencia(){
   var a = asigs.find(function(x){ return x.id === _hkExecAsigId; });
   if(!a){ toast('Asignación no encontrada','error'); return; }
 
-  var tipoEl = document.getElementById('hk-exec-inci-tipo');
-  var descEl = document.getElementById('hk-exec-inci-desc');
-  var accionEl = document.getElementById('hk-exec-inci-accion');
+  var tipoEl = document.getElementById('hk-inci-tipo') || document.getElementById('hk-exec-inci-tipo');
+  var descEl = document.getElementById('hk-inci-desc') || document.getElementById('hk-exec-inci-desc');
+  var accionEl = document.getElementById('hk-inci-accion') || document.getElementById('hk-exec-inci-accion');
 
   var tipo = tipoEl ? tipoEl.value : 'Otro';
   var desc = descEl ? descEl.value.trim() : '';
@@ -837,16 +850,10 @@ async function hkGuardarIncidencia(){
   invalidateCache('incidencias');
   await dbUpdate('housekeeping_assignments', a.id, { incidencia_id: inc.id });
   invalidateCache('housekeeping_assignments');
-  toast('⚠ Incidencia registrada · la Gobernanta la revisará','ok');
-  // Cerrar panel y limpiar campos para siguiente uso
-  var panel = document.getElementById('hk-exec-inci-panel');
-  if(panel){
-    panel.style.display = 'none';
-    var descEl2 = document.getElementById('hk-exec-inci-desc');
-    var accionEl2 = document.getElementById('hk-exec-inci-accion');
-    if(descEl2) descEl2.value = '';
-    if(accionEl2) accionEl2.value = '';
-  }
+  toast('⚠ Incidencia registrada','ok');
+  // Cerrar modal secundario de incidencia
+  var mInci = document.getElementById('modal-hk-inci');
+  if(mInci) mInci.remove();
   // Refrescar Revisión HK si está activa
   if(typeof renderHKRevision === 'function'){
     var revScreen = document.getElementById('screen-hk-revision');
