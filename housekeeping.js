@@ -804,6 +804,8 @@ async function hkGuardarIncidencia(){
     servicio: '[]',
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
+    area: 'Housekeeping',
+    departamento: 'Housekeeping',
     categoria: 'Reportada por empleado',
     severidad: 'Media',
     descripcion: desc,
@@ -1568,10 +1570,17 @@ async function renderHKRevision(){
     return;
   }
   invalidateCache('housekeeping_assignments');
-  var [asigs, plans] = await Promise.all([
+  invalidateCache('incidencias');
+  var [asigs, plans, allIncis] = await Promise.all([
     getDB('housekeeping_assignments'),
-    getDB('housekeeping_plans')
+    getDB('housekeeping_plans'),
+    getDB('incidencias')
   ]);
+  // Incidencias HK de hoy
+  var hkIncisHoy = allIncis.filter(function(i){
+    return (i.departamento||i.area||'') === 'Housekeeping'
+      && (i.created_at||'').slice(0,10) === today();
+  });
   var hoy = today();
   var planesHoy = plans.filter(p=>p.fecha===hoy);
   var planIds = planesHoy.map(p=>p.id);
@@ -1631,9 +1640,28 @@ async function renderHKRevision(){
           <div style="font-size:11px;color:var(--text3);margin-top:4px;">
             ${a.employee_nombre} · est. ${estMin} ${realMin?'· real '+realMin:''} ${dev}
             ${(a.re_trabajo_count||0)>0?' · 🔁 '+a.re_trabajo_count+'×':''}
+            ${a.incidencia_id?'<span style="color:#ef4444;font-weight:700;"> · ⚠ incidencia</span>':''}
           </div>
         </div>
       `;
+    });
+    html += '</div>';
+  }
+
+  // ── Incidencias HK del día ─────────────────────────────────────────
+  if(hkIncisHoy.length){
+    html += '<div style="font-family:var(--font-mono);font-size:10px;color:#ef4444;font-weight:700;letter-spacing:.1em;margin:18px 0 6px;">⚠ INCIDENCIAS HK HOY ('+hkIncisHoy.length+')</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    hkIncisHoy.forEach(function(i){
+      var estadoColor = i.estado==='Cerrada'?'#10b981':i.estado==='En proceso'?'#f59e0b':'#ef4444';
+      html += '<div style="background:#ef444411;border:1px solid #ef4444;border-radius:8px;padding:10px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+        + '<div style="font-size:12px;font-weight:600;color:var(--text);">' + (i.tipo_incidencia||i.categoria||'Incidencia') + '</div>'
+        + '<span style="background:'+estadoColor+'22;color:'+estadoColor+';border:1px solid '+estadoColor+';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">' + i.estado + '</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:var(--text2);">' + (i.descripcion||'') + '</div>'
+        + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Por: ' + (i.nombre||'') + '</div>'
+        + '</div>';
     });
     html += '</div>';
   }
