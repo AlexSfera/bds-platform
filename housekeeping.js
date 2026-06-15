@@ -1077,6 +1077,27 @@ async function hkOpenAsignar(tipo){
 
   var titulo = tipo==='habitacion' ? 'Asignar habitaciones' :
                tipo==='zona_publica' ? 'Asignar zona pública' : 'Asignar tarea periódica';
+
+  // Garantizar que el modal existe en body con sus elementos internos
+  if(!document.getElementById('hk-asig-title')){
+    var _old = document.getElementById('modal-hk-asignar');
+    if(_old) _old.parentNode.removeChild(_old);
+    var _m = document.createElement('div');
+    _m.id = 'modal-hk-asignar';
+    _m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:680;padding:16px;';
+    _m.innerHTML = '<div style="background:var(--bg2);border:2px solid var(--orange);border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;">'
+      + '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--orange);letter-spacing:.15em;margin-bottom:6px;">NUEVA ASIGNACIÓN</div>'
+      + '<div id="hk-asig-title" style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:14px;">—</div>'
+      + '<div id="hk-asig-form"></div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">'
+      + '<button class="tbtn" id="hk-asig-cancel">Cancelar</button>'
+      + '<button class="tbtn" style="background:var(--orange);color:white;" id="hk-asig-save">Guardar</button>'
+      + '</div></div>';
+    document.body.appendChild(_m);
+    document.getElementById('hk-asig-cancel').addEventListener('click', function(){ document.getElementById('modal-hk-asignar').style.display='none'; });
+    document.getElementById('hk-asig-save').addEventListener('click', function(){ hkGuardarAsig(); });
+  }
+
   document.getElementById('hk-asig-title').textContent = titulo;
 
   var form = document.getElementById('hk-asig-form');
