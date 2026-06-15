@@ -1279,6 +1279,7 @@ function hkRenderHabCheckboxes(){
   var TIPO_COLOR = {SYNCRO:'#3b82f6',PREMIUM:'#8b5cf6',PANORAMIC:'#a855f7',FLY:'#06b6d4',QUEEN:'#f59e0b'};
 
   // Filtrar habitaciones por tipo permitido según limpieza seleccionada
+  var tlimpSel = document.getElementById('hk-asig-tlimp');
   var tiposPermitidos = HK_TLIMP_TIPOS_PERMITIDOS[tlimpSel ? tlimpSel.value : ''] || null;
   var roomsFiltradas = tiposPermitidos
     ? _hkAsigRooms.filter(function(r){ return tiposPermitidos.indexOf(r.tipo) >= 0; })
@@ -1905,6 +1906,5 @@ window.hkToggleInciPanel = hkToggleInciPanel;
 window.hkGuardarIncidencia = hkGuardarIncidencia;
 window._hkRenderZonasEnRuta = _hkRenderZonasEnRuta;
 window.hkRenderHabCheckboxes = hkRenderHabCheckboxes;
-window.hkHabChkClick = hkHabChkClick;
 window.hkSelAllHab = hkSelAllHab;
 window.hkUpdateHabResumen = hkUpdateHabResumen;
