@@ -593,141 +593,163 @@ function buildInfoContent(area){
   // ════════════════════════════════════════════════════════════════════
   if(area === 'Recepción'){
     return ''
-    + _infoCard('🏨 Recepción — ¿Para qué rellenas tu turno?',
-        'Para que el hotel tenga foto real del día: <b>cuánto dinero entró</b> (caja MEWS), '
-      + '<b>qué pasó con los clientes</b> (incidencias) y <b>qué queda pendiente</b> para el siguiente turno (tareas y gestiones). '
-      + 'Sin tu turno cerrado, contabilidad no cuadra y el supervisor no puede validar.',
-        '#10b981')
+    + _infoCard('🏨 ¿Para qué rellenas tu turno?',
+        'SYNCRO HUB registra todo lo que pasa en tu turno: cuántos check-ins hiciste, cómo quedó la caja, si vendiste servicios SYNCROLAB y si hubo algún problema.<br><br>'
+      + '<b>Si no lo registras, para el sistema no ocurrió. Y lo que no ocurrió, no cuenta a tu favor.</b><br><br>'
+      + 'Tu evaluación mensual y tu bonus dependen directamente de lo que registres aquí.',
+        '#8b5cf6')
 
-    + _infoCard('📝 Mi Turno — Campo a campo',
-        '<b>'+_req('Fecha')+'</b><br>Día del turno que estás cerrando. Por defecto hoy.<br><br>'
+    + _infoCard('📝 Paso 1 — Rellena tu turno',
+        '<b>'+_req('Fecha')+'</b><br>El día del turno.<br><br>'
 
-      + '<b>'+_req('Turno')+'</b><br>Mañana / Tarde / Noche. Marca el que cubriste. Solo uno.<br><br>'
+      + '<b>'+_req('Turno')+'</b><br>'
+      + 'Mañana · Tarde · Noche. Solo uno. Una vez que hagas la caja, el sistema lo bloquea y no se puede cambiar.<br><br>'
 
-      + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales. Si hiciste horas extra → ponlas aquí.<br><br>'
+      + '<b>'+_req('Horas trabajadas')+'</b><br>'
+      + 'Las horas reales del día, no las del contrato.<br><br>'
 
-      + '<b>'+_req('Responsable de turno')+'</b><br>Quién estuvo al mando del turno. Normalmente tú mismo.<br><br>'
+      + '<b>'+_req('Responsable de turno')+'</b><br>'
+      + 'El nombre de quien estuvo al mando.<br><br>'
 
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
-      + '<u>SÍ</u> si queda algo abierto que <b>el siguiente turno de Recepción</b> debe continuar. Ej: "Cliente 304 pide factura mañana", "Esperar respuesta de reserva de grupo". '
-      + '<i>Si el trabajo lo debe hacer OTRO dpto → crea TAREA, no gestión.</i><br><br>'
+      + 'Algo de Recepción que queda abierto para el siguiente turno.<br>'
+      + '<i>Ejemplos: "Cliente 304 pide factura mañana" · "Esperar respuesta de reserva de grupo" · "Confirmar llegada tardía hab. 112"</i><br>'
+      + '<i>⚠ Si necesita que actúe otro departamento → crea una TAREA, no una gestión.</i><br><br>'
 
       + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
-      + '<u>SÍ</u> si pasó algo que necesita <b>decisión del jefe de Recepción</b>. Ej: queja seria de cliente, error grave de cobro, daño en habitación, descuadre importante, robo. '
-      + 'Tú la abres con qué ocurrió + acción tomada + si avisaste al responsable. <b>El jefe la cierra.</b>',
-        '#10b981')
-
-    + _infoCard('🏦 Caja Recepción — Traspaso vs Cierre: ¿cuál hago?',
-        '<b>Tu turno marca qué puedes hacer:</b><br>'
-      + '• <b>Mañana y Tarde →</b> solo '+_tag('TRASPASO','#0891b2')+' (dejas la caja al siguiente turno).<br>'
-      + '• <b>Noche →</b> '+_tag('CIERRE','#8b5cf6')+' de caja del día (o traspaso si aún no toca cerrar).<br><br>'
-      + '<b>Regla de oro:</b> una sola operación de caja por turno y día. Si sois dos en el turno, <u>la hace uno</u> y el otro pulsa "Cerrar turno sin caja".<br><br>'
-      + '<b>El turno se elige una sola vez en Mi Turno.</b> La caja hereda ese turno automáticamente — no se elige dos veces.',
+      + 'Algo grave que requiere decisión de tu jefe: queja seria, error de cobro relevante, daño en habitación, descuadre importante.<br>'
+      + '<i>Tú la abres. Tu jefe la resuelve y cierra.</i>',
         '#8b5cf6')
 
-    + _infoCard('🔁 Recepción · TRASPASO de caja (Mañana / Tarde) — Campo a campo',
-        '<b>Cuándo:</b> al terminar tu turno de Mañana o Tarde, para dejar el efectivo al siguiente compañero.<br><br>'
-      + '<b>1 · Fondo recibido del turno anterior (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
-      + 'Viene del último cierre o traspaso. <u>No se puede editar.</u> Cuéntalo al empezar para verificar que es correcto.<br><br>'
-      + '<b>2 · Ventas en efectivo según MEWS (€)</b> — '+_req('obligatorio')+'<br>'
-      + 'Lo que MEWS dice que cobraste en efectivo durante tu turno. (Si no hubo, pon 0.)<br><br>'
-      + '<b>3 · Cash real contado (€)</b> — '+_req('obligatorio')+'<br>'
-      + 'Cuenta físicamente los billetes y monedas que hay en el cajón ahora.<br><br>'
-      + '<b>4 · ¿Hay retiro para caja fuerte? SÍ / NO</b> — '+_req('obligatorio')+'<br>'
-      + 'Si sacaste dinero a la caja fuerte, marca SÍ e indica el importe.<br><br>'
-      + '<b>5 · Fondo esperado a traspasar (€)</b> — '+_tag('AUTOMÁTICO','#6b7280')+'<br>'
-      + 'El sistema calcula: <b>Fondo recibido + Ventas efectivo MEWS − Retiro caja fuerte</b>.<br><br>'
-      + '<b>6 · Fondo real a traspasar (€)</b> — '+_req('obligatorio')+'<br>'
-      + 'Cuenta el dinero que vas a dejar al siguiente turno e introdúcelo. '
-      + 'Si coincide con el esperado → <b style="color:#10b981;">✓ Fondo cuadrado</b>. '
-      + 'Si no → explica la diferencia (obligatorio).',
-        '#0891b2')
+    + _infoCard('📋 Paso 2 — Preguntas de control',
+        'Antes de llegar a la caja, el sistema te hace unas preguntas rápidas. Son '+_req('obligatorias')+'.<br><br>'
 
-    + _infoCard('💰 Recepción · CIERRE de caja (Noche) — Campo a campo',
-        '<b>Cuándo:</b> al cerrar el día, en el turno de Noche. Verifica que TODO el dinero real coincide con MEWS.<br><br>'
-      + '<b>El fondo recibido</b> viene del último cierre o traspaso del día (automático, no editable).<br><br>'
-      + '<b>Importante:</b> los importes MEWS (cash, tarjeta, Stripe) son <u>los de tu turno de Noche</u>, no el total del día. Filtra el informe MEWS por tu franja horaria.<br><br>'
-      + '<b>Bloque SEGÚN MEWS</b> — '+_req('obligatorios')+': Cash · Tarjeta · Stripe (del informe de cierre MEWS).<br>'
-      + '<b>Transferencias:</b> según MEWS + confirmación banco (con fecha).<br>'
-      + '<b>Cargos Hotel:</b> Room Charge · SYNCROLAB Charge · Cargo Alexander.<br>'
-      + '<b>Pensiones</b> <i>(informativo)</i>: pax desayuno · pax comida+cena + importes.<br>'
-      + '<b>Bloque REAL / FÍSICO</b> — '+_req('obligatorios')+': Cash contado · TPV físico · Stripe real (panel Stripe.com).<br><br>'
-      + '<b>Diferencias:</b> el sistema calcula Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia. '
-      + 'Si todo 0,00 € → caja cuadra. Si no → '+_req('OBLIGATORIO')+' Explicación + Acción tomada + ¿Informado al responsable?<br><br>'
-      + '<b>Caja Fuerte:</b> ¿retiraste dinero? SÍ/NO + importe.<br>'
-      + '<b>Fondo a traspasar:</b> lo que dejas para el día siguiente (Fondo recibido + Cash MEWS − Retiro). Cuéntalo y confírmalo.',
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-bottom:6px;">OPERACIÓN</div>'
+      + '• Check-ins, check-outs y reservas gestionadas en el turno<br>'
+      + '• ¿Quedan reservas pendientes? → Si SÍ, explica cuáles y qué falta'
+      + '</div>'
+
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-bottom:6px;">DESAYUNOS / UPSELL</div>'
+      + '• ¿Ofertaste desayunos a clientes sin desayuno incluido?<br>'
+      + '• Si SÍ → indica a cuántos ofreciste y cuántos compraron<br>'
+      + '• Si no había esa oportunidad → marca "No aplica"<br>'
+      + '<b style="color:#ef4444;">⚠ Ofrecer el desayuno es obligatorio. No ofrecerlo es un FIO.</b>'
+      + '</div>'
+
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#06b6d4;letter-spacing:.1em;margin-bottom:6px;">VENTAS SYNCROLAB</div>'
+      + '• ¿Vendiste algún servicio SYNCROLAB?<br>'
+      + '• Si SÍ → añade una línea por cada venta: tipo de servicio · importe · nº reserva MEWS · comentario<br>'
+      + '• Tipos disponibles: Entrenamiento personal · Fisioterapia · Recuperación · Testing deportivo · Nutrición · Consulta médica · Otro'
+      + '</div>'
+
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-bottom:6px;">BITRIX24 / COMUNICACIÓN</div>'
+      + '• ¿Revisaste WhatsApp, email y llamadas pendientes en Bitrix24? → Si NO, explica por qué<br>'
+      + '• ¿Queda algún lead sin cerrar? → Si SÍ: descripción · ¿registrado en Bitrix24? · responsable · fecha de seguimiento'
+      + '</div>'
+
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-bottom:6px;">CLIENTES</div>'
+      + '• ¿Hubo clientes insatisfechos? → Si SÍ: cuántos · ¿informaste al responsable en el momento?'
+      + '</div>',
         '#8b5cf6')
 
-    + _infoCard('🫁 Hypoxic Room — Solo si HAY problema',
-        '<b>¿Cuándo se rellena?</b> SOLO cuando la cámara hipóxica da problemas. Uso normal NO se registra.<br><br>'
+    + _infoCard('🏦 Paso 3 — Caja: ¿Traspaso o Cierre?',
+        '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:12px;">'
+      + '<b>Tu turno determina qué haces:</b><br><br>'
+      + '• Mañana / Tarde → solo '+_tag('TRASPASO','#0891b2')+' — dejas el efectivo al siguiente turno<br>'
+      + '• Noche → '+_tag('CIERRE','#8b5cf6')+' de caja del día (o traspaso si aún no toca)<br>'
+      + '• Si hay dos recepcionistas en el mismo turno → <b>uno hace la caja</b>, el otro pulsa "Cerrar turno sin caja"<br><br>'
+      + '<i>El sistema detecta si ya existe una operación de caja para tu turno hoy. Si tu compañero ya la hizo, solo podrás cerrar el turno.</i>'
+      + '</div>'
 
-      + '<b>Avisos que disparan registro:</b><br>'
-      + '• Hipoxia por debajo del set point<br>'
-      + '• CO₂ alto<br>'
-      + '• Puerta abierta varias veces >1 min<br>'
-      + '• Sensor sin datos<br>'
-      + '• Cliente avisa de cualquier problema<br><br>'
+      + '<b>TRASPASO — Mañana / Tarde</b><br>'
+      + '1. <b>Fondo recibido</b> → aparece solo, viene del turno anterior. Cuéntalo para verificar.<br>'
+      + '2. <b>Ventas efectivo MEWS</b> '+_req('*')+' → lo que MEWS registró en efectivo en tu turno. Pon 0 si no hubo.<br>'
+      + '3. <b>Cash real contado</b> '+_req('*')+' → cuenta el cajón ahora mismo.<br>'
+      + '4. <b>¿Retiro a caja fuerte?</b> '+_req('*')+' → SÍ o NO. Si SÍ, indica el importe.<br>'
+      + '5. <b>Fondo esperado</b> → calculado: Fondo recibido + Ventas MEWS − Retiro.<br>'
+      + '6. <b>Fondo real a traspasar</b> '+_req('*')+' → el dinero que dejas. Debe coincidir con el esperado.<br>'
+      + '<i>Si no cuadra → el sistema te pide explicación y acción tomada. Obligatorio antes de guardar.</i><br><br>'
 
-      + '<b>Campo a campo:</b><br>'
-      + '• '+_req('Habitación')+' (104–109 / 202–209) — qué habitación tiene el problema<br>'
-      + '• '+_req('Tipo de incidencia')+' — marca todos los que apliquen<br>'
-      + '• <b>CO₂ (ppm)</b> — si sabes el valor, ponlo. Si no, déjalo<br>'
-      + '• <b>Altitud actual (m)</b> — la que marca la pantalla<br>'
-      + '• <b>Set point (m)</b> — la altitud configurada<br>'
-      + '• ☐ <b>Puerta abierta varias veces >1min</b> — marca si aplica<br>'
-      + '• ☐ <b>Recepción notificada por cliente</b> — marca si el cliente avisó<br>'
-      + '• <b>Anotaciones</b> — cualquier detalle útil<br><br>'
+      + '<b>CIERRE — Noche</b><br>'
+      + 'Cuadras todo el día. El fondo recibido aparece automáticamente.<br><br>'
+      + '<u>Lo que traes de MEWS</u> (filtra por tu franja horaria, no el total del día):<br>'
+      + 'Cash · Tarjeta · Stripe · Transferencias según MEWS<br><br>'
+      + '<u>Cargos del hotel:</u><br>'
+      + '• Room Charge → consumos cargados a habitación<br>'
+      + '• SYNCROLAB Charge → servicios SYNCROLAB cargados a habitación<br>'
+      + '• Cargo Alexander → consumos del propietario<br>'
+      + '• Pensiones → solo informativo, no afecta el cuadre<br><br>'
+      + '<u>Lo que cuentas físicamente:</u><br>'
+      + 'Cash real · TPV físico · Stripe (Stripe.com) · Transferencias banco (con fecha)<br><br>'
+      + 'El sistema calcula en tiempo real: Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia<br>'
+      + '🟢 Verde = cuadrado · 🔴 Rojo = diferencia<br><br>'
+      + '<b>Si hay diferencia → obligatorio:</b> '+_req('Explicación')+' · '+_req('Acción tomada')+' · '+_req('¿Informado al responsable?')+'<br><br>'
+      + '<b>Caja fuerte</b> '+_req('*')+' → SÍ o NO. Si SÍ, indica el importe retirado.',
+        '#8b5cf6')
 
-      + '<b>Estados:</b> '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
-      + 'Al cerrar describe '+_req('Acción tomada')+' (qué hiciste para resolverlo).',
+    + _infoCard('🫁 Hypoxic Room — Solo si hay problema',
+        '<b>No registres el uso normal de la cámara.</b> Solo cuando algo falla o el cliente avisa.<br><br>'
+
+      + '<b>Cuándo crear una incidencia Hypoxic:</b><br>'
+      + '• Hipoxia por debajo del set point · CO₂ alto · Puerta abierta repetidamente<br>'
+      + '• Sensor sin datos · Cliente avisa de cualquier problema<br><br>'
+
+      + '<b>Campos:</b><br>'
+      + '• '+_req('Habitación')+' — hab. 104–109 o 202–209<br>'
+      + '• '+_req('Tipo de incidencia')+' — marca los que apliquen<br>'
+      + '• CO₂ (ppm) · Altitud actual (m) · Set point (m) — si los sabes, ponlos<br>'
+      + '• ☐ Puerta abierta varias veces · ☐ Recepción notificada por cliente<br>'
+      + '• Anotaciones — cualquier detalle útil<br><br>'
+
+      + 'Estados: '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
+      + 'Al cerrar: describe '+_req('Acción tomada')+' — qué hiciste exactamente.',
         '#06b6d4')
 
     + bloqueDiferencias
 
-    + _infoCard('🚨 Evaluación objetiva — Tu desempeño se mide',
-        '<b>El registro completo en Mi Turno es la base de tu evaluación mensual</b>, '
-      + 'y esa evaluación afecta directamente tus <u>incentivos económicos</u>.<br><br>'
+    + _infoCard('🚨 Tu registro = tu evaluación = tu bonus',
+        '<b>El sistema mide automáticamente cada turno:</b><br>'
+      + '• Caja cuadrada (Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia = 0)<br>'
+      + '• Diferencias explicadas + acción tomada + responsable informado<br>'
+      + '• Caja fuerte registrada (SÍ/NO + importe)<br>'
+      + '• Fondo real a traspasar contado y confirmado<br>'
+      + '• Upsell de desayunos registrado (ofreciste / vendiste)<br>'
+      + '• Incidencias reportadas en el momento, no a posteriori<br>'
+      + '• Leads de Bitrix24 gestionados dentro del turno<br><br>'
 
-      + '<b>Qué mide el sistema automáticamente:</b><br>'
-      + '• Cuadre de Caja MEWS (Δ Cash · Δ Tarjeta · Δ Stripe · Δ Transferencia)<br>'
-      + '• Diferencias explicadas + acción tomada + ¿informado al responsable?<br>'
-      + '• Conteo de fondo real a traspasar (cuadrado o no)<br>'
-      + '• Caja fuerte: registro SÍ/NO + importe<br>'
-      + '• Incidencias reportadas vs detectadas a posteriori (queja de cliente, supervisor)<br>'
-      + '• Hypoxic: incidencia abierta cuando cliente avisó o cámara dio problema<br>'
-      + '• Tareas creadas a HK / Mantenimiento cuando correspondía<br><br>'
-
-      + '<b>Qué penaliza:</b><br>'
-      + '• Caja MEWS descuadrada sin explicación + acción + responsable informado → penalización<br>'
+      + '<b>Lo que penaliza:</b><br>'
+      + '• Caja descuadrada sin justificar<br>'
       + '• Diferencia ocultada o redondeada para que cuadre → penalización doble<br>'
-      + '• Aviso de cliente sobre Hypoxic sin incidencia creada → penalización<br>'
-      + '• Queja de cliente detectada por supervisor o redes sociales que tú no reportaste → penalización doble<br>'
-      + '• Cierre de turno sin contar el fondo a traspasar → penalización<br>'
-      + '• Caja fuerte: retiro no registrado o sin importe → penalización<br>'
-      + '• Habitación con desperfecto detectado por HK que tú no avisaste a Mantenimiento → penalización<br><br>'
+      + '• No ofrecer desayuno a clientes sin pensión<br>'
+      + '• Aviso Hypoxic sin incidencia creada<br>'
+      + '• Queja detectada por supervisor que tú no reportaste → penalización doble<br>'
+      + '• Caja fuerte no registrada · Lead no registrado en Bitrix24<br><br>'
 
-      + '<b>Qué premia:</b><br>'
-      + '• Cierres de caja cuadrados de forma sostenida (Δ = 0,00 €)<br>'
-      + '• Diferencias mínimas con explicación clara y rápida<br>'
-      + '• Comunicación proactiva al responsable EN EL MOMENTO, no al cierre<br>'
-      + '• Incidencias documentadas con acción tomada y seguimiento<br>'
-      + '• Hypoxic reportado al primer aviso, no cuando ya está cerrada<br>'
-      + '• Tareas inter-dpto bien escaladas (HK, Mantenimiento) con prioridad correcta<br><br>'
+      + '<b>Lo que premia:</b><br>'
+      + '• Cierres cuadrados de forma sostenida<br>'
+      + '• Comunicación proactiva al responsable en el momento<br>'
+      + '• Incidencias bien documentadas con seguimiento<br><br>'
 
-      + '<b>La regla es simple: registrar = transparencia = confianza = incentivo. '
-      + 'No registrar = opacidad = riesgo = penalización.</b>',
+      + '<b>Registrar = transparencia = confianza = incentivo.<br>No registrar = penalización.</b>',
         '#ef4444')
 
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Fecha, turno y horas correctas<br>'
-      + '☐ Responsable de turno indicado<br>'
-      + '☐ Caja MEWS cuadrada (o diferencia explicada + acción + informado)<br>'
-      + '☐ Caja fuerte: SÍ/NO + importe si aplica<br>'
-      + '☐ Fondo real a traspasar contado<br>'
-      + '☐ Hypoxic: si hubo problema → incidencia creada<br>'
-      + '☐ Gestión SÍ/NO marcado<br>'
-      + '☐ Incidencia SÍ/NO marcado<br>'
-      + '☐ Si hay trabajo para HK / Mantenimiento → tarea creada',
+        '☐ Turno, fecha y horas correctos<br>'
+      + '☐ Preguntas de control completadas (check-ins, upsell, Bitrix24, clientes)<br>'
+      + '☐ Ventas SYNCROLAB añadidas si hubo<br>'
+      + '☐ Lead pendiente en Bitrix24 registrado si aplica<br>'
+      + '☐ Caja cuadrada, o diferencia explicada con acción tomada<br>'
+      + '☐ Caja fuerte: SÍ/NO respondido con importe si aplica<br>'
+      + '☐ Fondo real a traspasar contado y confirmado<br>'
+      + '☐ Hypoxic: incidencia creada si hubo problema<br>'
+      + '☐ Gestión marcada si queda algo para el siguiente turno<br>'
+      + '☐ Incidencia marcada si hubo algo grave<br>'
+      + '☐ Tarea creada si HK o Mantenimiento tiene que actuar',
         '#10b981')
     + jefe;
   }
