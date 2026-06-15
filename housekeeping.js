@@ -134,7 +134,6 @@ function hkIsGobernanta(user){
   if(!user) return false;
   if(user.rol === 'admin') return true;
   if(user.rol === 'gobernante') return true;
-  if(user.rol === 'jefe' && hkIsHK(user)) return true;
   if(user.rol === 'jefe_departamento' && hkIsHK(user)) return true;
   return false;
 }
@@ -210,7 +209,7 @@ async function renderHKMiRuta(){
     if(a.ad_hoc) {
       // ad-hoc: incluir si iniciada/finalizada hoy
       var ts = a.hora_inicio || a.created_at || '';
-      return ts.indexOf(hoy) === 0 || (a.created_at && new Date(a.created_at).toISOString().slice(0,10) === hoy);
+      return ts.slice(0,10) === hoy;
     }
     return planIds.indexOf(a.plan_id) >= 0;
   });
@@ -569,7 +568,7 @@ async function renderHKPlanificacion(){
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
       <div class="fg" style="margin:0;flex:1;min-width:140px;">
         <label style="margin-bottom:2px;">Fecha</label>
-        <input type="date" id="hk-plan-fecha" value="${_hkPlanFecha}" min="${today()}" max="${maxStr}"
+        <input type="date" id="hk-plan-fecha" value="${_hkPlanFecha}"
           onchange="_hkPlanFecha=this.value;renderHKPlanificacion()">
       </div>
       <div class="fg" style="margin:0;">
@@ -732,119 +731,263 @@ async function hkAutogenPlan(){
 }
 
 let _hkAsignarTipo = null;
+// Cache de rooms/zonas/periodic/empleados para el modal de asignación
+let _hkAsigRooms = [], _hkAsigZonas = [], _hkAsigPeriodic = [], _hkAsigEmps = [], _hkAsigPlanObj = null;
 
 async function hkOpenAsignar(tipo){
   _hkAsignarTipo = tipo;
   var plans = await getDB('housekeeping_plans');
   var plan = plans.find(p=>p.fecha===_hkPlanFecha && p.turno===_hkPlanTurno);
   if(!plan){ toast('Crea primero el plan','warn'); return; }
+  _hkAsigPlanObj = plan;
 
-  var [rooms, zonas, periodic, empleados] = await Promise.all([
+  var [rooms, zonas, periodic, empleados, asigs] = await Promise.all([
     getDB('housekeeping_rooms'),
     getDB('housekeeping_public_areas'),
     getDB('housekeeping_periodic_tasks'),
-    getDB('employees')
+    getDB('employees'),
+    getDB('housekeeping_assignments')
   ]);
 
-  var empsHK = empleados.filter(function(e){
+  // Habitaciones ya asignadas en este plan (para marcar como ocupadas)
+  var asigsPlan = asigs.filter(a=>a.plan_id===plan.id && a.tipo_objeto==='habitacion');
+  var habsYaAsignadas = new Set(asigsPlan.map(a=>a.objeto_id));
+
+  _hkAsigEmps = empleados.filter(function(e){
     if(e.estado && e.estado !== 'Activo') return false;
     return (e.area||'').toLowerCase().match(/(hk|housekeeping|limpieza)/);
   });
+  _hkAsigRooms = rooms.filter(r=>r.activa).sort(function(a,b){
+    return (a.planta||'').localeCompare(b.planta||'') || String(a.numero||'').localeCompare(String(b.numero||''));
+  });
+  _hkAsigZonas = zonas.filter(z=>z.activa).sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'','es'); });
+  _hkAsigPeriodic = periodic.filter(p=>p.activa);
 
-  var titulo = tipo==='habitacion' ? 'Asignar habitación' : tipo==='zona_publica' ? 'Asignar zona pública' : 'Asignar tarea periódica';
+  var titulo = tipo==='habitacion' ? 'Asignar habitaciones' : tipo==='zona_publica' ? 'Asignar zona pública' : 'Asignar tarea periódica';
   document.getElementById('hk-asig-title').textContent = titulo;
 
   var form = document.getElementById('hk-asig-form');
   var html = '';
 
-  // Empleado
+  // ── Empleado (común a todos los tipos) ─────────────────────────
   html += '<div class="fg"><label>Empleado/a</label><select id="hk-asig-emp">';
   html += '<option value="__SIN_ASIGNAR__">— Sin asignar —</option>';
-  empsHK.forEach(function(e){
+  _hkAsigEmps.forEach(function(e){
     html += `<option value="${e.id}" data-nombre="${e.nombre}">${e.nombre}${e.puesto?' · '+e.puesto:''}</option>`;
   });
   html += '</select></div>';
 
+  // ── HABITACIONES: tipo de limpieza primero, luego checkboxes ───
   if(tipo === 'habitacion'){
-    rooms = rooms.filter(r=>r.activa);
-    rooms.sort(function(a,b){ return (a.planta||'').localeCompare(b.planta||'') || (a.numero||'').localeCompare(b.numero||''); });
-    html += '<div class="fg"><label>Habitación</label><select id="hk-asig-obj">';
-    rooms.forEach(function(r){
-      html += `<option value="${r.id}" data-nombre="Hab. ${r.numero} (${r.tipo})" data-tipo="${r.tipo}" data-tlimpsalida="${r.tipo_limpieza_salida}" data-tsalmin="${r.tiempo_salida_min}">Hab. ${r.numero} · ${r.tipo} · P${r.planta}</option>`;
-    });
-    html += '</select></div>';
-    html += `<div class="fg"><label>Tipo de limpieza</label><select id="hk-asig-tlimp" onchange="hkRecalcEst()">
-      <option value="repaso">Repaso (15')</option>
-      <option value="repaso_sabanas">Repaso + sábanas (30')</option>
-      <option value="salida_syncro">Salida SYNCRO (35')</option>
-      <option value="salida_premium">Salida Premium (45')</option>
-      <option value="salida_fly">Salida FLY (55')</option>
-      <option value="inspeccion">Inspección (1')</option>
-      <option value="destripe">Destripe (variable)</option>
-    </select></div>`;
+    html += `<div class="fg">
+      <label>Tipo de limpieza</label>
+      <select id="hk-asig-tlimp" onchange="hkRenderHabCheckboxes()">
+        <option value="repaso">Repaso · 15 min</option>
+        <option value="repaso_sabanas">Repaso + sábanas · 30 min</option>
+        <option value="salida_syncro">Salida SYNCRO · 35 min</option>
+        <option value="salida_premium">Salida Premium · 45 min</option>
+        <option value="salida_fly">Salida FLY · 55 min</option>
+        <option value="inspeccion">Inspección · 1 min</option>
+        <option value="destripe">Destripe · variable</option>
+      </select>
+    </div>`;
+    html += `<div class="fg">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <label style="margin:0;">Habitaciones</label>
+        <div style="display:flex;gap:6px;">
+          <button type="button" class="tbtn" style="font-size:11px;padding:4px 8px;" onclick="hkSelAllHab(true)">Todas</button>
+          <button type="button" class="tbtn" style="font-size:11px;padding:4px 8px;" onclick="hkSelAllHab(false)">Ninguna</button>
+        </div>
+      </div>
+      <div id="hk-asig-hab-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;max-height:300px;overflow-y:auto;padding:2px;"></div>
+      <div id="hk-asig-resumen" style="margin-top:8px;font-size:11px;color:var(--text3);font-family:var(--font-mono);"></div>
+    </div>`;
+
+  // ── ZONA PÚBLICA ───────────────────────────────────────────────
   } else if(tipo === 'zona_publica'){
-    zonas = zonas.filter(z=>z.activa);
     var dow = HK_DIAS[new Date(_hkPlanFecha+'T00:00:00').getDay()];
-    zonas.sort(function(a,b){ return (a.orden||0) - (b.orden||0); });
     html += '<div class="fg"><label>Zona pública</label><select id="hk-asig-obj" onchange="hkRecalcEst()">';
-    zonas.forEach(function(z){
+    _hkAsigZonas.forEach(function(z){
       var dm = hkParseDiasMin(z.dias_minutos);
       var minHoy = dm[dow] || 0;
       var nombreShown = z.nombre + (minHoy?' · '+minHoy+'min':' · no toca hoy');
       html += `<option value="${z.id}" data-nombre="${z.nombre}" data-min="${minHoy||z.tiempo_estimado_min||15}">${nombreShown}</option>`;
     });
     html += '</select></div>';
+    html += '<div class="fg"><label>Tiempo estimado (min)</label><input type="number" id="hk-asig-est" min="0" max="600" value="15"></div>';
+    html += '<div class="fg"><label>Prioridad</label><select id="hk-asig-prio"><option value="normal">Normal</option><option value="alta">Alta</option></select></div>';
+
+  // ── TAREA PERIÓDICA ────────────────────────────────────────────
   } else if(tipo === 'tarea_periodica'){
-    periodic = periodic.filter(p=>p.activa);
     html += '<div class="fg"><label>Tarea periódica</label><select id="hk-asig-obj" onchange="hkRecalcEst()">';
-    periodic.forEach(function(p){
+    _hkAsigPeriodic.forEach(function(p){
       var t = p.tiempo_estimado_min || 60;
       html += `<option value="${p.id}" data-nombre="${p.nombre}" data-min="${t}">${p.nombre} · ${p.tiempo_referencia||t+' min'}</option>`;
     });
     html += '</select></div>';
+    html += '<div class="fg"><label>Tiempo estimado (min)</label><input type="number" id="hk-asig-est" min="0" max="600" value="60"></div>';
+    html += '<div class="fg"><label>Prioridad</label><select id="hk-asig-prio"><option value="normal">Normal</option><option value="alta">Alta</option></select></div>';
   }
 
-  // Tiempo estimado
-  html += '<div class="fg"><label>Tiempo estimado (min)</label><input type="number" id="hk-asig-est" min="0" max="600" value="15"></div>';
-  html += '<div class="fg"><label>Prioridad</label><select id="hk-asig-prio"><option value="normal">Normal</option><option value="alta">Alta</option></select></div>';
-
   form.innerHTML = html;
-  hkRecalcEst();
+
+  if(tipo === 'habitacion'){
+    // Guardar qué habitaciones ya están en el plan para marcarlas
+    form._habsYaAsignadas = habsYaAsignadas;
+    hkRenderHabCheckboxes();
+  } else {
+    hkRecalcEst();
+  }
   document.getElementById('modal-hk-asignar').style.display = 'flex';
+}
+
+// Renderiza la grilla de checkboxes de habitaciones, agrupada por planta
+function hkRenderHabCheckboxes(){
+  var grid = document.getElementById('hk-asig-hab-grid');
+  if(!grid) return;
+  var form = document.getElementById('hk-asig-form');
+  var habsYa = (form && form._habsYaAsignadas) ? form._habsYaAsignadas : new Set();
+  var tlimpSel = document.getElementById('hk-asig-tlimp');
+  var tlimp = tlimpSel ? tlimpSel.value : 'repaso';
+
+  // Colores por tipo de habitación
+  var TIPO_COLOR = {SYNCRO:'#3b82f6',PREMIUM:'#8b5cf6',PANORAMIC:'#a855f7',FLY:'#06b6d4',QUEEN:'#f59e0b'};
+
+  // Agrupar por planta
+  var porPlanta = {};
+  _hkAsigRooms.forEach(function(r){
+    var p = 'P'+(r.planta||'?');
+    if(!porPlanta[p]) porPlanta[p] = [];
+    porPlanta[p].push(r);
+  });
+
+  var html = '';
+  Object.keys(porPlanta).sort().forEach(function(planta){
+    html += `<div style="grid-column:1/-1;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-top:4px;">${planta}</div>`;
+    porPlanta[planta].forEach(function(r){
+      var yaAsignada = habsYa.has(r.id);
+      var col = TIPO_COLOR[r.tipo] || '#9ca3af';
+      var opac = yaAsignada ? 'opacity:.35;pointer-events:none;' : '';
+      var checked = yaAsignada ? '' : '';
+      html += `<label style="cursor:${yaAsignada?'not-allowed':'pointer'};${opac}display:flex;flex-direction:column;align-items:center;background:var(--bg3);border:2px solid var(--border);border-radius:8px;padding:6px 4px;font-size:11px;gap:2px;transition:border-color .15s;" 
+        onmouseover="if(!${yaAsignada})this.style.borderColor='${col}'" 
+        onmouseout="var cb=this.querySelector('input');this.style.borderColor=cb&&cb.checked?'${col}':'var(--border)'"
+        onclick="hkHabChkClick(this,'${col}')">
+        <input type="checkbox" data-room-id="${r.id}" data-room-nombre="Hab. ${r.numero} (${r.tipo})" ${checked} style="display:none;">
+        <span style="font-weight:700;color:var(--text);">${r.numero}</span>
+        <span style="font-size:9px;color:${col};font-family:var(--font-mono);">${r.tipo}</span>
+      </label>`;
+    });
+  });
+
+  grid.innerHTML = html;
+  hkUpdateHabResumen();
+}
+
+function hkHabChkClick(label, col){
+  var cb = label.querySelector('input[type=checkbox]');
+  if(!cb || cb.disabled) return;
+  cb.checked = !cb.checked;
+  label.style.borderColor = cb.checked ? col : 'var(--border)';
+  hkUpdateHabResumen();
+}
+
+function hkUpdateHabResumen(){
+  var resumen = document.getElementById('hk-asig-resumen');
+  if(!resumen) return;
+  var cbs = document.querySelectorAll('#hk-asig-hab-grid input[type=checkbox]:checked');
+  var tlimpSel = document.getElementById('hk-asig-tlimp');
+  var tlimp = tlimpSel ? tlimpSel.value : 'repaso';
+  var tUnit = HK_TIPO_TIEMPO[tlimp] || 0;
+  var n = cbs.length;
+  if(n === 0){
+    resumen.textContent = 'Ninguna seleccionada';
+  } else {
+    var totalMin = n * tUnit;
+    resumen.textContent = n + ' hab. · ' + (tUnit ? hkFmtDuration(totalMin) + ' estimado total' : 'tiempo variable');
+  }
+}
+
+function hkSelAllHab(sel){
+  var TIPO_COLOR = {SYNCRO:'#3b82f6',PREMIUM:'#8b5cf6',PANORAMIC:'#a855f7',FLY:'#06b6d4',QUEEN:'#f59e0b'};
+  var labels = document.querySelectorAll('#hk-asig-hab-grid label');
+  labels.forEach(function(label){
+    var cb = label.querySelector('input[type=checkbox]');
+    if(!cb) return;
+    var r = _hkAsigRooms.find(function(x){ return x.id === cb.getAttribute('data-room-id'); });
+    var col = r ? (TIPO_COLOR[r.tipo]||'#9ca3af') : 'var(--orange)';
+    cb.checked = sel;
+    label.style.borderColor = sel ? col : 'var(--border)';
+  });
+  hkUpdateHabResumen();
 }
 
 function hkRecalcEst(){
   var est = document.getElementById('hk-asig-est'); if(!est) return;
-  if(_hkAsignarTipo === 'habitacion'){
-    var tlimp = document.getElementById('hk-asig-tlimp');
-    if(tlimp){
-      var t = HK_TIPO_TIEMPO[tlimp.value] || 15;
-      est.value = t;
-    }
-  } else {
-    var obj = document.getElementById('hk-asig-obj');
-    if(obj && obj.selectedOptions && obj.selectedOptions[0]){
-      var m = obj.selectedOptions[0].getAttribute('data-min');
-      if(m) est.value = m;
-    }
+  var obj = document.getElementById('hk-asig-obj');
+  if(obj && obj.selectedOptions && obj.selectedOptions[0]){
+    var m = obj.selectedOptions[0].getAttribute('data-min');
+    if(m) est.value = m;
   }
 }
 
 async function hkGuardarAsig(){
-  var plans = await getDB('housekeeping_plans');
-  var plan = plans.find(p=>p.fecha===_hkPlanFecha && p.turno===_hkPlanTurno);
+  var plan = _hkAsigPlanObj;
+  if(!plan){
+    var plans = await getDB('housekeeping_plans');
+    plan = plans.find(p=>p.fecha===_hkPlanFecha && p.turno===_hkPlanTurno);
+  }
   if(!plan){ toast('Plan no encontrado','error'); return; }
 
   var empSel = document.getElementById('hk-asig-emp');
   var empId = empSel.value;
   var empNombre = empId==='__SIN_ASIGNAR__' ? 'Sin asignar' : (empSel.selectedOptions[0].getAttribute('data-nombre') || empSel.selectedOptions[0].textContent.split('·')[0].trim());
+  var prio = (document.getElementById('hk-asig-prio')||{value:'normal'}).value;
 
+  // ── HABITACIONES: insertar una asignación por cada checkbox marcado ─
+  if(_hkAsignarTipo === 'habitacion'){
+    var cbs = document.querySelectorAll('#hk-asig-hab-grid input[type=checkbox]:checked');
+    if(!cbs.length){ toast('Selecciona al menos una habitación','warn'); return; }
+    var tlimp = document.getElementById('hk-asig-tlimp').value;
+    var tEst = HK_TIPO_TIEMPO[tlimp] || 0;
+    var errores = 0;
+    for(var i=0; i<cbs.length; i++){
+      var cb = cbs[i];
+      var roomId = cb.getAttribute('data-room-id');
+      var roomNombre = cb.getAttribute('data-room-nombre');
+      var row = {
+        id: hkGenId('hkas'),
+        plan_id: plan.id,
+        ad_hoc: 0,
+        employee_id: empId,
+        employee_nombre: empNombre,
+        tipo_objeto: 'habitacion',
+        objeto_id: roomId,
+        objeto_nombre: roomNombre,
+        tipo_limpieza: tlimp,
+        tiempo_estimado_min: tEst,
+        prioridad: prio,
+        estado: 'pendiente'
+      };
+      var res = await dbInsert('housekeeping_assignments', row);
+      if(!res) errores++;
+    }
+    invalidateCache('housekeeping_assignments');
+    document.getElementById('modal-hk-asignar').style.display = 'none';
+    if(errores === 0){
+      toast(cbs.length + ' hab. asignadas','ok');
+    } else {
+      toast(errores + ' errores de ' + cbs.length,'warn');
+    }
+    renderHKPlanificacion();
+    return;
+  }
+
+  // ── ZONA PÚBLICA / TAREA PERIÓDICA: asignación única ───────────
   var objSel = document.getElementById('hk-asig-obj');
   var objId = objSel.value;
   var objNombre = objSel.selectedOptions[0].getAttribute('data-nombre') || objSel.selectedOptions[0].textContent;
-
   var tEst = parseInt(document.getElementById('hk-asig-est').value)||0;
-  var prio = document.getElementById('hk-asig-prio').value;
 
   var row = {
     id: hkGenId('hkas'),
@@ -859,10 +1002,6 @@ async function hkGuardarAsig(){
     prioridad: prio,
     estado: 'pendiente'
   };
-
-  if(_hkAsignarTipo === 'habitacion'){
-    row.tipo_limpieza = document.getElementById('hk-asig-tlimp').value;
-  }
 
   var res = await dbInsert('housekeeping_assignments', row);
   if(!res){ toast('Error al guardar','error'); return; }
@@ -891,20 +1030,25 @@ async function renderHKZonasPublicas(){
 
   invalidateCache('housekeeping_public_areas');
   invalidateCache('housekeeping_assignments');
-  var [zonas, asigs] = await Promise.all([
+  invalidateCache('housekeeping_plans');
+  var [zonas, asigs, plans] = await Promise.all([
     getDB('housekeeping_public_areas'),
-    getDB('housekeeping_assignments')
+    getDB('housekeeping_assignments'),
+    getDB('housekeeping_plans')
   ]);
 
   var dow = hkTodayDow();
   var hoy = today();
+  // Planes de hoy → para filtrar asignaciones planificadas del día actual
+  var planesHoy = plans.filter(p=>p.fecha===hoy);
+  var planIdsHoy = planesHoy.map(p=>p.id);
 
   // Estado por zona: si tiene asignación finalizado/revisado hoy → verde
   // Si tiene asignación en proceso → azul
   // Si toca hoy y no hay asignación → amarillo
   // Si no toca hoy → gris
 
-  zonas.sort(function(a,b){ return (a.orden||0)-(b.orden||0); });
+  zonas.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es'); });
 
   var html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;font-family:var(--font-mono);">';
   html += '<span>🟢 hecha hoy</span><span>🔵 en proceso</span><span>🟡 toca hoy</span><span>⚫ no toca</span>';
@@ -928,10 +1072,10 @@ async function renderHKZonasPublicas(){
         if(a.tipo_objeto !== 'zona_publica') return false;
         if(a.objeto_id !== z.id) return false;
         if(a.ad_hoc){
-          return (a.hora_inicio||a.created_at||'').indexOf(hoy) === 0;
+          return (a.hora_inicio||a.created_at||'').slice(0,10) === hoy;
         }
-        // si está en plan de hoy
-        return true; // simplificación: consideramos asignación reciente
+        // planificada: solo si el plan pertenece a los planes de hoy
+        return planIdsHoy.indexOf(a.plan_id) >= 0;
       });
 
       var icon = '⚫', color = '#9ca3af', estadoText = 'No toca hoy';
@@ -1333,3 +1477,7 @@ window.hkBorrarAsig = hkBorrarAsig;
 window.hkAdHocZona = hkAdHocZona;
 window.hkIsGobernanta = hkIsGobernanta;
 window.hkIsHK = hkIsHK;
+window.hkRenderHabCheckboxes = hkRenderHabCheckboxes;
+window.hkHabChkClick = hkHabChkClick;
+window.hkSelAllHab = hkSelAllHab;
+window.hkUpdateHabResumen = hkUpdateHabResumen;
