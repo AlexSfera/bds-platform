@@ -97,6 +97,8 @@
 
         <div id="hk-exec-actions" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;"></div>
 
+        <div id="hk-exec-inci-panel" style="display:none;background:#ef444411;border:1px solid #ef4444;border-radius:10px;padding:14px;margin-bottom:12px;"></div>
+
         <div class="fg">
           <label>Notas (opcional)</label>
           <textarea id="hk-exec-notas" rows="2" placeholder="Observaciones, problemas, hallazgos…"></textarea>
@@ -590,35 +592,28 @@ async function hkOpenExec(asigId){
     actions.innerHTML += `<button class="tbtn" style="background:transparent;border:1px solid #ef4444;color:#ef4444;font-size:13px;padding:12px;margin-top:4px;" onclick="hkToggleInciPanel()">⚠ Registrar incidencia</button>`;
   }
 
-  // Construir panel de incidencia — insertar en actions div, tras los botones
+  // Panel de incidencia — existe en el modal como elemento fijo, solo resetear contenido
   var inciPanel = document.getElementById('hk-exec-inci-panel');
-  if(!inciPanel){
-    inciPanel = document.createElement('div');
-    inciPanel.id = 'hk-exec-inci-panel';
-    actions.appendChild(inciPanel);
-  } else if(!actions.contains(inciPanel)){
-    actions.appendChild(inciPanel);
+  if(inciPanel){
+    inciPanel.style.display = 'none';
+    var tiposOpts = HK_INCI_TIPOS.map(function(t){
+      return '<option value="'+t+'">'+t+'</option>';
+    }).join('');
+    inciPanel.innerHTML = '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:10px;">⚠ NUEVA INCIDENCIA · HOUSEKEEPING</div>'
+      + '<div class="fg" style="margin-bottom:8px;">'
+      + '<label>Tipo de incidencia</label>'
+      + '<select id="hk-exec-inci-tipo">'+tiposOpts+'</select>'
+      + '</div>'
+      + '<div class="fg" style="margin-bottom:8px;">'
+      + '<label>Descripción <span style="color:#ef4444;">*</span></label>'
+      + '<textarea id="hk-exec-inci-desc" rows="2" placeholder="Describe el problema encontrado…"></textarea>'
+      + '</div>'
+      + '<div class="fg" style="margin-bottom:10px;">'
+      + '<label>Acción tomada / inmediata</label>'
+      + '<textarea id="hk-exec-inci-accion" rows="2" placeholder="Qué hiciste para resolverlo (si aplica)…"></textarea>'
+      + '</div>'
+      + '<button class="tbtn" style="background:#ef4444;color:white;width:100%;" onclick="hkGuardarIncidencia()">Guardar incidencia</button>';
   }
-  inciPanel.style.cssText = 'display:none;background:#ef444411;border:1px solid #ef4444;border-radius:10px;padding:14px;margin-top:4px;';
-
-  var tiposOpts = HK_INCI_TIPOS.map(function(t){
-    return '<option value="'+t+'">'+t+'</option>';
-  }).join('');
-
-  inciPanel.innerHTML = '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:10px;">⚠ NUEVA INCIDENCIA · HOUSEKEEPING</div>'
-    + '<div class="fg" style="margin-bottom:8px;">'
-    + '<label>Tipo de incidencia</label>'
-    + '<select id="hk-exec-inci-tipo">'+tiposOpts+'</select>'
-    + '</div>'
-    + '<div class="fg" style="margin-bottom:8px;">'
-    + '<label>Descripción <span style="color:#ef4444;">*</span></label>'
-    + '<textarea id="hk-exec-inci-desc" rows="2" placeholder="Describe el problema encontrado…"></textarea>'
-    + '</div>'
-    + '<div class="fg" style="margin-bottom:10px;">'
-    + '<label>Acción tomada / inmediata</label>'
-    + '<textarea id="hk-exec-inci-accion" rows="2" placeholder="Qué hiciste para resolverlo (si aplica)…"></textarea>'
-    + '</div>'
-    + '<button class="tbtn" style="background:#ef4444;color:white;width:100%;" onclick="hkGuardarIncidencia()">Guardar incidencia</button>';
 
   document.getElementById('modal-hk-exec').style.display = 'flex';
 }
