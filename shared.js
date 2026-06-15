@@ -143,7 +143,9 @@ const SUPERVISOR_DEPT_MAP = {
   gobernante: ['Housekeeping', 'Limpieza'],
   coord_recepcion_syncrolab: ['Recepción SYNCROLAB', 'SyncroLab', 'SYNCROLAB'],
   coord_entrenadores: ['Entrenadores', 'SYNCROLAB', 'SyncroLab'],
-  coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab']
+  coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab'],
+  adjunto_directivo: ['*'],  // acceso a todos los departamentos
+  adjunto: ['*']             // alias legacy
 };
 
 // Grupos de área para el rol 'jefe': su `area` expande a los departamentos que cubre.
@@ -253,7 +255,9 @@ function canViewDepartment(user,dept){
   if(isAdmin(user)) return true;
   var d=normalizeDeptName(dept);
   if(!d) return false;
-  return getSupervisorDepartments(user).map(normalizeDeptName).indexOf(d)!==-1;
+  var depts=getSupervisorDepartments(user);
+  if(depts.indexOf('*')!==-1) return true;  // comodín — acceso a todos
+  return depts.map(normalizeDeptName).indexOf(d)!==-1;
 }
 function canValidateDepartment(user,dept){
   // adjunto_directivo con area=Administración: solo lectura, no valida

@@ -25,6 +25,7 @@ function getDashDeptsForUser() {
   var rol = currentUser.rol;
   var area = currentUser.area;
   if (rol === 'admin') return DASH_DEPTS;
+  if (rol === 'adjunto_directivo' || rol === 'adjunto') return DASH_DEPTS;  // acceso total al dashboard
   if (rol === 'fb') return DASH_DEPTS.filter(function(d) {
     return ['Cocina','Sala','FnB'].indexOf(d.id) !== -1;
   });
@@ -34,7 +35,7 @@ function getDashDeptsForUser() {
   if (typeof isSupervisor === 'function' && isSupervisor(currentUser)) {
     return DASH_DEPTS.filter(function(d) {
       return getSupervisorDepartments(currentUser).some(function(dep) {
-        return normalizeDeptName(dep) === normalizeDeptName(d.id) || normalizeDeptName(dep) === normalizeDeptName(d.label);
+        return dep === '*' || normalizeDeptName(dep) === normalizeDeptName(d.id) || normalizeDeptName(dep) === normalizeDeptName(d.label);
       });
     });
   }
