@@ -65,6 +65,62 @@ function normalizarNombre(n) {
   }).join(' ');
 }
 
+// ── MATCHING EMPLEADO ────────────────────────────────────────────────────
+// Devuelve { emp, tipo } o null
+// tipo: 'exact' | 'fuzzy'
+function fichajeMatchEmpleado(alertaNombre, employees) {
+  var a = alertaNombre.toLowerCase().trim();
+  var tokA = a.split(/\s+/).filter(function(t){ return t.length > 2; });
+
+  var exactMatch = null;
+  var fuzzyMatch = null;
+
+  employees.forEach(function(e) {
+    var eName = (e.nombre || '').toLowerCase().trim();
+    if (eName === a) {
+      exactMatch = { emp: e, tipo: 'exact' };
+      return;
+    }
+    if (!exactMatch) {
+      var tokE = eName.split(/\s+/);
+      var hits = tokA.filter(function(t){ return tokE.indexOf(t) !== -1; });
+      if (hits.length >= 1 && !fuzzyMatch) {
+        fuzzyMatch = { emp: e, tipo: 'fuzzy' };
+      }
+    }
+  });
+
+  return exactMatch || fuzzyMatch || null;
+}
+
+// ── CREAR PERFIL MÍNIMO ─────────────────────────────────────────────────
+// Genera un empleado sin rol/área para que el admin lo complete
+async function fichajeCrearPerfilMinimo(nombre) {
+  var pinTmp = 'AUTO' + Date.now().toString().slice(-6);
+  var newEmp = {
+    id:          'E' + Date.now(),
+    nombre:      nombre,
+    pin:         pinTmp,
+    area:        '',
+    puesto:      '',
+    coste:       0,
+    estado:      'Sin asignar',
+    responsable: 0,
+    validador:   0,
+    rol:         'empleado',
+    obs:         'Perfil creado automáticamente desde Alertas Fichaje. Pendiente asignar área y rol.',
+    fecha_alta:  typeof today === 'function' ? today() : new Date().toISOString().slice(0,10),
+    created_at:  typeof localTs === 'function' ? localTs() : new Date().toISOString()
+  };
+  var result = await dbInsert('employees', newEmp);
+  if (result === null) return null;
+  invalidateCache('employees');
+  if (typeof auditLog === 'function') {
+    auditLog('FICHAJE_CREATE_EMP', nombre + ' — perfil auto desde alertas fichaje');
+  }
+  return newEmp;
+}
+
 // ── ESTADO DEL MÓDULO ───────────────────────────────────────────────────
 var _fichajeImportMode    = 'semanal';   // 'semanal' | 'mensual'
 var _fichajeInicioSemana  = '';
@@ -73,6 +129,7 @@ var _fichajeMes           = '';          // YYYY-MM
 var _fichajePreview       = [];          // parsed antes de confirmar
 var _fichajeFilterPeriodo = '';          // filtro vista admin
 var _fichajeFilterEmp     = '';          // filtro empleado concreto
+var _fichajeMatchResult   = null;        // resultado del último matching
 
 // ── RENDER PRINCIPAL ────────────────────────────────────────────────────
 async function renderFichaje() {
@@ -110,7 +167,14 @@ async function renderFichajeAdmin(el) {
     ? allAlerts.filter(function(a) { return a.periodo_control === _fichajeFilterPeriodo; })
     : allAlerts;
 
+  // ── Panel de matching (si hay resultado reciente) ──
+  var matchPanel = _fichajeMatchResult
+    ? renderFichajeMatchPanel(_fichajeMatchResult)
+    : '';
+
   el.innerHTML = `
+    ${matchPanel ? '<div id="fichaje-match-panel" style="margin-bottom:20px;">' + matchPanel + '</div>' : ''}
+
     <div class="two-col" style="gap:20px;align-items:flex-start;">
 
       <!-- COLUMNA IZQUIERDA: Importador -->
@@ -220,7 +284,6 @@ function renderFichajeRanking(alertas) {
   });
 
   var sorted = Object.values(byEmp).sort(function(a, b) { return b.total - a.total; });
-
   var maxTotal = sorted[0] ? sorted[0].total : 1;
 
   var rows = sorted.map(function(emp, i) {
@@ -295,6 +358,68 @@ function renderFichajeSummaryCards(alertas) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// PANEL DE MATCHING — resultado post-importación
+// ════════════════════════════════════════════════════════════════════════
+function renderFichajeMatchPanel(matchResult) {
+  if (!matchResult || !matchResult.length) return '';
+
+  var sinPerfil  = matchResult.filter(function(r){ return r.status === 'sin_perfil'; });
+  var creados    = matchResult.filter(function(r){ return r.status === 'creado'; });
+  var matchExact = matchResult.filter(function(r){ return r.status === 'exact'; });
+  var matchFuzzy = matchResult.filter(function(r){ return r.status === 'fuzzy'; });
+
+  var rows = matchResult.map(function(r) {
+    var statusHtml;
+    if (r.status === 'exact') {
+      statusHtml = '<span style="background:var(--green-dim);color:var(--green);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;">✓ Match exacto</span>';
+    } else if (r.status === 'fuzzy') {
+      statusHtml = '<span style="background:var(--blue-dim);color:var(--blue);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;">≈ Match aproximado</span>';
+    } else if (r.status === 'creado') {
+      statusHtml = '<span style="background:var(--amber-dim);color:var(--amber);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;">🆕 Perfil creado</span>';
+    } else {
+      statusHtml = '<span style="background:var(--red-dim);color:var(--red);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;">✗ Error al crear</span>';
+    }
+    var empInfo = r.empNombre
+      ? '<span style="font-size:11px;color:var(--text2);">' + r.empNombre + (r.empArea ? ' · ' + r.empArea : '') + '</span>'
+      : '<span style="font-size:11px;color:var(--text3);">—</span>';
+
+    return '<tr>'
+      + '<td style="font-weight:600;">' + r.alertaNombre + '</td>'
+      + '<td>' + statusHtml + '</td>'
+      + '<td>' + empInfo + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var resumen = [];
+  if (matchExact.length) resumen.push('<span style="color:var(--green);">✓ ' + matchExact.length + ' exacto(s)</span>');
+  if (matchFuzzy.length) resumen.push('<span style="color:var(--blue);">≈ ' + matchFuzzy.length + ' aproximado(s)</span>');
+  if (creados.length)    resumen.push('<span style="color:var(--amber);">🆕 ' + creados.length + ' perfil(es) creado(s)</span>');
+  if (sinPerfil.length)  resumen.push('<span style="color:var(--red);">✗ ' + sinPerfil.length + ' error(es)</span>');
+
+  return '<div class="card" style="border-left:3px solid var(--amber);">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+    + '<div class="card-title" style="margin:0;">👥 MATCHING DE EMPLEADOS</div>'
+    + '<button class="btn btn-secondary btn-sm" onclick="_fichajeMatchResult=null;renderFichaje()">✕ Cerrar</button>'
+    + '</div>'
+    + '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap;">'
+    + resumen.join(' &nbsp;·&nbsp; ')
+    + '</div>'
+    + (creados.length
+      ? '<div style="font-size:11px;background:var(--amber-dim);color:var(--amber);padding:8px;border-radius:6px;margin-bottom:10px;">'
+        + '⚠ Los perfiles creados automáticamente tienen PIN temporal y sin área/rol asignados. '
+        + 'Ve a <b>Maestro</b> para completarlos.'
+        + '</div>'
+      : '')
+    + '<div class="tbl-wrap">'
+    + '<table>'
+    + '<thead><tr><th>Nombre en alerta</th><th>Estado</th><th>Perfil en sistema</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table>'
+    + '</div>'
+    + '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // VISTA EMPLEADO
 // ════════════════════════════════════════════════════════════════════════
 async function renderFichajeEmpleado(el) {
@@ -321,7 +446,7 @@ async function renderFichajeEmpleado(el) {
     ? misAlertas.filter(function(a) { return a.periodo_control === _fichajeFilterPeriodo; })
     : misAlertas;
 
-  var anomalia    = alertasPeriodo.filter(function(a){ return a.tipo_alerta === 'anomalia_marcaje'; }).length;
+  var anomalia     = alertasPeriodo.filter(function(a){ return a.tipo_alerta === 'anomalia_marcaje'; }).length;
   var noAutorizado = alertasPeriodo.filter(function(a){ return a.tipo_alerta === 'metodo_no_autorizado'; }).length;
   var total        = alertasPeriodo.length;
 
@@ -531,16 +656,78 @@ async function fichajeImportar() {
     await auditLog('bitrix_alerts_import', periodo + ' · ' + rows.length + ' registros · por ' + currentUser.nombre);
     invalidateCache('bitrix_alerts');
     toast('✅ ' + rows.length + ' alertas importadas para ' + periodo, 'ok');
-    // Limpiar textarea y actualizar filtro
+
+    // Limpiar textarea
     var rawEl = document.getElementById('fich-raw');
     if (rawEl) rawEl.value = '';
     var prevEl = document.getElementById('fichaje-preview-area');
     if (prevEl) prevEl.innerHTML = '';
     _fichajeFilterPeriodo = periodo;
+
+    // ── MATCHING POST-IMPORT ─────────────────────────────────────────
+    await fichajeEjecutarMatching(rows);
+
     await renderFichaje();
   } else {
     toast('Error al guardar. Revisa la consola.', 'error');
   }
+}
+
+// ── MATCHING: lógica principal ───────────────────────────────────────────
+// Recibe las rows recién importadas, hace matching contra employees,
+// crea perfiles para los que no tienen perfil, guarda resultado en _fichajeMatchResult
+async function fichajeEjecutarMatching(rows) {
+  // Nombres únicos de las alertas importadas
+  var nombresUnicos = [];
+  var seen = {};
+  rows.forEach(function(r) {
+    var n = normalizarNombre(r.nombre_empleado);
+    if (!seen[n]) { seen[n] = true; nombresUnicos.push(n); }
+  });
+
+  // Cargar empleados actuales
+  var employees = [];
+  try { employees = await getDB('employees'); } catch(e) {}
+  // Excluir estado Sin asignar ya creados (por si se reimporta)
+  var activeEmps = employees.filter(function(e){ return e.estado !== 'Sin asignar'; });
+
+  var resultados = [];
+
+  for (var i = 0; i < nombresUnicos.length; i++) {
+    var alertaNombre = nombresUnicos[i];
+    var match = fichajeMatchEmpleado(alertaNombre, employees); // busca en todos (incluso sin asignar)
+
+    if (match) {
+      resultados.push({
+        alertaNombre: alertaNombre,
+        status: match.tipo,
+        empNombre: match.emp.nombre,
+        empArea: match.emp.area || '—'
+      });
+    } else {
+      // Sin perfil → crear perfil mínimo
+      var newEmp = await fichajeCrearPerfilMinimo(alertaNombre);
+      if (newEmp) {
+        resultados.push({
+          alertaNombre: alertaNombre,
+          status: 'creado',
+          empNombre: newEmp.nombre,
+          empArea: '— (pendiente asignar)'
+        });
+        // Añadir al array local para que el siguiente ciclo lo encuentre
+        employees.push(newEmp);
+      } else {
+        resultados.push({
+          alertaNombre: alertaNombre,
+          status: 'sin_perfil',
+          empNombre: null,
+          empArea: null
+        });
+      }
+    }
+  }
+
+  _fichajeMatchResult = resultados;
 }
 
 // ── CARGA DE DATOS ───────────────────────────────────────────────────────
@@ -553,5 +740,6 @@ async function cargarBitrixAlerts() {
 // Se llama desde showScreen cuando id === 'fichaje'
 window._fichajeOnShow = function() {
   _fichajeFilterPeriodo = '';
+  _fichajeMatchResult   = null;
   renderFichaje();
 };
