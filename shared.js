@@ -468,8 +468,14 @@ function getScreens(rol){
   if(isSala)      dptoMod.push(ITEMS.incentivos); // empleados Sala ven su bonus
   if(isHK)        {
     dptoMod.push(ITEMS.ruta);
-    // Gobernanta/Subgobernanta ven planificación + zonas + revisión + dashboard + config
-    var _isGob = typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
+    // Gobernanta: rol gobernante, admin, o jefe_departamento con área HK
+    var _isGob = currentUser && (
+      currentUser.rol === 'admin' ||
+      currentUser.rol === 'gobernante' ||
+      (currentUser.rol === 'jefe_departamento' && (
+        currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza'
+      ))
+    );
     if(_isGob){
       dptoMod.push(ITEMS.hkPlan);
       dptoMod.push(ITEMS.hkZonas);
