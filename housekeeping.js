@@ -83,7 +83,10 @@
     document.body.appendChild(modalAsig);
   }
 
-  if(!document.getElementById('modal-hk-exec')){
+  // Verificar que el modal tiene el panel de incidencia (versiones antiguas no lo tienen)
+  if(!document.getElementById('hk-exec-inci-panel')){
+    var oldExecModal = document.getElementById('modal-hk-exec');
+    if(oldExecModal) oldExecModal.parentNode.removeChild(oldExecModal);
     var modal = document.createElement('div');
     modal.id = 'modal-hk-exec';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:680;padding:16px;';
