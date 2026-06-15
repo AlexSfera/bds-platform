@@ -783,7 +783,7 @@ function hkToggleInciPanel(){
 
   var m = document.createElement('div');
   m.id = 'modal-hk-inci';
-  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:700;padding:16px;';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
   m.innerHTML = '<div style="background:var(--bg2);border:2px solid #ef4444;border-radius:14px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;">'
     + '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:12px;">⚠ NUEVA INCIDENCIA · HOUSEKEEPING</div>'
     + '<div class="fg" style="margin-bottom:10px;">'
@@ -821,7 +821,7 @@ async function hkGuardarIncidencia(){
   var desc = descEl ? descEl.value.trim() : '';
   var accion = accionEl ? accionEl.value.trim() : '';
 
-  if(!desc){ toast('Describe la incidencia','warn'); return; }
+  if(!desc){ toast('Describe la incidencia','warn'); document.getElementById('hk-inci-desc') && document.getElementById('hk-inci-desc').focus(); return; }
 
   var inc = {
     id: hkGenId('inc'),
