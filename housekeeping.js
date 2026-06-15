@@ -774,26 +774,23 @@ var HK_INCI_TIPOS = [
 
 function hkToggleInciPanel(){
   var panel = document.getElementById('hk-exec-inci-panel');
-  if(!panel){
-    // Panel no existe — reconstruir el modal completo
-    var oldModal = document.getElementById('modal-hk-exec');
-    if(oldModal) oldModal.parentNode.removeChild(oldModal);
-    injectHKHTML && injectHKHTML();
-    toast('Recarga la página (Cmd+Shift+R) y vuelve a intentarlo','warn');
-    return;
-  }
+  if(!panel){ toast('Actualiza la página (Cmd+Shift+R)','warn'); return; }
   var isHidden = (panel.style.display === 'none' || panel.style.display === '');
+  panel.style.display = isHidden ? 'block' : 'none';
   if(isHidden){
-    panel.style.display = 'block';
-    // Scroll dentro del modal container
-    var modalInner = panel.closest('[style*="overflow-y"]') || panel.parentElement;
-    if(modalInner){
-      setTimeout(function(){
-        modalInner.scrollTop = modalInner.scrollHeight;
-      }, 30);
-    }
-  } else {
-    panel.style.display = 'none';
+    // Scroll al panel — buscar el contenedor scrollable del modal
+    setTimeout(function(){
+      var container = panel.parentElement;
+      while(container && container !== document.body){
+        if(container.scrollHeight > container.clientHeight){ break; }
+        container = container.parentElement;
+      }
+      if(container && container !== document.body){
+        container.scrollTop = container.scrollHeight;
+      } else {
+        panel.scrollIntoView({behavior:'smooth', block:'start'});
+      }
+    }, 50);
   }
 }
 
@@ -841,9 +838,15 @@ async function hkGuardarIncidencia(){
   await dbUpdate('housekeeping_assignments', a.id, { incidencia_id: inc.id });
   invalidateCache('housekeeping_assignments');
   toast('⚠ Incidencia registrada · la Gobernanta la revisará','ok');
-  // Cerrar panel de incidencia, mantener modal abierto
+  // Cerrar panel y limpiar campos para siguiente uso
   var panel = document.getElementById('hk-exec-inci-panel');
-  if(panel) panel.style.display = 'none';
+  if(panel){
+    panel.style.display = 'none';
+    var descEl2 = document.getElementById('hk-exec-inci-desc');
+    var accionEl2 = document.getElementById('hk-exec-inci-accion');
+    if(descEl2) descEl2.value = '';
+    if(accionEl2) accionEl2.value = '';
+  }
   // Refrescar Revisión HK si está activa
   if(typeof renderHKRevision === 'function'){
     var revScreen = document.getElementById('screen-hk-revision');
