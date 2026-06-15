@@ -1079,30 +1079,93 @@ function buildInfoContent(area){
   // ════════════════════════════════════════════════════════════════════
   if(/syncrolab/i.test(area)){
     return ''
-    + _infoCard('🏋 SYNCROLAB — ¿Para qué rellenas tu turno?',
-        'Para registrar sesiones realizadas, testing, recovery y CUALQUIER incidencia médica o de seguridad. '
-      + 'En SYNCROLAB la seguridad del cliente está por encima de todo: incidencia médica = aviso inmediato al responsable.',
+    + _infoCard('🏋 ¿Para qué rellenas tu turno?',
+        'SYNCRO HUB registra lo que pasa en tu turno: las dos cajas, los cargos a habitación y cualquier incidencia.<br><br>'
+      + '<b>La seguridad del cliente es lo primero.</b> Cualquier problema médico o técnico se registra en el momento — no al final del turno.<br><br>'
+      + 'Tienes dos sistemas y dos cajas físicas que gestionas a la vez:<br>'
+      + '<span style="color:#6366f1;font-weight:700;">🩺 Nubimed / Clínica</span> — fisioterapia, medicina deportiva, recovery clínico<br>'
+      + '<span style="color:#10b981;font-weight:700;">🏋 VirtuGym / Fitness</span> — entrenamiento personal, fitness, sesiones deportivas',
         '#a855f7')
 
-    + _infoCard('📝 Mi Turno — Campo a campo',
-        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
-      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto que continúa tu compañero. Ej: "Cliente vuelve mañana para 2ª sesión", "Cerrar informe del test de hoy", "Revisar programa de recovery". <i>Si pide acción a Economato/Mantenimiento → TAREA, no gestión.</i><br><br>'
-      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br><u>Cualquier</u> tema que requiere <b>decisión del coordinador</b>: mareo, sobrecarga, mala respuesta al test, malestar médico, problema técnico grave de cámara. La seguridad del cliente está sobre todo. Tú la abres + paras la sesión si aplica + avisas. <b>El coordinador la cierra.</b>',
+    + _infoCard('📝 Paso 1 — Rellena tu turno',
+        '<b>'+_req('Fecha')+'</b><br>El día del turno.<br><br>'
+
+      + '<b>'+_req('Turno')+'</b><br>'
+      + 'Mañana o Tarde. Solo uno. Una vez que hagas la caja queda bloqueado.<br><br>'
+
+      + '<b>'+_req('Horas trabajadas')+'</b><br>'
+      + 'Las horas reales del día, no las del contrato.<br><br>'
+
+      + '<b>'+_req('Responsable de turno')+'</b><br>'
+      + 'El nombre de quien estuvo al mando.<br><br>'
+
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
+      + 'Algo de SYNCROLAB que queda para el siguiente turno.<br>'
+      + '<i>Ejemplos: "Cliente vuelve mañana para 2ª sesión" · "Cerrar informe del test de hoy" · "Revisar programa de recovery del 302"</i><br>'
+      + '<i>⚠ Si necesita Economato o Mantenimiento → TAREA, no gestión.</i><br><br>'
+
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
+      + 'Cualquier problema que requiere decisión del coordinador: mareo, sobrecarga, mala respuesta al test, malestar médico, problema técnico grave.<br>'
+      + '<b style="color:#ef4444;">Si hay malestar físico: para la sesión + abre incidencia + avisa al coordinador. Él la cierra.</b>',
         '#a855f7')
 
-    + _infoCard('🫁 Hypoxic Room — Si detectas problema técnico',
-        'Si durante la sesión la cámara da problemas (CO₂ alto · hipoxia bajo set point · puerta abierta · sensor sin datos) → '
-      + 'crea incidencia en módulo Hypoxic con: '+_req('Habitación')+' · '+_req('Tipo')+' · CO₂ · Altitud · Set point · Anotaciones.<br><br>'
-      + '<b>Si el cliente sufre malestar:</b> INCIDENCIA inmediata + parar sesión + informar responsable.',
+    + _infoCard('💰 Paso 2 — Caja: ¿Traspaso o Cierre?',
+        '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:12px;">'
+      + '<b>El turno y el día determinan qué haces:</b><br><br>'
+      + '• Mañana (lun–sáb) → solo '+_tag('TRASPASO','#0891b2')+' — dejas el efectivo al turno de Tarde<br>'
+      + '• Tarde (lun–sáb) → '+_tag('TRASPASO','#0891b2')+' o '+_tag('CIERRE','#a855f7')+' — el Tarde cierra el día<br>'
+      + '• Cualquier turno en domingo → '+_tag('CIERRE','#a855f7')+' — hay un solo turno<br>'
+      + '• Si hay dos personas en el mismo turno → una hace la caja, la otra pulsa "Cerrar turno sin caja"'
+      + '</div>'
+
+      + '<b>TRASPASO — Mañana</b> (solo efectivo, sin retiro)<br>'
+      + 'Haces lo mismo para las dos cajas:<br>'
+      + '1. <b>Fondo recibido</b> → aparece solo, viene del turno anterior. Cuéntalo.<br>'
+      + '2. <b>Ventas efectivo</b> '+_req('*')+' → lo que el sistema registró. Pon 0 si no hubo.<br>'
+      + '3. <b>Efectivo real a traspasar</b> '+_req('*')+' → cuenta la caja física ahora.<br>'
+      + '4. <b>Esperado</b> → calculado: Fondo + Ventas. Debe coincidir con el real.<br>'
+      + '<i>Si no cuadra → explicación obligatoria.</i><br><br>'
+
+      + '<b>CIERRE — Tarde o domingo</b><br>'
+      + 'Para cada sistema introduces según sistema y real contado:<br>'
+      + '• Efectivo · Tarjeta/TPV · Stripe · Transferencia<br>'
+      + 'El sistema calcula la diferencia solo. Si hay diferencia → explicación obligatoria.',
         '#a855f7')
+
+    + _infoCard('🏨 Cargos a habitación MEWS',
+        'Si un cliente paga un servicio SYNCROLAB <b>cargándolo a su habitación</b> (no en efectivo), añade una línea aquí.<br><br>'
+      + 'Campos por línea:<br>'
+      + '• <b>Sistema</b> — Nubimed o VirtuGym<br>'
+      + '• <b>Habitación</b> — número del huésped<br>'
+      + '• <b>Huésped</b> — nombre del cliente<br>'
+      + '• <b>Concepto</b> — qué servicio fue (ej: "Fisioterapia 60min")<br>'
+      + '• <b>Importe (€)</b><br><br>'
+      + '<b style="color:#f59e0b;">⚠ Esto no es efectivo de tu caja.</b> Es un cobro que Recepción confirma y carga en MEWS. Si no lo registras, Recepción no sabe que tiene que cargarlo y el servicio se pierde.',
+        '#f59e0b')
+
+    + _infoCard('🫁 Hypoxic Room — Solo si hay problema',
+        '<b>No registres el uso normal de las cámaras.</b> Solo cuando algo falla.<br><br>'
+      + 'Habitaciones: 104–109 · 202–209<br><br>'
+      + '<b>Cuándo crear una incidencia:</b><br>'
+      + '• Hipoxia bajo set point · CO₂ alto · Puerta abierta repetidamente · Sensor sin datos<br>'
+      + '• El cliente avisa de cualquier sensación anormal<br><br>'
+      + '<b>Campos:</b> '+_req('Habitación')+' · '+_req('Tipo')+' · CO₂ · Altitud · Set point · ☐ Cliente notificó · Anotaciones<br><br>'
+      + 'Estados: '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
+      + 'Al cerrar: describe exactamente '+_req('qué hiciste')+'.<br><br>'
+      + '<b style="color:#ef4444;">Si el cliente tiene malestar físico: para la sesión + incidencia + coordin. inmediatamente.</b>',
+        '#06b6d4')
 
     + bloqueDiferencias
 
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Sesiones del día registradas<br>'
-      + '☐ Problemas técnicos cámara → incidencia Hypoxic<br>'
-      + '☐ Incidencia médica/seguridad → marcada + informada al responsable<br>'
-      + '☐ Material que falte → tarea a Economato',
+        '☐ Turno, fecha y horas correctos<br>'
+      + '☐ Gestión marcada si queda algo pendiente<br>'
+      + '☐ Incidencia marcada si hubo algo con un cliente<br>'
+      + '☐ Caja Nubimed cuadrada o diferencia explicada<br>'
+      + '☐ Caja VirtuGym cuadrada o diferencia explicada<br>'
+      + '☐ Cargos a habitación añadidos si algún cliente pagó contra habitación<br>'
+      + '☐ Incidencia Hypoxic creada si hubo problema técnico en cámara<br>'
+      + '☐ Si falta material → tarea a Economato',
         '#10b981')
     + jefe;
   }

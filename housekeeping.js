@@ -271,8 +271,7 @@ async function renderHKMiRuta(){
 
   var mias = asigs.filter(function(a){
     if(a.employee_id !== currentUser.id) return false;
-    // empleado: solo habitaciones; gobernanta: todas
-    if(!isGob && a.tipo_objeto && a.tipo_objeto !== 'habitacion') return false;
+    // Empleado ve TODAS sus asignaciones del día (habitaciones + zonas + periódicas)
     if(a.ad_hoc){
       var ts = a.hora_inicio || a.created_at || '';
       return ts.slice(0, 10) === hoy;
@@ -420,7 +419,9 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
         + '<div style="font-size:11px;color:var(--text3);margin-top:2px;">' + estadoText + (z.tarea_grupo ? ' · ' + z.tarea_grupo : '') + '</div>'
         + '</div>';
 
-      var puedeAbrir = asigHoy && (asigHoy.estado === 'en_proceso' || asigHoy.estado === 'pausada' || asigHoy.estado === 'pendiente');
+      // Empleado puede abrir si la zona está asignada a él (pendiente/en proceso/pausada)
+      var esMiZona = asigHoy && asigHoy.employee_id === currentUser.id;
+      var puedeAbrir = asigHoy && (asigHoy.estado === 'en_proceso' || asigHoy.estado === 'pausada' || (asigHoy.estado === 'pendiente' && (esMiZona || isGob)));
       var puedeEjec  = isGob && minHoy > 0 && !(asigHoy && (asigHoy.estado === 'finalizado' || asigHoy.estado === 'revisado'));
 
       if(puedeAbrir){
@@ -505,10 +506,42 @@ async function hkOpenExec(asigId){
     actions.innerHTML += `<button class="tbtn" style="background:#ef4444;color:white;font-size:14px;padding:14px;" onclick="hkAction('reabrir')">↺ Reabrir (admin)</button>`;
   }
 
-  // Botón incidencia
+  // Panel de incidencia inline (debajo de acciones, sobre notas)
   if(soyDuenio || gob){
-    actions.innerHTML += `<button class="tbtn" style="background:transparent;border:1px solid #ef4444;color:#ef4444;font-size:13px;padding:12px;margin-top:4px;" onclick="hkCrearIncidencia('${a.id}')">⚠ Crear incidencia</button>`;
+    actions.innerHTML += `<button class="tbtn" style="background:transparent;border:1px solid #ef4444;color:#ef4444;font-size:13px;padding:12px;margin-top:4px;" onclick="hkToggleInciPanel()">⚠ Registrar incidencia</button>`;
   }
+
+  // Construir panel de incidencia
+  var inciPanel = document.getElementById('hk-exec-inci-panel');
+  if(!inciPanel){
+    inciPanel = document.createElement('div');
+    inciPanel.id = 'hk-exec-inci-panel';
+    var notasEl = document.getElementById('hk-exec-notas');
+    if(notasEl && notasEl.parentElement){
+      notasEl.parentElement.insertBefore(inciPanel, notasEl.closest('.fg')||notasEl);
+    }
+  }
+  inciPanel.style.display = 'none';
+  inciPanel.style.cssText = 'display:none;background:#ef444411;border:1px solid #ef4444;border-radius:10px;padding:14px;margin-bottom:12px;';
+
+  var tiposOpts = HK_INCI_TIPOS.map(function(t){
+    return '<option value="'+t+'">'+t+'</option>';
+  }).join('');
+
+  inciPanel.innerHTML = '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:10px;">⚠ NUEVA INCIDENCIA · HOUSEKEEPING</div>'
+    + '<div class="fg" style="margin-bottom:8px;">'
+    + '<label>Tipo de incidencia</label>'
+    + '<select id="hk-exec-inci-tipo">'+tiposOpts+'</select>'
+    + '</div>'
+    + '<div class="fg" style="margin-bottom:8px;">'
+    + '<label>Descripción <span style="color:#ef4444;">*</span></label>'
+    + '<textarea id="hk-exec-inci-desc" rows="2" placeholder="Describe el problema encontrado…"></textarea>'
+    + '</div>'
+    + '<div class="fg" style="margin-bottom:10px;">'
+    + '<label>Acción tomada / inmediata</label>'
+    + '<textarea id="hk-exec-inci-accion" rows="2" placeholder="Qué hiciste para resolverlo (si aplica)…"></textarea>'
+    + '</div>'
+    + '<button class="tbtn" style="background:#ef4444;color:white;width:100%;" onclick="hkGuardarIncidencia()">Guardar incidencia</button>';
 
   document.getElementById('modal-hk-exec').style.display = 'flex';
 }
@@ -646,31 +679,78 @@ async function hkUpdateLastClean(a, ts){
   }
 }
 
-async function hkCrearIncidencia(asigId){
+// Tipos de incidencia HK (del catálogo incidencia_tipos.js)
+var HK_INCI_TIPOS = [
+  'Habitación no lista / pendiente',
+  'Repaso pendiente',
+  'Limpieza insuficiente',
+  'Queja / huésped insatisfecho',
+  'Objeto olvidado',
+  'Daño en habitación',
+  'Falta de amenities / lencería',
+  'Problema con lavandería',
+  'Problema con mantenimiento',
+  'Problema con recepción / estado habitación',
+  'Accidente / seguridad',
+  'Incumplimiento de procedimiento',
+  'Retraso / disciplina',
+  'Otro'
+];
+
+function hkToggleInciPanel(){
+  var panel = document.getElementById('hk-exec-inci-panel');
+  if(!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function hkGuardarIncidencia(){
+  if(!_hkExecAsigId) return;
   var asigs = await getDB('housekeeping_assignments');
-  var a = asigs.find(x=>x.id===asigId);
-  if(!a){ return; }
-  var desc = prompt('Descripción de la incidencia en "'+a.objeto_nombre+'":');
-  if(!desc || !desc.trim()){ return; }
+  var a = asigs.find(function(x){ return x.id === _hkExecAsigId; });
+  if(!a){ toast('Asignación no encontrada','error'); return; }
+
+  var tipoEl = document.getElementById('hk-exec-inci-tipo');
+  var descEl = document.getElementById('hk-exec-inci-desc');
+  var accionEl = document.getElementById('hk-exec-inci-accion');
+
+  var tipo = tipoEl ? tipoEl.value : 'Otro';
+  var desc = descEl ? descEl.value.trim() : '';
+  var accion = accionEl ? accionEl.value.trim() : '';
+
+  if(!desc){ toast('Describe la incidencia','warn'); return; }
+
   var inc = {
     id: hkGenId('inc'),
     fecha: today(),
     ts: localTs(),
     departamento: 'Housekeeping',
-    tipo: 'HK',
-    descripcion: desc.trim(),
+    tipo_incidencia: tipo,
+    descripcion: desc,
+    accion_inmediata: accion,
+    severidad: 'Media',
+    categoria: 'Reportada por empleado',
     estado: 'Abierta',
-    creado_por: currentUser.id,
-    creado_nombre: currentUser.nombre,
-    contexto: 'asig:'+a.id+' · '+a.objeto_nombre
+    employee_id: currentUser.id,
+    nombre: currentUser.nombre,
+    requiere_formacion: 'No',
+    requiere_disciplina: 'No',
+    staff_implicado_ids: '[]',
+    staff_implicado_nombres: '[]',
+    created_at: localTs()
   };
-  // Reutilizar tabla incidencias del sistema
-  await dbInsert('incidencias', inc);
+
+  var res = await dbInsert('incidencias', inc);
+  if(!res){ toast('Error al guardar incidencia','error'); return; }
   invalidateCache('incidencias');
   await dbUpdate('housekeeping_assignments', a.id, { incidencia_id: inc.id });
   invalidateCache('housekeeping_assignments');
   toast('Incidencia registrada','ok');
   hkCloseExec();
+}
+
+async function hkCrearIncidencia(asigId){
+  // Legacy: abre el panel inline si el modal está abierto
+  hkToggleInciPanel();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -978,7 +1058,10 @@ async function hkOpenAsignar(tipo){
       opt.value = pair[0]; opt.textContent = pair[1];
       tlimpSel.appendChild(opt);
     });
-    tlimpSel.addEventListener('change', hkRenderHabCheckboxes);
+    tlimpSel.addEventListener('change', function(){
+      hkRenderHabCheckboxes();
+      hkUpdateHabResumen();
+    });
     tlimpDiv.appendChild(tlimpSel);
     form.appendChild(tlimpDiv);
 
@@ -988,6 +1071,15 @@ async function hkOpenAsignar(tipo){
     var habHeader = document.createElement('div');
     habHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
     habHeader.innerHTML = '<label style="margin:0;">Habitaciones</label>';
+    // Aviso de restricción de tipo
+    var _tlimpVal = tlimpSel ? tlimpSel.value : '';
+    var _tiposAllow = HK_TLIMP_TIPOS_PERMITIDOS[_tlimpVal];
+    if(_tiposAllow){
+      var avisoEl = document.createElement('div');
+      avisoEl.style.cssText = 'font-size:10px;color:var(--orange);font-family:var(--font-mono);margin-top:4px;grid-column:1/-1;';
+      avisoEl.textContent = 'Solo habitaciones: ' + _tiposAllow.join(', ');
+      habHeader.appendChild(avisoEl);
+    }
     var btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:6px;';
     var btnTodas = document.createElement('button');
@@ -1079,6 +1171,15 @@ function _hkAddEstPrio(form){
   hkRecalcEst();
 }
 
+// Tipos de habitación permitidos por tipo de limpieza
+// null = sin restricción (todos los tipos)
+var HK_TLIMP_TIPOS_PERMITIDOS = {
+  salida_syncro:  ['SYNCRO'],
+  salida_premium: ['PREMIUM','PANORAMIC','QUEEN'],
+  salida_fly:     ['FLY']
+  // repaso, repaso_sabanas, inspeccion, destripe: sin restricción
+};
+
 // Renderiza/re-renderiza la grilla de checkboxes de habitaciones
 function hkRenderHabCheckboxes(){
   var grid = document.getElementById('hk-asig-hab-grid');
@@ -1087,9 +1188,15 @@ function hkRenderHabCheckboxes(){
   var habsYa = (form && form._habsYa) ? form._habsYa : new Set();
   var TIPO_COLOR = {SYNCRO:'#3b82f6',PREMIUM:'#8b5cf6',PANORAMIC:'#a855f7',FLY:'#06b6d4',QUEEN:'#f59e0b'};
 
+  // Filtrar habitaciones por tipo permitido según limpieza seleccionada
+  var tiposPermitidos = HK_TLIMP_TIPOS_PERMITIDOS[tlimpSel ? tlimpSel.value : ''] || null;
+  var roomsFiltradas = tiposPermitidos
+    ? _hkAsigRooms.filter(function(r){ return tiposPermitidos.indexOf(r.tipo) >= 0; })
+    : _hkAsigRooms;
+
   // Agrupar por planta
   var porPlanta = {};
-  _hkAsigRooms.forEach(function(r){
+  roomsFiltradas.forEach(function(r){
     var p = 'P'+(r.planta||'?');
     if(!porPlanta[p]) porPlanta[p]=[];
     porPlanta[p].push(r);
@@ -1704,6 +1811,8 @@ window.hkBorrarAsig = hkBorrarAsig;
 window.hkAdHocZona = hkAdHocZona;
 window.hkIsGobernanta = hkIsGobernanta;
 window.hkIsHK = hkIsHK;
+window.hkToggleInciPanel = hkToggleInciPanel;
+window.hkGuardarIncidencia = hkGuardarIncidencia;
 window._hkRenderZonasEnRuta = _hkRenderZonasEnRuta;
 window.hkRenderHabCheckboxes = hkRenderHabCheckboxes;
 window.hkHabChkClick = hkHabChkClick;
