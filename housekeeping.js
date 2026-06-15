@@ -128,7 +128,7 @@ const HK_ESTADO_COLOR = {
 function hkIsHK(user){
   if(!user) return false;
   var area = (user.area||'').toLowerCase();
-  return area === 'hk' || area === 'housekeeping' || area === 'limpieza';
+  return area === 'hk' || area === 'housekeeping';
 }
 function hkIsGobernanta(user){
   if(!user) return false;
@@ -184,110 +184,264 @@ async function renderHKScreen(id){
 // ═══════════════════════════════════════════════════════════════════════
 // MI RUTA — vista del empleado HK y de Gobernanta para SU ruta
 // ═══════════════════════════════════════════════════════════════════════
+// Tab activo en Mi Ruta (tabs: 'habitaciones' | 'zonas')
+// Tab activo en Mi Ruta
+let _hkRutaTab = 'habitaciones';
+
+// Helper: card clicable que enlaza evento via JS (evita problemas de escaping en innerHTML)
+function _hkCard(asig, isGob){
+  var color = HK_ESTADO_COLOR[asig.estado] || '#9ca3af';
+  var label = HK_ESTADO_LABEL[asig.estado] || asig.estado;
+  var tipoLabel = asig.tipo_limpieza ? (HK_TIPO_LIMPIEZA_LABEL[asig.tipo_limpieza]||asig.tipo_limpieza) : '';
+  var icon = asig.tipo_objeto === 'habitacion' ? '🚪' : (asig.tipo_objeto === 'zona_publica' ? '🧽' : '🔧');
+  var realMin = asig.tiempo_real_min ? hkFmtDuration(asig.tiempo_real_min) : '';
+  var estMin  = asig.tiempo_estimado_min ? hkFmtDuration(asig.tiempo_estimado_min) : '';
+  var rtFlag  = (asig.re_trabajo_count||0) > 0 ? ' 🔁' : '';
+  var empLine = isGob ? '<div style="font-size:11px;color:var(--text3);margin-top:2px;">👤 ' + (asig.employee_nombre||'Sin asignar') + '</div>' : '';
+  var motivo  = asig.motivo_reapertura
+    ? '<div style="font-size:11px;color:#ef4444;margin-top:6px;background:#ef444411;padding:6px 8px;border-radius:6px;">⚠ Reabierta: ' + asig.motivo_reapertura + '</div>'
+    : '';
+
+  var el = document.createElement('div');
+  el.dataset.hkId = asig.id;
+  el.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:8px;padding:12px;cursor:pointer;';
+  el.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+    + '<div style="font-size:11px;color:' + color + ';font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;">' + label + rtFlag + '</div>'
+    + '<div style="font-size:11px;color:var(--text3);">' + estMin + (realMin ? ' · real ' + realMin : '') + '</div>'
+    + '</div>'
+    + '<div style="font-size:15px;font-weight:700;color:var(--text);">' + icon + ' ' + asig.objeto_nombre + '</div>'
+    + (tipoLabel ? '<div style="font-size:12px;color:var(--text3);margin-top:2px;">' + tipoLabel + '</div>' : '')
+    + empLine + motivo;
+  el.addEventListener('click', function(){ hkOpenExec(asig.id); });
+  return el;
+}
+
 async function renderHKMiRuta(){
-  var content = document.getElementById('hk-ruta-content');
-  var sub = document.getElementById('hk-ruta-sub');
-  if(!content) return;
-  if(!currentUser){ content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);">Sesión no iniciada</div>'; return; }
-  content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);font-family:var(--font-mono);font-size:11px;">Cargando…</div>';
+  var wrap = document.getElementById('hk-ruta-content');
+  var sub  = document.getElementById('hk-ruta-sub');
+  if(!wrap) return;
+  if(!currentUser){ wrap.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);">Sesión no iniciada</div>'; return; }
+
+  var isGob = hkIsGobernanta(currentUser);
+
+  // ── Tabs ──────────────────────────────────────────────────────────
+  wrap.innerHTML = '';
+  var tabBar = document.createElement('div');
+  tabBar.style.cssText = 'display:flex;gap:6px;margin-bottom:16px;';
+
+  var btnHab = document.createElement('button');
+  btnHab.className = 'tbtn' + (_hkRutaTab === 'habitaciones' ? ' on' : '');
+  btnHab.textContent = '🚪 Habitaciones';
+  btnHab.onclick = function(){ _hkRutaTab = 'habitaciones'; renderHKMiRuta(); };
+
+  var btnZon = document.createElement('button');
+  btnZon.className = 'tbtn' + (_hkRutaTab === 'zonas' ? ' on' : '');
+  btnZon.textContent = '🧽 Zonas públicas';
+  btnZon.onclick = function(){ _hkRutaTab = 'zonas'; renderHKMiRuta(); };
+
+  tabBar.appendChild(btnHab);
+  tabBar.appendChild(btnZon);
+  wrap.appendChild(tabBar);
+
+  if(_hkRutaTab === 'zonas'){
+    if(sub) sub.textContent = 'Mi Ruta · ' + today();
+    await _hkRenderZonasEnRuta(wrap, isGob);
+    return;
+  }
+
+  // ── Tab Habitaciones ──────────────────────────────────────────────
+  var loader = document.createElement('div');
+  loader.style.cssText = 'color:var(--text3);font-size:12px;padding:8px 0;';
+  loader.textContent = 'Cargando…';
+  wrap.appendChild(loader);
 
   invalidateCache('housekeeping_assignments');
   invalidateCache('housekeeping_plans');
-  var [asigs, plans] = await Promise.all([
+  var results = await Promise.all([
     getDB('housekeeping_assignments'),
     getDB('housekeeping_plans')
   ]);
+  var asigs = results[0];
+  var plans = results[1];
 
   var hoy = today();
-  // Plans del día
-  var planesHoy = plans.filter(p=>p.fecha === hoy);
-  var planIds = planesHoy.map(p=>p.id);
+  var planIds = plans.filter(function(p){ return p.fecha === hoy; }).map(function(p){ return p.id; });
 
-  // Asignaciones del usuario actual (planificadas hoy + ad-hoc)
-  var mias = asigs.filter(a=>{
+  var mias = asigs.filter(function(a){
     if(a.employee_id !== currentUser.id) return false;
-    if(a.ad_hoc) {
-      // ad-hoc: incluir si iniciada/finalizada hoy
+    // empleado: solo habitaciones; gobernanta: todas
+    if(!isGob && a.tipo_objeto && a.tipo_objeto !== 'habitacion') return false;
+    if(a.ad_hoc){
       var ts = a.hora_inicio || a.created_at || '';
-      return ts.slice(0,10) === hoy;
+      return ts.slice(0, 10) === hoy;
     }
     return planIds.indexOf(a.plan_id) >= 0;
   });
 
-  if(sub) sub.textContent = mias.length + ' asignaciones · ' + hoy;
+  var habCount = mias.filter(function(a){ return a.tipo_objeto === 'habitacion'; }).length;
+  if(sub) sub.textContent = habCount + ' hab. · ' + hoy;
+
+  // Quitar loader
+  wrap.removeChild(loader);
 
   if(!mias.length){
-    content.innerHTML = `
-      <div style="background:var(--bg3);border:1px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;">
-        <div style="font-size:32px;margin-bottom:8px;">🌱</div>
-        <div style="font-size:14px;color:var(--text2);font-weight:600;margin-bottom:4px;">Sin asignaciones todavía</div>
-        <div style="font-size:12px;color:var(--text3);">La Gobernanta planificará tu ruta del día.</div>
-      </div>
-    `;
-    // Si es Gobernanta, ofrecer auto-asignación rápida
-    if(hkIsGobernanta(currentUser)){
-      content.innerHTML += `
-        <div style="margin-top:16px;background:var(--bg3);border:1px solid var(--orange);border-radius:10px;padding:16px;">
-          <div style="font-family:var(--font-mono);font-size:10px;color:var(--orange);font-weight:700;letter-spacing:.1em;margin-bottom:6px;">GOBERNANTA</div>
-          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Puedes ir a Planificación para asignarte habitaciones o ejecutar zonas públicas directamente.</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="tbtn" onclick="showScreen('hk-plan')">📅 Planificación</button>
-            <button class="tbtn" onclick="showScreen('hk-zonas')">🧽 Zonas públicas</button>
-          </div>
-        </div>
-      `;
+    var empty = document.createElement('div');
+    empty.style.cssText = 'background:var(--bg3);border:1px dashed var(--border2);border-radius:10px;padding:32px;text-align:center;';
+    empty.innerHTML = '<div style="font-size:32px;margin-bottom:8px;">🌱</div>'
+      + '<div style="font-size:14px;color:var(--text2);font-weight:600;margin-bottom:4px;">Sin habitaciones asignadas hoy</div>'
+      + '<div style="font-size:12px;color:var(--text3);">La Gobernanta planificará tu ruta del día.</div>';
+    wrap.appendChild(empty);
+    if(isGob){
+      var gobBox = document.createElement('div');
+      gobBox.style.cssText = 'margin-top:16px;background:var(--bg3);border:1px solid var(--orange);border-radius:10px;padding:16px;';
+      gobBox.innerHTML = '<div style="font-family:var(--font-mono);font-size:10px;color:var(--orange);font-weight:700;letter-spacing:.1em;margin-bottom:6px;">GOBERNANTA</div>'
+        + '<div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Ve a Planificación para asignar habitaciones al equipo.</div>';
+      var btnPlan = document.createElement('button');
+      btnPlan.className = 'tbtn';
+      btnPlan.style.cssText = 'background:var(--orange);color:white;';
+      btnPlan.textContent = '📅 Ir a Planificación';
+      btnPlan.onclick = function(){ showScreen('hk-plan'); };
+      gobBox.appendChild(btnPlan);
+      wrap.appendChild(gobBox);
     }
     return;
   }
 
-  // Orden: pendientes primero, luego en_proceso/pausada, luego finalizado/revisado
+  // Orden operativo
   var orden = {en_proceso:0, pausada:1, pendiente:2, requiere_correccion:3, finalizado:4, revisado:5};
   mias.sort(function(a,b){ return (orden[a.estado]||9) - (orden[b.estado]||9); });
 
-  // Render
-  var html = '';
-
-  // Aviso si hay una en proceso
-  var activa = mias.find(a=>a.estado === 'en_proceso');
+  // Banner en proceso
+  var activa = mias.find(function(a){ return a.estado === 'en_proceso'; });
   if(activa){
     var inicio = activa.hora_inicio ? activa.hora_inicio.slice(11,16) : '—';
-    html += `
-      <div style="background:#3b82f622;border:2px solid #3b82f6;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">
-        <div style="font-size:24px;">⏱</div>
-        <div style="flex:1;">
-          <div style="font-size:11px;color:#3b82f6;font-weight:700;font-family:var(--font-mono);letter-spacing:.1em;">EN PROCESO DESDE ${inicio}</div>
-          <div style="font-size:14px;font-weight:700;color:var(--text);">${activa.objeto_nombre}</div>
-        </div>
-        <button class="tbtn" style="background:#3b82f6;color:white;" onclick="hkOpenExec('${activa.id}')">Abrir</button>
-      </div>
-    `;
+    var banner = document.createElement('div');
+    banner.style.cssText = 'background:#3b82f622;border:2px solid #3b82f6;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;';
+    var bannerBtn = document.createElement('button');
+    bannerBtn.className = 'tbtn';
+    bannerBtn.style.cssText = 'background:#3b82f6;color:white;';
+    bannerBtn.textContent = 'Abrir';
+    bannerBtn.addEventListener('click', (function(id){ return function(){ hkOpenExec(id); }; })(activa.id));
+    banner.innerHTML = '<div style="font-size:24px;">⏱</div>'
+      + '<div style="flex:1;">'
+      + '<div style="font-size:11px;color:#3b82f6;font-weight:700;font-family:var(--font-mono);letter-spacing:.1em;">EN PROCESO DESDE ' + inicio + '</div>'
+      + '<div style="font-size:14px;font-weight:700;color:var(--text);">' + activa.objeto_nombre + '</div>'
+      + '</div>';
+    banner.appendChild(bannerBtn);
+    wrap.appendChild(banner);
   }
 
-  html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+  // Lista de asignaciones
+  var lista = document.createElement('div');
+  lista.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
   mias.forEach(function(a){
-    var color = HK_ESTADO_COLOR[a.estado] || '#9ca3af';
-    var label = HK_ESTADO_LABEL[a.estado] || a.estado;
-    var tipoLabel = a.tipo_limpieza ? (HK_TIPO_LIMPIEZA_LABEL[a.tipo_limpieza]||a.tipo_limpieza) : '';
-    var icon = a.tipo_objeto === 'habitacion' ? '🚪' : (a.tipo_objeto === 'zona_publica' ? '🧽' : '🔧');
-    var realMin = a.tiempo_real_min ? hkFmtDuration(a.tiempo_real_min) : '';
-    var estMin = a.tiempo_estimado_min ? hkFmtDuration(a.tiempo_estimado_min) : '';
-    var rtFlag = (a.re_trabajo_count||0) > 0 ? ' 🔁' : '';
-
-    html += `
-      <div style="background:var(--bg2);border:1px solid var(--border);border-left:4px solid ${color};border-radius:8px;padding:12px;cursor:pointer;" onclick="hkOpenExec('${a.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div style="font-size:11px;color:${color};font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;">${label}${rtFlag}</div>
-          <div style="font-size:11px;color:var(--text3);">${estMin}${realMin?' · real '+realMin:''}</div>
-        </div>
-        <div style="font-size:15px;font-weight:700;color:var(--text);">${icon} ${a.objeto_nombre}</div>
-        ${tipoLabel ? '<div style="font-size:12px;color:var(--text3);margin-top:2px;">'+tipoLabel+'</div>' : ''}
-        ${a.motivo_reapertura ? '<div style="font-size:11px;color:#ef4444;margin-top:6px;background:#ef444411;padding:6px 8px;border-radius:6px;">⚠ Reabierta: '+a.motivo_reapertura+'</div>' : ''}
-      </div>
-    `;
+    lista.appendChild(_hkCard(a, isGob));
   });
-  html += '</div>';
+  wrap.appendChild(lista);
+}
 
-  content.innerHTML = html;
+// ─── ZONAS PÚBLICAS INTEGRADAS EN MI RUTA ──────────────────────────
+async function _hkRenderZonasEnRuta(wrap, isGob){
+  invalidateCache('housekeeping_public_areas');
+  invalidateCache('housekeeping_assignments');
+  invalidateCache('housekeeping_plans');
+  var results = await Promise.all([
+    getDB('housekeeping_public_areas'),
+    getDB('housekeeping_assignments'),
+    getDB('housekeeping_plans')
+  ]);
+  var zonas = results[0];
+  var asigs = results[1];
+  var plans = results[2];
+
+  var dow = hkTodayDow();
+  var hoy = today();
+  var planIdsHoy = plans.filter(function(p){ return p.fecha === hoy; }).map(function(p){ return p.id; });
+
+  zonas = zonas.filter(function(z){ return z.activa; });
+  zonas.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es'); });
+
+  // Leyenda
+  var leyenda = document.createElement('div');
+  leyenda.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;font-family:var(--font-mono);';
+  leyenda.innerHTML = '<span>🟢 hecha hoy</span><span>🔵 en proceso</span><span>🟡 toca hoy</span><span>⚫ no toca</span>';
+  wrap.appendChild(leyenda);
+
+  // Agrupar por zona_grupo, ordenar grupos alfabéticamente
+  var grupos = {};
+  zonas.forEach(function(z){
+    var g = z.zona_grupo || 'OTROS';
+    if(!grupos[g]) grupos[g] = [];
+    grupos[g].push(z);
+  });
+  var gruposOrdenados = Object.keys(grupos).sort();
+
+  gruposOrdenados.forEach(function(g){
+    var gLabel = document.createElement('div');
+    gLabel.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.15em;margin:14px 0 6px;';
+    gLabel.textContent = g;
+    wrap.appendChild(gLabel);
+
+    var gList = document.createElement('div');
+    gList.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+
+    grupos[g].forEach(function(z){
+      var dm = hkParseDiasMin(z.dias_minutos);
+      var minHoy = dm[dow] || 0;
+      var asigHoy = asigs.find(function(a){
+        if(a.tipo_objeto !== 'zona_publica') return false;
+        if(a.objeto_id !== z.id) return false;
+        if(a.ad_hoc) return (a.hora_inicio||a.created_at||'').slice(0,10) === hoy;
+        return planIdsHoy.indexOf(a.plan_id) >= 0;
+      });
+
+      var icon = '⚫', color = '#9ca3af', estadoText = 'No toca hoy';
+      if(minHoy > 0){
+        if(asigHoy && (asigHoy.estado === 'finalizado' || asigHoy.estado === 'revisado')){
+          icon = '🟢'; color = '#10b981';
+          estadoText = 'Hecha · ' + (asigHoy.hora_fin||'').slice(11,16)
+            + (isGob && asigHoy.employee_nombre ? ' · ' + asigHoy.employee_nombre : '');
+        } else if(asigHoy && (asigHoy.estado === 'en_proceso' || asigHoy.estado === 'pausada')){
+          icon = '🔵'; color = '#3b82f6';
+          estadoText = 'En curso' + (isGob && asigHoy.employee_nombre ? ' · ' + asigHoy.employee_nombre : '');
+        } else {
+          icon = '🟡'; color = '#f59e0b';
+          estadoText = 'Pendiente · ' + minHoy + 'min';
+        }
+      }
+
+      var row = document.createElement('div');
+      row.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px;';
+      row.innerHTML = '<div style="font-size:16px;">' + icon + '</div>'
+        + '<div style="flex:1;">'
+        + '<div style="font-size:13px;font-weight:600;color:var(--text);">' + z.nombre + '</div>'
+        + '<div style="font-size:11px;color:var(--text3);margin-top:2px;">' + estadoText + (z.tarea_grupo ? ' · ' + z.tarea_grupo : '') + '</div>'
+        + '</div>';
+
+      var puedeAbrir = asigHoy && (asigHoy.estado === 'en_proceso' || asigHoy.estado === 'pausada' || asigHoy.estado === 'pendiente');
+      var puedeEjec  = isGob && minHoy > 0 && !(asigHoy && (asigHoy.estado === 'finalizado' || asigHoy.estado === 'revisado'));
+
+      if(puedeAbrir){
+        var btnAbrir = document.createElement('button');
+        btnAbrir.className = 'tbtn';
+        btnAbrir.style.fontSize = '11px';
+        btnAbrir.textContent = 'Abrir';
+        btnAbrir.addEventListener('click', (function(id){ return function(){ hkOpenExec(id); }; })(asigHoy.id));
+        row.appendChild(btnAbrir);
+      } else if(puedeEjec && !asigHoy){
+        var btnLimp = document.createElement('button');
+        btnLimp.className = 'tbtn';
+        btnLimp.style.cssText = 'font-size:11px;background:var(--orange);color:white;';
+        btnLimp.textContent = '▶ Limpiar ahora';
+        btnLimp.addEventListener('click', (function(zid, znom, min){ return function(){ hkAdHocZona(zid, znom, min); }; })(z.id, z.nombre, minHoy));
+        row.appendChild(btnLimp);
+      }
+
+      gList.appendChild(row);
+    });
+    wrap.appendChild(gList);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -561,14 +715,14 @@ async function renderHKPlanificacion(){
   // Empleados HK
   var empsHK = empleados.filter(function(e){
     if(e.estado && e.estado !== 'Activo') return false;
-    return (e.area||'').toLowerCase().match(/(hk|housekeeping|limpieza)/);
+    return (e.area||'').toLowerCase().match(/(hk|housekeeping)/);
   });
 
   var html = `
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
       <div class="fg" style="margin:0;flex:1;min-width:140px;">
         <label style="margin-bottom:2px;">Fecha</label>
-        <input type="date" id="hk-plan-fecha" value="${_hkPlanFecha}"
+        <input type="date" id="hk-plan-fecha" value="${_hkPlanFecha}" min="${today()}" max="${maxStr}"
           onchange="_hkPlanFecha=this.value;renderHKPlanificacion()">
       </div>
       <div class="fg" style="margin:0;">
@@ -731,263 +885,119 @@ async function hkAutogenPlan(){
 }
 
 let _hkAsignarTipo = null;
-// Cache de rooms/zonas/periodic/empleados para el modal de asignación
-let _hkAsigRooms = [], _hkAsigZonas = [], _hkAsigPeriodic = [], _hkAsigEmps = [], _hkAsigPlanObj = null;
 
 async function hkOpenAsignar(tipo){
   _hkAsignarTipo = tipo;
   var plans = await getDB('housekeeping_plans');
   var plan = plans.find(p=>p.fecha===_hkPlanFecha && p.turno===_hkPlanTurno);
   if(!plan){ toast('Crea primero el plan','warn'); return; }
-  _hkAsigPlanObj = plan;
 
-  var [rooms, zonas, periodic, empleados, asigs] = await Promise.all([
+  var [rooms, zonas, periodic, empleados] = await Promise.all([
     getDB('housekeeping_rooms'),
     getDB('housekeeping_public_areas'),
     getDB('housekeeping_periodic_tasks'),
-    getDB('employees'),
-    getDB('housekeeping_assignments')
+    getDB('employees')
   ]);
 
-  // Habitaciones ya asignadas en este plan (para marcar como ocupadas)
-  var asigsPlan = asigs.filter(a=>a.plan_id===plan.id && a.tipo_objeto==='habitacion');
-  var habsYaAsignadas = new Set(asigsPlan.map(a=>a.objeto_id));
-
-  _hkAsigEmps = empleados.filter(function(e){
+  var empsHK = empleados.filter(function(e){
     if(e.estado && e.estado !== 'Activo') return false;
-    return (e.area||'').toLowerCase().match(/(hk|housekeeping|limpieza)/);
+    return (e.area||'').toLowerCase().match(/(hk|housekeeping)/);
   });
-  _hkAsigRooms = rooms.filter(r=>r.activa).sort(function(a,b){
-    return (a.planta||'').localeCompare(b.planta||'') || String(a.numero||'').localeCompare(String(b.numero||''));
-  });
-  _hkAsigZonas = zonas.filter(z=>z.activa).sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'','es'); });
-  _hkAsigPeriodic = periodic.filter(p=>p.activa);
 
-  var titulo = tipo==='habitacion' ? 'Asignar habitaciones' : tipo==='zona_publica' ? 'Asignar zona pública' : 'Asignar tarea periódica';
+  var titulo = tipo==='habitacion' ? 'Asignar habitación' : tipo==='zona_publica' ? 'Asignar zona pública' : 'Asignar tarea periódica';
   document.getElementById('hk-asig-title').textContent = titulo;
 
   var form = document.getElementById('hk-asig-form');
   var html = '';
 
-  // ── Empleado (común a todos los tipos) ─────────────────────────
+  // Empleado
   html += '<div class="fg"><label>Empleado/a</label><select id="hk-asig-emp">';
   html += '<option value="__SIN_ASIGNAR__">— Sin asignar —</option>';
-  _hkAsigEmps.forEach(function(e){
+  empsHK.forEach(function(e){
     html += `<option value="${e.id}" data-nombre="${e.nombre}">${e.nombre}${e.puesto?' · '+e.puesto:''}</option>`;
   });
   html += '</select></div>';
 
-  // ── HABITACIONES: tipo de limpieza primero, luego checkboxes ───
   if(tipo === 'habitacion'){
-    html += `<div class="fg">
-      <label>Tipo de limpieza</label>
-      <select id="hk-asig-tlimp" onchange="hkRenderHabCheckboxes()">
-        <option value="repaso">Repaso · 15 min</option>
-        <option value="repaso_sabanas">Repaso + sábanas · 30 min</option>
-        <option value="salida_syncro">Salida SYNCRO · 35 min</option>
-        <option value="salida_premium">Salida Premium · 45 min</option>
-        <option value="salida_fly">Salida FLY · 55 min</option>
-        <option value="inspeccion">Inspección · 1 min</option>
-        <option value="destripe">Destripe · variable</option>
-      </select>
-    </div>`;
-    html += `<div class="fg">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <label style="margin:0;">Habitaciones</label>
-        <div style="display:flex;gap:6px;">
-          <button type="button" class="tbtn" style="font-size:11px;padding:4px 8px;" onclick="hkSelAllHab(true)">Todas</button>
-          <button type="button" class="tbtn" style="font-size:11px;padding:4px 8px;" onclick="hkSelAllHab(false)">Ninguna</button>
-        </div>
-      </div>
-      <div id="hk-asig-hab-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;max-height:300px;overflow-y:auto;padding:2px;"></div>
-      <div id="hk-asig-resumen" style="margin-top:8px;font-size:11px;color:var(--text3);font-family:var(--font-mono);"></div>
-    </div>`;
-
-  // ── ZONA PÚBLICA ───────────────────────────────────────────────
+    rooms = rooms.filter(r=>r.activa);
+    rooms.sort(function(a,b){ return (a.planta||'').localeCompare(b.planta||'') || (a.numero||'').localeCompare(b.numero||''); });
+    html += '<div class="fg"><label>Habitación</label><select id="hk-asig-obj">';
+    rooms.forEach(function(r){
+      html += `<option value="${r.id}" data-nombre="Hab. ${r.numero} (${r.tipo})" data-tipo="${r.tipo}" data-tlimpsalida="${r.tipo_limpieza_salida}" data-tsalmin="${r.tiempo_salida_min}">Hab. ${r.numero} · ${r.tipo} · P${r.planta}</option>`;
+    });
+    html += '</select></div>';
+    html += `<div class="fg"><label>Tipo de limpieza</label><select id="hk-asig-tlimp" onchange="hkRecalcEst()">
+      <option value="repaso">Repaso (15')</option>
+      <option value="repaso_sabanas">Repaso + sábanas (30')</option>
+      <option value="salida_syncro">Salida SYNCRO (35')</option>
+      <option value="salida_premium">Salida Premium (45')</option>
+      <option value="salida_fly">Salida FLY (55')</option>
+      <option value="inspeccion">Inspección (1')</option>
+      <option value="destripe">Destripe (variable)</option>
+    </select></div>`;
   } else if(tipo === 'zona_publica'){
+    zonas = zonas.filter(z=>z.activa);
     var dow = HK_DIAS[new Date(_hkPlanFecha+'T00:00:00').getDay()];
+    zonas.sort(function(a,b){ return (a.orden||0) - (b.orden||0); });
     html += '<div class="fg"><label>Zona pública</label><select id="hk-asig-obj" onchange="hkRecalcEst()">';
-    _hkAsigZonas.forEach(function(z){
+    zonas.forEach(function(z){
       var dm = hkParseDiasMin(z.dias_minutos);
       var minHoy = dm[dow] || 0;
       var nombreShown = z.nombre + (minHoy?' · '+minHoy+'min':' · no toca hoy');
       html += `<option value="${z.id}" data-nombre="${z.nombre}" data-min="${minHoy||z.tiempo_estimado_min||15}">${nombreShown}</option>`;
     });
     html += '</select></div>';
-    html += '<div class="fg"><label>Tiempo estimado (min)</label><input type="number" id="hk-asig-est" min="0" max="600" value="15"></div>';
-    html += '<div class="fg"><label>Prioridad</label><select id="hk-asig-prio"><option value="normal">Normal</option><option value="alta">Alta</option></select></div>';
-
-  // ── TAREA PERIÓDICA ────────────────────────────────────────────
   } else if(tipo === 'tarea_periodica'){
+    periodic = periodic.filter(p=>p.activa);
     html += '<div class="fg"><label>Tarea periódica</label><select id="hk-asig-obj" onchange="hkRecalcEst()">';
-    _hkAsigPeriodic.forEach(function(p){
+    periodic.forEach(function(p){
       var t = p.tiempo_estimado_min || 60;
       html += `<option value="${p.id}" data-nombre="${p.nombre}" data-min="${t}">${p.nombre} · ${p.tiempo_referencia||t+' min'}</option>`;
     });
     html += '</select></div>';
-    html += '<div class="fg"><label>Tiempo estimado (min)</label><input type="number" id="hk-asig-est" min="0" max="600" value="60"></div>';
-    html += '<div class="fg"><label>Prioridad</label><select id="hk-asig-prio"><option value="normal">Normal</option><option value="alta">Alta</option></select></div>';
   }
+
+  // Tiempo estimado
+  html += '<div class="fg"><label>Tiempo estimado (min)</label><input type="number" id="hk-asig-est" min="0" max="600" value="15"></div>';
+  html += '<div class="fg"><label>Prioridad</label><select id="hk-asig-prio"><option value="normal">Normal</option><option value="alta">Alta</option></select></div>';
 
   form.innerHTML = html;
-
-  if(tipo === 'habitacion'){
-    // Guardar qué habitaciones ya están en el plan para marcarlas
-    form._habsYaAsignadas = habsYaAsignadas;
-    hkRenderHabCheckboxes();
-  } else {
-    hkRecalcEst();
-  }
+  hkRecalcEst();
   document.getElementById('modal-hk-asignar').style.display = 'flex';
-}
-
-// Renderiza la grilla de checkboxes de habitaciones, agrupada por planta
-function hkRenderHabCheckboxes(){
-  var grid = document.getElementById('hk-asig-hab-grid');
-  if(!grid) return;
-  var form = document.getElementById('hk-asig-form');
-  var habsYa = (form && form._habsYaAsignadas) ? form._habsYaAsignadas : new Set();
-  var tlimpSel = document.getElementById('hk-asig-tlimp');
-  var tlimp = tlimpSel ? tlimpSel.value : 'repaso';
-
-  // Colores por tipo de habitación
-  var TIPO_COLOR = {SYNCRO:'#3b82f6',PREMIUM:'#8b5cf6',PANORAMIC:'#a855f7',FLY:'#06b6d4',QUEEN:'#f59e0b'};
-
-  // Agrupar por planta
-  var porPlanta = {};
-  _hkAsigRooms.forEach(function(r){
-    var p = 'P'+(r.planta||'?');
-    if(!porPlanta[p]) porPlanta[p] = [];
-    porPlanta[p].push(r);
-  });
-
-  var html = '';
-  Object.keys(porPlanta).sort().forEach(function(planta){
-    html += `<div style="grid-column:1/-1;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;margin-top:4px;">${planta}</div>`;
-    porPlanta[planta].forEach(function(r){
-      var yaAsignada = habsYa.has(r.id);
-      var col = TIPO_COLOR[r.tipo] || '#9ca3af';
-      var opac = yaAsignada ? 'opacity:.35;pointer-events:none;' : '';
-      var checked = yaAsignada ? '' : '';
-      html += `<label style="cursor:${yaAsignada?'not-allowed':'pointer'};${opac}display:flex;flex-direction:column;align-items:center;background:var(--bg3);border:2px solid var(--border);border-radius:8px;padding:6px 4px;font-size:11px;gap:2px;transition:border-color .15s;" 
-        onmouseover="if(!${yaAsignada})this.style.borderColor='${col}'" 
-        onmouseout="var cb=this.querySelector('input');this.style.borderColor=cb&&cb.checked?'${col}':'var(--border)'"
-        onclick="hkHabChkClick(this,'${col}')">
-        <input type="checkbox" data-room-id="${r.id}" data-room-nombre="Hab. ${r.numero} (${r.tipo})" ${checked} style="display:none;">
-        <span style="font-weight:700;color:var(--text);">${r.numero}</span>
-        <span style="font-size:9px;color:${col};font-family:var(--font-mono);">${r.tipo}</span>
-      </label>`;
-    });
-  });
-
-  grid.innerHTML = html;
-  hkUpdateHabResumen();
-}
-
-function hkHabChkClick(label, col){
-  var cb = label.querySelector('input[type=checkbox]');
-  if(!cb || cb.disabled) return;
-  cb.checked = !cb.checked;
-  label.style.borderColor = cb.checked ? col : 'var(--border)';
-  hkUpdateHabResumen();
-}
-
-function hkUpdateHabResumen(){
-  var resumen = document.getElementById('hk-asig-resumen');
-  if(!resumen) return;
-  var cbs = document.querySelectorAll('#hk-asig-hab-grid input[type=checkbox]:checked');
-  var tlimpSel = document.getElementById('hk-asig-tlimp');
-  var tlimp = tlimpSel ? tlimpSel.value : 'repaso';
-  var tUnit = HK_TIPO_TIEMPO[tlimp] || 0;
-  var n = cbs.length;
-  if(n === 0){
-    resumen.textContent = 'Ninguna seleccionada';
-  } else {
-    var totalMin = n * tUnit;
-    resumen.textContent = n + ' hab. · ' + (tUnit ? hkFmtDuration(totalMin) + ' estimado total' : 'tiempo variable');
-  }
-}
-
-function hkSelAllHab(sel){
-  var TIPO_COLOR = {SYNCRO:'#3b82f6',PREMIUM:'#8b5cf6',PANORAMIC:'#a855f7',FLY:'#06b6d4',QUEEN:'#f59e0b'};
-  var labels = document.querySelectorAll('#hk-asig-hab-grid label');
-  labels.forEach(function(label){
-    var cb = label.querySelector('input[type=checkbox]');
-    if(!cb) return;
-    var r = _hkAsigRooms.find(function(x){ return x.id === cb.getAttribute('data-room-id'); });
-    var col = r ? (TIPO_COLOR[r.tipo]||'#9ca3af') : 'var(--orange)';
-    cb.checked = sel;
-    label.style.borderColor = sel ? col : 'var(--border)';
-  });
-  hkUpdateHabResumen();
 }
 
 function hkRecalcEst(){
   var est = document.getElementById('hk-asig-est'); if(!est) return;
-  var obj = document.getElementById('hk-asig-obj');
-  if(obj && obj.selectedOptions && obj.selectedOptions[0]){
-    var m = obj.selectedOptions[0].getAttribute('data-min');
-    if(m) est.value = m;
+  if(_hkAsignarTipo === 'habitacion'){
+    var tlimp = document.getElementById('hk-asig-tlimp');
+    if(tlimp){
+      var t = HK_TIPO_TIEMPO[tlimp.value] || 15;
+      est.value = t;
+    }
+  } else {
+    var obj = document.getElementById('hk-asig-obj');
+    if(obj && obj.selectedOptions && obj.selectedOptions[0]){
+      var m = obj.selectedOptions[0].getAttribute('data-min');
+      if(m) est.value = m;
+    }
   }
 }
 
 async function hkGuardarAsig(){
-  var plan = _hkAsigPlanObj;
-  if(!plan){
-    var plans = await getDB('housekeeping_plans');
-    plan = plans.find(p=>p.fecha===_hkPlanFecha && p.turno===_hkPlanTurno);
-  }
+  var plans = await getDB('housekeeping_plans');
+  var plan = plans.find(p=>p.fecha===_hkPlanFecha && p.turno===_hkPlanTurno);
   if(!plan){ toast('Plan no encontrado','error'); return; }
 
   var empSel = document.getElementById('hk-asig-emp');
   var empId = empSel.value;
   var empNombre = empId==='__SIN_ASIGNAR__' ? 'Sin asignar' : (empSel.selectedOptions[0].getAttribute('data-nombre') || empSel.selectedOptions[0].textContent.split('·')[0].trim());
-  var prio = (document.getElementById('hk-asig-prio')||{value:'normal'}).value;
 
-  // ── HABITACIONES: insertar una asignación por cada checkbox marcado ─
-  if(_hkAsignarTipo === 'habitacion'){
-    var cbs = document.querySelectorAll('#hk-asig-hab-grid input[type=checkbox]:checked');
-    if(!cbs.length){ toast('Selecciona al menos una habitación','warn'); return; }
-    var tlimp = document.getElementById('hk-asig-tlimp').value;
-    var tEst = HK_TIPO_TIEMPO[tlimp] || 0;
-    var errores = 0;
-    for(var i=0; i<cbs.length; i++){
-      var cb = cbs[i];
-      var roomId = cb.getAttribute('data-room-id');
-      var roomNombre = cb.getAttribute('data-room-nombre');
-      var row = {
-        id: hkGenId('hkas'),
-        plan_id: plan.id,
-        ad_hoc: 0,
-        employee_id: empId,
-        employee_nombre: empNombre,
-        tipo_objeto: 'habitacion',
-        objeto_id: roomId,
-        objeto_nombre: roomNombre,
-        tipo_limpieza: tlimp,
-        tiempo_estimado_min: tEst,
-        prioridad: prio,
-        estado: 'pendiente'
-      };
-      var res = await dbInsert('housekeeping_assignments', row);
-      if(!res) errores++;
-    }
-    invalidateCache('housekeeping_assignments');
-    document.getElementById('modal-hk-asignar').style.display = 'none';
-    if(errores === 0){
-      toast(cbs.length + ' hab. asignadas','ok');
-    } else {
-      toast(errores + ' errores de ' + cbs.length,'warn');
-    }
-    renderHKPlanificacion();
-    return;
-  }
-
-  // ── ZONA PÚBLICA / TAREA PERIÓDICA: asignación única ───────────
   var objSel = document.getElementById('hk-asig-obj');
   var objId = objSel.value;
   var objNombre = objSel.selectedOptions[0].getAttribute('data-nombre') || objSel.selectedOptions[0].textContent;
+
   var tEst = parseInt(document.getElementById('hk-asig-est').value)||0;
+  var prio = document.getElementById('hk-asig-prio').value;
 
   var row = {
     id: hkGenId('hkas'),
@@ -1002,6 +1012,10 @@ async function hkGuardarAsig(){
     prioridad: prio,
     estado: 'pendiente'
   };
+
+  if(_hkAsignarTipo === 'habitacion'){
+    row.tipo_limpieza = document.getElementById('hk-asig-tlimp').value;
+  }
 
   var res = await dbInsert('housekeeping_assignments', row);
   if(!res){ toast('Error al guardar','error'); return; }
@@ -1030,25 +1044,20 @@ async function renderHKZonasPublicas(){
 
   invalidateCache('housekeeping_public_areas');
   invalidateCache('housekeeping_assignments');
-  invalidateCache('housekeeping_plans');
-  var [zonas, asigs, plans] = await Promise.all([
+  var [zonas, asigs] = await Promise.all([
     getDB('housekeeping_public_areas'),
-    getDB('housekeeping_assignments'),
-    getDB('housekeeping_plans')
+    getDB('housekeeping_assignments')
   ]);
 
   var dow = hkTodayDow();
   var hoy = today();
-  // Planes de hoy → para filtrar asignaciones planificadas del día actual
-  var planesHoy = plans.filter(p=>p.fecha===hoy);
-  var planIdsHoy = planesHoy.map(p=>p.id);
 
   // Estado por zona: si tiene asignación finalizado/revisado hoy → verde
   // Si tiene asignación en proceso → azul
   // Si toca hoy y no hay asignación → amarillo
   // Si no toca hoy → gris
 
-  zonas.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'', 'es'); });
+  zonas.sort(function(a,b){ return (a.orden||0)-(b.orden||0); });
 
   var html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;font-family:var(--font-mono);">';
   html += '<span>🟢 hecha hoy</span><span>🔵 en proceso</span><span>🟡 toca hoy</span><span>⚫ no toca</span>';
@@ -1072,10 +1081,10 @@ async function renderHKZonasPublicas(){
         if(a.tipo_objeto !== 'zona_publica') return false;
         if(a.objeto_id !== z.id) return false;
         if(a.ad_hoc){
-          return (a.hora_inicio||a.created_at||'').slice(0,10) === hoy;
+          return (a.hora_inicio||a.created_at||'').indexOf(hoy) === 0;
         }
-        // planificada: solo si el plan pertenece a los planes de hoy
-        return planIdsHoy.indexOf(a.plan_id) >= 0;
+        // si está en plan de hoy
+        return true; // simplificación: consideramos asignación reciente
       });
 
       var icon = '⚫', color = '#9ca3af', estadoText = 'No toca hoy';
@@ -1477,6 +1486,7 @@ window.hkBorrarAsig = hkBorrarAsig;
 window.hkAdHocZona = hkAdHocZona;
 window.hkIsGobernanta = hkIsGobernanta;
 window.hkIsHK = hkIsHK;
+window._hkRenderZonasEnRuta = _hkRenderZonasEnRuta;
 window.hkRenderHabCheckboxes = hkRenderHabCheckboxes;
 window.hkHabChkClick = hkHabChkClick;
 window.hkSelAllHab = hkSelAllHab;

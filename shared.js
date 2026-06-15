@@ -143,9 +143,7 @@ const SUPERVISOR_DEPT_MAP = {
   gobernante: ['Housekeeping', 'Limpieza'],
   coord_recepcion_syncrolab: ['Recepción SYNCROLAB', 'SyncroLab', 'SYNCROLAB'],
   coord_entrenadores: ['Entrenadores', 'SYNCROLAB', 'SyncroLab'],
-  coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab'],
-  adjunto_directivo: ['*'],  // acceso a todos los departamentos
-  adjunto: ['*']             // alias legacy
+  coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab']
 };
 
 // Grupos de área para el rol 'jefe': su `area` expande a los departamentos que cubre.
@@ -255,15 +253,9 @@ function canViewDepartment(user,dept){
   if(isAdmin(user)) return true;
   var d=normalizeDeptName(dept);
   if(!d) return false;
-  var depts=getSupervisorDepartments(user);
-  if(depts.indexOf('*')!==-1) return true;  // comodín — acceso a todos
-  return depts.map(normalizeDeptName).indexOf(d)!==-1;
+  return getSupervisorDepartments(user).map(normalizeDeptName).indexOf(d)!==-1;
 }
-function canValidateDepartment(user,dept){
-  // adjunto_directivo con area=Administración: solo lectura, no valida
-  if(isAdjuntoDirectivo(user) && (user.area==='Administración')) return false;
-  return isAdmin(user) || isAdjuntoDirectivo(user) || (isSupervisor(user)&&canViewDepartment(user,dept));
-}
+function canValidateDepartment(user,dept){ return isAdmin(user) || isAdjuntoDirectivo(user) || (isSupervisor(user)&&canViewDepartment(user,dept)); }
 function getRecordDepartment(record,shiftMap){
   if(!record) return '[NO DATA]';
   var direct = record.area || record.departamento || record.dept_destino || record.dept_origen;
@@ -417,7 +409,8 @@ function getScreens(rol){
   var isSala       = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
   var isRecepcion  = currentUser && currentUser.area === 'Recepción';
   var isCocina     = currentUser && currentUser.area === 'Cocina';
-  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
+  var _areaHK = currentUser ? (currentUser.area||'').toLowerCase() : '';
+  var isHK = currentUser && (_areaHK === 'hk' || _areaHK === 'housekeeping' || currentUser.rol === 'gobernante' || (currentUser.rol === 'jefe_departamento' && (_areaHK === 'hk' || _areaHK === 'housekeeping')));
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
   var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
@@ -459,12 +452,9 @@ function getScreens(rol){
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
-  var isAdminArea = currentUser && currentUser.area === 'Administración';
   var navComun = isAdminU
     ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
-    : (isAdjDir && isAdminArea)
-      ? [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio]  // adjunto Administración: sin checklist
-      : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
+    : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
 
   // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
   if(isAdminU || isRecepcion) navComun.push(ITEMS.hypoxic);
@@ -477,13 +467,10 @@ function getScreens(rol){
   if(isCocina)    dptoMod.push(ITEMS.merma);
   if(isSala)      dptoMod.push(ITEMS.ajustes);
   if(isSala)      dptoMod.push(ITEMS.incentivos); // empleados Sala ven su bonus
-  if(isHK)        {
-    dptoMod.push(ITEMS.ruta);
-    // Gobernanta/Subgobernanta ven planificación + zonas + revisión + dashboard + config
-    var _isGob = typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
+  var _isGob = isHK && typeof hkIsGobernanta === 'function' && hkIsGobernanta(currentUser);
+  if(isHK) {
     if(_isGob){
       dptoMod.push(ITEMS.hkPlan);
-      dptoMod.push(ITEMS.hkZonas);
       dptoMod.push(ITEMS.hkRevision);
       dptoMod.push(ITEMS.hkDash);
       dptoMod.push(ITEMS.hkConfig);
@@ -496,7 +483,6 @@ function getScreens(rol){
   if(isAdminU && !isHK){
     dptoMod.push({sep:true,label:'HOUSEKEEPING'});
     dptoMod.push(ITEMS.hkPlan);
-    dptoMod.push(ITEMS.hkZonas);
     dptoMod.push(ITEMS.hkRevision);
     dptoMod.push(ITEMS.hkDash);
     dptoMod.push(ITEMS.hkConfig);
@@ -513,7 +499,7 @@ function getScreens(rol){
     gestion.push(ITEMS.export);
   }
   if(isJefe) gestion.push(ITEMS.fio);
-  if(isJefe && !(isAdjDir && isAdminArea)) gestion.push(ITEMS.incentivos);
+  if(isJefe) gestion.push(ITEMS.incentivos);
 
   // Devolvemos array plano con separadores marcados para buildNav
   var out = [].concat(navComun);
@@ -521,6 +507,8 @@ function getScreens(rol){
   if(gestion.length){ out.push({sep:true,label:'GESTIÓN'});         out = out.concat(gestion); }
   // Info siempre primero
   out.unshift(ITEMS.readme);
+  // HK: Mi Ruta justo debajo de Info (posición 1)
+  if(isHK){ out.splice(1, 0, ITEMS.ruta); }
   return out;
 }
 
@@ -942,7 +930,7 @@ async function initTurnoForm(){
     if(typeof lockLabTurnoIfCajaToday === 'function') lockLabTurnoIfCajaToday();
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
-  } else if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')) {
+  } else if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping')) {
     // ── HOUSEKEEPING ────────────────────────────────────────────
     if(salaBlock) salaBlock.style.display = 'none';
     if(sub) sub.textContent = 'Housekeeping · Balcón de la Sella';
@@ -974,35 +962,6 @@ async function initTurnoForm(){
     // Ocultar rec-turno-block
     var recTurnoHK = document.getElementById('rec-turno-block');
     if(recTurnoHK) recTurnoHK.style.display = 'none';
-    if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
-    if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
-  } else if(currentUser && currentUser.area === 'Administración') {
-    // ── ADMINISTRACIÓN — Mañana / Tarde, sin merma ──────────────
-    if(salaBlock) salaBlock.style.display = 'none';
-    if(sub) sub.textContent = 'Administración · SYNCROSFERA';
-    // Ocultar merma
-    var mermaSecAdm = document.getElementById('merma-section');
-    if(mermaSecAdm) mermaSecAdm.style.display = 'none';
-    var sinMermaAdm = document.getElementById('sin-merma-block');
-    if(sinMermaAdm) sinMermaAdm.style.display = 'none';
-    // Ocultar todos los demás selectores de servicio
-    ['t-servicio','t-servicio-cocina','t-servicio-multi','t-servicio-hk','t-servicio-lab'].forEach(function(id){
-      var el = document.getElementById(id); if(el) el.style.display = 'none';
-    });
-    var recTurnoAdm = document.getElementById('rec-turno-block');
-    if(recTurnoAdm) recTurnoAdm.style.display = 'none';
-    // Mostrar selector Administración (Mañana/Tarde)
-    var tservAdm = document.getElementById('t-servicio-adm');
-    if(tservAdm){ tservAdm.style.display = 'flex'; tservAdm.style.flexWrap = 'wrap'; }
-    var lblAdm = document.getElementById('t-servicio-label');
-    if(lblAdm) lblAdm.innerHTML = 'Turno <span class="req">*</span>';
-    var servBlockAdm = document.getElementById('servicio-fg-block');
-    if(servBlockAdm) servBlockAdm.style.display = 'block';
-    // Reset radios
-    document.querySelectorAll('input[name="servicio-adm"]').forEach(function(r){ r.checked = false; });
-    // Mostrar responsable
-    var tRespAdm = document.getElementById('t-responsable');
-    if(tRespAdm && tRespAdm.closest('.fg')) tRespAdm.closest('.fg').style.display = 'block';
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   } else {
@@ -1477,7 +1436,7 @@ function saveTurno(){
   if(!toggleState.incidencia) errs.push('Indica si hubo incidencia operativa');
   // Merma validation — ONLY for Cocina/Friegue. Sala, Recepción y Housekeeping exentos.
   var _isSalaUser = currentUser && currentUser.area === 'Sala';
-  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
+  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping');
   var _isLabUser = currentUser && /syncrolab|entrenador|fisioterapeuta/i.test(currentUser.area||'');
   if(!_isSalaUser && !_isRecepcion && !_isHKUser && !_isLabUser){
     if(!sinMermaFlag&&mermaRows.length===0) errs.push('Declara merma o marca Sin merma');
@@ -1969,8 +1928,6 @@ function initValDeptFilter(){
   var sel=document.getElementById('v-dept');
   if(!sel||!currentUser) return;
   if(typeof isAdmin==='function' && isAdmin(currentUser)){ sel.disabled=false; onValDeptChange(); return; }
-  // adjunto_directivo: ve todos los departamentos en modo solo lectura (no valida)
-  if(typeof isAdjuntoDirectivo==='function' && isAdjuntoDirectivo(currentUser)){ sel.disabled=false; onValDeptChange(); return; }
   // Jefe / coordinador: el selector SOLO ofrece sus departamentos (sin "Todos"); bloqueado si es uno.
   var opts=_jefeDeptOptions(currentUser);
   if(opts.length){
@@ -2067,11 +2024,10 @@ async function renderValidacion(){
     // All action buttons in one nowrap flex row
     var isReadOnly = s.estado==='Validado'||s.estado==='Validado con FIO'||s.estado==='Rechazado';
     var canSupervise = canValidateShift(currentUser,s);
-    var isAdjAdm = isAdjuntoDirectivo(currentUser) && currentUser.area==='Administración';
-    var btnRevisar = (!isReadOnly && canSupervise && !isAdjAdm)
+    var btnRevisar = (!isReadOnly && canSupervise)
       ? '<button class="vbtn vbtn-primary" onclick="openValidarModal(\''+sid+'\')">Revisar</button>' : '';
-    // BUG-50: turno validado también abre openValidarModal; adjunto Administración siempre Ve
-    var btnVer = ((isReadOnly && canSupervise) || isAdjAdm)
+    // BUG-50: turno validado también abre openValidarModal para permitir gestionar gestiones/incidencias
+    var btnVer = (isReadOnly && canSupervise)
       ? '<button class="vbtn vbtn-sec" onclick="openValidarModal(\''+sid+'\')">📋 Ver</button>' : '';
     var btnArevisar = '';  // Botón post-error eliminado en Fase 1 (función openPostErrorModal no implementada)
                             // Para revisar errores post-validación usar el módulo FIO
