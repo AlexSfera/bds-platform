@@ -111,14 +111,14 @@ async function migrateFromLocalStorage() {
 // ═══════════════════════════════════════════════════════════════════════
 // SCHEMA VERSION & DEPT CONFIG
 const SCHEMA_VERSION = '5.0';
-const DEPTS = ['Cocina','Sala','Mantenimiento','Recepción','Administración','Economato','Limpieza'];
+const DEPTS = ['Cocina','Sala','Mantenimiento','Recepción','Administración','Economato','Housekeeping'];
 const DEPT_COLORS = {
   'Cocina':'#f59e0b','Sala':'#3b82f6','Mantenimiento':'#ef4444',
-  'Recepción':'#8b5cf6','Administración':'#a855f7','Economato':'#06b6d4','Limpieza':'#f97316'
+  'Recepción':'#8b5cf6','Administración':'#a855f7','Economato':'#06b6d4','Housekeeping':'#f97316'
 };
 const DEPT_ICONS = {
   'Cocina':'🍳','Sala':'🍽','Mantenimiento':'🔧','Recepción':'🏨',
-  'Administración':'📋','Economato':'📦','Limpieza':'🧹'
+  'Administración':'📋','Economato':'📦','Housekeeping':'🧹'
 };
 
 // Pins for role-level access
