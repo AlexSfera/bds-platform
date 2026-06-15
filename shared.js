@@ -409,7 +409,7 @@ function getScreens(rol){
   var isSala       = currentUser && (currentUser.area === 'Sala' || currentUser.area === 'Jefe de Sala');
   var isRecepcion  = currentUser && currentUser.area === 'Recepción';
   var isCocina     = currentUser && currentUser.area === 'Cocina';
-  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
+  var isHK         = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza' || currentUser.rol === 'gobernante');
   var isMant       = currentUser && currentUser.area === 'Mantenimiento';
   var isSyncrolab  = currentUser && /syncrolab|syncro lab/i.test((currentUser.area||'') + ' ' + (currentUser.puesto||''));
   var isAdminU     = (rol === 'admin');
@@ -1437,7 +1437,7 @@ function saveTurno(){
   if(!toggleState.incidencia) errs.push('Indica si hubo incidencia operativa');
   // Merma validation — ONLY for Cocina/Friegue. Sala, Recepción y Housekeeping exentos.
   var _isSalaUser = currentUser && currentUser.area === 'Sala';
-  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
+  var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza' || currentUser.rol === 'gobernante');
   var _isLabUser = currentUser && /syncrolab|entrenador|fisioterapeuta/i.test(currentUser.area||'');
   if(!_isSalaUser && !_isRecepcion && !_isHKUser && !_isLabUser){
     if(!sinMermaFlag&&mermaRows.length===0) errs.push('Declara merma o marca Sin merma');
