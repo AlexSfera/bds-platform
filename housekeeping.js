@@ -61,6 +61,25 @@
   });
 
   // Modal de ejecución (iniciar / pausar / finalizar)
+  // Modal asignación — debe estar en body, NO dentro de content (se destruiría en re-render)
+  if(!document.getElementById('modal-hk-asignar')){
+    var modalAsig = document.createElement('div');
+    modalAsig.id = 'modal-hk-asignar';
+    modalAsig.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:680;padding:16px;';
+    modalAsig.innerHTML = `
+      <div style="background:var(--bg2);border:2px solid var(--orange);border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;">
+        <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--orange);letter-spacing:.15em;margin-bottom:6px;">NUEVA ASIGNACIÓN</div>
+        <div id="hk-asig-title" style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:14px;">—</div>
+        <div id="hk-asig-form"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+          <button class="tbtn" onclick="document.getElementById('modal-hk-asignar').style.display='none'">Cancelar</button>
+          <button class="tbtn" style="background:var(--orange);color:white;" onclick="hkGuardarAsig()">Guardar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modalAsig);
+  }
+
   if(!document.getElementById('modal-hk-exec')){
     var modal = document.createElement('div');
     modal.id = 'modal-hk-exec';
@@ -203,18 +222,63 @@ function _hkCard(asig, isGob){
     ? '<div style="font-size:11px;color:#ef4444;margin-top:6px;background:#ef444411;padding:6px 8px;border-radius:6px;">⚠ Reabierta: ' + asig.motivo_reapertura + '</div>'
     : '';
 
+  // Botón de acción según estado
+  var accionLabel = '', accionColor = '';
+  if(asig.estado === 'pendiente')        { accionLabel = '▶ Iniciar';    accionColor = '#3b82f6'; }
+  else if(asig.estado === 'en_proceso')  { accionLabel = '✓ Finalizar';  accionColor = '#10b981'; }
+  else if(asig.estado === 'pausada')     { accionLabel = '▶ Continuar';  accionColor = '#3b82f6'; }
+  else if(asig.estado === 'requiere_correccion'){ accionLabel = '▶ Reanudar'; accionColor = '#f59e0b'; }
+
   var el = document.createElement('div');
   el.dataset.hkId = asig.id;
-  el.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:8px;padding:12px;cursor:pointer;';
-  el.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-    + '<div style="font-size:11px;color:' + color + ';font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;">' + label + rtFlag + '</div>'
-    + '<div style="font-size:11px;color:var(--text3);">' + estMin + (realMin ? ' · real ' + realMin : '') + '</div>'
-    + '</div>'
-    + '<div style="font-size:15px;font-weight:700;color:var(--text);">' + icon + ' ' + asig.objeto_nombre + '</div>'
-    + (tipoLabel ? '<div style="font-size:12px;color:var(--text3);margin-top:2px;">' + tipoLabel + '</div>' : '')
-    + empLine + motivo;
-  el.addEventListener('click', function(){ hkOpenExec(asig.id); });
+  el.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:8px;padding:12px;';
+
+  var topRow = document.createElement('div');
+  topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
+  topRow.innerHTML = '<div style="font-size:11px;color:' + color + ';font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;">' + label + rtFlag + '</div>'
+    + '<div style="font-size:11px;color:var(--text3);">' + estMin + (realMin ? ' · real ' + realMin : '') + '</div>';
+  el.appendChild(topRow);
+
+  var nameEl = document.createElement('div');
+  nameEl.style.cssText = 'font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px;';
+  nameEl.textContent = icon + ' ' + asig.objeto_nombre;
+  el.appendChild(nameEl);
+
+  if(tipoLabel){ var tlEl=document.createElement('div'); tlEl.style.cssText='font-size:12px;color:var(--text3);margin-top:2px;'; tlEl.textContent=tipoLabel; el.appendChild(tlEl); }
+  if(empLine){ var empEl=document.createElement('div'); empEl.innerHTML=empLine; el.appendChild(empEl); }
+  if(motivo){ var motEl=document.createElement('div'); motEl.innerHTML=motivo; el.appendChild(motEl); }
+
+  if(accionLabel){
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;';
+
+    var btnAccion = document.createElement('button');
+    btnAccion.className = 'tbtn';
+    btnAccion.style.cssText = 'flex:1;background:' + accionColor + ';color:white;font-size:13px;padding:10px;';
+    btnAccion.textContent = accionLabel;
+    btnAccion.addEventListener('click', (function(id, estado){
+      return function(e){
+        e.stopPropagation();
+        var act = estado==='pendiente'?'start':estado==='en_proceso'?'finish':estado==='pausada'?'resume':'start';
+        _hkExecAsigId = id;
+        hkAction(act).then(function(){ renderHKMiRuta(); });
+      };
+    })(asig.id, asig.estado));
+    btnRow.appendChild(btnAccion);
+
+    var btnDetalle = document.createElement('button');
+    btnDetalle.className = 'tbtn';
+    btnDetalle.style.cssText = 'font-size:12px;padding:10px 14px;';
+    btnDetalle.textContent = '⋯';
+    btnDetalle.title = 'Ver detalle / pausar / incidencia';
+    btnDetalle.addEventListener('click', function(e){ e.stopPropagation(); hkOpenExec(asig.id); });
+    btnRow.appendChild(btnDetalle);
+    el.appendChild(btnRow);
+  } else {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', function(){ hkOpenExec(asig.id); });
+  }
+
   return el;
 }
 
@@ -271,7 +335,8 @@ async function renderHKMiRuta(){
 
   var mias = asigs.filter(function(a){
     if(a.employee_id !== currentUser.id) return false;
-    // Empleado ve TODAS sus asignaciones del día (habitaciones + zonas + periódicas)
+    // Pestaña Habitaciones: solo tipo_objeto='habitacion'
+    if(a.tipo_objeto !== 'habitacion') return false;
     if(a.ad_hoc){
       var ts = a.hora_inicio || a.created_at || '';
       return ts.slice(0, 10) === hoy;
@@ -878,21 +943,6 @@ async function renderHKPlanificacion(){
     });
     html += '</div>';
   }
-
-  // Modal de asignación
-  html += `
-    <div id="modal-hk-asignar" style="position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:680;padding:16px;">
-      <div style="background:var(--bg2);border:2px solid var(--orange);border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;">
-        <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--orange);letter-spacing:.15em;margin-bottom:6px;">NUEVA ASIGNACIÓN</div>
-        <div id="hk-asig-title" style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:14px;">—</div>
-        <div id="hk-asig-form"></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-          <button class="tbtn" onclick="document.getElementById('modal-hk-asignar').style.display='none'">Cancelar</button>
-          <button class="tbtn" style="background:var(--orange);color:white;" onclick="hkGuardarAsig()">Guardar</button>
-        </div>
-      </div>
-    </div>
-  `;
 
   content.innerHTML = html;
 }
