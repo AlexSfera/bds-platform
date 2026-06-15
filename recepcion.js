@@ -28,8 +28,8 @@
       <textarea id="kpi-reserv-pend-exp" rows="2" placeholder="Detalla las reservas pendientes..."></textarea>
     </div>
 
-    <!-- UPSELL DESAYUNOS -->
-    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">DESAYUNOS / UPSELL</div>
+    <!-- CROSS-SELL DESAYUNO -->
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#f59e0b;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">CROSS-SELL · DESAYUNO</div>
     <div class="fg" style="margin-bottom:8px;">
       <label>¿Ofertaste desayunos a clientes sin desayuno incluido?</label>
       <div style="display:flex;gap:8px;margin-top:6px;">
@@ -38,9 +38,26 @@
         <button class="tbtn" id="kpi-upsell-na" onclick="setRecKpi('upsell_desayuno','na',this)">No aplica</button>
       </div>
     </div>
-    <div id="kpi-upsell-detail" style="display:none;" class="grid2">
-      <div class="fg"><label>¿A cuántos clientes se ofreció?</label><input type="text" inputmode="decimal" id="kpi-desal-ofertados" placeholder="0" style="color:#111827;background:#ffffff;"></div>
-      <div class="fg"><label>¿Cuántos desayunos se vendieron?</label><input type="text" inputmode="decimal" id="kpi-desal-vendidos" placeholder="0" style="color:#111827;background:#ffffff;"></div>
+    <div id="desayuno-ventas-block" style="display:none;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:8px;">
+      <div style="font-size:11px;color:#f59e0b;font-family:var(--font-mono);font-weight:700;margin-bottom:8px;">DESAYUNOS VENDIDOS — una línea por venta (IVA 10%)</div>
+      <div id="desayuno-ventas-container"></div>
+      <button onclick="addDesayunoVenta()" style="display:flex;align-items:center;gap:6px;background:rgba(245,158,11,.1);border:1px dashed #f59e0b;color:#f59e0b;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;width:100%;justify-content:center;margin-top:6px;">+ Añadir desayuno</button>
+    </div>
+
+    <!-- CROSS-SELL CENA -->
+    <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#ef4444;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">CROSS-SELL · CENA</div>
+    <div class="fg" style="margin-bottom:8px;">
+      <label>¿Ofertaste cena a clientes sin pensión incluida?</label>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="tbtn" id="kpi-cena-si" onclick="setRecKpi('upsell_cena','si',this)">SÍ</button>
+        <button class="tbtn" id="kpi-cena-no" onclick="setRecKpi('upsell_cena','no',this)">NO</button>
+        <button class="tbtn" id="kpi-cena-na" onclick="setRecKpi('upsell_cena','na',this)">No aplica</button>
+      </div>
+    </div>
+    <div id="cena-ventas-block" style="display:none;border:1px solid #ef4444;border-radius:8px;padding:12px;margin-bottom:8px;">
+      <div style="font-size:11px;color:#ef4444;font-family:var(--font-mono);font-weight:700;margin-bottom:8px;">CENAS VENDIDAS — una línea por venta (IVA 10%)</div>
+      <div id="cena-ventas-container"></div>
+      <button onclick="addCenaVenta()" style="display:flex;align-items:center;gap:6px;background:rgba(239,68,68,.1);border:1px dashed #ef4444;color:#ef4444;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;width:100%;justify-content:center;margin-top:6px;">+ Añadir cena</button>
     </div>
 
     <!-- VENTAS SYNCROLAB -->
@@ -281,16 +298,16 @@ function setRecKpi(key, val, btn) {
     else btn.classList.add('t-na');
   }
   var deps = {
-    reservas_pendientes: 'kpi-reserv-pend-exp-block',
-    upsell_desayuno:     'kpi-upsell-detail',
-    comms_pendientes:    'kpi-comms-pend-exp-block',
+    reservas_pendientes:    'kpi-reserv-pend-exp-block',
+    upsell_desayuno:        'desayuno-ventas-block',
+    upsell_cena:            'cena-ventas-block',
     clientes_insatisfechos: 'kpi-clientes-detail',
-    syncrolab_ventas:    'syncro-ventas-container',
-    lead_pendiente:      'kpi-lead-block'
+    syncrolab_ventas:       'kpi-syncro-block',
+    lead_pendiente:         'kpi-lead-block'
   };
   if(deps[key]){
     var bl = document.getElementById(deps[key]);
-    if(bl) bl.style.display = val==='si' ? (key==='upsell_desayuno'?'grid':'block') : 'none';
+    if(bl) bl.style.display = val==='si' ? 'block' : 'none';
   }
 }
 
@@ -300,10 +317,17 @@ function setRecKpi(key, val, btn) {
 function openRecKpiModal() {
   _recKpiState = {};
   document.querySelectorAll('#modal-rec-kpi .tbtn').forEach(function(b){ b.classList.remove('t-si','t-no','t-na'); });
-  ['kpi-reserv-pend-exp-block','kpi-upsell-detail','kpi-comms-pend-exp-block','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
+  ['kpi-reserv-pend-exp-block','desayuno-ventas-block','cena-ventas-block','kpi-clientes-detail','kpi-syncro-block','kpi-lead-block'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.style.display='none';
   });
-  ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-desal-ofertados','kpi-desal-vendidos','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
+  // Limpiar contenedores de ventas dinámicas
+  ['desayuno-ventas-container','cena-ventas-container','syncro-ventas-container'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.innerHTML='';
+  });
+  _desayunoVentaIdx=0; _desayunoVentas=[];
+  _cenaVentaIdx=0; _cenaVentas=[];
+  _syncroVentaIdx=0; _syncroVentas=[];
+  ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-clientes-num'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
   var errEl = document.getElementById('kpi-err');
@@ -321,8 +345,25 @@ function submitRecKpi() {
   var errs = [];
   if(!_recKpiState.reservas_pendientes) errs.push('Indica si quedan reservas pendientes');
   if(!_recKpiState.upsell_desayuno)     errs.push('Indica si ofertaste desayunos');
+  if(!_recKpiState.upsell_cena)         errs.push('Indica si ofertaste cena');
   if(!_recKpiState.comms_revisadas)     errs.push('Indica si revisaste comunicaciones');
   if(!_recKpiState.clientes_insatisfechos) errs.push('Indica si hubo clientes insatisfechos');
+
+  if(_recKpiState.upsell_desayuno === 'si'){
+    var dVentas = collectDesayunoVentas();
+    if(dVentas.length === 0) errs.push('Añade al menos un desayuno vendido');
+    dVentas.forEach(function(v,i){
+      if(!v.importe||v.importe<=0) errs.push('Desayuno #'+(i+1)+': importe obligatorio');
+    });
+  }
+
+  if(_recKpiState.upsell_cena === 'si'){
+    var cVentas = collectCenaVentas();
+    if(cVentas.length === 0) errs.push('Añade al menos una cena vendida');
+    cVentas.forEach(function(v,i){
+      if(!v.importe||v.importe<=0) errs.push('Cena #'+(i+1)+': importe obligatorio');
+    });
+  }
 
   if(_recKpiState.syncrolab_ventas === 'si'){
     var ventas = collectSyncroVentas();
@@ -350,6 +391,8 @@ function submitRecKpi() {
   _recKpiState.checkouts = parseInt((document.getElementById('kpi-checkouts')||{}).value)||0;
   _recKpiState.reservas  = parseInt((document.getElementById('kpi-reservas')||{}).value)||0;
   _recKpiState.syncrolab_ventas_data = collectSyncroVentas();
+  _recKpiState.desayuno_ventas_data  = collectDesayunoVentas();
+  _recKpiState.cena_ventas_data      = collectCenaVentas();
   _recKpiState.lead_desc   = (document.getElementById('kpi-lead-desc')||{}).value||'';
   _recKpiState.lead_resp   = (document.getElementById('kpi-lead-resp')||{}).value||'';
   _recKpiState.lead_fecha  = (document.getElementById('kpi-lead-fecha')||{}).value||'';
@@ -809,6 +852,86 @@ async function reabrirTurnoValidado(shiftId) {
 // ═══════════════════════════════════════════════════════════════════════
 var _syncroVentaIdx = 0;
 var _syncroVentas   = [];
+
+// ═══════════════════════════════════════════════════════════════════════
+// CROSS-SELL DESAYUNO — líneas de venta
+// ═══════════════════════════════════════════════════════════════════════
+var _desayunoVentaIdx = 0;
+var _desayunoVentas   = [];
+
+function addDesayunoVenta() {
+  var idx = _desayunoVentaIdx++;
+  _desayunoVentas.push({idx:idx});
+  var c = document.getElementById('desayuno-ventas-container');
+  if(!c) return;
+  var div = document.createElement('div');
+  div.id = 'desayuno-venta-'+idx;
+  div.style.cssText = 'border:1px solid #f59e0b;border-radius:6px;padding:10px;margin-bottom:8px;position:relative;';
+  div.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+    + '<div class="fg"><label>Nº habitación / reserva</label><input type="text" id="dv-reserva-'+idx+'" placeholder="Nº habitación o MEWS" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Importe (€ IVA 10%) <span class="req">*</span></label><input type="text" inputmode="decimal" id="dv-importe-'+idx+'" placeholder="0.00" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg" style="grid-column:1/-1"><label>Comentario</label><input type="text" id="dv-obs-'+idx+'" placeholder="Opcional" style="color:#111827;background:#ffffff;"></div>'
+    + '</div>'
+    + '<button onclick="removeDesayunoVenta('+idx+')" style="position:absolute;top:8px;right:8px;background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">✕</button>';
+  c.appendChild(div);
+}
+
+function removeDesayunoVenta(idx) {
+  var el = document.getElementById('desayuno-venta-'+idx);
+  if(el) el.remove();
+}
+
+function collectDesayunoVentas() {
+  var result = [];
+  document.querySelectorAll('#desayuno-ventas-container > div').forEach(function(div){
+    var id      = div.id.replace('desayuno-venta-','');
+    var importe = parseFloat((document.getElementById('dv-importe-'+id)||{value:''}).value)||0;
+    var reserva = (document.getElementById('dv-reserva-'+id)||{value:''}).value;
+    var obs     = (document.getElementById('dv-obs-'+id)||{value:''}).value;
+    result.push({importe:importe, reserva:reserva, obs:obs});
+  });
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CROSS-SELL CENA — líneas de venta
+// ═══════════════════════════════════════════════════════════════════════
+var _cenaVentaIdx = 0;
+var _cenaVentas   = [];
+
+function addCenaVenta() {
+  var idx = _cenaVentaIdx++;
+  _cenaVentas.push({idx:idx});
+  var c = document.getElementById('cena-ventas-container');
+  if(!c) return;
+  var div = document.createElement('div');
+  div.id = 'cena-venta-'+idx;
+  div.style.cssText = 'border:1px solid #ef4444;border-radius:6px;padding:10px;margin-bottom:8px;position:relative;';
+  div.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+    + '<div class="fg"><label>Nº habitación / reserva</label><input type="text" id="cv-reserva-'+idx+'" placeholder="Nº habitación o MEWS" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Importe (€ IVA 10%) <span class="req">*</span></label><input type="text" inputmode="decimal" id="cv-importe-'+idx+'" placeholder="0.00" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg" style="grid-column:1/-1"><label>Comentario</label><input type="text" id="cv-obs-'+idx+'" placeholder="Opcional" style="color:#111827;background:#ffffff;"></div>'
+    + '</div>'
+    + '<button onclick="removeCenaVenta('+idx+')" style="position:absolute;top:8px;right:8px;background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">✕</button>';
+  c.appendChild(div);
+}
+
+function removeCenaVenta(idx) {
+  var el = document.getElementById('cena-venta-'+idx);
+  if(el) el.remove();
+}
+
+function collectCenaVentas() {
+  var result = [];
+  document.querySelectorAll('#cena-ventas-container > div').forEach(function(div){
+    var id      = div.id.replace('cena-venta-','');
+    var importe = parseFloat((document.getElementById('cv-importe-'+id)||{value:''}).value)||0;
+    var reserva = (document.getElementById('cv-reserva-'+id)||{value:''}).value;
+    var obs     = (document.getElementById('cv-obs-'+id)||{value:''}).value;
+    result.push({importe:importe, reserva:reserva, obs:obs});
+  });
+  return result;
+}
 
 function addSyncroVenta() {
   var idx = _syncroVentaIdx++;
