@@ -426,36 +426,37 @@ function getScreens(rol){
     || ['chef','fb','jefe_recepcion','supervisor','jefe'].indexOf(rol) >= 0;
 
   // ── Definiciones de pantallas ─────────────────────────────────────
+  // group: 'dia' | 'dept' | 'gestion' | 'analitica' → barra superior agrupada por color
   var ITEMS = {
-    readme:      {id:'readme',      label:'📋 Info'},
-    turno:       {id:'turno',       label:'🕐 Mi Turno'},
-    gestiones:   {id:'gestiones',   label:'📌 Gestiones'},
-    tareas:      {id:'tareas',      label:'🔗 Tareas'},
-    incidencias: {id:'incidencias', label:'⚠ Incidencias'},
-    hypoxic:     {id:'hypoxic',     label:'🫁 Hypoxic Room'},
-    validacion:  {id:'validacion',  label:'✅ Validación'},
-    dashboard:   {id:'dashboard',   label:'📊 Dashboard'},
-    maestro:     {id:'maestro',     label:'👥 Maestro'},
-    export:      {id:'export',      label:'⬇ Exportar'},
-    fio:         {id:'fio',         label:'⚖ FIO'},
-    misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
+    readme:      {id:'readme',      label:'📋 Info',           group:'dia'},
+    turno:       {id:'turno',       label:'🕐 Mi Turno',       group:'dia'},
+    gestiones:   {id:'gestiones',   label:'📌 Gestiones',      group:'dept'},
+    tareas:      {id:'tareas',      label:'🔗 Tareas',         group:'dept'},
+    incidencias: {id:'incidencias', label:'⚠ Incidencias',     group:'dept'},
+    hypoxic:     {id:'hypoxic',     label:'🫁 Hypoxic Room',   group:'dept'},
+    validacion:  {id:'validacion',  label:'✅ Validación',     group:'gestion'},
+    dashboard:   {id:'dashboard',   label:'📊 Dashboard',      group:'analitica'},
+    maestro:     {id:'maestro',     label:'👥 Maestro',        group:'gestion'},
+    export:      {id:'export',      label:'⬇ Exportar',        group:'gestion'},
+    fio:         {id:'fio',         label:'⚖ FIO',             group:'gestion'},
+    misfio:      {id:'mis-fio',     label:'⚖ Mis FIO',         group:'dept'},
     // Módulos por dpto (placeholders)
-    merma:       {id:'merma-mod',   label:'📦 Merma'},
-    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes de Caja'},
-    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
-    cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
-    cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
-    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
-    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true},
+    merma:       {id:'merma-mod',   label:'📦 Merma',          group:'dept'},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes de Caja', group:'dept'},
+    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        group:'dept'},
+    cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice', group:'dept'},
+    cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice', group:'dept'},
+    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true, group:'dept'},
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true, group:'dept'},
     // ── HOUSEKEEPING ─────────────────────────────────────────────────
-    hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
-    hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
-    hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
-    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
-    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
-    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
-    incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
-    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'}
+    hkPlan:      {id:'hk-plan',     label:'📅 Planificación',  group:'dept'},
+    hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas', group:'dept'},
+    hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK',group:'dept'},
+    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK',    group:'dept'},
+    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK',   group:'dept'},
+    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje',group:'dia'},
+    incentivos:  {id:'incentivos',  label:'💰 Incentivos',     group:'analitica'},
+    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay', group:'dia'}
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
@@ -548,41 +549,63 @@ function buildNav(){
   };
   const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
 
-  // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
-  const sideb = document.getElementById('sidebar-nav');
-  if(sideb) sideb.innerHTML = '';
+  // Pintar barra superior agrupada (escritorio) + bottom nav (móvil) + topbar legacy oculto
+  const groupbar = document.getElementById('groupnav');
+  if(groupbar) groupbar.innerHTML = '';
+
+  // Orden y metadatos de grupos
+  const GROUPS = [
+    {key:'dia',       label:'MI DÍA'},
+    {key:'dept',      label:'MI DEPARTAMENTO'},
+    {key:'gestion',   label:'GESTIÓN'},
+    {key:'analitica', label:'ANALÍTICA'}
+  ];
+
+  // Repartir screens (no-separadores) en sus grupos
+  const byGroup = {dia:[], dept:[], gestion:[], analitica:[]};
+  screens.forEach(s=>{
+    if(s.sep) return;                       // separadores legacy: ignorados en barra superior
+    const g = s.group || 'dept';
+    (byGroup[g] || byGroup.dept).push(s);
+  });
+
+  if(groupbar){
+    GROUPS.forEach(g=>{
+      const items = byGroup[g.key];
+      if(!items || !items.length) return;   // grupo vacío para este rol → no se pinta
+      const grp = document.createElement('div');
+      grp.className = 'gnav-group gnav-' + g.key;
+      const lbl = document.createElement('div');
+      lbl.className = 'gnav-label';
+      lbl.textContent = g.label;
+      grp.appendChild(lbl);
+      const row = document.createElement('div');
+      row.className = 'gnav-items';
+      items.forEach(s=>{
+        const isPending = !!s.pending;
+        const btn = document.createElement('button');
+        btn.className = 'gnav-btn' + (isPending ? ' is-pending' : '');
+        btn.id = 'gnav-' + s.id;
+        btn.innerHTML = s.label + '<span class="alert-dot" id="dotgnav-'+s.id+'"></span>';
+        if(isPending){
+          btn.onclick = function(){ toast('Módulo en desarrollo','info'); };
+        } else if(s.action){
+          btn.onclick = function(){ if(typeof window[s.action] === 'function') window[s.action](); else toast('Función no disponible','err'); };
+        } else {
+          btn.onclick = function(){ showScreen(s.id); };
+        }
+        row.appendChild(btn);
+      });
+      grp.appendChild(row);
+      groupbar.appendChild(grp);
+    });
+  }
 
   screens.forEach(s=>{
-    if(s.sep){
-      // Separador de grupo
-      if(sideb){
-        const sep = document.createElement('div');
-        sep.className = 'sidebar-group-label';
-        sep.textContent = s.label;
-        sideb.appendChild(sep);
-      }
-      return;
-    }
+    if(s.sep) return;
     const isPending = !!s.pending;
 
-    // Sidebar (escritorio)
-    if(sideb){
-      const a = document.createElement('button');
-      a.className = 'sidebar-btn' + (isPending ? ' is-pending' : '');
-      a.id = 'side-' + s.id;
-      a.innerHTML = s.label + (isPending ? ' <span class="pill-pending">Pendiente</span>' : '')
-                  + '<span class="alert-dot" id="dotside-'+s.id+'"></span>';
-      if(isPending){
-        a.onclick = function(){ toast('Módulo en desarrollo','info'); };
-      } else if(s.action){
-        a.onclick = function(){ if(typeof window[s.action] === 'function') window[s.action](); else toast('Función no disponible','err'); };
-      } else {
-        a.onclick = function(){ showScreen(s.id); };
-      }
-      sideb.appendChild(a);
-    }
-
-    // Topbar legacy (lo dejamos oculto vía CSS pero seguimos poblándolo por compatibilidad de IDs)
+    // Topbar legacy (oculto vía CSS; poblado por compatibilidad de IDs)
     const b=document.createElement('button');
     b.className='nav-btn'; b.id='nav-'+s.id;
     b.innerHTML=s.label+'<span class="alert-dot" id="dot-'+s.id+'"></span>';
@@ -611,11 +634,13 @@ function buildNav(){
   var bn=document.getElementById('bottom-nav');
   if(bn) bn.style.display='block';
 
-  // Rellenar bloque usuario topbar (dpto · nombre)
-  var deptEl = document.getElementById('topbar-dept');
-  var nameEl = document.getElementById('topbar-name');
-  if(deptEl) deptEl.textContent = currentUser && currentUser.area ? ('🏢 ' + currentUser.area) : '';
-  if(nameEl) nameEl.textContent = currentUser && currentUser.nombre ? ('👤 ' + currentUser.nombre) : '';
+  // Rellenar bloque usuario topbar (área · puesto · nombre)
+  var areaEl   = document.getElementById('topbar-area');
+  var puestoEl = document.getElementById('topbar-puesto');
+  var nameEl   = document.getElementById('topbar-name');
+  if(areaEl)   areaEl.textContent   = currentUser && currentUser.area   ? currentUser.area   : '';
+  if(puestoEl) puestoEl.textContent = currentUser && currentUser.puesto ? currentUser.puesto : '';
+  if(nameEl)   nameEl.textContent   = currentUser && currentUser.nombre ? currentUser.nombre : '';
 }
 async function showScreen(id){
   // Reset topbar dept accent when leaving dashboard
@@ -626,11 +651,11 @@ async function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.sidebar-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.gnav-btn').forEach(b=>b.classList.remove('active'));
   const s=document.getElementById('screen-'+id); if(s) s.classList.add('active');
   const nb=document.getElementById('nav-'+id); if(nb) nb.classList.add('active');
   const bb=document.getElementById('bnav-'+id); if(bb) bb.classList.add('active');
-  const sb=document.getElementById('side-'+id); if(sb) sb.classList.add('active');
+  const gb=document.getElementById('gnav-'+id); if(gb) gb.classList.add('active');
   window.scrollTo(0,0);
   if(id==='readme' && typeof renderInfoScreen==='function'){ renderInfoScreen(); }
   if(id==='turno'){ initTurnoForm(); }
@@ -674,6 +699,9 @@ async function updateDots(){
   // Desktop dots
   const valDot=document.getElementById('dot-turno'); if(valDot) valDot.classList.toggle('show',hasCor);
   const tDot=document.getElementById('dot-tareas'); if(tDot) tDot.classList.toggle('show',pendT>0);
+  // Group nav dots (barra superior)
+  const gvalDot=document.getElementById('dotgnav-turno'); if(gvalDot) gvalDot.classList.toggle('show',hasCor);
+  const gtDot=document.getElementById('dotgnav-tareas'); if(gtDot) gtDot.classList.toggle('show',pendT>0);
   // Mobile bottom nav dots
   const bvalDot=document.getElementById('bdot-turno'); if(bvalDot) bvalDot.classList.toggle('show',hasCor);
   const btDot=document.getElementById('bdot-tareas'); if(btDot) btDot.classList.toggle('show',pendT>0);
