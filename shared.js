@@ -2006,6 +2006,19 @@ function initValDeptFilter(){
   onValDeptChange();
 }
 
+function filtrarValidacion(){
+  var _opDiv  = document.getElementById('val-content-operativo');
+  var _dept   = (document.getElementById('v-dept')||{}).value||'';
+  if(_opDiv && _opDiv.style.display !== 'none'){
+    // Tab OPERATIVO activo — refrescar incidencias/gestiones/tareas
+    if(typeof renderFollowUpExtras === 'function') renderFollowUpExtras(_dept);
+  } else {
+    // Tab TURNOS u otro activo — refrescar tabla de turnos
+    renderValidacion();
+  }
+}
+window.filtrarValidacion = filtrarValidacion;
+
 async function renderValidacion(){
   let shifts=await getDB('shifts');
   // jefe_recepcion: only see Recepción shifts
