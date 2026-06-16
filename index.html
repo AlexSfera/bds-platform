@@ -50,38 +50,120 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 /* ── APP SHELL ── */
 #app{display:none;min-height:100vh;}
 
-/* ══ TOPBAR — tema oscuro exacto de maqueta aprobada ══ */
+/* ══ TOPBAR (dark theme — V4.0 navigation) ══ */
 .topbar{
-  background:#1a1c1f;
-  border-bottom:1px solid #2e3238;
-  display:flex;align-items:center;
+  background:#1a1c1f;border-bottom:1px solid #2e3238;
+  display:flex;align-items:center;gap:0;
   padding:0 18px;height:48px;
   position:sticky;top:0;z-index:100;
-  box-shadow:0 1px 6px rgba(0,0,0,.22);
-  gap:10px;
 }
 .topbar-logo{
   font-family:var(--font-mono);font-size:13px;font-weight:700;
   letter-spacing:.14em;color:#2ec4b6;white-space:nowrap;
-  text-transform:uppercase;display:none;
+  text-transform:uppercase;
 }
-.topbar-logo em{color:#5a6070;font-style:normal;font-weight:400;font-size:10px;letter-spacing:.08em;margin-left:4px;}
+.topbar-logo em{
+  color:#5a6070;font-style:normal;font-weight:400;
+  font-size:10px;letter-spacing:.08em;margin-left:4px;
+}
 .topbar-sep{display:none;}
-.topbar-nav{display:none;}
-.nav-btn{background:none;border:none;color:#9aa0aa;font-family:var(--font-ui);font-size:12px;font-weight:500;padding:5px 10px;border-radius:var(--radius);cursor:pointer;white-space:nowrap;transition:all .15s;position:relative;}
-.nav-btn:hover{color:#e8eaed;background:rgba(255,255,255,.06);}
-.nav-btn.active{color:#2ec4b6;background:rgba(46,196,182,.12);}
-.nav-btn .alert-dot{position:absolute;top:4px;right:4px;width:6px;height:6px;background:#ef4444;border-radius:50%;display:none;}
-.nav-btn .alert-dot.show{display:block;}
-/* usuario: area · puesto · nombre */
-.topbar-user{margin-left:auto;display:flex;align-items:center;gap:0;font-family:var(--font-mono);font-size:10px;white-space:nowrap;}
-.topbar-area{background:#222528;border:1px solid #3a3f47;color:#9aa0aa;padding:4px 9px;border-radius:4px 0 0 4px;letter-spacing:.06em;white-space:nowrap;}
-.topbar-puesto{background:#222528;border:1px solid #3a3f47;border-left:none;color:#5a6070;padding:4px 9px;letter-spacing:.06em;white-space:nowrap;}
-.topbar-name{background:rgba(46,196,182,.18);border:1px solid #2ec4b6;border-left:none;color:#2ec4b6;padding:4px 9px;border-radius:0 4px 4px 0;font-weight:700;letter-spacing:.08em;white-space:nowrap;}
-.topbar-user .btn-logout{margin-left:10px;}
-.user-badge{background:rgba(217,119,6,.12);border:1px solid #d97706;color:#d97706;padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.1em;}
-.btn-logout{background:none;border:1px solid #2e3238;color:#5a6070;padding:3px 9px;border-radius:var(--radius);cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:all .15s;}
+.topbar-nav{display:none !important;}
+.nav-btn{display:none;}
+
+.topbar-user{
+  margin-left:auto;display:flex;align-items:center;gap:0;
+  font-family:var(--font-mono);font-size:10px;color:#9aa0aa;
+  white-space:nowrap;
+}
+.topbar-area{
+  background:#222528;border:1px solid #3a3f47;
+  color:#9aa0aa;padding:4px 9px;border-radius:4px 0 0 4px;
+  letter-spacing:.06em;white-space:nowrap;
+  text-transform:uppercase;font-weight:700;
+}
+.topbar-puesto{
+  background:#222528;border:1px solid #3a3f47;border-left:none;
+  color:#5a6070;padding:4px 9px;
+  letter-spacing:.06em;white-space:nowrap;
+}
+.topbar-name{
+  background:rgba(46,196,182,.18);border:1px solid #2ec4b6;border-left:none;
+  color:#2ec4b6;padding:4px 9px;border-radius:0 4px 4px 0;
+  font-weight:700;letter-spacing:.08em;white-space:nowrap;
+}
+.user-badge{
+  background:rgba(46,196,182,.18);border:1px solid #2ec4b6;
+  color:#2ec4b6;padding:3px 9px;border-radius:4px;
+  font-size:11px;font-weight:700;letter-spacing:.1em;
+  margin-left:8px;font-family:var(--font-mono);
+}
+.btn-logout{
+  background:none;border:1px solid #3a3f47;color:#9aa0aa;
+  padding:4px 10px;border-radius:4px;cursor:pointer;
+  font-size:10px;font-family:var(--font-mono);
+  letter-spacing:.08em;font-weight:700;margin-left:10px;
+  transition:all .15s;
+}
 .btn-logout:hover{border-color:#ef4444;color:#ef4444;}
+
+/* ══ GROUPNAV — 4 grupos: MI DIA / MI DEPT / GESTION / ANALITICA ══ */
+#groupnav{
+  display:none;
+  background:#111214;border-bottom:1px solid #2e3238;
+  overflow-x:auto;scrollbar-width:none;
+  position:sticky;top:48px;z-index:99;
+}
+#groupnav::-webkit-scrollbar{display:none;}
+.gnav-inner{display:flex;align-items:stretch;min-width:max-content;}
+.gnav-group{
+  display:flex;align-items:stretch;flex-direction:column;position:relative;
+}
+.gnav-group + .gnav-group::before{
+  content:'';position:absolute;left:0;top:4px;bottom:4px;
+  width:1px;background:#2e3238;
+}
+.gnav-dia{--gnav-color:#2ec4b6;--gnav-color-dim:rgba(46,196,182,.11);}
+.gnav-dept{--gnav-color:#3b82f6;--gnav-color-dim:rgba(59,130,246,.11);}
+.gnav-gestion{--gnav-color:#f59e0b;--gnav-color-dim:rgba(245,158,11,.11);}
+.gnav-analitica{--gnav-color:#a855f7;--gnav-color-dim:rgba(168,85,247,.11);}
+.gnav-group::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--gnav-color);
+}
+.gnav-label{
+  font-family:var(--font-mono);font-size:7px;font-weight:700;letter-spacing:.2em;
+  color:var(--gnav-color);text-align:center;padding:4px 8px 0;
+  text-transform:uppercase;line-height:1;pointer-events:none;
+  position:relative;z-index:1;
+}
+.gnav-items{display:flex;align-items:stretch;flex:1;}
+.gnav-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;padding:4px 11px 8px;
+  border:none;background:none;color:#5a6070;
+  cursor:pointer;border-bottom:2px solid transparent;
+  transition:all .15s;white-space:nowrap;
+  font-family:var(--font-mono);font-size:8px;font-weight:700;letter-spacing:.09em;
+  min-width:54px;position:relative;
+}
+.gnav-btn:hover:not(.active):not(.is-pending){
+  color:#9aa0aa;background:rgba(255,255,255,.025);
+}
+.gnav-btn.active{
+  color:var(--gnav-color);
+  border-bottom-color:var(--gnav-color);
+  background:var(--gnav-color-dim);
+}
+.gnav-btn.is-pending{color:#3a3f47;cursor:not-allowed;}
+.gnav-ic{font-size:14px;line-height:1;}
+.gnav-tx{font-size:8px;font-weight:700;letter-spacing:.09em;}
+.gnav-btn .alert-dot{
+  position:absolute;top:3px;right:6px;
+  width:6px;height:6px;background:#ef4444;border-radius:50%;
+  display:none;
+}
+.gnav-btn .alert-dot.show{display:block;}
+
 /* ── PORTAL DEPT GRID ── */
 .portal-dept-grid { grid-template-columns: repeat(2, 1fr); }
 @media(min-width:768px){ .portal-dept-grid { grid-template-columns: repeat(4, 1fr); } }
@@ -109,108 +191,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 .bnav-label{font-size:8px;font-weight:700;letter-spacing:.06em;}
 .bnav-dot{position:absolute;top:6px;right:calc(50% - 14px);width:7px;height:7px;background:var(--red);border-radius:50%;display:none;border:2px solid var(--bg2);}
 .bnav-dot.show{display:block;}
-/* Desktop */
+
+/* ── Sidebar legacy: HIDDEN (replaced by #groupnav) ── */
+#sidebar{display:none !important;}
+
+/* Desktop: show groupnav, hide bottom-nav */
 @media(min-width:768px){
-  .topbar-logo{display:block;}
-  .topbar-sep{display:block;}
-  .topbar-nav{display:none !important;}
+  #groupnav{display:flex;}
   #bottom-nav{display:none !important;}
-  .app-shell{padding-left:0;}
 }
-/* Mobile */
+/* Mobile: hide groupnav, give space for bottom-nav */
 @media(max-width:767px){
+  #groupnav{display:none;}
   .main{padding-bottom:80px !important;}
 }
-
-/* ══ BARRA DE NAVEGACIÓN AGRUPADA — exacto de maqueta aprobada ══ */
-#groupnav{
-  display:none;
-  background:#111214;
-  border-bottom:1px solid #2e3238;
-  align-items:stretch;
-  overflow-x:auto;
-  scrollbar-width:none;
-  position:sticky;top:48px;z-index:99;
-}
-#groupnav::-webkit-scrollbar{display:none;}
-@media(min-width:768px){ #groupnav{display:flex;} }
-@media(max-width:767px){ #groupnav{display:none;} }
-
-/* grupo: columna con stripe de color arriba + items en fila */
-.gnav-group{
-  display:flex;flex-direction:column;
-  position:relative;flex-shrink:0;
-}
-/* stripe de color superior — 3px, visible y nítido */
-.gnav-group::after{
-  content:'';position:absolute;top:0;left:0;right:0;height:3px;
-  background:var(--gnav-color,#2e3238);
-}
-/* separador vertical entre grupos */
-.gnav-group + .gnav-group::before{
-  content:'';position:absolute;left:0;top:4px;bottom:4px;
-  width:1px;background:#2e3238;
-}
-
-/* label de grupo — 7px mono uppercase, color del grupo */
-.gnav-label{
-  font-family:var(--font-mono);
-  font-size:7px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;
-  text-align:center;padding:5px 10px 0;line-height:1;
-  color:var(--gnav-color,#5a6070);
-  pointer-events:none;position:relative;z-index:1;
-}
-
-/* fila de botones */
-.gnav-items{display:flex;align-items:stretch;flex:1;}
-
-/* botón: icono (16px) + texto (9px) en columna — espaciado UX correcto */
-.gnav-btn{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:4px;
-  background:none;border:none;
-  color:#5a6070;
-  padding:8px 14px 10px;
-  cursor:pointer;white-space:nowrap;
-  border-bottom:2px solid transparent;
-  transition:color .15s,background .15s,border-color .15s;
-  min-width:62px;position:relative;
-}
-.gnav-ic{
-  font-size:16px;line-height:1;display:block;
-  filter:grayscale(.4);
-  transition:filter .15s;
-}
-.gnav-tx{
-  font-family:var(--font-mono);font-size:9px;font-weight:700;
-  letter-spacing:.07em;line-height:1;display:block;
-  text-transform:uppercase;
-}
-.gnav-btn:hover:not(.active){
-  color:#9aa0aa;
-  background:rgba(255,255,255,.04);
-}
-.gnav-btn:hover:not(.active) .gnav-ic{filter:grayscale(0);}
-.gnav-btn.active{
-  color:var(--gnav-color);
-  border-bottom-color:var(--gnav-color);
-  background:var(--gnav-bg);
-}
-.gnav-btn.active .gnav-ic{filter:grayscale(0);}
-.gnav-btn.is-pending{color:#2e3238;cursor:not-allowed;}
-.gnav-btn .alert-dot{
-  position:absolute;top:6px;right:6px;
-  width:6px;height:6px;
-  background:#ef4444;border-radius:50%;display:none;
-  border:1.5px solid #111214;
-}
-.gnav-btn .alert-dot.show{display:block;}
-
-/* colores exactos de maqueta aprobada */
-.gnav-dia{      --gnav-color:#2ec4b6; --gnav-bg:rgba(46,196,182,.11);  }
-.gnav-dept{     --gnav-color:#3b82f6; --gnav-bg:rgba(59,130,246,.11);  }
-.gnav-gestion{  --gnav-color:#f59e0b; --gnav-bg:rgba(245,158,11,.11);  }
-.gnav-analitica{--gnav-color:#a855f7; --gnav-bg:rgba(168,85,247,.11);  }
 
 /* ── LAYOUT ── */
 .main{padding:20px;max-width:1200px;margin:0 auto;}
@@ -667,21 +661,26 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
 <div id="app">
 
+  <!-- ══ SIDEBAR (escritorio) ══ -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">BDS · V3</div>
+    <div id="sidebar-nav"></div>
+  </aside>
+
   <div class="app-shell">
   <div class="topbar">
     <div class="topbar-logo">SYNCRO SHIFT <em>V4.0</em></div>
     <div class="topbar-sep"></div>
     <div class="topbar-nav" id="topbar-nav"></div>
     <div class="topbar-user">
-      <span class="topbar-area" id="topbar-area"></span>
+      <span class="topbar-area"   id="topbar-area"></span>
       <span class="topbar-puesto" id="topbar-puesto"></span>
-      <span class="topbar-name" id="topbar-name"></span>
+      <span class="topbar-name"   id="topbar-name"></span>
       <span id="user-name-top" style="display:none;"></span>
       <span class="user-badge" id="user-role-top" style="display:none;"></span>
       <button class="btn-logout" onclick="logout()">SALIR</button>
     </div>
   </div>
-  <!-- ══ BARRA DE NAVEGACIÓN AGRUPADA (escritorio) ══ -->
   <nav id="groupnav"></nav>
   <!-- BOTTOM NAV (mobile) -->
   <div id="bottom-nav">

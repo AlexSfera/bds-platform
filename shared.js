@@ -426,37 +426,36 @@ function getScreens(rol){
     || ['chef','fb','jefe_recepcion','supervisor','jefe'].indexOf(rol) >= 0;
 
   // ── Definiciones de pantallas ─────────────────────────────────────
-  // group: 'dia' | 'dept' | 'gestion' | 'analitica' → barra superior agrupada por color
   var ITEMS = {
-    readme:      {id:'readme',      label:'📋 Info',           group:'dia'},
-    turno:       {id:'turno',       label:'🕐 Mi Turno',       group:'dia'},
-    gestiones:   {id:'gestiones',   label:'📌 Gestiones',      group:'dept'},
-    tareas:      {id:'tareas',      label:'🔗 Tareas',         group:'dept'},
-    incidencias: {id:'incidencias', label:'⚠ Incidencias',     group:'dept'},
-    hypoxic:     {id:'hypoxic',     label:'🫁 Hypoxic Room',   group:'dept'},
-    validacion:  {id:'validacion',  label:'✅ Validación',     group:'gestion'},
-    dashboard:   {id:'dashboard',   label:'📊 Dashboard',      group:'analitica'},
-    maestro:     {id:'maestro',     label:'👥 Maestro',        group:'gestion'},
-    export:      {id:'export',      label:'⬇ Exportar',        group:'gestion'},
-    fio:         {id:'fio',         label:'⚖ FIO',             group:'gestion'},
-    misfio:      {id:'mis-fio',     label:'⚖ Mis FIO',         group:'dept'},
+    readme:      {id:'readme',      label:'📋 Info'},
+    turno:       {id:'turno',       label:'🕐 Mi Turno'},
+    gestiones:   {id:'gestiones',   label:'📌 Gestiones'},
+    tareas:      {id:'tareas',      label:'🔗 Tareas'},
+    incidencias: {id:'incidencias', label:'⚠ Incidencias'},
+    hypoxic:     {id:'hypoxic',     label:'🫁 Hypoxic Room'},
+    validacion:  {id:'validacion',  label:'✅ Validación'},
+    dashboard:   {id:'dashboard',   label:'📊 Dashboard'},
+    maestro:     {id:'maestro',     label:'👥 Maestro'},
+    export:      {id:'export',      label:'⬇ Exportar'},
+    fio:         {id:'fio',         label:'⚖ FIO'},
+    misfio:      {id:'mis-fio',     label:'⚖ Mis FIO'},
     // Módulos por dpto (placeholders)
-    merma:       {id:'merma-mod',   label:'📦 Merma',          group:'dept'},
-    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes de Caja', group:'dept'},
-    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta',        group:'dept'},
-    cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice', group:'dept'},
-    cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice', group:'dept'},
-    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true, group:'dept'},
-    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true, group:'dept'},
+    merma:       {id:'merma-mod',   label:'📦 Merma'},
+    ajustes:     {id:'ajustes-mod', label:'⚙ Ajustes de Caja'},
+    ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
+    cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
+    cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
+    recmod:      {id:'rec-mod',     label:'🏨 Recepción',      pending:true},
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento',  pending:true},
     // ── HOUSEKEEPING ─────────────────────────────────────────────────
-    hkPlan:      {id:'hk-plan',     label:'📅 Planificación',  group:'dept'},
-    hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas', group:'dept'},
-    hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK',group:'dept'},
-    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK',    group:'dept'},
-    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK',   group:'dept'},
-    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje',group:'dia'},
-    incentivos:  {id:'incentivos',  label:'💰 Incentivos',     group:'analitica'},
-    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay', group:'dia'}
+    hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
+    hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
+    hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
+    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
+    hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
+    fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
+    incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
+    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'}
   };
 
   // ── ZONA 1: Navegación común (todos) ──────────────────────────────
@@ -525,15 +524,142 @@ function getScreens(rol){
   return out;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// SYNCRO SHIFT V4.0 — buildNav (4-group structure)
+//   G1 MI DIA  : readme · turno · fichaje · checklist
+//   G2 MI DEPT : gestiones · tareas · incidencias · mis-fio · merma · ajustes
+//                · caja · ruta · hypoxic · recmod · mant · hk-*
+//   G3 GESTION : validacion · fio · maestro · export
+//   G4 ANALITICA: dashboard · incentivos
+// ═══════════════════════════════════════════════════════════════════════
+
+const GROUP_OF = {
+  // G1
+  'readme':1, 'turno':1, 'fichaje':1, 'chk-mod':1,
+  // G2
+  'gestiones':2, 'tareas':2, 'incidencias':2, 'mis-fio':2,
+  'merma-mod':2, 'ajustes-mod':2,
+  'rec-caja-op':2, 'lab-caja-op':2,
+  'ruta-mod':2, 'hypoxic':2,
+  'rec-mod':2, 'mant-mod':2,
+  'hk-plan':2, 'hk-zonas':2, 'hk-revision':2, 'hk-dash':2, 'hk-config':2,
+  // G3
+  'validacion':3, 'fio':3, 'maestro':3, 'export':3,
+  // G4
+  'dashboard':4, 'incentivos':4
+};
+
+const GNAV_IC = {
+  'readme':'📋', 'turno':'◷', 'fichaje':'⏱', 'chk-mod':'✓',
+  'gestiones':'📌', 'tareas':'🔗', 'incidencias':'⚠', 'mis-fio':'⚖',
+  'merma-mod':'📦', 'ajustes-mod':'⚙',
+  'rec-caja-op':'💰', 'lab-caja-op':'💰',
+  'ruta-mod':'🧹', 'hypoxic':'🫁',
+  'rec-mod':'🏨', 'mant-mod':'🔧',
+  'hk-plan':'📅', 'hk-zonas':'🧽', 'hk-revision':'✅', 'hk-dash':'📊', 'hk-config':'⚙',
+  'validacion':'✅', 'fio':'⚖', 'maestro':'👥', 'export':'⬇',
+  'dashboard':'📊', 'incentivos':'⭐'
+};
+
+const GNAV_TX = {
+  'readme':'INFO', 'turno':'MI TURNO', 'fichaje':'FICHAJE', 'chk-mod':'CHECKLIST',
+  'gestiones':'GESTIONES', 'tareas':'TAREAS', 'incidencias':'INCIDENCIAS', 'mis-fio':'MIS FIO',
+  'merma-mod':'MERMA', 'ajustes-mod':'AJ.CAJA',
+  'rec-caja-op':'CAJA', 'lab-caja-op':'CAJA',
+  'ruta-mod':'MI RUTA', 'hypoxic':'HYPOXIC',
+  'rec-mod':'RECEPCION', 'mant-mod':'MANT.',
+  'hk-plan':'PLANIF.', 'hk-zonas':'ZONAS', 'hk-revision':'REVISION', 'hk-dash':'PANEL HK', 'hk-config':'CONFIG HK',
+  'validacion':'VALIDACION', 'fio':'FIO', 'maestro':'MAESTRO', 'export':'EXPORTAR',
+  'dashboard':'DASHBOARD', 'incentivos':'INCENTIVOS'
+};
+
+const GROUP_META = [
+  { n:1, cls:'gnav-dia',       label:'MI DIA' },
+  { n:2, cls:'gnav-dept',      label:'MI DEPARTAMENTO' },
+  { n:3, cls:'gnav-gestion',   label:'GESTION' },
+  { n:4, cls:'gnav-analitica', label:'ANALITICA' }
+];
+
 function buildNav(){
   // Safety: ensure portal is fully hidden when app is running
   var ps=document.getElementById('portal-screen');
   if(ps){ ps.style.display='none'; ps.style.pointerEvents='none'; }
-  const nav=document.getElementById('topbar-nav'); nav.innerHTML='';
-  const bnav=document.getElementById('bnav-inner'); if(bnav) bnav.innerHTML='';
-  const screens=getScreens(currentUser.rol);
-  // Nav icons for bottom nav
-  const _svg=(p)=>'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+
+  const groupnav = document.getElementById('groupnav');
+  const bnav     = document.getElementById('bnav-inner');
+  const navLegacy = document.getElementById('topbar-nav');
+  const sideb     = document.getElementById('sidebar-nav');
+  if(groupnav)  groupnav.innerHTML  = '';
+  if(bnav)      bnav.innerHTML      = '';
+  if(navLegacy) navLegacy.innerHTML = '';
+  if(sideb)     sideb.innerHTML     = '';
+
+  const screens = getScreens(currentUser.rol);
+
+  // ── Bucket screens by group, dedupe by id ──
+  const buckets = {1:[], 2:[], 3:[], 4:[]};
+  const seen = {};
+  screens.forEach(function(s){
+    if(s.sep) return;
+    if(!s.id || seen[s.id]) return;
+    seen[s.id] = true;
+    const g = GROUP_OF[s.id] || 2;
+    buckets[g].push(s);
+  });
+
+  // ── Render groupnav (desktop) ──
+  if(groupnav){
+    const inner = document.createElement('div');
+    inner.className = 'gnav-inner';
+
+    GROUP_META.forEach(function(meta){
+      const items = buckets[meta.n];
+      if(!items.length) return;
+
+      const grp = document.createElement('div');
+      grp.className = 'gnav-group ' + meta.cls;
+
+      const lbl = document.createElement('div');
+      lbl.className = 'gnav-label';
+      lbl.textContent = meta.label;
+      grp.appendChild(lbl);
+
+      const itemsDiv = document.createElement('div');
+      itemsDiv.className = 'gnav-items';
+
+      items.forEach(function(s){
+        const isPending = !!s.pending;
+        const btn = document.createElement('button');
+        btn.className = 'gnav-btn' + (isPending ? ' is-pending' : '');
+        btn.id = 'gnav-' + s.id;
+        const ic = GNAV_IC[s.id] || '●';
+        const tx = GNAV_TX[s.id] || (s.id || '').toUpperCase();
+        btn.innerHTML =
+          '<span class="gnav-ic">' + ic + '</span>' +
+          '<span class="gnav-tx">' + tx + '</span>' +
+          '<span class="alert-dot" id="dotgnav-' + s.id + '"></span>';
+        if(isPending){
+          btn.onclick = function(){ toast('Módulo en desarrollo','info'); };
+        } else if(s.action){
+          btn.onclick = function(){
+            if(typeof window[s.action] === 'function') window[s.action]();
+            else toast('Función no disponible','err');
+          };
+        } else {
+          btn.onclick = function(){ showScreen(s.id); };
+        }
+        itemsDiv.appendChild(btn);
+      });
+
+      grp.appendChild(itemsDiv);
+      inner.appendChild(grp);
+    });
+
+    groupnav.appendChild(inner);
+  }
+
+  // ── Render bottom-nav (mobile) — preserved from legacy ──
+  const _svg=function(p){return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';};
   const ICONS={
     'readme':    _svg('<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>'),
     'turno':     _svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
@@ -547,100 +673,15 @@ function buildNav(){
     'hypoxic':   _svg('<path d="M12 2a3 3 0 0 0-3 3c0 1.5 1 2.5 1 4v3a4 4 0 0 1-2 3.5L7 16a3 3 0 0 0 0 4.5 3 3 0 0 0 4 0l1-1 1 1a3 3 0 0 0 4 0 3 3 0 0 0 0-4.5l-1-.5a4 4 0 0 1-2-3.5V9c0-1.5 1-2.5 1-4a3 3 0 0 0-3-3z"/>'),
     'rec-caja-op': _svg('<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 10h.01"/><path d="M2 10h20"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.','chk-mod':'Check.','mis-fio':'FIO','fichaje':'Fichaje','incentivos':'Bonus','fio':'FIO','lab-caja-op':'Caja'};
 
-  // Pintar barra superior agrupada (escritorio) + bottom nav (móvil) + topbar legacy oculto
-  const groupbar = document.getElementById('groupnav');
-  if(groupbar) groupbar.innerHTML = '';
-
-  // Orden y metadatos de grupos
-  const GROUPS = [
-    {key:'dia',       label:'MI DÍA'},
-    {key:'dept',      label:'MI DEPARTAMENTO'},
-    {key:'gestion',   label:'GESTIÓN'},
-    {key:'analitica', label:'ANALÍTICA'}
-  ];
-
-  // Repartir screens (no-separadores) en sus grupos
-  const byGroup = {dia:[], dept:[], gestion:[], analitica:[]};
-  screens.forEach(s=>{
-    if(s.sep) return;                       // separadores legacy: ignorados en barra superior
-    const g = s.group || 'dept';
-    (byGroup[g] || byGroup.dept).push(s);
-  });
-
-  // Icono y texto corto por screen id — exacto de maqueta aprobada
-  const GNAV_IC = {
-    'readme':'📋','turno':'◷','fichaje':'⏱','chk-mod':'✓',
-    'gestiones':'📌','tareas':'🔗','incidencias':'⚠','mis-fio':'⚖',
-    'merma-mod':'📦','ajustes-mod':'⚙','rec-caja-op':'💰','lab-caja-op':'💰',
-    'ruta-mod':'🧹','hypoxic':'🫁','rec-mod':'🏨','mant-mod':'🔧','incentivos':'⭐',
-    'hk-plan':'📅','hk-zonas':'🧽','hk-revision':'✅','hk-dash':'📊','hk-config':'⚙',
-    'validacion':'✅','fio':'⚖','maestro':'👥','export':'⬇','dashboard':'📊'
-  };
-  const GNAV_TX = {
-    'readme':'INFO','turno':'MI TURNO','fichaje':'FICHAJE','chk-mod':'CHECKLIST',
-    'gestiones':'GESTIONES','tareas':'TAREAS','incidencias':'INCIDENCIAS','mis-fio':'MIS FIO',
-    'merma-mod':'MERMA','ajustes-mod':'AJ.CAJA','rec-caja-op':'CAJA','lab-caja-op':'CAJA',
-    'ruta-mod':'MI RUTA','hypoxic':'HYPOXIC','rec-mod':'RECEPCION','mant-mod':'MANT.','incentivos':'INCENTIVOS',
-    'hk-plan':'PLANIF.','hk-zonas':'ZONAS','hk-revision':'REVISION','hk-dash':'PANEL HK','hk-config':'CONFIG HK',
-    'validacion':'VALIDACION','fio':'FIO','maestro':'MAESTRO','export':'EXPORTAR','dashboard':'DASHBOARD'
-  };
-
-  if(groupbar){
-    GROUPS.forEach(g=>{
-      const items = byGroup[g.key];
-      if(!items || !items.length) return;
-      const grp = document.createElement('div');
-      grp.className = 'gnav-group gnav-' + g.key;
-      const lbl = document.createElement('div');
-      lbl.className = 'gnav-label';
-      lbl.textContent = g.label;
-      grp.appendChild(lbl);
-      const row = document.createElement('div');
-      row.className = 'gnav-items';
-      items.forEach(s=>{
-        const isPending = !!s.pending;
-        const btn = document.createElement('button');
-        btn.className = 'gnav-btn' + (isPending ? ' is-pending' : '');
-        btn.id = 'gnav-' + s.id;
-        // icono arriba + texto abajo en columna — exacto de maqueta
-        const ic  = GNAV_IC[s.id] || '●';
-        const tx  = GNAV_TX[s.id] || s.id.toUpperCase();
-        btn.innerHTML =
-          '<span class="gnav-ic">' + ic + '</span>' +
-          '<span class="gnav-tx">' + tx + '</span>' +
-          '<span class="alert-dot" id="dotgnav-'+s.id+'"></span>';
-        if(isPending){
-          btn.onclick = function(){ toast('Módulo en desarrollo','info'); };
-        } else if(s.action){
-          btn.onclick = function(){ if(typeof window[s.action] === 'function') window[s.action](); else toast('Función no disponible','err'); };
-        } else {
-          btn.onclick = function(){ showScreen(s.id); };
-        }
-        row.appendChild(btn);
-      });
-      grp.appendChild(row);
-      groupbar.appendChild(grp);
-    });
-  }
-
-  screens.forEach(s=>{
+  // Iterate screens once more for bottom-nav (mobile) preserving original order
+  const seenB = {};
+  screens.forEach(function(s){
     if(s.sep) return;
+    if(!s.id || seenB[s.id]) return;
+    seenB[s.id] = true;
     const isPending = !!s.pending;
-
-    // Topbar legacy (oculto vía CSS; poblado por compatibilidad de IDs)
-    const b=document.createElement('button');
-    b.className='nav-btn'; b.id='nav-'+s.id;
-    b.innerHTML=s.label+'<span class="alert-dot" id="dot-'+s.id+'"></span>';
-    b.onclick=function(){
-      if(isPending){ toast('Módulo en desarrollo','info'); return; }
-      if(s.action){ if(typeof window[s.action] === 'function') window[s.action](); return; }
-      showScreen(s.id);
-    };
-    nav.appendChild(b);
-
-    // Bottom nav (móvil)
     if(bnav){
       const bb=document.createElement('button');
       bb.className='bnav-btn' + (isPending ? ' is-pending' : '');
@@ -654,17 +695,18 @@ function buildNav(){
       bnav.appendChild(bb);
     }
   });
-  // Show bottom nav
+
+  // Show bottom nav (mobile only — CSS gates it via media query)
   var bn=document.getElementById('bottom-nav');
   if(bn) bn.style.display='block';
 
-  // Rellenar bloque usuario topbar (área · puesto · nombre)
+  // ── Fill user chips in topbar (area · puesto · nombre) ──
   var areaEl   = document.getElementById('topbar-area');
   var puestoEl = document.getElementById('topbar-puesto');
   var nameEl   = document.getElementById('topbar-name');
-  if(areaEl)   areaEl.textContent   = currentUser && currentUser.area   ? currentUser.area   : '';
-  if(puestoEl) puestoEl.textContent = currentUser && currentUser.puesto ? currentUser.puesto : '';
-  if(nameEl)   nameEl.textContent   = currentUser && currentUser.nombre ? currentUser.nombre : '';
+  if(areaEl)   areaEl.textContent   = (currentUser && currentUser.area)   || '';
+  if(puestoEl) puestoEl.textContent = (currentUser && currentUser.puesto) || '';
+  if(nameEl)   nameEl.textContent   = (currentUser && currentUser.nombre) || '';
 }
 async function showScreen(id){
   // Reset topbar dept accent when leaving dashboard
@@ -675,10 +717,12 @@ async function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.sidebar-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.gnav-btn').forEach(b=>b.classList.remove('active'));
   const s=document.getElementById('screen-'+id); if(s) s.classList.add('active');
   const nb=document.getElementById('nav-'+id); if(nb) nb.classList.add('active');
   const bb=document.getElementById('bnav-'+id); if(bb) bb.classList.add('active');
+  const sb=document.getElementById('side-'+id); if(sb) sb.classList.add('active');
   const gb=document.getElementById('gnav-'+id); if(gb) gb.classList.add('active');
   window.scrollTo(0,0);
   if(id==='readme' && typeof renderInfoScreen==='function'){ renderInfoScreen(); }
@@ -720,15 +764,15 @@ async function updateDots(){
   const tareas=await getDB('tareas');
   const hasCor=shifts.some(s=>s.employee_id===currentUser.id&&s.estado==='En corrección');
   const pendT=tareas.filter(t=>t.dept_destino===currentUser.area&&isTaskOpen(t)).length;
-  // Desktop dots
+  // Desktop legacy dots
   const valDot=document.getElementById('dot-turno'); if(valDot) valDot.classList.toggle('show',hasCor);
   const tDot=document.getElementById('dot-tareas'); if(tDot) tDot.classList.toggle('show',pendT>0);
-  // Group nav dots (barra superior)
-  const gvalDot=document.getElementById('dotgnav-turno'); if(gvalDot) gvalDot.classList.toggle('show',hasCor);
-  const gtDot=document.getElementById('dotgnav-tareas'); if(gtDot) gtDot.classList.toggle('show',pendT>0);
   // Mobile bottom nav dots
   const bvalDot=document.getElementById('bdot-turno'); if(bvalDot) bvalDot.classList.toggle('show',hasCor);
   const btDot=document.getElementById('bdot-tareas'); if(btDot) btDot.classList.toggle('show',pendT>0);
+  // Groupnav dots (V4.0)
+  const gvalDot=document.getElementById('dotgnav-turno'); if(gvalDot) gvalDot.classList.toggle('show',hasCor);
+  const gtDot=document.getElementById('dotgnav-tareas'); if(gtDot) gtDot.classList.toggle('show',pendT>0);
 }
 async function populateDashEmpDropdowns(){
   const employees=(await getDB('employees')).filter(e=>e.estado==='Activo');
