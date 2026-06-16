@@ -72,24 +72,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 
 .topbar-user{
   margin-left:auto;display:flex;align-items:center;gap:0;
-  font-family:var(--font-mono);font-size:10px;color:#9aa0aa;
+  font-family:var(--font-mono);font-size:11px;color:#9aa0aa;
   white-space:nowrap;
 }
 .topbar-area{
   background:#222528;border:1px solid #3a3f47;
-  color:#9aa0aa;padding:4px 9px;border-radius:4px 0 0 4px;
+  color:#9aa0aa;padding:5px 10px;border-radius:4px 0 0 4px;
   letter-spacing:.06em;white-space:nowrap;
-  text-transform:uppercase;font-weight:700;
+  text-transform:uppercase;font-weight:700;font-size:11px;
 }
 .topbar-puesto{
   background:#222528;border:1px solid #3a3f47;border-left:none;
-  color:#5a6070;padding:4px 9px;
-  letter-spacing:.06em;white-space:nowrap;
+  color:#5a6070;padding:5px 10px;
+  letter-spacing:.06em;white-space:nowrap;font-size:11px;
 }
 .topbar-name{
   background:rgba(46,196,182,.18);border:1px solid #2ec4b6;border-left:none;
-  color:#2ec4b6;padding:4px 9px;border-radius:0 4px 4px 0;
-  font-weight:700;letter-spacing:.08em;white-space:nowrap;
+  color:#2ec4b6;padding:5px 10px;border-radius:0 4px 4px 0;
+  font-weight:700;letter-spacing:.08em;white-space:nowrap;font-size:11px;
 }
 .user-badge{
   background:rgba(46,196,182,.18);border:1px solid #2ec4b6;
@@ -108,7 +108,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 
 /* ══ GROUPNAV — 4 grupos: MI DIA / MI DEPT / GESTION / ANALITICA ══ */
 #groupnav{
-  display:none;
+  display:flex;
   background:#111214;border-bottom:1px solid #2e3238;
   overflow-x:auto;scrollbar-width:none;
   position:sticky;top:48px;z-index:99;
@@ -131,20 +131,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   background:var(--gnav-color);
 }
 .gnav-label{
-  font-family:var(--font-mono);font-size:7px;font-weight:700;letter-spacing:.2em;
-  color:var(--gnav-color);text-align:center;padding:4px 8px 0;
+  font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.2em;
+  color:var(--gnav-color);text-align:center;padding:5px 10px 0;
   text-transform:uppercase;line-height:1;pointer-events:none;
   position:relative;z-index:1;
 }
 .gnav-items{display:flex;align-items:stretch;flex:1;}
 .gnav-btn{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;padding:4px 11px 8px;
+  gap:4px;padding:6px 12px 10px;
   border:none;background:none;color:#5a6070;
   cursor:pointer;border-bottom:2px solid transparent;
   transition:all .15s;white-space:nowrap;
-  font-family:var(--font-mono);font-size:8px;font-weight:700;letter-spacing:.09em;
-  min-width:54px;position:relative;
+  font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.09em;
+  min-width:64px;position:relative;
 }
 .gnav-btn:hover:not(.active):not(.is-pending){
   color:#9aa0aa;background:rgba(255,255,255,.025);
@@ -155,11 +155,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   background:var(--gnav-color-dim);
 }
 .gnav-btn.is-pending{color:#3a3f47;cursor:not-allowed;}
-.gnav-ic{font-size:14px;line-height:1;}
-.gnav-tx{font-size:8px;font-weight:700;letter-spacing:.09em;}
+.gnav-ic{font-size:17px;line-height:1;}
+.gnav-tx{font-size:10px;font-weight:700;letter-spacing:.09em;}
 .gnav-btn .alert-dot{
-  position:absolute;top:3px;right:6px;
-  width:6px;height:6px;background:#ef4444;border-radius:50%;
+  position:absolute;top:4px;right:7px;
+  width:7px;height:7px;background:#ef4444;border-radius:50%;
   display:none;
 }
 .gnav-btn .alert-dot.show{display:block;}
@@ -192,18 +192,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 .bnav-dot{position:absolute;top:6px;right:calc(50% - 14px);width:7px;height:7px;background:var(--red);border-radius:50%;display:none;border:2px solid var(--bg2);}
 .bnav-dot.show{display:block;}
 
-/* ── Sidebar legacy: HIDDEN (replaced by #groupnav) ── */
+/* ── Sidebar legacy + Bottom-nav legacy: HIDDEN (groupnav los reemplaza) ── */
 #sidebar{display:none !important;}
+#bottom-nav{display:none !important;}
 
-/* Desktop: show groupnav, hide bottom-nav */
-@media(min-width:768px){
-  #groupnav{display:flex;}
-  #bottom-nav{display:none !important;}
-}
-/* Mobile: hide groupnav, give space for bottom-nav */
+/* Mobile: scroll horizontal del groupnav (overflow-x:auto ya lo da) */
 @media(max-width:767px){
-  #groupnav{display:none;}
-  .main{padding-bottom:80px !important;}
+  .main{padding-bottom:24px;}
 }
 
 /* ── LAYOUT ── */
