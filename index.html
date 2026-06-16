@@ -114,6 +114,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   align-items:stretch;overflow-x:auto;padding:0 12px;
   position:sticky;top:56px;z-index:95;
 }
+@media(min-width:768px){
+  #groupnav{display:flex;}
+}
+@media(max-width:767px){
+  #groupnav{display:none;}
+}
 #groupnav::-webkit-scrollbar{height:0;}
 .gnav-group{display:flex;flex-direction:column;position:relative;flex-shrink:0;}
 .gnav-group + .gnav-group::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:1px;background:var(--border);}
