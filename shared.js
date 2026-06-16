@@ -569,10 +569,28 @@ function buildNav(){
     (byGroup[g] || byGroup.dept).push(s);
   });
 
+  // Icono y texto corto por screen id — exacto de maqueta aprobada
+  const GNAV_IC = {
+    'readme':'📋','turno':'◷','fichaje':'⏱','chk-mod':'✓',
+    'gestiones':'📌','tareas':'🔗','incidencias':'⚠','mis-fio':'⚖',
+    'merma-mod':'📦','ajustes-mod':'⚙','rec-caja-op':'💰','lab-caja-op':'💰',
+    'ruta-mod':'🧹','hypoxic':'🫁','rec-mod':'🏨','mant-mod':'🔧','incentivos':'⭐',
+    'hk-plan':'📅','hk-zonas':'🧽','hk-revision':'✅','hk-dash':'📊','hk-config':'⚙',
+    'validacion':'✅','fio':'⚖','maestro':'👥','export':'⬇','dashboard':'📊'
+  };
+  const GNAV_TX = {
+    'readme':'INFO','turno':'MI TURNO','fichaje':'FICHAJE','chk-mod':'CHECKLIST',
+    'gestiones':'GESTIONES','tareas':'TAREAS','incidencias':'INCIDENCIAS','mis-fio':'MIS FIO',
+    'merma-mod':'MERMA','ajustes-mod':'AJ.CAJA','rec-caja-op':'CAJA','lab-caja-op':'CAJA',
+    'ruta-mod':'MI RUTA','hypoxic':'HYPOXIC','rec-mod':'RECEPCION','mant-mod':'MANT.','incentivos':'INCENTIVOS',
+    'hk-plan':'PLANIF.','hk-zonas':'ZONAS','hk-revision':'REVISION','hk-dash':'PANEL HK','hk-config':'CONFIG HK',
+    'validacion':'VALIDACION','fio':'FIO','maestro':'MAESTRO','export':'EXPORTAR','dashboard':'DASHBOARD'
+  };
+
   if(groupbar){
     GROUPS.forEach(g=>{
       const items = byGroup[g.key];
-      if(!items || !items.length) return;   // grupo vacío para este rol → no se pinta
+      if(!items || !items.length) return;
       const grp = document.createElement('div');
       grp.className = 'gnav-group gnav-' + g.key;
       const lbl = document.createElement('div');
@@ -586,7 +604,13 @@ function buildNav(){
         const btn = document.createElement('button');
         btn.className = 'gnav-btn' + (isPending ? ' is-pending' : '');
         btn.id = 'gnav-' + s.id;
-        btn.innerHTML = s.label + '<span class="alert-dot" id="dotgnav-'+s.id+'"></span>';
+        // icono arriba + texto abajo en columna — exacto de maqueta
+        const ic  = GNAV_IC[s.id] || '●';
+        const tx  = GNAV_TX[s.id] || s.id.toUpperCase();
+        btn.innerHTML =
+          '<span class="gnav-ic">' + ic + '</span>' +
+          '<span class="gnav-tx">' + tx + '</span>' +
+          '<span class="alert-dot" id="dotgnav-'+s.id+'"></span>';
         if(isPending){
           btn.onclick = function(){ toast('Módulo en desarrollo','info'); };
         } else if(s.action){

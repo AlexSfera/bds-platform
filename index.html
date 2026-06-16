@@ -164,7 +164,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 /* fila de botones */
 .gnav-items{display:flex;align-items:stretch;flex:1;}
 
-/* botón individual — 8px mono, padding exacto de maqueta */
+/* botón individual — columna icono arriba + texto abajo, exacto de maqueta */
 .gnav-btn{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:3px;
@@ -177,6 +177,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   transition:color .15s,background .15s,border-color .15s;
   min-width:54px;position:relative;
 }
+.gnav-ic{font-size:14px;line-height:1;display:block;}
+.gnav-tx{font-family:var(--font-mono);font-size:8px;font-weight:700;letter-spacing:.09em;line-height:1;display:block;}
 .gnav-btn:hover:not(.active){
   color:#9aa0aa;
   background:rgba(255,255,255,.025);
