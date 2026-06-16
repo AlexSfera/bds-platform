@@ -1518,6 +1518,7 @@ var _valGestCache = [];
 var _valGestFilter = '';
 var _valTaskCache = [];
 var _valTaskFilter = '';
+var _valShiftMap  = {};  // shiftMap compartido para resolver dept de incidencias
 function valInciRenderTable(){
   var inciEl=document.getElementById('val-incidencias-table');
   if(!inciEl) return;
@@ -1546,7 +1547,7 @@ function valInciRenderTable(){
     h+='<tr>'
       +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((i.fecha||(i.created_at||'').slice(0,10)))+'</td>'
       +'<td style="font-size:12px">'+(i.nombre_empleado||i.employee_name||i.nombre||'—')+'</td>'
-      +'<td>'+deptBadge(i.area||'—')+'</td>'
+      +'<td>'+deptBadge(i.area || (_valShiftMap[i.shift_id]&&_valShiftMap[i.shift_id].area) || '—')+'</td>'
       +'<td style="max-width:240px;font-size:12px">'+(i.descripcion||'—').slice(0,80)+'</td>'
       +'<td>'+badge+'</td>'
       +'</tr>';
@@ -1639,31 +1640,43 @@ window.valTaskFilterBy = valTaskFilterBy;
 window.valTaskRenderTable = valTaskRenderTable;
 
 async function renderFollowUpExtras(dept){
-  var incis=[]; var gests=[]; var tasks=[];
+  var incis=[]; var gests=[]; var tasks=[]; var shifts=[];
   try{ incis=await getDB('incidencias'); }catch(e){}
   try{ gests=await getDB('gestiones'); }catch(e){}
   try{ tasks=await getDB('tareas'); }catch(e){}
+  try{ shifts=await getDB('shifts'); }catch(e){}
+
+  // Construir shiftMap para resolver área de incidencias que solo tienen shift_id
+  var shiftMap={};
+  shifts.forEach(function(s){ if(s.id) shiftMap[s.id]=s; });
+  _valShiftMap = shiftMap;  // compartir con valInciRenderTable
+
+  // Función normalizada para resolver el dept de un registro
+  var nd=normalizeDeptName;
+  var ndept=nd(dept);
+  function recDept(r){ return getRecordDepartment(r,shiftMap); }
+  function matchesDept(r){ return !dept || nd(recDept(r))===ndept; }
 
   var openIncis=incis.filter(function(i){
     var s=(i.estado||'').toLowerCase();
     return s!=='cerrada'&&s!=='cerrado'&&s!=='closed';
-  }).filter(function(i){ return !dept||(i.area||'')=== dept; })
+  }).filter(matchesDept)
     .sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
 
   var pendGests=gests.filter(function(g){
     var s=(g.estado||'').toLowerCase();
     return s!=='cerrada'&&s!=='cerrado'&&s!=='closed';
-  }).filter(function(g){ return !dept||((g.departamento||g.area||'')=== dept); })
+  }).filter(matchesDept)
     .sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
 
   var pendTasks=tasks.filter(function(t){
     return typeof isTaskOpen==='function'?isTaskOpen(t):(function(){var s=(t.estado||'').toLowerCase();return s!=='cerrada'&&s!=='completada'&&s!=='closed';})();
-  }).filter(function(t){ return !dept||(t.dept_destino||'')=== dept; })
+  }).filter(matchesDept)
     .sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
 
   // Incidencias
   // ── KPIs de incidencias ──
-  var _allIncis=incis.filter(function(i){return !dept||(i.area||'')=== dept;});
+  var _allIncis=incis.filter(matchesDept);
   var _inciAb=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='abierta'||s==='abierto';}).length;
   var _inciPr=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='en proceso';}).length;
   var _inciCe=_allIncis.filter(function(i){var s=(i.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado';}).length;
@@ -1686,7 +1699,7 @@ async function renderFollowUpExtras(dept){
 
   // Gestiones
   // ── KPIs de gestiones ──
-  var _allGests=gests.filter(function(g){return !dept||((g.departamento||g.area||'')=== dept);});
+  var _allGests=gests.filter(matchesDept);
   var _gestAb=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='abierta'||s==='abierto'||!s;}).length;
   var _gestPr=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='en proceso';}).length;
   var _gestCe=_allGests.filter(function(g){var s=(g.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado';}).length;
@@ -1709,7 +1722,7 @@ async function renderFollowUpExtras(dept){
 
   // Tareas
   // ── KPIs de tareas ──
-  var _allTasks=tasks.filter(function(t){return !dept||(t.dept_destino||'')=== dept;});
+  var _allTasks=tasks.filter(matchesDept);
   var _taskAb=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='abierta'||s==='abierto'||!s;}).length;
   var _taskPr=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='en proceso';}).length;
   var _taskCe=_allTasks.filter(function(t){var s=(t.estado||'').toLowerCase();return s==='cerrada'||s==='cerrado'||s==='completada';}).length;
@@ -2011,7 +2024,7 @@ async function renderValidacion(){
   if(desde) shifts=shifts.filter(s=>s.fecha>=desde);
   if(hasta) shifts=shifts.filter(s=>s.fecha<=hasta);
   if(estado) shifts=shifts.filter(s=>s.estado===estado);
-  if(dept) shifts=shifts.filter(s=>s.area===dept);
+  if(dept) shifts=shifts.filter(s=>normalizeDeptName(s.area)===normalizeDeptName(dept));
   if(serv) shifts=shifts.filter(function(s){
     if(!s.servicio) return false;
     if(s.area==='Recepción') return s.servicio===serv;
