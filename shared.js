@@ -1535,10 +1535,14 @@ function valInciRenderTable(){
   }
   var h='<table><tr><th>Fecha</th><th>Empleado</th><th>Dept.</th><th>Descripción</th><th>Estado</th></tr>';
   list.forEach(function(i){
-    var canChg = typeof canValidateDepartment==='function' && canValidateDepartment(currentUser, i.area||'');
-    var badge = canChg
-      ? bIncidentEstadoClick(i.estado, i.id)
-      : (typeof bIncidentEstado==='function'?bIncidentEstado(i.estado):bEstado(i.estado));
+    var badge = '<span data-itemtype="incidencia" data-itemid="'+i.id+'" '
+      +'style="cursor:pointer;" title="Clic para ver / gestionar" class="badge estado-clickable '
+      +(((i.estado||'').toLowerCase()==='cerrada'||((i.estado||'').toLowerCase()==='cerrado'))?'b-green'
+        :((i.estado||'').toLowerCase()==='en proceso'?'b-blue':'b-red'))
+      +'">'
+      +(((i.estado||'').toLowerCase()==='cerrada'||((i.estado||'').toLowerCase()==='cerrado'))?'Cerrada'
+        :((i.estado||'').toLowerCase()==='en proceso'?'En proceso':'Abierta'))
+      +'</span>';
     h+='<tr>'
       +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDate((i.fecha||(i.created_at||'').slice(0,10)))+'</td>'
       +'<td style="font-size:12px">'+(i.nombre_empleado||i.employee_name||i.nombre||'—')+'</td>'
@@ -2105,7 +2109,12 @@ async function renderValidacion(){
   });
   el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
   if(typeof renderTurnosKpis==='function') renderTurnosKpis(shifts);
-  // OPERATIVO tab se carga desde switchValTab('operativo')
+  // Si tab OPERATIVO está visible, refrescarlo también con el mismo filtro de dept
+  var _opDiv = document.getElementById('val-content-operativo');
+  if(_opDiv && _opDiv.style.display !== 'none' && typeof renderFollowUpExtras === 'function'){
+    var _opDept = (document.getElementById('v-dept')||{}).value||'';
+    renderFollowUpExtras(_opDept);
+  }
 }
 // valAdvanceGestion, valShowCloseGestionForm, valSaveCloseGestion,
 // valAdvanceGestionNew, valShowCloseGestionNewForm, valSaveCloseGestionNew → gestiones.js
