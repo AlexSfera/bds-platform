@@ -76,8 +76,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   font-size:10px;letter-spacing:.08em;margin-left:4px;
 }
 .topbar-sep{display:none;}
-.topbar-nav{display:none !important;}
-.nav-btn{display:none;}
+.topbar-nav{
+  display:flex !important;align-items:stretch;flex:1;
+  overflow-x:auto;scrollbar-width:none;
+  margin:0 12px;height:48px;
+  gap:0;
+}
+.topbar-nav::-webkit-scrollbar{display:none;}
+.nav-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:0 14px;height:48px;
+  border:none;background:none;color:#94a3b8;
+  font-family:var(--font-mono);font-size:11px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;
+  cursor:pointer;white-space:nowrap;
+  border-bottom:2px solid transparent;
+  transition:all .15s;position:relative;
+}
+.nav-btn:hover:not(.is-pending){color:#f1f5f9;background:rgba(96,165,250,.06);}
+.nav-btn.active{color:#2ec4b6;border-bottom-color:#2ec4b6;background:rgba(46,196,182,.08);}
+.nav-btn.is-pending{color:#475569;cursor:not-allowed;opacity:.6;}
+.nav-btn .alert-dot{
+  width:7px;height:7px;background:#f87171;border-radius:50%;
+  display:none;margin-left:2px;
+}
+.nav-btn .alert-dot.show{display:inline-block;}
+.pill-pending{
+  background:rgba(100,116,139,.25);color:#94a3b8;
+  border-radius:8px;padding:1px 6px;font-size:9px;
+  margin-left:4px;letter-spacing:.06em;
+}
 
 .topbar-user{
   margin-left:auto;display:flex;align-items:center;gap:0;
@@ -115,8 +143,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 }
 .btn-logout:hover{border-color:#ef4444;color:#ef4444;}
 
+/* ── GROUPNAV: oculto (no se rellena en esta versión) ── */
+#groupnav{display:none !important;}
+
 /* ══ GROUPNAV — 4 grupos: MI DIA / MI DEPT / GESTION / ANALITICA ══ */
-#groupnav{
+#groupnav.gnav-active{
   display:flex;
   background:#0a1626;border-bottom:1px solid #1e3457;
   overflow-x:auto;scrollbar-width:none;
