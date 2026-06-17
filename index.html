@@ -1850,33 +1850,13 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="modal-title" id="me-title">Empleado</div>
     <div class="grid2" style="gap:12px;">
       <div class="fg sp2"><label>Nombre <span class="req">*</span></label><input type="text" id="emp-nombre"></div>
-      <div class="fg"><label>Área</label><select id="emp-area">
-        <optgroup label="Restaurante / F&amp;B">
-          <option>Sala</option>
-          <option>Cocina</option>
-        </optgroup>
-        <optgroup label="Recepción / Hotel">
-          <option>Recepción</option>
-        </optgroup>
-        <optgroup label="Housekeeping">
-          <option>Housekeeping</option>
-          <option>Limpieza</option>
-        </optgroup>
-        <optgroup label="Mantenimiento">
-          <option>Mantenimiento</option>
-        </optgroup>
-        <optgroup label="SYNCROLAB">
-          <option>SYNCROLAB</option>
-          <option>Recepción SYNCROLAB</option>
-          <option>Entrenadores</option>
-          <option>Fisioterapeutas</option>
-        </optgroup>
-        <optgroup label="Central">
-          <option>Administración</option>
-          <option>Economato</option>
-        </optgroup>
-      </select></div>
-      <div class="fg"><label>Puesto</label><select id="emp-puesto">
+      <!-- Área: oculta — se deriva automáticamente del puesto vía _syncAreaFromPuesto() -->
+      <select id="emp-area" style="display:none;" aria-hidden="true">
+        <option>Sala</option><option>Cocina</option><option>Recepción</option>
+        <option>Housekeeping</option><option>Mantenimiento</option><option>SYNCROLAB</option>
+        <option>Administración</option><option>Friegue</option>
+      </select>
+      <div class="fg sp2"><label>Puesto <span class="req">*</span> <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— el área se asigna automáticamente</span></label><select id="emp-puesto" onchange="_syncAreaFromPuesto()">
   <optgroup label="Cocina">
     <option>Jefe de Cocina</option>
     <option>Segundo Jefe de Cocina</option>
@@ -1928,7 +1908,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <option>Responsable</option>
   </optgroup>
 </select></div>
-      <div class="fg"><label>PIN (4-6 dígitos) <span class="req">*</span></label><input type="text" id="emp-pin" maxlength="6"></div>
+      <div class="fg" id="emp-pin-row"><label>PIN (4-6 dígitos) <span class="req">*</span></label><input type="text" id="emp-pin" maxlength="6" autocomplete="new-password"></div>
       <div class="fg"><label>Coste €/hora</label><input type="number" id="emp-coste" step="0.01" min="0"></div>
       <div class="fg"><label>Estado</label><select id="emp-estado"><option>Activo</option><option>Baja</option><option>Vacaciones</option></select></div>
       <div class="fg"><label>Responsable de turno</label><select id="emp-resp"><option value="1">Sí</option><option value="0">No</option></select></div>
