@@ -458,18 +458,48 @@ function getScreens(rol){
     checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'}
   };
 
-  // ── ZONA 1: Navegación común (todos) ──────────────────────────────
-  var isAdminArea = currentUser && currentUser.area === 'Administración';
-  var navComun = isAdminU
-    ? [ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias]      // admin no tiene Mi Turno
-    : (isAdjDir && isAdminArea)
-      ? [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio]  // adjunto Administración: sin checklist
-      : [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
+  // ════════════════════════════════════════════════════════════════
+  // MENÚ COMPACTO para admin y adjunto_directivo
+  // admin: Gestiones, Incidencias, Hypoxic, Fichaje, Dashboard HK,
+  //        Validación, Dashboard, Maestro, Exportar, FIO, Incentivos
+  // adj_directivo: igual + Mi Turno + Mis FIO, SIN Hypoxic
+  // ════════════════════════════════════════════════════════════════
+  if(isAdminU || isAdjDir){
+    var out = [];
+    // MI DÍA
+    if(isAdjDir){
+      out.push(ITEMS.turno);
+    }
+    out.push(ITEMS.gestiones);
+    out.push(ITEMS.incidencias);
+    if(isAdjDir){
+      out.push(ITEMS.misfio);
+    }
+    if(isAdminU){
+      out.push(ITEMS.hypoxic);
+    }
+    out.push(ITEMS.fichaje);
+    // MI DEPARTAMENTO (solo Dashboard HK)
+    out.push({sep:true,label:'MI DEPARTAMENTO'});
+    out.push(ITEMS.hkDash);
+    // GESTIÓN
+    out.push({sep:true,label:'GESTIÓN'});
+    out.push(ITEMS.validacion);
+    out.push(ITEMS.dashboard);
+    out.push(ITEMS.maestro);
+    out.push(ITEMS.export);
+    out.push(ITEMS.fio);
+    out.push(ITEMS.incentivos);
+    return out;
+  }
 
-  // Hypoxic Room: admin (vista global) + usuarios SYNCROLAB + Recepción
-  if(isAdminU || isRecepcion) navComun.push(ITEMS.hypoxic);
+  // ── ZONA 1: Navegación común (resto: empleados y jefes) ───────────
+  var navComun = [ITEMS.turno, ITEMS.gestiones, ITEMS.tareas, ITEMS.incidencias, ITEMS.misfio, ITEMS.checklist];
 
-  // Alertas Fichaje: todos los empleados ven sus propias; admin/adjunto ven todos
+  // Hypoxic Room: usuarios SYNCROLAB + Recepción
+  if(isRecepcion) navComun.push(ITEMS.hypoxic);
+
+  // Alertas Fichaje: todos los empleados ven sus propias
   navComun.push(ITEMS.fichaje);
 
   // ── ZONA 2: Módulo de departamento (varía) ────────────────────────
@@ -492,34 +522,21 @@ function getScreens(rol){
   if(isRecepcion) { dptoMod.push(ITEMS.cajaRec); dptoMod.push(ITEMS.recmod); }
   if(isSyncrolab) { dptoMod.push(ITEMS.cajaLab); }
   if(isMant)      dptoMod.push(ITEMS.mantmod);
-  // Admin ve también todas las pantallas HK
-  if(isAdminU && !isHK){
-    dptoMod.push({sep:true,label:'HOUSEKEEPING'});
-    dptoMod.push(ITEMS.hkPlan);
-    dptoMod.push(ITEMS.hkZonas);
-    dptoMod.push(ITEMS.hkRevision);
-    dptoMod.push(ITEMS.hkDash);
-    dptoMod.push(ITEMS.hkConfig);
-  }
 
-  // ── ZONA 3: Gestión (solo jefe/admin) ─────────────────────────────
+  // ── ZONA 3: Gestión (solo jefe) ───────────────────────────────────
   var gestion = [];
   if(isJefe){
     gestion.push(ITEMS.validacion);
     gestion.push(ITEMS.dashboard);
+    gestion.push(ITEMS.fio);
+    gestion.push(ITEMS.incentivos);
   }
-  if(isAdminU){
-    gestion.push(ITEMS.maestro);
-    gestion.push(ITEMS.export);
-  }
-  if(isJefe) gestion.push(ITEMS.fio);
-  if(isJefe && !(isAdjDir && isAdminArea)) gestion.push(ITEMS.incentivos);
 
   // Devolvemos array plano con separadores marcados para buildNav
   var out = [].concat(navComun);
   if(dptoMod.length){ out.push({sep:true,label:'MI DEPARTAMENTO'}); out = out.concat(dptoMod); }
   if(gestion.length){ out.push({sep:true,label:'GESTIÓN'});         out = out.concat(gestion); }
-  // Info siempre primero
+  // Info siempre primero (solo para empleados y jefes — admin/adj_dir ya retornados arriba)
   out.unshift(ITEMS.readme);
   return out;
 }
@@ -552,9 +569,34 @@ function buildNav(){
   const sideb = document.getElementById('sidebar-nav');
   if(sideb) sideb.innerHTML = '';
 
+  // ── TOPBAR: agrupado por separadores con etiquetas (V4.1) ─────────
+  // Estructura: <div.nav-group data-group="X"><div.nav-group-label>X</div><div.nav-group-items>botones</div></div>
+  // El primer bloque (antes del primer sep) es "MI DÍA"
+  var GROUP_LABELS = { 0: 'MI DÍA' };
+  var currentGroup = null;
+  var currentGroupItems = null;
+  function _startGroup(label){
+    var g = document.createElement('div');
+    g.className = 'nav-group nav-group-' + label.toLowerCase().replace(/[^a-z]/g,'');
+    var lbl = document.createElement('div');
+    lbl.className = 'nav-group-label';
+    lbl.textContent = label;
+    var items = document.createElement('div');
+    items.className = 'nav-group-items';
+    g.appendChild(lbl);
+    g.appendChild(items);
+    nav.appendChild(g);
+    currentGroup = g;
+    currentGroupItems = items;
+  }
+  // Arrancar primer grupo MI DÍA
+  _startGroup('MI DÍA');
+
   screens.forEach(s=>{
     if(s.sep){
-      // Separador de grupo
+      // Cierra grupo actual, abre uno nuevo
+      _startGroup(s.label);
+      // Sidebar también recibe el separador
       if(sideb){
         const sep = document.createElement('div');
         sep.className = 'sidebar-group-label';
@@ -582,16 +624,17 @@ function buildNav(){
       sideb.appendChild(a);
     }
 
-    // Topbar legacy (lo dejamos oculto vía CSS pero seguimos poblándolo por compatibilidad de IDs)
+    // Topbar V4.1 — dentro del grupo actual
     const b=document.createElement('button');
-    b.className='nav-btn'; b.id='nav-'+s.id;
+    b.className='nav-btn' + (isPending ? ' is-pending' : '');
+    b.id='nav-'+s.id;
     b.innerHTML=s.label+'<span class="alert-dot" id="dot-'+s.id+'"></span>';
     b.onclick=function(){
       if(isPending){ toast('Módulo en desarrollo','info'); return; }
       if(s.action){ if(typeof window[s.action] === 'function') window[s.action](); return; }
       showScreen(s.id);
     };
-    nav.appendChild(b);
+    currentGroupItems.appendChild(b);
 
     // Bottom nav (móvil)
     if(bnav){
@@ -606,6 +649,11 @@ function buildNav(){
       };
       bnav.appendChild(bb);
     }
+  });
+  // Limpia grupos vacíos (ej. MI DÍA si admin no tiene items antes del primer sep)
+  Array.prototype.forEach.call(nav.querySelectorAll('.nav-group'), function(g){
+    var items = g.querySelector('.nav-group-items');
+    if(!items || items.children.length === 0) g.parentNode.removeChild(g);
   });
   // Show bottom nav
   var bn=document.getElementById('bottom-nav');
