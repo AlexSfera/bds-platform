@@ -8,30 +8,23 @@
 <style>
 
 :root {
-  /* ── DARK-BLUE THEME · V4.1 ── */
-  --bg:#0d1b2e;          /* fondo base app */
-  --bg2:#142639;         /* superficie 1 (topbar, modales fondo) */
-  --bg3:#1a2f4a;         /* superficie 2 (cards) */
-  --bg4:#223a5c;         /* superficie 3 (inputs hover, kpi alt) */
-  --border:#2a4365;      /* borde sobre superficies */
-  --border2:#3a5a8a;     /* borde acentuado */
-  --text:#f1f5f9;        /* texto principal */
-  --text2:#cbd5e1;       /* texto secundario */
-  --text3:#94a3b8;       /* texto terciario / labels */
-  --amber:#fbbf24; --amber2:#fcd34d; --amber-dim:rgba(251,191,36,.16);
-  --green:#34d399; --green-dim:rgba(52,211,153,.16);
-  --red:#f87171; --red-dim:rgba(248,113,113,.18);
-  --blue:#60a5fa; --blue-dim:rgba(96,165,250,.16);
-  --orange:#fb923c; --orange-dim:rgba(251,146,60,.16);
-  --purple:#c084fc; --purple-dim:rgba(192,132,252,.16);
-  --cyan:#22d3ee; --cyan-dim:rgba(34,211,238,.16);
+  --bg:#f9fafb; --bg2:#ffffff; --bg3:#f3f4f6; --bg4:#e5e7eb;
+  --border:#d1d5db; --border2:#9ca3af;
+  --text:#111827; --text2:#374151; --text3:#4b5563;
+  --amber:#d97706; --amber2:#fbbf24; --amber-dim:rgba(217,119,6,.12);
+  --green:#10b981; --green-dim:rgba(16,185,129,.12);
+  --red:#ef4444; --red-dim:rgba(239,68,68,.12);
+  --blue:#3b82f6; --blue-dim:rgba(59,130,246,.12);
+  --orange:#f97316; --orange-dim:rgba(249,115,22,.12);
+  --purple:#a855f7; --purple-dim:rgba(168,85,247,.12);
+  --cyan:#06b6d4; --cyan-dim:rgba(6,182,212,.12);
   --font-mono:'JetBrains Mono',monospace;
   --font-ui:'Inter',sans-serif;
-  --radius:6px; --radius2:12px;
-  --shadow:0 6px 24px rgba(0,0,0,.45);
+  --radius:6px; --radius2:10px;
+  --shadow:0 4px 16px rgba(0,0,0,.12);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-height:100vh;font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-height:100vh;font-size:16px;line-height:1.7;}
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:var(--bg2);}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
@@ -56,123 +49,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 
 /* ── APP SHELL ── */
 #app{display:none;min-height:100vh;}
-
-/* ══ TOPBAR (dark-blue theme — V4.1 navigation) ══ */
-.topbar{
-  background:#0a1626;
-  border-bottom:2px solid var(--topbar-accent-color,#1e3457);
-  display:flex;align-items:center;gap:0;
-  padding:0 18px;height:48px;
-  position:sticky;top:0;z-index:100;
-  transition:border-color .25s;
-}
-.topbar-logo{
-  font-family:var(--font-mono);font-size:13px;font-weight:700;
-  letter-spacing:.14em;color:#2ec4b6;white-space:nowrap;
-  text-transform:uppercase;
-}
-.topbar-logo em{
-  color:#5a6070;font-style:normal;font-weight:400;
-  font-size:10px;letter-spacing:.08em;margin-left:4px;
-}
+.topbar{background:var(--bg2);border-bottom:2px solid var(--topbar-accent-color,var(--border));padding:0 16px;height:56px;box-shadow:0 1px 6px rgba(0,0,0,.08);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;transition:border-color .25s;}
+.topbar-logo{font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.2em;color:#2ec4b6;text-transform:uppercase;white-space:nowrap;display:none;}
 .topbar-sep{display:none;}
-.topbar-nav{display:none !important;}
-.nav-btn{display:none;}
-
-.topbar-user{
-  margin-left:auto;display:flex;align-items:center;gap:0;
-  font-family:var(--font-mono);font-size:11px;color:#9aa0aa;
-  white-space:nowrap;
-}
-.topbar-area{
-  background:#142639;border:1px solid #2a4365;
-  color:#cbd5e1;padding:5px 10px;border-radius:4px 0 0 4px;
-  letter-spacing:.06em;white-space:nowrap;
-  text-transform:uppercase;font-weight:700;font-size:11px;
-}
-.topbar-puesto{
-  background:#142639;border:1px solid #2a4365;border-left:none;
-  color:#94a3b8;padding:5px 10px;
-  letter-spacing:.06em;white-space:nowrap;font-size:11px;
-}
-.topbar-name{
-  background:rgba(46,196,182,.20);border:1px solid #2ec4b6;border-left:none;
-  color:#5eead4;padding:5px 10px;border-radius:0 4px 4px 0;
-  font-weight:700;letter-spacing:.08em;white-space:nowrap;font-size:11px;
-}
-.user-badge{
-  background:rgba(46,196,182,.20);border:1px solid #2ec4b6;
-  color:#5eead4;padding:3px 9px;border-radius:4px;
-  font-size:11px;font-weight:700;letter-spacing:.1em;
-  margin-left:8px;font-family:var(--font-mono);
-}
-.btn-logout{
-  background:none;border:1px solid #2a4365;color:#cbd5e1;
-  padding:4px 10px;border-radius:4px;cursor:pointer;
-  font-size:10px;font-family:var(--font-mono);
-  letter-spacing:.08em;font-weight:700;margin-left:10px;
-  transition:all .15s;
-}
-.btn-logout:hover{border-color:#ef4444;color:#ef4444;}
-
-/* ══ GROUPNAV — 4 grupos: MI DIA / MI DEPT / GESTION / ANALITICA ══ */
-#groupnav{
-  display:flex;
-  background:#0a1626;border-bottom:1px solid #1e3457;
-  overflow-x:auto;scrollbar-width:none;
-  position:sticky;top:48px;z-index:99;
-}
-#groupnav::-webkit-scrollbar{display:none;}
-.gnav-inner{display:flex;align-items:stretch;min-width:max-content;}
-.gnav-group{
-  display:flex;align-items:stretch;flex-direction:column;position:relative;
-}
-.gnav-group + .gnav-group::before{
-  content:'';position:absolute;left:0;top:6px;bottom:6px;
-  width:1px;background:#1e3457;
-}
-.gnav-dia{--gnav-color:#2ec4b6;--gnav-color-dim:rgba(46,196,182,.13);}
-.gnav-dept{--gnav-color:#60a5fa;--gnav-color-dim:rgba(96,165,250,.13);}
-.gnav-gestion{--gnav-color:#fbbf24;--gnav-color-dim:rgba(251,191,36,.13);}
-.gnav-analitica{--gnav-color:#c084fc;--gnav-color-dim:rgba(192,132,252,.13);}
-.gnav-group::after{
-  content:'';position:absolute;top:0;left:0;right:0;height:2px;
-  background:var(--gnav-color);
-}
-.gnav-label{
-  font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.2em;
-  color:var(--gnav-color);text-align:center;padding:6px 10px 0;
-  text-transform:uppercase;line-height:1;pointer-events:none;
-  position:relative;z-index:1;
-}
-.gnav-items{display:flex;align-items:stretch;flex:1;}
-.gnav-btn{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:5px;padding:8px 14px 11px;
-  border:none;background:none;color:#64748b;
-  cursor:pointer;border-bottom:2px solid transparent;
-  transition:all .15s;white-space:nowrap;
-  font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.09em;
-  min-width:72px;position:relative;
-}
-.gnav-btn:hover:not(.active):not(.is-pending){
-  color:#cbd5e1;background:rgba(255,255,255,.035);
-}
-.gnav-btn.active{
-  color:var(--gnav-color);
-  border-bottom-color:var(--gnav-color);
-  background:var(--gnav-color-dim);
-}
-.gnav-btn.is-pending{color:#334155;cursor:not-allowed;}
-.gnav-ic{font-size:22px;line-height:1;}
-.gnav-tx{font-size:10px;font-weight:700;letter-spacing:.09em;}
-.gnav-btn .alert-dot{
-  position:absolute;top:5px;right:8px;
-  width:8px;height:8px;background:#f87171;border-radius:50%;
-  display:none;box-shadow:0 0 0 2px #0a1626;
-}
-.gnav-btn .alert-dot.show{display:block;}
-
+.topbar-nav{display:none;} /* hidden on all — replaced by bottom nav */
+.nav-btn{background:none;border:none;color:var(--text2);font-family:var(--font-ui);font-size:14px;font-weight:500;padding:5px 10px;border-radius:var(--radius);cursor:pointer;white-space:nowrap;transition:all .15s;position:relative;}
+.nav-btn:hover{color:var(--text);background:var(--bg3);}
+.nav-btn.active{color:var(--amber);background:var(--amber-dim);}
+.nav-btn .alert-dot{position:absolute;top:4px;right:4px;width:6px;height:6px;background:var(--red);border-radius:50%;display:none;}
+.nav-btn .alert-dot.show{display:block;}
+.topbar-user{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text2);font-family:var(--font-mono);white-space:nowrap;}
+.user-badge{background:var(--amber-dim);border:1px solid var(--amber);color:var(--amber);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.1em;}
+.btn-logout{background:none;border:1px solid var(--border);color:var(--text3);padding:3px 9px;border-radius:var(--radius);cursor:pointer;font-size:10px;font-family:var(--font-mono);transition:all .15s;}
+.btn-logout:hover{border-color:var(--red);color:var(--red);}
 /* ── PORTAL DEPT GRID ── */
 .portal-dept-grid { grid-template-columns: repeat(2, 1fr); }
 @media(min-width:768px){ .portal-dept-grid { grid-template-columns: repeat(4, 1fr); } }
@@ -180,7 +69,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 /* ── BOTTOM NAV (mobile-first) ── */
 #bottom-nav{
   position:fixed;bottom:0;left:0;right:0;z-index:200;
-  background:#0a1626;border-top:1px solid #1e3457;box-shadow:0 -2px 12px rgba(0,0,0,.4);
+  background:var(--bg2);border-top:1px solid var(--border);box-shadow:0 -2px 8px rgba(0,0,0,.08);
   display:none; /* shown by JS after login */
   padding:0;
   padding-bottom:env(safe-area-inset-bottom);
@@ -188,37 +77,64 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 .bnav-inner{display:flex;align-items:stretch;justify-content:space-around;}
 .bnav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:10px 4px 8px;cursor:pointer;border:none;background:none;
-  color:#94a3b8;font-family:var(--font-mono);font-size:9px;font-weight:700;
+  padding:8px 4px 6px;cursor:pointer;border:none;background:none;
+  color:var(--text3);font-family:var(--font-mono);font-size:9px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase;transition:all .15s;
-  position:relative;gap:4px;min-height:60px;
+  position:relative;gap:3px;min-height:56px;
 }
-.bnav-btn:hover{color:#cbd5e1;}
+.bnav-btn:hover{color:var(--text2);}
 .bnav-btn.active{color:#2ec4b6;}
 .bnav-btn.active .bnav-icon{color:#2ec4b6;}
-.bnav-icon{line-height:0;display:flex;align-items:center;justify-content:center;font-size:22px;}
-.bnav-label{font-size:9px;font-weight:700;letter-spacing:.06em;}
-.bnav-dot{position:absolute;top:7px;right:calc(50% - 16px);width:8px;height:8px;background:var(--red);border-radius:50%;display:none;border:2px solid #0a1626;}
+.bnav-icon{line-height:0;display:flex;align-items:center;justify-content:center;}
+.bnav-label{font-size:8px;font-weight:700;letter-spacing:.06em;}
+.bnav-dot{position:absolute;top:6px;right:calc(50% - 14px);width:7px;height:7px;background:var(--red);border-radius:50%;display:none;border:2px solid var(--bg2);}
 .bnav-dot.show{display:block;}
-
-/* ── Sidebar legacy + Bottom-nav legacy: HIDDEN (groupnav los reemplaza) ── */
-#sidebar{display:none !important;}
-#bottom-nav{display:none !important;}
-
-/* Mobile: scroll horizontal del groupnav (overflow-x:auto ya lo da) */
+/* Desktop: show topbar nav, hide bottom nav */
+@media(min-width:768px){
+  .topbar-logo{display:block;}
+  .topbar-sep{display:block;}
+  .topbar-nav{display:none !important;} /* sustituido por sidebar */
+  #bottom-nav{display:none !important;}
+  #sidebar{display:flex;}
+  .app-shell{padding-left:210px;}
+}
+/* Mobile: main content needs bottom padding */
 @media(max-width:767px){
-  .main{padding-bottom:24px;}
+  .main{padding-bottom:80px !important;}
+  #sidebar{display:none;}
 }
 
+/* ── SIDEBAR (escritorio) ── */
+#sidebar{
+  position:fixed;left:0;top:0;bottom:0;width:210px;background:var(--bg2);border-right:1px solid var(--border);
+  flex-direction:column;padding:14px 10px 18px;gap:4px;z-index:90;overflow-y:auto;
+}
+.sidebar-logo{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.22em;color:#2ec4b6;text-transform:uppercase;padding:6px 8px 14px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+.sidebar-group-label{font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.18em;color:var(--text3);text-transform:uppercase;padding:14px 8px 6px;}
+.sidebar-btn{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  background:none;border:none;color:var(--text2);font-family:var(--font-ui);font-size:13px;font-weight:500;
+  padding:8px 10px;border-radius:var(--radius);cursor:pointer;text-align:left;width:100%;
+  white-space:nowrap;transition:all .12s;position:relative;
+}
+.sidebar-btn:hover{color:var(--text);background:var(--bg3);}
+.sidebar-btn.active{color:var(--amber);background:var(--amber-dim);}
+.sidebar-btn.is-pending{color:var(--text3);cursor:not-allowed;}
+.sidebar-btn .alert-dot{width:6px;height:6px;background:var(--red);border-radius:50%;display:none;}
+.sidebar-btn .alert-dot.show{display:block;}
+.pill-pending{font-size:9px;background:var(--bg4);color:var(--text3);padding:2px 6px;border-radius:8px;font-family:var(--font-mono);letter-spacing:.06em;}
+
+/* Topbar derecho: usuario */
+.topbar-dept{font-family:var(--font-mono);font-size:11px;color:var(--text2);padding:4px 8px;background:var(--bg3);border-radius:6px;letter-spacing:.06em;}
+.topbar-name{font-family:var(--font-mono);font-size:11px;color:var(--text2);padding:4px 8px;letter-spacing:.04em;}
+
 /* ── LAYOUT ── */
-.main{padding:28px 48px 40px;max-width:1180px;margin:0 auto;}
-@media(max-width:1024px){.main{padding:24px 32px 36px;}}
-@media(max-width:700px){.main{padding:20px 16px 32px;}}
+.main{padding:20px;max-width:1200px;margin:0 auto;}
 .screen{display:none;}
 .screen.active{display:block;}
-.page-header{margin-bottom:24px;}
-.page-title{font-family:var(--font-mono);font-size:19px;font-weight:700;color:var(--text);letter-spacing:.02em;}
-.page-sub{font-size:12px;color:var(--text2);margin-top:5px;font-family:var(--font-mono);}
+.page-header{margin-bottom:20px;}
+.page-title{font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--text);}
+.page-sub{font-size:11px;color:var(--text2);margin-top:3px;font-family:var(--font-mono);}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 @media(max-width:700px){.two-col{grid-template-columns:1fr;}}
 .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
@@ -226,8 +142,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 @media(max-width:600px){.three-col{grid-template-columns:1fr;}}
 
 /* ── CARD ── */
-.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius2);padding:22px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.25);}
-.card-title{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--text3);margin-bottom:16px;}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius2);padding:18px;margin-bottom:14px;}
+.card-title{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--text3);margin-bottom:14px;}
 .card-title .accent{color:var(--amber);}
 
 /* ── FORM ── */
@@ -259,42 +175,11 @@ input:focus,select:focus,textarea:focus{border-color:#2ec4b6;box-shadow:0 0 0 2p
 select{color:#f0f4ff;background:#132540;}
 select option{background:#1a3a5c;color:#f0f4ff;}
 select option:hover,select option:focus,select option:checked{background:#2e5a8a;color:#ffffff;}
-
-/* ══ DARK-BLUE OVERRIDE · V4.1 ══
-   Neutraliza fondos blancos / texto oscuro hardcoded inline en HTML
-   para mantener coherencia visual del tema dark-blue. */
-[style*="background:#fff"],[style*="background: #fff"],
-[style*="background:#ffffff"],[style*="background: #ffffff"],
-[style*="background:white"],[style*="background: white"]{
-  background:#142639 !important;
-}
-[style*="background:#f9fafb"],[style*="background: #f9fafb"],
-[style*="background:#f3f4f6"],[style*="background: #f3f4f6"]{
-  background:#1a2f4a !important;
-}
-[style*="color:#111827"],[style*="color: #111827"],
-[style*="color:#1f2937"],[style*="color: #1f2937"]{
-  color:#f1f5f9 !important;
-}
-[style*="color:#374151"],[style*="color: #374151"]{
-  color:#cbd5e1 !important;
-}
-[style*="border:1px solid #d1d5db"],[style*="border: 1px solid #d1d5db"],
-[style*="border:1px solid #e5e7eb"],[style*="border: 1px solid #e5e7eb"]{
-  border-color:#2a4365 !important;
-}
-/* select inline reset al tema oscuro */
-select[style*="background:#ffffff"],select[style*="background: #ffffff"],
-select[style*="background:#fff"],select[style*="background: #fff"],
-select[style*="background:#f9fafb"],select[style*="background: #f9fafb"],
-input[style*="background:#ffffff"],input[style*="background: #ffffff"],
-textarea[style*="background:#ffffff"],textarea[style*="background: #ffffff"]{
-  background:#132540 !important;color:#f0f4ff !important;border-color:#2e5a8a !important;
-}
-select[style*="background:#ffffff"] option,select[style*="background:#fff"] option,
-select[style*="background:#f9fafb"] option{
-  background:#1a3a5c !important;color:#f0f4ff !important;
-}
+/* Windows/Edge fix: force explicit colors on all select variants */
+select[style*="background:var(--bg2)"],select[style*="background: var(--bg2)"]{background:#ffffff !important;color:#111827 !important;}
+select[style*="background:var(--bg2)"] option,select[style*="background: var(--bg2)"] option{background:#ffffff;color:#111827;}
+select[style*="background:var(--bg)"],select[style*="background: var(--bg)"]{background:#f9fafb !important;color:#111827 !important;}
+select[style*="background:var(--bg)"] option,select[style*="background: var(--bg)"] option{background:#f9fafb;color:#111827;}
 textarea{resize:vertical;min-height:60px;}
 .toggle-group{display:flex;gap:5px;}
 .tbtn{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);font-family:var(--font-mono);font-size:11px;font-weight:600;padding:8px 4px;cursor:pointer;transition:all .15s;text-align:center;}
@@ -363,7 +248,7 @@ table{width:100%;border-collapse:collapse;font-size:12px;}
 th{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);padding:9px 11px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
 td{padding:9px 11px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:rgba(96,165,250,.06);}
+tr:hover td{background:rgba(255,255,255,.018);}
 
 /* ── BADGES ── */
 .badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
@@ -499,11 +384,11 @@ tr:hover td{background:rgba(96,165,250,.06);}
   }
 }
 #portal-pin-modal{position:fixed;inset:0;z-index:1100;background:rgba(0,0,10,.6);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:20px;}
-.pdept-card{background:#152a44;border:1px solid #2a4365;border-radius:12px;padding:18px 14px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:7px;touch-action:manipulation;color:#f1f5f9;}
+.pdept-card{background:#f0f9ff;border:1px solid #2a3347;border-radius:12px;padding:18px 14px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:7px;touch-action:manipulation;}
 .pdept-card.active-dept{border-top-width:2px;}
-.pdept-card.active-dept:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(46,196,182,.25);}
+.pdept-card.active-dept:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(46,196,182,.2);}
 .pdept-card.active-dept:active{transform:scale(.97);}
-.pdept-card.soon-dept{opacity:.45;cursor:default;pointer-events:none;border-top-width:2px;background:#0f1f33;}
+.pdept-card.soon-dept{opacity:.5;cursor:default;pointer-events:none;border-top-width:2px;background:#f9fafb;}
 .p-pin-box{background:#0f2035;border:1px solid #2e5a8a;border-radius:8px;padding:14px;font-family:var(--font-mono);font-size:26px;font-weight:700;letter-spacing:.3em;color:#f59e0b;text-align:center;margin-bottom:14px;min-height:56px;display:flex;align-items:center;justify-content:center;}
 .p-pin-box.p-err{border-color:#ef4444 !important;color:#ef4444;}
 .p-key{background:#1e3558;border:1px solid #244570;border-radius:7px;color:#f0f4ff;font-family:var(--font-mono);font-size:16px;font-weight:600;padding:14px;cursor:pointer;transition:all .12s;touch-action:manipulation;user-select:none;}
@@ -515,11 +400,11 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
 
 .vbtn{display:inline-flex;align-items:center;border-radius:6px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid;white-space:nowrap;transition:opacity .15s;text-decoration:none;line-height:1.4;}
-.vbtn:hover{opacity:.85;}
-.vbtn-primary{background:#1e3a5f;color:#f1f5f9;border-color:#3b82f6;}
-.vbtn-sec{background:#1a2f4a;color:#cbd5e1;border-color:#2a4365;}
-.vbtn-warn{background:rgba(251,191,36,.14);color:#fbbf24;border-color:#fbbf24;}
-.vbtn-del{background:rgba(248,113,113,.14);color:#f87171;border-color:#f87171;}
+.vbtn:hover{opacity:.8;}
+.vbtn-primary{background:#10233f;color:#fff;border-color:#10233f;}
+.vbtn-sec{background:#f3f4f6;color:#374151;border-color:#d1d5db;}
+.vbtn-warn{background:#fffbeb;color:#d97706;border-color:#fcd34d;}
+.vbtn-del{background:#fef2f2;color:#dc2626;border-color:#fca5a5;}
 </style>
 </head>
 <body>
@@ -553,12 +438,8 @@ tr:hover td{background:rgba(96,165,250,.06);}
       <h1 style="font-family:'JetBrains Mono',monospace;font-size:clamp(28px,5vw,48px);font-weight:700;letter-spacing:.22em;color:#2ec4b6;margin:0 0 12px;">SYNCROSFERA</h1>
       <div style="width:64px;height:2px;background:#2ec4b6;margin:0 auto 20px;"></div>
       <h2 style="font-size:22px;font-weight:600;color:#fff;margin:0 0 8px;">Portal Operativo</h2>
-      <p style="font-size:14px;color:#94a3b8;margin:0 0 14px;">Gestión diaria del equipo</p>
-      <div style="max-width:640px;margin:0 auto 8px;text-align:center;">
-        <p style="font-family:'Inter',sans-serif;font-style:italic;font-size:15px;color:#cbd5e1;line-height:1.55;margin:0;">"Cada día es una oportunidad de ser mejor versión de ti."</p>
-        <p style="font-family:'Inter',sans-serif;font-size:15px;color:#2ec4b6;font-weight:600;line-height:1.55;margin:6px 0 0;">En equipo alcanzamos la excelencia.</p>
-      </div>
-      <p id="portal-clock" style="font-size:12px;color:#64748b;margin-top:10px;"></p>
+      <p style="font-size:14px;color:#94a3b8;margin:0 0 6px;">Balcón de la Sella · Gestión diaria del equipo</p>
+      <p id="portal-clock" style="font-size:12px;color:#64748b;"></p>
     </header>
 
     <!-- Status bar -->
@@ -570,15 +451,15 @@ tr:hover td{background:rgba(96,165,250,.06);}
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
           <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#2ec4b6;margin:0 0 4px;">5</p>
+            <p style="font-size:20px;font-weight:700;color:#2ec4b6;margin:0 0 4px;">2</p>
             <p style="font-size:11px;color:#94a3b8;margin:0;">Activos</p>
           </div>
           <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#f59e0b;margin:0 0 4px;">5</p>
+            <p style="font-size:20px;font-weight:700;color:#f59e0b;margin:0 0 4px;">8</p>
             <p style="font-size:11px;color:#94a3b8;margin:0;">Próximamente</p>
           </div>
           <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#fff;margin:0 0 4px;">v4.0</p>
+            <p style="font-size:20px;font-weight:700;color:#fff;margin:0 0 4px;">v3.0</p>
             <p style="font-size:11px;color:#94a3b8;margin:0;">Versión</p>
           </div>
         </div>
@@ -637,16 +518,28 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
         </div>
       </button>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">💪</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Entrenadores</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Sesiones · Seguimiento</p>
-      </div>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">🩺</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Fisioterapeutas</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Tratamientos · Pacientes</p>
-      </div>
+      <button onclick="pSel('entrenadores','Entrenadores','#10b981')" style="text-align:left;border-radius:16px;border:2px solid #10b981;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
+          <div style="width:48px;height:48px;background:rgba(16,185,129,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">💪</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+        </div>
+        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Entrenadores</h3>
+        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Sesiones · Seguimiento</p>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#10b981;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        </div>
+      </button>
+      <button onclick="pSel('fisioterapeutas','Fisioterapeutas','#ec4899')" style="text-align:left;border-radius:16px;border:2px solid #ec4899;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
+          <div style="width:48px;height:48px;background:rgba(236,72,153,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🩺</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+        </div>
+        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Fisioterapeutas</h3>
+        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Tratamientos · Pacientes</p>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#ec4899;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        </div>
+      </button>
       <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:16px;border:2px solid #f97316;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
           <div style="width:48px;height:48px;background:rgba(249,115,22,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🧹</div>
@@ -658,11 +551,17 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
         </div>
       </button>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">🔧</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Mantenimiento</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Incidencias · Tareas técnicas</p>
-      </div>
+      <button onclick="pSel('mantenimiento','Mantenimiento','#64748b')" style="text-align:left;border-radius:16px;border:2px solid #64748b;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
+          <div style="width:48px;height:48px;background:rgba(100,116,139,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🔧</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+        </div>
+        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Mantenimiento</h3>
+        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Incidencias · Tareas técnicas</p>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#64748b;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        </div>
+      </button>
       <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
         <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">📦</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
         <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Economato</h3>
@@ -677,7 +576,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
     <!-- Footer -->
     <footer style="margin-top:48px;text-align:center;font-size:12px;color:#334155;">
-      SYNCROSFERA · Health Sport Hotel · v4.0
+      SYNCROSFERA · Balcón de la Sella · Health Sport Hotel
     </footer>
   </main>
 </div>
@@ -686,25 +585,23 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
   <!-- ══ SIDEBAR (escritorio) ══ -->
   <aside id="sidebar">
-    <div class="sidebar-logo">SYNCRO SHIFT V4.0</div>
+    <div class="sidebar-logo">BDS · V3</div>
     <div id="sidebar-nav"></div>
   </aside>
 
   <div class="app-shell">
   <div class="topbar">
-    <div class="topbar-logo">SYNCRO SHIFT <em>V4.0</em></div>
+    <div class="topbar-logo">BDS·v3</div>
     <div class="topbar-sep"></div>
     <div class="topbar-nav" id="topbar-nav"></div>
     <div class="topbar-user">
-      <span class="topbar-area"   id="topbar-area"></span>
-      <span class="topbar-puesto" id="topbar-puesto"></span>
-      <span class="topbar-name"   id="topbar-name"></span>
+      <span class="topbar-dept" id="topbar-dept"></span>
+      <span class="topbar-name" id="topbar-name"></span>
       <span id="user-name-top" style="display:none;"></span>
       <span class="user-badge" id="user-role-top" style="display:none;"></span>
       <button class="btn-logout" onclick="logout()">SALIR</button>
     </div>
   </div>
-  <nav id="groupnav"></nav>
   <!-- BOTTOM NAV (mobile) -->
   <div id="bottom-nav">
     <div class="bnav-inner" id="bnav-inner"></div>
@@ -1807,7 +1704,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="modal-footer">
       <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-validar')">Cancelar</button>
       <button class="btn btn-warn btn-sm" onclick="doValidacion('En corrección')">↩ Corrección</button>
-      <button class="btn btn-success btn-sm" onclick="tryValidacion('Validado')">✓ Validar</button>
+      <button class="btn btn-success btn-sm" onclick="doValidacion('Validado')">✓ Validar</button>
     </div>
   </div>
 </div>
@@ -1851,33 +1748,8 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="modal-title" id="me-title">Empleado</div>
     <div class="grid2" style="gap:12px;">
       <div class="fg sp2"><label>Nombre <span class="req">*</span></label><input type="text" id="emp-nombre"></div>
-      <div class="fg"><label>Área</label><select id="emp-area">
-        <optgroup label="Restaurante / F&amp;B">
-          <option>Sala</option>
-          <option>Cocina</option>
-        </optgroup>
-        <optgroup label="Recepción / Hotel">
-          <option>Recepción</option>
-        </optgroup>
-        <optgroup label="Housekeeping">
-          <option>Housekeeping</option>
-          <option>Limpieza</option>
-        </optgroup>
-        <optgroup label="Mantenimiento">
-          <option>Mantenimiento</option>
-        </optgroup>
-        <optgroup label="SYNCROLAB">
-          <option>SYNCROLAB</option>
-          <option>Recepción SYNCROLAB</option>
-          <option>Entrenadores</option>
-          <option>Fisioterapeutas</option>
-        </optgroup>
-        <optgroup label="Central">
-          <option>Administración</option>
-          <option>Economato</option>
-        </optgroup>
-      </select></div>
-      <div class="fg"><label>Puesto</label><select id="emp-puesto">
+      <input type="hidden" id="emp-area">
+      <div class="fg"><label>Puesto</label><select id="emp-puesto" onchange="_syncAreaFromPuesto()">
   <optgroup label="Cocina">
     <option>Jefe de Cocina</option>
     <option>Segundo Jefe de Cocina</option>
@@ -1929,7 +1801,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <option>Responsable</option>
   </optgroup>
 </select></div>
-      <div class="fg"><label>PIN (4-6 dígitos) <span class="req">*</span></label><input type="text" id="emp-pin" maxlength="6"></div>
+      <div class="fg" id="emp-pin-row"><label>PIN (4-6 dígitos) <span class="req">*</span></label><input type="text" id="emp-pin" maxlength="6" autocomplete="off"></div>
       <div class="fg"><label>Coste €/hora</label><input type="number" id="emp-coste" step="0.01" min="0"></div>
       <div class="fg"><label>Estado</label><select id="emp-estado"><option>Activo</option><option>Baja</option><option>Vacaciones</option></select></div>
       <div class="fg"><label>Responsable de turno</label><select id="emp-resp"><option value="1">Sí</option><option value="0">No</option></select></div>

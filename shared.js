@@ -451,7 +451,7 @@ function getScreens(rol){
     hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
     hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
     hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
-    hkRevision:  {id:'hk-revision', label:'🔍 Revisión HK'},
+    hkRevision:  {id:'hk-revision', label:'✅ Revisión HK'},
     hkDash:      {id:'hk-dash',     label:'📊 Dashboard HK'},
     fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
     incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
@@ -524,147 +524,20 @@ function getScreens(rol){
   return out;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// SYNCRO SHIFT V4.0 — buildNav (4-group structure)
-//   G1 MI DIA  : readme · turno · fichaje · checklist
-//   G2 MI DEPT : gestiones · tareas · incidencias · mis-fio · merma · ajustes
-//                · caja · ruta · hypoxic · recmod · mant · hk-*
-//   G3 GESTION : validacion · fio · maestro · export
-//   G4 ANALITICA: dashboard · incentivos
-// ═══════════════════════════════════════════════════════════════════════
-
-const GROUP_OF = {
-  // G1
-  'readme':1, 'turno':1, 'fichaje':1, 'chk-mod':1,
-  // G2
-  'gestiones':2, 'tareas':2, 'incidencias':2, 'mis-fio':2,
-  'merma-mod':2, 'ajustes-mod':2,
-  'rec-caja-op':2, 'lab-caja-op':2,
-  'ruta-mod':2, 'hypoxic':2,
-  'rec-mod':2, 'mant-mod':2,
-  'hk-plan':2, 'hk-zonas':2, 'hk-revision':2, 'hk-dash':2, 'hk-config':2,
-  // G3
-  'validacion':3, 'fio':3, 'maestro':3, 'export':3,
-  // G4
-  'dashboard':4, 'incentivos':4
-};
-
-const GNAV_IC = {
-  'readme':'📋', 'turno':'◷', 'fichaje':'⏱', 'chk-mod':'✓',
-  'gestiones':'📌', 'tareas':'🔗', 'incidencias':'⚠', 'mis-fio':'⚖',
-  'merma-mod':'📦', 'ajustes-mod':'⚙',
-  'rec-caja-op':'💰', 'lab-caja-op':'💰',
-  'ruta-mod':'🧹', 'hypoxic':'🫁',
-  'rec-mod':'🏨', 'mant-mod':'🔧',
-  'hk-plan':'📅', 'hk-zonas':'🧽', 'hk-revision':'🔍', 'hk-dash':'📊', 'hk-config':'⚙',
-  'validacion':'🛡', 'fio':'⚖', 'maestro':'👥', 'export':'⬇',
-  'dashboard':'📊', 'incentivos':'⭐'
-};
-
-const GNAV_TX = {
-  'readme':'INFO', 'turno':'MI TURNO', 'fichaje':'FICHAJE', 'chk-mod':'CHECKLIST',
-  'gestiones':'GESTIONES', 'tareas':'TAREAS', 'incidencias':'INCIDENCIAS', 'mis-fio':'MIS FIO',
-  'merma-mod':'MERMA', 'ajustes-mod':'AJ.CAJA',
-  'rec-caja-op':'CAJA', 'lab-caja-op':'CAJA',
-  'ruta-mod':'MI RUTA', 'hypoxic':'HYPOXIC',
-  'rec-mod':'RECEPCION', 'mant-mod':'MANT.',
-  'hk-plan':'PLANIF.', 'hk-zonas':'ZONAS', 'hk-revision':'REVISION', 'hk-dash':'PANEL HK', 'hk-config':'CONFIG HK',
-  'validacion':'VALIDACION', 'fio':'FIO', 'maestro':'MAESTRO', 'export':'EXPORTAR',
-  'dashboard':'DASHBOARD', 'incentivos':'INCENTIVOS'
-};
-
-const GROUP_META = [
-  { n:1, cls:'gnav-dia',       label:'MI DIA' },
-  { n:2, cls:'gnav-dept',      label:'MI DEPARTAMENTO' },
-  { n:3, cls:'gnav-gestion',   label:'GESTION' },
-  { n:4, cls:'gnav-analitica', label:'ANALITICA' }
-];
-
 function buildNav(){
   // Safety: ensure portal is fully hidden when app is running
   var ps=document.getElementById('portal-screen');
   if(ps){ ps.style.display='none'; ps.style.pointerEvents='none'; }
-
-  const groupnav = document.getElementById('groupnav');
-  const bnav     = document.getElementById('bnav-inner');
-  const navLegacy = document.getElementById('topbar-nav');
-  const sideb     = document.getElementById('sidebar-nav');
-  if(groupnav)  groupnav.innerHTML  = '';
-  if(bnav)      bnav.innerHTML      = '';
-  if(navLegacy) navLegacy.innerHTML = '';
-  if(sideb)     sideb.innerHTML     = '';
-
-  const screens = getScreens(currentUser.rol);
-
-  // ── Bucket screens by group, dedupe by id ──
-  const buckets = {1:[], 2:[], 3:[], 4:[]};
-  const seen = {};
-  screens.forEach(function(s){
-    if(s.sep) return;
-    if(!s.id || seen[s.id]) return;
-    seen[s.id] = true;
-    const g = GROUP_OF[s.id] || 2;
-    buckets[g].push(s);
-  });
-
-  // ── Render groupnav (desktop) ──
-  if(groupnav){
-    const inner = document.createElement('div');
-    inner.className = 'gnav-inner';
-
-    GROUP_META.forEach(function(meta){
-      const items = buckets[meta.n];
-      if(!items.length) return;
-
-      const grp = document.createElement('div');
-      grp.className = 'gnav-group ' + meta.cls;
-
-      const lbl = document.createElement('div');
-      lbl.className = 'gnav-label';
-      lbl.textContent = meta.label;
-      grp.appendChild(lbl);
-
-      const itemsDiv = document.createElement('div');
-      itemsDiv.className = 'gnav-items';
-
-      items.forEach(function(s){
-        const isPending = !!s.pending;
-        const btn = document.createElement('button');
-        btn.className = 'gnav-btn' + (isPending ? ' is-pending' : '');
-        btn.id = 'gnav-' + s.id;
-        const ic = GNAV_IC[s.id] || '●';
-        const tx = GNAV_TX[s.id] || (s.id || '').toUpperCase();
-        btn.innerHTML =
-          '<span class="gnav-ic">' + ic + '</span>' +
-          '<span class="gnav-tx">' + tx + '</span>' +
-          '<span class="alert-dot" id="dotgnav-' + s.id + '"></span>';
-        if(isPending){
-          btn.onclick = function(){ toast('Módulo en desarrollo','info'); };
-        } else if(s.action){
-          btn.onclick = function(){
-            if(typeof window[s.action] === 'function') window[s.action]();
-            else toast('Función no disponible','err');
-          };
-        } else {
-          btn.onclick = function(){ showScreen(s.id); };
-        }
-        itemsDiv.appendChild(btn);
-      });
-
-      grp.appendChild(itemsDiv);
-      inner.appendChild(grp);
-    });
-
-    groupnav.appendChild(inner);
-  }
-
-  // ── Render bottom-nav (mobile) — preserved from legacy ──
-  const _svg=function(p){return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';};
+  const nav=document.getElementById('topbar-nav'); nav.innerHTML='';
+  const bnav=document.getElementById('bnav-inner'); if(bnav) bnav.innerHTML='';
+  const screens=getScreens(currentUser.rol);
+  // Nav icons for bottom nav
+  const _svg=(p)=>'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
   const ICONS={
     'readme':    _svg('<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>'),
     'turno':     _svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
     'tareas':    _svg('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
-    'validacion':_svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>'),
+    'validacion':_svg('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'),
     'dashboard': _svg('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'),
     'maestro':   _svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
     'export':    _svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
@@ -673,15 +546,54 @@ function buildNav(){
     'hypoxic':   _svg('<path d="M12 2a3 3 0 0 0-3 3c0 1.5 1 2.5 1 4v3a4 4 0 0 1-2 3.5L7 16a3 3 0 0 0 0 4.5 3 3 0 0 0 4 0l1-1 1 1a3 3 0 0 0 4 0 3 3 0 0 0 0-4.5l-1-.5a4 4 0 0 1-2-3.5V9c0-1.5 1-2.5 1-4a3 3 0 0 0-3-3z"/>'),
     'rec-caja-op': _svg('<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 10h.01"/><path d="M2 10h20"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.','chk-mod':'Check.','mis-fio':'FIO','fichaje':'Fichaje','incentivos':'Bonus','fio':'FIO','lab-caja-op':'Caja'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
 
-  // Iterate screens once more for bottom-nav (mobile) preserving original order
-  const seenB = {};
-  screens.forEach(function(s){
-    if(s.sep) return;
-    if(!s.id || seenB[s.id]) return;
-    seenB[s.id] = true;
+  // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
+  const sideb = document.getElementById('sidebar-nav');
+  if(sideb) sideb.innerHTML = '';
+
+  screens.forEach(s=>{
+    if(s.sep){
+      // Separador de grupo
+      if(sideb){
+        const sep = document.createElement('div');
+        sep.className = 'sidebar-group-label';
+        sep.textContent = s.label;
+        sideb.appendChild(sep);
+      }
+      return;
+    }
     const isPending = !!s.pending;
+
+    // Sidebar (escritorio)
+    if(sideb){
+      const a = document.createElement('button');
+      a.className = 'sidebar-btn' + (isPending ? ' is-pending' : '');
+      a.id = 'side-' + s.id;
+      a.innerHTML = s.label + (isPending ? ' <span class="pill-pending">Pendiente</span>' : '')
+                  + '<span class="alert-dot" id="dotside-'+s.id+'"></span>';
+      if(isPending){
+        a.onclick = function(){ toast('Módulo en desarrollo','info'); };
+      } else if(s.action){
+        a.onclick = function(){ if(typeof window[s.action] === 'function') window[s.action](); else toast('Función no disponible','err'); };
+      } else {
+        a.onclick = function(){ showScreen(s.id); };
+      }
+      sideb.appendChild(a);
+    }
+
+    // Topbar legacy (lo dejamos oculto vía CSS pero seguimos poblándolo por compatibilidad de IDs)
+    const b=document.createElement('button');
+    b.className='nav-btn'; b.id='nav-'+s.id;
+    b.innerHTML=s.label+'<span class="alert-dot" id="dot-'+s.id+'"></span>';
+    b.onclick=function(){
+      if(isPending){ toast('Módulo en desarrollo','info'); return; }
+      if(s.action){ if(typeof window[s.action] === 'function') window[s.action](); return; }
+      showScreen(s.id);
+    };
+    nav.appendChild(b);
+
+    // Bottom nav (móvil)
     if(bnav){
       const bb=document.createElement('button');
       bb.className='bnav-btn' + (isPending ? ' is-pending' : '');
@@ -695,18 +607,15 @@ function buildNav(){
       bnav.appendChild(bb);
     }
   });
-
-  // Show bottom nav (mobile only — CSS gates it via media query)
+  // Show bottom nav
   var bn=document.getElementById('bottom-nav');
   if(bn) bn.style.display='block';
 
-  // ── Fill user chips in topbar (area · puesto · nombre) ──
-  var areaEl   = document.getElementById('topbar-area');
-  var puestoEl = document.getElementById('topbar-puesto');
-  var nameEl   = document.getElementById('topbar-name');
-  if(areaEl)   areaEl.textContent   = (currentUser && currentUser.area)   || '';
-  if(puestoEl) puestoEl.textContent = (currentUser && currentUser.puesto) || '';
-  if(nameEl)   nameEl.textContent   = (currentUser && currentUser.nombre) || '';
+  // Rellenar bloque usuario topbar (dpto · nombre)
+  var deptEl = document.getElementById('topbar-dept');
+  var nameEl = document.getElementById('topbar-name');
+  if(deptEl) deptEl.textContent = currentUser && currentUser.area ? ('🏢 ' + currentUser.area) : '';
+  if(nameEl) nameEl.textContent = currentUser && currentUser.nombre ? ('👤 ' + currentUser.nombre) : '';
 }
 async function showScreen(id){
   // Reset topbar dept accent when leaving dashboard
@@ -718,12 +627,10 @@ async function showScreen(id){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.sidebar-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.gnav-btn').forEach(b=>b.classList.remove('active'));
   const s=document.getElementById('screen-'+id); if(s) s.classList.add('active');
   const nb=document.getElementById('nav-'+id); if(nb) nb.classList.add('active');
   const bb=document.getElementById('bnav-'+id); if(bb) bb.classList.add('active');
   const sb=document.getElementById('side-'+id); if(sb) sb.classList.add('active');
-  const gb=document.getElementById('gnav-'+id); if(gb) gb.classList.add('active');
   window.scrollTo(0,0);
   if(id==='readme' && typeof renderInfoScreen==='function'){ renderInfoScreen(); }
   if(id==='turno'){ initTurnoForm(); }
@@ -764,15 +671,12 @@ async function updateDots(){
   const tareas=await getDB('tareas');
   const hasCor=shifts.some(s=>s.employee_id===currentUser.id&&s.estado==='En corrección');
   const pendT=tareas.filter(t=>t.dept_destino===currentUser.area&&isTaskOpen(t)).length;
-  // Desktop legacy dots
+  // Desktop dots
   const valDot=document.getElementById('dot-turno'); if(valDot) valDot.classList.toggle('show',hasCor);
   const tDot=document.getElementById('dot-tareas'); if(tDot) tDot.classList.toggle('show',pendT>0);
   // Mobile bottom nav dots
   const bvalDot=document.getElementById('bdot-turno'); if(bvalDot) bvalDot.classList.toggle('show',hasCor);
   const btDot=document.getElementById('bdot-tareas'); if(btDot) btDot.classList.toggle('show',pendT>0);
-  // Groupnav dots (V4.0)
-  const gvalDot=document.getElementById('dotgnav-turno'); if(gvalDot) gvalDot.classList.toggle('show',hasCor);
-  const gtDot=document.getElementById('dotgnav-tareas'); if(gtDot) gtDot.classList.toggle('show',pendT>0);
 }
 async function populateDashEmpDropdowns(){
   const employees=(await getDB('employees')).filter(e=>e.estado==='Activo');
@@ -1537,8 +1441,6 @@ async function _doSaveTurno(){
   invalidateCache('shifts');
   invalidateCache('tareas');
   invalidateCache('incidencias');
-  // Limpiar borrador checklist localStorage tras guardar turno (incluye correcciones)
-  if(typeof clearChkLocalStorage === 'function') clearChkLocalStorage();
   console.log('SYNCROSFERA QA tareas guardadas',tareasCreadas);
   console.log('SYNCROSFERA QA incidencias guardadas',incidenciasCreadas);
 }
@@ -2756,6 +2658,30 @@ async function renderDashboard(){
 
 // ═══════════════════════════════════════════════════════════════════════
 // MAESTRO
+// Mapeo optgroup del select puesto → área canónica
+var PUESTO_AREA_MAP = {
+  'Cocina':['Jefe de Cocina','Segundo Jefe de Cocina','Cocinero','Cocinera','Ayudante de cocina','Friegue'],
+  'Sala':['Jefe de Sala','Jefe de Sector','Camarero','Camarera','Ayudante camarero','Ayudante camarera'],
+  'Recepción':['Jefe de Recepción','Subjefe de Recepción','Recepcionista','Ayudante de Recepción','Auditor de Noche'],
+  'Housekeeping':['Gobernanta','Subgobernanta','Camarero de pisos','Camarera de pisos','Ayudante camarero de pisos','Ayudante camarera de pisos','Lavandería'],
+  'Mantenimiento':['Jefe de Mantenimiento','Técnico'],
+  'SYNCROLAB':['Club Manager','Coordinador(a) de Atención al Cliente','Coordinador(a) de Entrenadores','Coordinador(a) de Fisioterapeutas','Atención al Cliente','Entrenador(a)','Fisioterapeuta'],
+  'Administración':['F&B Manager','Administrador','Responsable']
+};
+function _getAreaFromPuesto(puesto){
+  var p=(puesto||'').trim();
+  for(var area in PUESTO_AREA_MAP){
+    if(PUESTO_AREA_MAP[area].indexOf(p)!==-1) return area;
+  }
+  return p; // fallback: usar el puesto como área
+}
+function _syncAreaFromPuesto(){
+  var puestoEl=document.getElementById('emp-puesto');
+  var areaEl=document.getElementById('emp-area');
+  if(!puestoEl||!areaEl) return;
+  areaEl.value=_getAreaFromPuesto(puestoEl.value);
+}
+
 async function renderMaestro(){
   const employees=(await getDB('employees')).filter(e=>e.id!=='E13');
   // Permisos: adjunto_directivo NO puede modificar/eliminar/ver-PIN de fila con rol=admin
@@ -2764,8 +2690,9 @@ async function renderMaestro(){
     return canActAsAdmin(currentUser) || (currentUser.rol === 'fb' && e.rol !== 'admin');
   }
   function pinCell(e){
-    if(isAdjuntoDirectivo(currentUser) && e.rol === 'admin') return '<span style="color:var(--text3)">●●●●</span>';
-    return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">'+e.pin+'</span>';
+    if(isAdjuntoDirectivo(currentUser)) return '<span style="color:var(--text3)">●●●●</span>';
+    if(isAdmin(currentUser)) return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">'+e.pin+'</span>';
+    return '<span style="color:var(--text3)">●●●●</span>';
   }
   document.getElementById('maestro-table').innerHTML=`<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Acciones</th></tr>
   ${employees.map(e=>`<tr><td><strong>${e.nombre}</strong></td><td>${deptBadge(e.area)}</td><td style="font-size:11px">${e.puesto}</td><td>${e.estado==='Activo'?'<span class="badge b-green">Activo</span>':e.estado==='Baja'?'<span class="badge b-red">Baja</span>':'<span class="badge b-yellow">'+e.estado+'</span>'}</td><td>${e.responsable==1?'<span class="badge b-blue">SÍ</span>':'—'}</td><td>${e.validador==1?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td style="font-family:var(--font-mono);font-size:10px">${e.rol}</td><td style="font-family:var(--font-mono)">${parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—'}</td><td>${pinCell(e)}</td><td style="white-space:nowrap">${canEditRow(e) ? `<button class="btn btn-secondary btn-sm" onclick="openEmpModal('${e.id}')">Editar</button> ${(canActAsAdmin(currentUser)||(currentUser.rol==='fb'&&e.rol!=='admin'))?
@@ -2778,10 +2705,43 @@ async function renderMaestro(){
 }
 async function openEmpModal(empId){
   _editEmpId=empId||null;
-  if(empId){ const e=(await getDB('employees')).find(x=>x.id===empId); if(!e) return; document.getElementById('me-title').textContent='Editar: '+e.nombre; document.getElementById('emp-nombre').value=e.nombre; document.getElementById('emp-area').value=e.area; document.getElementById('emp-puesto').value=e.puesto; document.getElementById('emp-pin').value=e.pin; document.getElementById('emp-coste').value=(e.coste&&parseFloat(e.coste)>0)?parseFloat(e.coste):''; document.getElementById('emp-estado').value=e.estado; document.getElementById('emp-resp').value=(e.responsable==1||e.responsable===true||e.responsable==='1'||e.responsable==='true')?'1':'0'; document.getElementById('emp-val').value=(e.validador==1||e.validador===true||e.validador==='1'||e.validador==='true')?'1':'0'; document.getElementById('emp-rol').value=e.rol; document.getElementById('emp-obs').value=e.obs||'';
-  } else { document.getElementById('me-title').textContent='Nuevo Empleado'; ['emp-nombre','emp-pin','emp-coste','emp-obs'].forEach(id=>document.getElementById(id).value=''); ['emp-area','emp-puesto','emp-estado'].forEach(id=>{ const el=document.getElementById(id); if(el) el.selectedIndex=0; }); document.getElementById('emp-resp').value='0'; document.getElementById('emp-val').value='0'; document.getElementById('emp-rol').value='empleado'; }
+  var isAdjAdm = isAdjuntoDirectivo(currentUser);
+  if(empId){
+    const e=(await getDB('employees')).find(x=>x.id===empId); if(!e) return;
+    document.getElementById('me-title').textContent='Editar: '+e.nombre;
+    document.getElementById('emp-nombre').value=e.nombre;
+    document.getElementById('emp-area').value=e.area;
+    document.getElementById('emp-puesto').value=e.puesto;
+    // adjunto_directivo: PIN vacío — debe introducir nuevo PIN para guardar
+    document.getElementById('emp-pin').value = isAdjAdm ? '' : (e.pin||'');
+    document.getElementById('emp-coste').value=(e.coste&&parseFloat(e.coste)>0)?parseFloat(e.coste):'';
+    document.getElementById('emp-estado').value=e.estado;
+    document.getElementById('emp-resp').value=(e.responsable==1||e.responsable===true||e.responsable==='1'||e.responsable==='true')?'1':'0';
+    document.getElementById('emp-val').value=(e.validador==1||e.validador===true||e.validador==='1'||e.validador==='true')?'1':'0';
+    document.getElementById('emp-rol').value=e.rol;
+    document.getElementById('emp-obs').value=e.obs||'';
+  } else {
+    document.getElementById('me-title').textContent='Nuevo Empleado';
+    ['emp-nombre','emp-pin','emp-coste','emp-obs'].forEach(id=>document.getElementById(id).value='');
+    ['emp-puesto','emp-estado'].forEach(id=>{ const el=document.getElementById(id); if(el) el.selectedIndex=0; });
+    document.getElementById('emp-area').value='';
+    document.getElementById('emp-resp').value='0';
+    document.getElementById('emp-val').value='0';
+    document.getElementById('emp-rol').value='empleado';
+  }
+  // Sincronizar área desde puesto
+  _syncAreaFromPuesto();
+  // PIN label dinámico para adjunto_directivo
+  var pinRow=document.getElementById('emp-pin-row');
+  if(pinRow){
+    var pinLabel=pinRow.querySelector('label');
+    if(pinLabel) pinLabel.innerHTML = isAdjAdm
+      ? 'PIN nuevo (4-6 dígitos) <span class="req">*</span> <span style="font-size:11px;color:var(--text3);">— introduce un PIN nuevo para guardar</span>'
+      : 'PIN (4-6 dígitos) <span class="req">*</span>';
+  }
   document.getElementById('modal-empleado').classList.add('open');
 }
+
 async function saveEmpleado(){
   const nombre=document.getElementById('emp-nombre').value.trim();
   const pin=document.getElementById('emp-pin').value.trim();
@@ -2789,7 +2749,9 @@ async function saveEmpleado(){
   if(!pin||pin.length<4){toast('PIN mínimo 4 dígitos','err');return;}
   const employees=await getDB('employees');
   if(employees.find(e=>e.pin===pin&&e.id!==_editEmpId)){toast('PIN ya en uso','err');return;}
-  var selectedArea = document.getElementById('emp-area').value;
+  // Derivar área del puesto (siempre — así puesto y área son siempre coherentes)
+  _syncAreaFromPuesto();
+  var selectedArea = document.getElementById('emp-area').value || _getAreaFromPuesto(document.getElementById('emp-puesto').value);
   var selectedRol  = document.getElementById('emp-rol').value;
 
   // ─── Validación de ámbito de creación/edición según rol del usuario actual ───
