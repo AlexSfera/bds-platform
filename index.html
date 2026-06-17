@@ -91,10 +91,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 .topbar-nav-row{
   display:flex;align-items:stretch;justify-content:center;
   padding:0 12px;min-height:60px;
+  overflow:visible;
 }
 .topbar-nav{
   display:flex !important;align-items:stretch;flex:1;justify-content:center;
-  overflow-x:auto;scrollbar-width:none;
+  overflow:visible;            /* CRÍTICO: sin overflow, sino recorta el dropdown */
   margin:0;
   gap:18px;
   position:relative;
@@ -121,7 +122,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 .nav-group-midia{--ng-color:#2ec4b6;}
 .nav-group-midepartamento{--ng-color:#60a5fa;}
 .nav-group-gestion,
-.nav-group-gestin{--ng-color:#fbbf24;}    /* "GESTIÓN" sin tilde tras normalizar */
+.nav-group-gestin,
+.nav-group-managerbar{--ng-color:#fbbf24;}    /* gestión / manager bar */
 .nav-group-analitica,
 .nav-group-analtica{--ng-color:#c084fc;}
 
@@ -151,36 +153,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   margin-left:4px;letter-spacing:.06em;
 }
 
-/* ── GRUPO GESTIÓN: dropdown ── */
-.nav-group-gestion-dropdown{
-  position:relative;border-top-color:#fbbf24;
+/* ── GRUPO con DROPDOWN (Manager Bar) ── */
+.nav-group-dropdown{
+  position:relative;
+  border-top-color:var(--ng-color,#fbbf24);
 }
-.nav-group-gestion-dropdown .nav-group-label{color:#fbbf24;opacity:.7;}
-.nav-btn-gestion{
+.nav-btn-dropdown-toggle{
   display:inline-flex;align-items:center;gap:6px;
   padding:0 16px;height:48px;
-  border:none;background:none;color:#fbbf24;
+  border:none;background:none;color:var(--ng-color,#fbbf24);
   font-family:var(--font-mono);font-size:11.5px;font-weight:700;
   letter-spacing:.05em;text-transform:uppercase;
   cursor:pointer;white-space:nowrap;
   border-bottom:2px solid transparent;
   transition:all .15s;position:relative;
 }
-.nav-btn-gestion:hover{background:rgba(251,191,36,.08);border-bottom-color:#fbbf24;}
-.nav-btn-gestion.open{background:rgba(251,191,36,.15);border-bottom-color:#fbbf24;}
-.nav-btn-gestion .chevron{font-size:9px;transition:transform .2s;display:inline-block;}
-.nav-btn-gestion.open .chevron{transform:rotate(180deg);}
-.nav-btn-gestion .alert-dot{
+.nav-btn-dropdown-toggle:hover{background:rgba(251,191,36,.08);border-bottom-color:var(--ng-color,#fbbf24);}
+.nav-btn-dropdown-toggle.open{background:rgba(251,191,36,.15);border-bottom-color:var(--ng-color,#fbbf24);}
+.nav-btn-dropdown-toggle .chevron{font-size:9px;transition:transform .2s;display:inline-block;}
+.nav-btn-dropdown-toggle.open .chevron{transform:rotate(180deg);}
+.nav-btn-dropdown-toggle .alert-dot{
   width:8px;height:8px;background:#f87171;border-radius:50%;
   display:none;margin-left:2px;
 }
-.nav-btn-gestion .alert-dot.show{display:inline-block;}
+.nav-btn-dropdown-toggle .alert-dot.show{display:inline-block;}
 
 .nav-dropdown-menu{
-  position:absolute;top:calc(100% + 2px);right:0;
+  position:absolute;top:calc(100% + 4px);right:0;
   background:#0a1626;border:1px solid #2a3f5f;
   border-radius:8px;box-shadow:0 12px 28px rgba(0,0,0,.55);
-  min-width:240px;padding:6px;z-index:200;
+  min-width:240px;padding:6px;z-index:500;
   display:none;flex-direction:column;gap:2px;
 }
 .nav-dropdown-menu.open{display:flex;}
@@ -246,7 +248,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   .topbar-user{font-size:11px;}
   .topbar-dept,.topbar-puesto,.topbar-name{padding:5px 8px;font-size:11px;}
   .btn-logout{padding:5px 10px;font-size:10px;margin-left:6px;}
-  .topbar-nav-row{padding:0 4px;min-height:54px;}
+  .topbar-nav-row{padding:0 4px;min-height:54px;overflow-x:auto;overflow-y:visible;scrollbar-width:none;}
+  .topbar-nav-row::-webkit-scrollbar{display:none;}
   .topbar-nav{justify-content:flex-start;gap:10px;}
   .nav-dropdown-menu{right:auto;left:0;min-width:200px;}
 }

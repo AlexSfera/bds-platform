@@ -481,9 +481,9 @@ function getScreens(rol){
     return [
       ITEMS.gestiones, ITEMS.incidencias, ITEMS.tareas, ITEMS.hypoxic,
       {sep:true,label:'MI DEPARTAMENTO'},
-      ITEMS.dashHK,
-      {sep:true,label:'GESTIÓN',dropdown:true},
-      ITEMS.validacion, ITEMS.fichaje, ITEMS.dashboard,
+      ITEMS.validacion, ITEMS.dashHK,
+      {sep:true,label:'MANAGER BAR',dropdown:true},
+      ITEMS.fichaje, ITEMS.dashboard,
       ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.incentivos
     ];
   }
@@ -496,9 +496,9 @@ function getScreens(rol){
       ITEMS.turno, ITEMS.gestiones, ITEMS.incidencias, ITEMS.tareas,
       ITEMS.misfio, ITEMS.fichaje,
       {sep:true,label:'MI DEPARTAMENTO'},
-      ITEMS.dashHK,
-      {sep:true,label:'GESTIÓN',dropdown:true},
-      ITEMS.validacion, ITEMS.dashboard,
+      ITEMS.validacion, ITEMS.dashHK,
+      {sep:true,label:'MANAGER BAR',dropdown:true},
+      ITEMS.dashboard,
       ITEMS.maestro, ITEMS.export, ITEMS.fio
     ];
   }
@@ -534,6 +534,7 @@ function getScreens(rol){
   // ── MI DEPARTAMENTO ──────────────────────────────────────────────
   var miDpto = [];
   if(!isAdmon){
+    if(isJefe) miDpto.push(ITEMS.validacion);           // Validación: primera para jefes
     if(isMant) miDpto.push(ITEMS.mantmod);
     miDpto.push(ITEMS.fichaje);
     miDpto.push(ITEMS.misfio);
@@ -547,10 +548,9 @@ function getScreens(rol){
     }
   }
 
-  // ── GESTIÓN (solo jefe) ──────────────────────────────────────────
+  // ── MANAGER BAR (solo jefe) ──────────────────────────────────────
   var gestion = [];
   if(isJefe){
-    gestion.push(ITEMS.validacion);
     gestion.push(ITEMS.dashboard);
     gestion.push(ITEMS.fio);
     if(!noIncGestion) gestion.push(ITEMS.incentivos);
@@ -563,7 +563,7 @@ function getScreens(rol){
     out = out.concat(miDpto);
   }
   if(gestion.length){
-    out.push({sep:true,label:'GESTIÓN',dropdown:true});
+    out.push({sep:true,label:'MANAGER BAR',dropdown:true});
     out = out.concat(gestion);
   }
   return out;
@@ -609,20 +609,20 @@ function buildNav(){
     g.className = 'nav-group nav-group-' + clsKey;
 
     if(opts.dropdown){
-      // ── Grupo GESTIÓN: botón único + menú desplegable ──
-      g.classList.add('nav-group-gestion-dropdown');
+      // ── Grupo con dropdown (ej. MANAGER BAR) ──
+      g.classList.add('nav-group-dropdown');
       var btn = document.createElement('button');
-      btn.className = 'nav-btn-gestion';
-      btn.id = 'nav-gestion-toggle';
+      btn.className = 'nav-btn-dropdown-toggle';
+      btn.id = 'nav-' + clsKey + '-toggle';
       btn.innerHTML = '<span>' + label + '</span> <span class="chevron">▾</span>'
-                    + '<span class="alert-dot" id="dot-gestion-group"></span>';
+                    + '<span class="alert-dot" id="dot-' + clsKey + '-group"></span>';
       var menu = document.createElement('div');
       menu.className = 'nav-dropdown-menu';
       btn.onclick = function(ev){
         ev.stopPropagation();
         var willOpen = !btn.classList.contains('open');
         // Cerrar otros dropdowns abiertos primero
-        Array.prototype.forEach.call(document.querySelectorAll('.nav-btn-gestion.open'), function(b){
+        Array.prototype.forEach.call(document.querySelectorAll('.nav-btn-dropdown-toggle.open'), function(b){
           if(b !== btn){
             b.classList.remove('open');
             var m = b.parentNode.querySelector('.nav-dropdown-menu');
@@ -699,7 +699,7 @@ function buildNav(){
       if(parentMenu){
         parentMenu.classList.remove('open');
         var parentGroup = parentMenu.closest('.nav-group');
-        var toggleBtn = parentGroup && parentGroup.querySelector('.nav-btn-gestion');
+        var toggleBtn = parentGroup && parentGroup.querySelector('.nav-btn-dropdown-toggle');
         if(toggleBtn) toggleBtn.classList.remove('open');
       }
       if(isPending){ toast('Módulo en desarrollo','info'); return; }
@@ -739,11 +739,11 @@ function buildNav(){
   if(puestoEl) puestoEl.textContent = currentUser && currentUser.puesto ? ('🎯 ' + currentUser.puesto) : '';
   if(nameEl)   nameEl.textContent   = currentUser && currentUser.nombre ? ('👤 ' + currentUser.nombre) : '';
 
-  // Listener global (una sola vez) para cerrar dropdown GESTIÓN al click fuera
+  // Listener global (una sola vez) para cerrar dropdowns al click fuera
   if(!window._navDropdownClickInit){
     window._navDropdownClickInit = true;
     document.addEventListener('click', function(e){
-      Array.prototype.forEach.call(document.querySelectorAll('.nav-btn-gestion.open'), function(btn){
+      Array.prototype.forEach.call(document.querySelectorAll('.nav-btn-dropdown-toggle.open'), function(btn){
         if(btn.parentNode.contains(e.target)) return;
         btn.classList.remove('open');
         var menu = btn.parentNode.querySelector('.nav-dropdown-menu');
@@ -753,7 +753,7 @@ function buildNav(){
     // ESC también cierra
     document.addEventListener('keydown', function(e){
       if(e.key !== 'Escape') return;
-      Array.prototype.forEach.call(document.querySelectorAll('.nav-btn-gestion.open'), function(btn){
+      Array.prototype.forEach.call(document.querySelectorAll('.nav-btn-dropdown-toggle.open'), function(btn){
         btn.classList.remove('open');
         var menu = btn.parentNode.querySelector('.nav-dropdown-menu');
         if(menu) menu.classList.remove('open');
