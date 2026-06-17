@@ -138,66 +138,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 }
 .btn-logout:hover{border-color:#ef4444;color:#ef4444;}
 
-/* ── GROUPNAV: oculto (no se rellena en esta versión) ── */
+/* ── GROUPNAV V4.0: ELIMINADO. Solo topbar legacy con buildNav() de shared.js ── */
 #groupnav{display:none !important;}
-
-/* ══ GROUPNAV — 4 grupos: MI DIA / MI DEPT / GESTION / ANALITICA ══ */
-#groupnav.gnav-active{
-  display:flex;
-  background:#0a1626;border-bottom:1px solid #1e3457;
-  overflow-x:auto;scrollbar-width:none;
-  position:sticky;top:64px;z-index:99;
-}
-#groupnav::-webkit-scrollbar{display:none;}
-.gnav-inner{display:flex;align-items:stretch;min-width:max-content;}
-.gnav-group{
-  display:flex;align-items:stretch;flex-direction:column;position:relative;
-}
-.gnav-group + .gnav-group::before{
-  content:'';position:absolute;left:0;top:6px;bottom:6px;
-  width:1px;background:#1e3457;
-}
-.gnav-dia{--gnav-color:#2ec4b6;--gnav-color-dim:rgba(46,196,182,.13);}
-.gnav-dept{--gnav-color:#60a5fa;--gnav-color-dim:rgba(96,165,250,.13);}
-.gnav-gestion{--gnav-color:#fbbf24;--gnav-color-dim:rgba(251,191,36,.13);}
-.gnav-analitica{--gnav-color:#c084fc;--gnav-color-dim:rgba(192,132,252,.13);}
-.gnav-group::after{
-  content:'';position:absolute;top:0;left:0;right:0;height:2px;
-  background:var(--gnav-color);
-}
-.gnav-label{
-  font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.2em;
-  color:var(--gnav-color);text-align:center;padding:6px 10px 0;
-  text-transform:uppercase;line-height:1;pointer-events:none;
-  position:relative;z-index:1;
-}
-.gnav-items{display:flex;align-items:stretch;flex:1;}
-.gnav-btn{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:5px;padding:8px 14px 11px;
-  border:none;background:none;color:#64748b;
-  cursor:pointer;border-bottom:2px solid transparent;
-  transition:all .15s;white-space:nowrap;
-  font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.09em;
-  min-width:72px;position:relative;
-}
-.gnav-btn:hover:not(.active):not(.is-pending){
-  color:#cbd5e1;background:rgba(255,255,255,.035);
-}
-.gnav-btn.active{
-  color:var(--gnav-color);
-  border-bottom-color:var(--gnav-color);
-  background:var(--gnav-color-dim);
-}
-.gnav-btn.is-pending{color:#334155;cursor:not-allowed;}
-.gnav-ic{font-size:22px;line-height:1;}
-.gnav-tx{font-size:10px;font-weight:700;letter-spacing:.09em;}
-.gnav-btn .alert-dot{
-  position:absolute;top:5px;right:8px;
-  width:8px;height:8px;background:#f87171;border-radius:50%;
-  display:none;box-shadow:0 0 0 2px #0a1626;
-}
-.gnav-btn .alert-dot.show{display:block;}
 
 /* ── PORTAL DEPT GRID ── */
 .portal-dept-grid { grid-template-columns: repeat(2, 1fr); }
@@ -227,11 +169,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 .bnav-dot{position:absolute;top:7px;right:calc(50% - 16px);width:8px;height:8px;background:var(--red);border-radius:50%;display:none;border:2px solid #0a1626;}
 .bnav-dot.show{display:block;}
 
-/* ── Sidebar legacy + Bottom-nav legacy: HIDDEN (groupnav los reemplaza) ── */
+/* ── Sidebar legacy: HIDDEN (solo topbar) ── */
 #sidebar{display:none !important;}
-#bottom-nav{display:none !important;}
+/* Bottom-nav móvil: solo visible <=767px (lo activa buildNav vía display:block) */
+@media(min-width:768px){ #bottom-nav{display:none !important;} }
 
-/* Mobile: scroll horizontal del groupnav (overflow-x:auto ya lo da) */
+/* Mobile padding-bottom para bottom-nav */
 @media(max-width:767px){
   .main{padding-bottom:24px;}
 }
@@ -730,7 +673,6 @@ tr:hover td{background:rgba(96,165,250,.06);}
       <button class="btn-logout" onclick="logout()">SALIR</button>
     </div>
   </div>
-  <nav id="groupnav"></nav>
   <!-- BOTTOM NAV (mobile) -->
   <div id="bottom-nav">
     <div class="bnav-inner" id="bnav-inner"></div>
