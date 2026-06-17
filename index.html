@@ -77,18 +77,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 }
 .topbar-sep{display:none;}
 .topbar-nav{
-  display:flex !important;align-items:stretch;flex:1;
+  display:flex !important;align-items:stretch;flex:1;justify-content:center;
   overflow-x:auto;scrollbar-width:none;
   margin:0 16px;height:64px;
   gap:0;
 }
 .topbar-nav::-webkit-scrollbar{display:none;}
 .nav-btn{
-  display:inline-flex;align-items:center;gap:6px;
-  padding:0 16px;height:64px;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:0 14px;height:64px;
   border:none;background:none;color:#94a3b8;
-  font-family:var(--font-mono);font-size:12px;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;
+  font-family:var(--font-mono);font-size:11.5px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;
   cursor:pointer;white-space:nowrap;
   border-bottom:2px solid transparent;
   transition:all .15s;position:relative;
@@ -112,21 +112,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   font-family:var(--font-mono);font-size:12px;color:#9aa0aa;
   white-space:nowrap;
 }
-.topbar-area{
+.topbar-dept{
   background:#142639;border:1px solid #2a4365;
   color:#cbd5e1;padding:7px 12px;border-radius:6px 0 0 6px;
-  letter-spacing:.06em;white-space:nowrap;
-  text-transform:uppercase;font-weight:700;font-size:12px;
-}
-.topbar-puesto{
-  background:#142639;border:1px solid #2a4365;border-left:none;
-  color:#94a3b8;padding:7px 12px;
-  letter-spacing:.06em;white-space:nowrap;font-size:12px;
+  letter-spacing:.04em;white-space:nowrap;
+  font-weight:600;font-size:12px;
 }
 .topbar-name{
   background:rgba(46,196,182,.22);border:1px solid #2ec4b6;border-left:none;
   color:#5eead4;padding:7px 14px;border-radius:0 6px 6px 0;
-  font-weight:700;letter-spacing:.08em;white-space:nowrap;font-size:12px;
+  font-weight:700;letter-spacing:.04em;white-space:nowrap;font-size:12px;
 }
 .user-badge{
   background:rgba(46,196,182,.22);border:1px solid #2ec4b6;
@@ -728,8 +723,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="topbar-sep"></div>
     <div class="topbar-nav" id="topbar-nav"></div>
     <div class="topbar-user">
-      <span class="topbar-area"   id="topbar-area"></span>
-      <span class="topbar-puesto" id="topbar-puesto"></span>
+      <span class="topbar-dept"   id="topbar-dept"></span>
       <span class="topbar-name"   id="topbar-name"></span>
       <span id="user-name-top" style="display:none;"></span>
       <span class="user-badge" id="user-role-top" style="display:none;"></span>

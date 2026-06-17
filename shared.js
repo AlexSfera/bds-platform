@@ -2739,14 +2739,6 @@ async function openEmpModal(empId){
       ? 'PIN nuevo (4-6 dígitos) <span class="req">*</span> <span style="font-size:11px;color:var(--text3);">— introduce un PIN nuevo para guardar</span>'
       : 'PIN (4-6 dígitos) <span class="req">*</span>';
   }
-  // Restringir opciones de rol para adjunto_directivo: ocultar "admin"
-  var rolSel=document.getElementById('emp-rol');
-  if(rolSel){
-    Array.prototype.forEach.call(rolSel.options, function(opt){
-      if(opt.value==='admin'){ opt.hidden = isAdjAdm; opt.disabled = isAdjAdm; }
-    });
-    if(isAdjAdm && rolSel.value==='admin') rolSel.value='empleado';
-  }
   document.getElementById('modal-empleado').classList.add('open');
 }
 
