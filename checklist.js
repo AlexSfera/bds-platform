@@ -8,6 +8,50 @@ var _chkSavedState = [];
 var _chkPendingData = null;
 var _chkInitialized = false;
 
+// ── Persistencia localStorage (key por usuario + fecha + turno/área) ──
+// Cualquier marca durante el día se conserva al salir del modal y entre sesiones
+// (mismo dispositivo). Se limpia al guardar turno (_doSaveTurno) o al login (resetChkState).
+function _chkLsKey(){
+  if(!currentUser || !currentUser.id) return null;
+  var d = (typeof today === 'function') ? today() : new Date().toISOString().slice(0,10);
+  var area = (currentUser.area || '').replace(/\s+/g,'_');
+  // Turno/servicio actual (Recepción/SYNCROLAB tienen variantes mañana/tarde/noche)
+  var srv = '';
+  try {
+    if(currentUser.area === 'Recepción' && typeof getRecTurnoValue === 'function') srv = getRecTurnoValue() || '';
+    else if(/syncrolab/i.test(currentUser.area||'')){
+      var r = document.querySelector('input[name="servicio-lab"]:checked');
+      srv = r ? r.value : '';
+    }
+  } catch(e){}
+  return 'syncro.chk.' + currentUser.id + '.' + d + '.' + area + (srv ? '.' + srv : '');
+}
+function _chkSaveLs(){
+  try {
+    var k = _chkLsKey(); if(!k) return;
+    localStorage.setItem(k, JSON.stringify(_chkState));
+  } catch(e){ /* localStorage lleno o no disponible — silencioso */ }
+}
+function _chkLoadLs(expectedLen){
+  try {
+    var k = _chkLsKey(); if(!k) return null;
+    var raw = localStorage.getItem(k);
+    if(!raw) return null;
+    var arr = JSON.parse(raw);
+    if(!Array.isArray(arr)) return null;
+    // Si el catálogo cambió (distinto número de items), descartar borrador
+    if(typeof expectedLen === 'number' && arr.length !== expectedLen) return null;
+    return arr;
+  } catch(e){ return null; }
+}
+function clearChkLocalStorage(){
+  try {
+    var k = _chkLsKey(); if(!k) return;
+    localStorage.removeItem(k);
+  } catch(e){}
+}
+window.clearChkLocalStorage = clearChkLocalStorage;
+
 function resetChkState(){
   _chkInitialized = false;
   _chkState = [];
@@ -139,6 +183,7 @@ function chkToggle(idx){
   var b=document.getElementById('chk-'+idx);
   if(b) b.className='chk-box'+(_chkState[idx]?' checked':'');
   chkUpdateProgress();
+  _chkSaveLs();  // persistencia inmediata
 }
 
 function chkUpdateProgress(){
@@ -222,13 +267,22 @@ function chkOpen(pendingData){
   }
   else{sections=CHK_COCINA_SECTIONS;items=CHK_COCINA_ITEMS;}
   if(!_chkInitialized || _chkState.length !== items.length){
-    _chkState=Array(items.length).fill(false);
+    // Intentar recuperar borrador del día (mismo usuario, fecha, área, turno)
+    var draft = _chkLoadLs(items.length);
+    _chkState = draft || Array(items.length).fill(false);
     _chkInitialized=true;
   }
   document.getElementById('chk-items').innerHTML=buildChkHTML(sections,items);
-  var bar=document.getElementById('chk-bar');if(bar)bar.style.width='0%';
+  // Pintar progreso real (no 0%) si veníamos con borrador
+  var doneInit=_chkState.filter(Boolean).length;
+  var pctInit=items.length>0?Math.round(doneInit/items.length*100):0;
+  var bar=document.getElementById('chk-bar');if(bar)bar.style.width=pctInit+'%';
   var warn=document.getElementById('chk-warn');
-  if(warn){warn.style.display='block';warn.style.color='var(--text3)';warn.textContent='0 de '+items.length+' marcados. Puedes enviar igualmente.';}
+  if(warn){
+    warn.style.display='block';
+    if(doneInit===items.length && items.length>0){warn.style.color='var(--green)';warn.textContent='Completo: '+doneInit+'/'+items.length;}
+    else{warn.style.color='var(--text3)';warn.textContent=doneInit+' de '+items.length+' marcados. Puedes enviar igualmente.';}
+  }
   var btn=document.getElementById('chk-confirm-btn');
   if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}
   var m=document.getElementById('modal-checklist');if(m)m.classList.add('open');

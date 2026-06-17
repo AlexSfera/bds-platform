@@ -6,6 +6,34 @@
 // ═══════════════════════════════════════════════════════════════
 
 
+// ── HELPERS DE CHECKLIST (compartidos) ──
+// Devuelve los items del catálogo de checklist correspondientes al departamento
+// y turno del shift `s`. Si no hay catálogo configurado, devuelve null.
+// Fix bug: antes faltaba esta función y se mostraba "No hay checklist configurado"
+// o aparecían items de Cocina en otros departamentos.
+function _valChecklistItems(s){
+  if(!s) return null;
+  var area = s.area || '';
+  var srv  = (s.servicio || '').toLowerCase();
+  if(area === 'Friegue' || s.puesto === 'Friegue') return (typeof CHK_FRIEGUE_ITEMS !== 'undefined') ? CHK_FRIEGUE_ITEMS : null;
+  if(area === 'Sala')   return (typeof CHK_SALA_ITEMS    !== 'undefined') ? CHK_SALA_ITEMS    : null;
+  if(area === 'F&B')    return (typeof CHK_FNB_ITEMS     !== 'undefined') ? CHK_FNB_ITEMS     : null;
+  if(area === 'Recepción' || area === 'Recepción SFERA'){
+    if(srv.indexOf('noche') >= 0) return (typeof CHK_REC_NOCHE_ITEMS  !== 'undefined') ? CHK_REC_NOCHE_ITEMS  : null;
+    if(srv.indexOf('tarde') >= 0) return (typeof CHK_REC_TARDE_ITEMS  !== 'undefined') ? CHK_REC_TARDE_ITEMS  : null;
+    return (typeof CHK_REC_MANANA_ITEMS !== 'undefined') ? CHK_REC_MANANA_ITEMS : null;
+  }
+  if(/syncrolab/i.test(area)){
+    if(srv.indexOf('tarde') >= 0) return (typeof CHK_LAB_TARDE_ITEMS  !== 'undefined') ? CHK_LAB_TARDE_ITEMS  : null;
+    return (typeof CHK_LAB_MANANA_ITEMS !== 'undefined') ? CHK_LAB_MANANA_ITEMS : null;
+  }
+  if(area === 'Cocina') return (typeof CHK_COCINA_ITEMS !== 'undefined') ? CHK_COCINA_ITEMS : null;
+  // Housekeeping, Mantenimiento, Administración, otros → sin checklist por ahora
+  return null;
+}
+window._valChecklistItems = _valChecklistItems;
+
+
 // ── DELETE SHIFT (admin only) ──
 async function deleteShift(shiftId){
   if(currentUser.rol!=='admin') return;
@@ -1229,3 +1257,218 @@ async function renderValAjustes(deptArg){
   el.innerHTML=html;
 }
 window.renderValAjustes = renderValAjustes;
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// CHECKLIST < 70% → SUGERENCIA DE FIO AUTOMÁTICO AL VALIDAR
+// Política unificada (jun 2026) para: Cocina · Friegue · Sala · Recepción
+//                                     · SYNCROLAB · Housekeeping
+// Al pulsar "✓ Validar":
+//   1. Si el turno NO tiene checklist configurado → pasa directo a doValidacion()
+//   2. Si tiene checklist y % completado >= 70 → pasa directo a doValidacion()
+//   3. Si % completado < 70 → abre modal de confirmación FIO:
+//      - El supervisor ve detalle (X/Y, %, items sin marcar)
+//      - Puede ajustar nivel y comentario antes de guardar
+//      - Botón A: "Registrar FIO + Validar" (crea fio + valida)
+//      - Botón B: "Validar sin FIO" (requiere justificación escrita)
+//      - Botón C: "Cancelar" (no hace nada)
+// ═══════════════════════════════════════════════════════════════════════
+
+// Departamentos para los que aplica el FIO automático por checklist
+var _FIO_CHK_DEPTS = ['Cocina','Friegue','Sala','Recepción','SYNCROLAB','Housekeeping'];
+
+// Análisis del checklist de un shift. Devuelve {hasChk, total, done, pct, missing[]}
+function _analyzeShiftChecklist(s){
+  var out = {hasChk:false, total:0, done:0, pct:100, missing:[]};
+  if(!s || !s.checklist_items) return out;
+  try {
+    var arr = JSON.parse(s.checklist_items);
+    if(!Array.isArray(arr) || arr.length===0) return out;
+    var items = _valChecklistItems(s);
+    out.hasChk = true;
+    out.total = arr.length;
+    out.done  = arr.filter(Boolean).length;
+    out.pct   = out.total>0 ? Math.round((out.done/out.total)*100) : 100;
+    if(items){
+      arr.forEach(function(checked,i){
+        if(!checked && i<items.length) out.missing.push(items[i]);
+      });
+    }
+  } catch(e){}
+  return out;
+}
+
+// ¿Aplica política <70%? (dept en la lista, hay checklist, y por debajo del umbral)
+function _shouldOfferChkFio(s){
+  if(!s) return null;
+  var dept = s.area || '';
+  if(_FIO_CHK_DEPTS.indexOf(dept) < 0) return null;
+  var a = _analyzeShiftChecklist(s);
+  if(!a.hasChk || a.total<5) return null;  // checklists muy cortos no disparan FIO
+  // Umbral 70% redondeando hacia abajo: ej. 8 items → necesita 5 (8*0.7=5.6 → floor=5)
+  var minRequired = Math.floor(a.total * 0.7);
+  if(a.done >= minRequired) return null;
+  a.minRequired = minRequired;
+  a.dept = dept;
+  return a;
+}
+
+// Wrapper del botón "Validar". Si <70% abre el modal de confirmación FIO.
+async function tryValidacion(newEstado){
+  if(!validatingShiftId) return;
+  // Solo aplica al validar (no a "En corrección")
+  if(newEstado !== 'Validado') return doValidacion(newEstado);
+
+  var shifts = await getDB('shifts');
+  var s = shifts.find(function(x){ return x.id === validatingShiftId; });
+  if(!s) return doValidacion(newEstado);
+
+  var analysis = _shouldOfferChkFio(s);
+  if(!analysis) return doValidacion(newEstado);
+
+  // Abrir modal de confirmación
+  await _openChkFioConfirmModal(s, analysis);
+}
+window.tryValidacion = tryValidacion;
+
+// Modal de confirmación FIO por checklist incompleto
+async function _openChkFioConfirmModal(s, a){
+  window._chkFioCtx = { shift: s, analysis: a };
+
+  // Buscar entrada del catálogo FIO para este dept con nombre "No cumplir checklist..."
+  var catEntry = null;
+  try {
+    var cat = await getDB('fio_catalog');
+    catEntry = cat.find(function(c){
+      return c.activo !== false
+        && c.departamento === a.dept
+        && /no\s*cumplir.*checklist/i.test(c.nombre || '');
+    });
+  } catch(e){}
+  window._chkFioCtx.catEntry = catEntry;
+
+  var L = catEntry ? (FIO_LEVELS[catEntry.nivel_default] || FIO_LEVELS.L2) : FIO_LEVELS.L2;
+  var basePoints = catEntry ? (catEntry.puntos_default || L.points) : 1;
+
+  var missingHtml = a.missing.length > 0
+    ? '<div style="max-height:140px;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;">'
+      + a.missing.map(function(it){ return '<div style="font-size:11px;color:var(--text3);padding:2px 0;">✗ '+it+'</div>'; }).join('')
+      + '</div>'
+    : '';
+
+  var ov = document.getElementById('modal-chk-fio-confirm');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-chk-fio-confirm';
+    ov.className = 'modal-overlay';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeModal('modal-chk-fio-confirm'); });
+  }
+  ov.innerHTML =
+      '<div class="modal" style="max-width:560px;">'
+    + '<div class="modal-h"><h3>⚠ Checklist incompleto · ' + a.dept + '</h3>'
+    + '<button class="modal-x" onclick="closeModal(\'modal-chk-fio-confirm\')">✕</button></div>'
+    + '<div class="modal-b">'
+    + '<div style="padding:10px;background:var(--bg2);border-left:3px solid var(--red);border-radius:4px;margin-bottom:12px;font-size:13px;">'
+    +   '<div style="font-weight:700;color:var(--red);margin-bottom:4px;">'+a.done+' de '+a.total+' marcados ('+a.pct+'%)</div>'
+    +   '<div style="color:var(--text2);font-size:12px;">Mínimo requerido para no generar FIO: <strong>'+a.minRequired+'/'+a.total+' (70%)</strong></div>'
+    +   '<div style="color:var(--text3);font-size:11px;margin-top:6px;">Empleado: <strong>'+formatDisplayValue(s.nombre)+'</strong> · '+fmtDate(s.fecha)+' · '+formatServiceOrTurn(s.servicio)+'</div>'
+    + '</div>'
+    + (catEntry
+        ? '<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Tipo de fallo: <strong>'+catEntry.nombre+'</strong></div>'
+        : '<div style="padding:8px;background:var(--bg2);border:1px solid var(--amber);border-radius:4px;font-size:11px;color:var(--amber);margin-bottom:8px;">⚠ No hay entrada en catálogo FIO para "'+a.dept+'". Solicita a admin que añada el fallo de checklist al catálogo. El FIO se creará igualmente con nivel manual.</div>'
+      )
+    + '<div class="fg"><label>Nivel · puntos *</label>'
+    + '<select id="chkfio-level">'
+    +   ['L1','L2','L3'].map(function(lc){
+          var Lx = FIO_LEVELS[lc];
+          var sel = (lc === L.code) ? ' selected' : '';
+          return '<option value="'+lc+'"'+sel+'>'+Lx.code+' · '+Lx.name+' ('+Lx.points+'p)</option>';
+        }).join('')
+    + '</select></div>'
+    + '<div class="fg"><label>Comentario · evidencia *</label>'
+    + '<textarea id="chkfio-comment" rows="4" placeholder="Detalla qué items críticos faltaron o por qué se valida sin FIO."></textarea>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Obligatorio. Mínimo 15 caracteres.</div></div>'
+    + '<div style="margin-top:10px;"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items sin marcar ('+a.missing.length+'):</div>' + missingHtml + '</div>'
+    + '</div>'
+    + '<div class="modal-f" style="display:flex;gap:6px;flex-wrap:wrap;">'
+    + '<button class="btn btn-secondary" onclick="closeModal(\'modal-chk-fio-confirm\')">Cancelar</button>'
+    + '<button class="btn btn-warn" onclick="_chkFioValidateOnly()">Validar sin FIO</button>'
+    + '<button class="btn btn-primary" onclick="_chkFioValidateWithFio()">Registrar FIO + Validar</button>'
+    + '</div></div>';
+  ov.classList.add('open');
+}
+
+// Opción A: registrar FIO + validar turno
+async function _chkFioValidateWithFio(){
+  var ctx = window._chkFioCtx; if(!ctx) return;
+  var s = ctx.shift, a = ctx.analysis, cat = ctx.catEntry;
+  var lvl = (document.getElementById('chkfio-level')||{}).value || 'L2';
+  var comment = ((document.getElementById('chkfio-comment')||{}).value || '').trim();
+  if(comment.length < 15){ toast('Comentario obligatorio (mín. 15 caracteres)','err'); return; }
+
+  var L = FIO_LEVELS[lvl] || FIO_LEVELS.L2;
+  var basePts = cat ? (cat.puntos_default || L.points) : L.points;
+
+  // Auto-completar comentario validador con marca [FIO_CHK]
+  var valComment = (document.getElementById('val-comentario')||{}).value || '';
+  var autoNote = '[FIO_CHK] Checklist '+a.done+'/'+a.total+' ('+a.pct+'%) — '+comment;
+  document.getElementById('val-comentario').value = valComment ? (valComment + ' | ' + autoNote) : autoNote;
+
+  // 1) Crear FIO
+  var rec = {
+    id: genId(),
+    shift_id: s.id,
+    employee_id: s.employee_id,
+    employee_name: s.nombre,
+    departamento: a.dept,
+    fault_id: cat ? cat.id : null,
+    fault_name: cat ? cat.nombre : 'No cumplir checklist de apertura/cierre',
+    categoria: cat ? (cat.categoria || '') : 'Checklist',
+    fecha: s.fecha,
+    incentive_month: _fioMonth(s.fecha),
+    level_code: L.code,
+    base_points: basePts,
+    applied_points: basePts,
+    impact_area: 'Operación',
+    evidence_text: '',
+    evidence_image: null,
+    description: 'Checklist incompleto al cierre: '+a.done+'/'+a.total+' ('+a.pct+'%). '+comment,
+    created_by: currentUser.nombre,
+    status: FIO_STATUS.REGISTRADO,
+    empleado_informado: false,
+    created_at: localTs()
+  };
+  try {
+    await dbInsert('fio', rec);
+    invalidateCache('fio');
+    await auditLog('FIO_AUTO_CHK', currentUser.nombre+' → '+s.nombre+' | checklist '+a.done+'/'+a.total+' ('+a.pct+'%) | '+L.code+' '+basePts+'p');
+  } catch(e){
+    toast('Error al crear FIO: '+e.message,'err');
+    return;
+  }
+
+  closeModal('modal-chk-fio-confirm');
+  // 2) Validar turno (sigue el flujo normal)
+  await doValidacion('Validado');
+  toast('FIO registrado y turno validado','ok');
+}
+window._chkFioValidateWithFio = _chkFioValidateWithFio;
+
+// Opción B: validar sin FIO (requiere justificación)
+async function _chkFioValidateOnly(){
+  var ctx = window._chkFioCtx; if(!ctx) return;
+  var a = ctx.analysis;
+  var comment = ((document.getElementById('chkfio-comment')||{}).value || '').trim();
+  if(comment.length < 15){ toast('Justificación obligatoria (mín. 15 caracteres)','err'); return; }
+
+  // Anexar justificación al comentario validador
+  var valComment = (document.getElementById('val-comentario')||{}).value || '';
+  var autoNote = '[CHK_SIN_FIO] Checklist '+a.done+'/'+a.total+' ('+a.pct+'%) — '+comment;
+  document.getElementById('val-comentario').value = valComment ? (valComment + ' | ' + autoNote) : autoNote;
+
+  await auditLog('CHK_VALIDATE_NO_FIO', currentUser.nombre+' justificó validar sin FIO: checklist '+a.done+'/'+a.total+' — '+comment.slice(0,60));
+  closeModal('modal-chk-fio-confirm');
+  await doValidacion('Validado');
+}
+window._chkFioValidateOnly = _chkFioValidateOnly;
