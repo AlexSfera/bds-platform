@@ -52,10 +52,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 
 /* ══ TOPBAR (dark theme — V4.0 navigation) ══ */
 .topbar{
-  background:#1a1c1f;border-bottom:1px solid #2e3238;
+  background:#1a1c1f;
+  border-bottom:2px solid var(--topbar-accent-color,#2e3238);
   display:flex;align-items:center;gap:0;
   padding:0 18px;height:48px;
   position:sticky;top:0;z-index:100;
+  transition:border-color .25s;
 }
 .topbar-logo{
   font-family:var(--font-mono);font-size:13px;font-weight:700;
@@ -658,7 +660,7 @@ tr:hover td{background:rgba(255,255,255,.018);}
 
   <!-- ══ SIDEBAR (escritorio) ══ -->
   <aside id="sidebar">
-    <div class="sidebar-logo">BDS · V3</div>
+    <div class="sidebar-logo">SYNCRO SHIFT V4.0</div>
     <div id="sidebar-nav"></div>
   </aside>
 
