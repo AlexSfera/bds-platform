@@ -57,15 +57,23 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 /* ── APP SHELL ── */
 #app{display:none;min-height:100vh;}
 
-/* ══ TOPBAR (dark-blue theme — V4.1 navigation) ══ */
-/* ── TOPBAR (V4.1 dark-blue) ── */
+/* ══ TOPBAR (dark-blue theme — V4.2 navigation: 2 filas) ══ */
+/* Fila 1: identidad fija (logo · ÁREA · PUESTO · NOMBRE · SALIR)
+   Fila 2: barra de navegación por grupos                          */
 .topbar{
   background:#0a1626;
   border-bottom:2px solid var(--topbar-accent-color,#1e3457);
-  display:flex;align-items:stretch;gap:0;
-  padding:0 20px 0 24px;min-height:82px;
+  display:flex;flex-direction:column;
+  padding:0;
   position:sticky;top:0;z-index:100;
   transition:border-color .25s;
+}
+/* ── FILA 1: header identidad ── */
+.topbar-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px 10px 24px;min-height:46px;
+  border-bottom:1px solid #142639;
+  gap:16px;
 }
 .topbar-logo{
   font-family:var(--font-mono);font-size:15px;font-weight:700;
@@ -79,12 +87,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 }
 .topbar-sep{display:none;}
 
-/* ── TOPBAR NAV: contenedor de grupos ── */
+/* ── FILA 2: nav row ── */
+.topbar-nav-row{
+  display:flex;align-items:stretch;justify-content:center;
+  padding:0 12px;min-height:60px;
+}
 .topbar-nav{
   display:flex !important;align-items:stretch;flex:1;justify-content:center;
   overflow-x:auto;scrollbar-width:none;
-  margin:0 12px;
-  gap:14px;
+  margin:0;
+  gap:18px;
+  position:relative;
 }
 .topbar-nav::-webkit-scrollbar{display:none;}
 
@@ -98,7 +111,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   font-family:var(--font-mono);font-size:9px;font-weight:700;
   letter-spacing:.24em;color:var(--ng-color,#3a5a8a);
   text-align:center;line-height:1;padding:0 4px 4px;
-  text-transform:uppercase;
+  text-transform:uppercase;opacity:.7;
 }
 .nav-group-items{
   display:flex;align-items:stretch;flex-wrap:nowrap;
@@ -115,7 +128,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 /* Botones dentro de grupo */
 .nav-btn{
   display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  padding:0 13px;height:60px;
+  padding:0 13px;height:48px;
   border:none;background:none;color:#94a3b8;
   font-family:var(--font-mono);font-size:11.5px;font-weight:700;
   letter-spacing:.05em;text-transform:uppercase;
@@ -138,6 +151,53 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   margin-left:4px;letter-spacing:.06em;
 }
 
+/* ── GRUPO GESTIÓN: dropdown ── */
+.nav-group-gestion-dropdown{
+  position:relative;border-top-color:#fbbf24;
+}
+.nav-group-gestion-dropdown .nav-group-label{color:#fbbf24;opacity:.7;}
+.nav-btn-gestion{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:0 16px;height:48px;
+  border:none;background:none;color:#fbbf24;
+  font-family:var(--font-mono);font-size:11.5px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;
+  cursor:pointer;white-space:nowrap;
+  border-bottom:2px solid transparent;
+  transition:all .15s;position:relative;
+}
+.nav-btn-gestion:hover{background:rgba(251,191,36,.08);border-bottom-color:#fbbf24;}
+.nav-btn-gestion.open{background:rgba(251,191,36,.15);border-bottom-color:#fbbf24;}
+.nav-btn-gestion .chevron{font-size:9px;transition:transform .2s;display:inline-block;}
+.nav-btn-gestion.open .chevron{transform:rotate(180deg);}
+.nav-btn-gestion .alert-dot{
+  width:8px;height:8px;background:#f87171;border-radius:50%;
+  display:none;margin-left:2px;
+}
+.nav-btn-gestion .alert-dot.show{display:inline-block;}
+
+.nav-dropdown-menu{
+  position:absolute;top:calc(100% + 2px);right:0;
+  background:#0a1626;border:1px solid #2a3f5f;
+  border-radius:8px;box-shadow:0 12px 28px rgba(0,0,0,.55);
+  min-width:240px;padding:6px;z-index:200;
+  display:none;flex-direction:column;gap:2px;
+}
+.nav-dropdown-menu.open{display:flex;}
+.nav-dropdown-menu .nav-btn{
+  height:auto;padding:11px 14px;justify-content:flex-start;
+  border-bottom:none;border-left:3px solid transparent;
+  text-align:left;color:#cbd5e1;
+}
+.nav-dropdown-menu .nav-btn:hover:not(.is-pending){
+  background:rgba(251,191,36,.08);border-left-color:#fbbf24;color:#f1f5f9;
+}
+.nav-dropdown-menu .nav-btn.active{
+  color:#fbbf24;border-left-color:#fbbf24;background:rgba(251,191,36,.12);
+  border-bottom-color:transparent;
+}
+
+/* ── CHIPS USUARIO (ÁREA · PUESTO · NOMBRE) ── */
 .topbar-user{
   margin-left:auto;display:flex;align-items:center;gap:0;
   font-family:var(--font-mono);font-size:12px;color:#9aa0aa;
@@ -145,15 +205,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 }
 .topbar-dept{
   background:#142639;border:1px solid #2a4365;
-  color:#cbd5e1;padding:8px 12px;border-radius:6px 0 0 6px;
+  color:#cbd5e1;padding:7px 12px;border-radius:6px 0 0 6px;
   letter-spacing:.04em;white-space:nowrap;
   font-weight:600;font-size:12px;
 }
+.topbar-puesto{
+  background:#1a2f47;border:1px solid #2a4365;border-left:none;
+  color:#94a3b8;padding:7px 12px;
+  letter-spacing:.04em;white-space:nowrap;
+  font-weight:600;font-size:12px;
+}
+.topbar-puesto:empty{display:none;}
 .topbar-name{
   background:rgba(46,196,182,.22);border:1px solid #2ec4b6;border-left:none;
-  color:#5eead4;padding:8px 14px;border-radius:0 6px 6px 0;
+  color:#5eead4;padding:7px 14px;border-radius:0 6px 6px 0;
   font-weight:700;letter-spacing:.04em;white-space:nowrap;font-size:12px;
 }
+/* Si no hay puesto, el chip area cierra a la derecha y name redondea como antes */
+.topbar-dept:has(+ .topbar-puesto:empty){border-radius:6px 0 0 6px;}
 .user-badge{
   background:rgba(46,196,182,.22);border:1px solid #2ec4b6;
   color:#5eead4;padding:6px 12px;border-radius:6px;
@@ -168,8 +237,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
   transition:all .15s;
   align-self:center;
 }
-.btn-logout:hover{border-color:#3a5a8a;color:#f1f5f9;}
 .btn-logout:hover{border-color:#ef4444;color:#ef4444;}
+
+/* ── Responsive móvil: topbar header se compacta, nav row scrollea ── */
+@media(max-width:767px){
+  .topbar-header{flex-wrap:wrap;gap:8px;padding:8px 12px;}
+  .topbar-logo{font-size:13px;}
+  .topbar-user{font-size:11px;}
+  .topbar-dept,.topbar-puesto,.topbar-name{padding:5px 8px;font-size:11px;}
+  .btn-logout{padding:5px 10px;font-size:10px;margin-left:6px;}
+  .topbar-nav-row{padding:0 4px;min-height:54px;}
+  .topbar-nav{justify-content:flex-start;gap:10px;}
+  .nav-dropdown-menu{right:auto;left:0;min-width:200px;}
+}
 
 /* ── GROUPNAV V4.0: ELIMINADO. Solo topbar legacy con buildNav() de shared.js ── */
 #groupnav{display:none !important;}
@@ -695,15 +775,21 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
   <div class="app-shell">
   <div class="topbar">
-    <div class="topbar-logo">SYNCRO SHIFT <em>V4.0</em></div>
-    <div class="topbar-sep"></div>
-    <div class="topbar-nav" id="topbar-nav"></div>
-    <div class="topbar-user">
-      <span class="topbar-dept"   id="topbar-dept"></span>
-      <span class="topbar-name"   id="topbar-name"></span>
-      <span id="user-name-top" style="display:none;"></span>
-      <span class="user-badge" id="user-role-top" style="display:none;"></span>
-      <button class="btn-logout" onclick="logout()">SALIR</button>
+    <!-- Fila 1: identidad (logo + chips usuario + SALIR) -->
+    <div class="topbar-header">
+      <div class="topbar-logo">SYNCRO SHIFT <em>V4.0</em></div>
+      <div class="topbar-user">
+        <span class="topbar-dept"   id="topbar-dept"></span>
+        <span class="topbar-puesto" id="topbar-puesto"></span>
+        <span class="topbar-name"   id="topbar-name"></span>
+        <span id="user-name-top" style="display:none;"></span>
+        <span class="user-badge" id="user-role-top" style="display:none;"></span>
+        <button class="btn-logout" onclick="logout()">SALIR</button>
+      </div>
+    </div>
+    <!-- Fila 2: navegación por grupos (MI DÍA · MI DEPARTAMENTO · GESTIÓN▾) -->
+    <div class="topbar-nav-row">
+      <div class="topbar-nav" id="topbar-nav"></div>
     </div>
   </div>
   <!-- BOTTOM NAV (mobile) -->
