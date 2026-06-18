@@ -49,17 +49,6 @@
     <!-- BITRIX24 / COMUNICACIÓN -->
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">BITRIX24 / COMUNICACIÓN</div>
     <div class="fg" style="margin-bottom:8px;">
-      <label>¿Revisaste WhatsApp / email / llamadas pendientes en Bitrix24?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-comms-si" onclick="setRecKpi('comms_revisadas','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-comms-no" onclick="setRecKpi('comms_revisadas','no',this)">NO</button>
-      </div>
-    </div>
-    <div id="kpi-comms-no-block" style="display:none;" class="fg">
-      <label>Motivo de no revisión <span class="req">*</span></label>
-      <textarea id="kpi-comms-no-exp" rows="2" placeholder="¿Por qué no pudiste revisar?"></textarea>
-    </div>
-    <div class="fg" style="margin-bottom:8px;">
       <label>¿Queda algún lead pendiente en Bitrix24?</label>
       <div style="display:flex;gap:8px;margin-top:6px;">
         <button class="tbtn" id="kpi-lead-si" onclick="setRecKpi('lead_pendiente','si',this);document.getElementById('kpi-lead-block').style.display='block'">SÍ</button>
@@ -101,6 +90,7 @@
 
     <div id="kpi-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
     <button onclick="submitRecKpi()" style="width:100%;padding:14px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">Continuar al cuadre de caja →</button>
+    <button onclick="closeRecKpiModal()" style="width:100%;padding:11px;margin-top:8px;background:transparent;color:var(--text3);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
   </div>
 </div>
 <div id="modal-rec-caja" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
@@ -272,8 +262,7 @@ function setRecKpi(key, val, btn) {
     else btn.classList.add('t-na');
   }
   var deps = {
-    upsell_desayuno:     'kpi-upsell-detail',
-    comms_pendientes:    'kpi-comms-pend-exp-block',
+    upsell_desayuno:        'kpi-upsell-detail',
     clientes_insatisfechos: 'kpi-clientes-detail',
     syncrolab_ventas:    'syncro-ventas-container',
     lead_pendiente:      'kpi-lead-block'
@@ -290,7 +279,7 @@ function setRecKpi(key, val, btn) {
 function openRecKpiModal() {
   _recKpiState = {};
   document.querySelectorAll('#modal-rec-kpi .tbtn').forEach(function(b){ b.classList.remove('t-si','t-no','t-na'); });
-  ['kpi-upsell-detail','kpi-comms-pend-exp-block','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
+  ['kpi-upsell-detail','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.style.display='none';
   });
   ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-desal-ofertados','kpi-desal-vendidos','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
@@ -318,7 +307,6 @@ function submitRecKpi() {
   }
 
   if(!_recKpiState.upsell_desayuno)     errs.push('Indica si ofertaste desayunos');
-  if(!_recKpiState.comms_revisadas)     errs.push('Indica si revisaste comunicaciones');
   if(!_recKpiState.clientes_insatisfechos) errs.push('Indica si hubo clientes insatisfechos');
 
   if(_recKpiState.syncrolab_ventas === 'si'){
@@ -350,7 +338,6 @@ function submitRecKpi() {
   _recKpiState.lead_desc   = (document.getElementById('kpi-lead-desc')||{}).value||'';
   _recKpiState.lead_resp   = (document.getElementById('kpi-lead-resp')||{}).value||'';
   _recKpiState.lead_fecha  = (document.getElementById('kpi-lead-fecha')||{}).value||'';
-  _recKpiState.comms_no_exp = (document.getElementById('kpi-comms-no-exp')||{}).value||'';
   _recKpiState.clientes_num = parseInt((document.getElementById('kpi-clientes-num')||{}).value)||0;
 
   closeRecKpiModal();
@@ -1302,18 +1289,6 @@ function calcRecTraspaso() {
 // ── TRASPASO: guardar ───────────────────────────────────────────────────
 async function submitRecTraspaso() {
   var errs = [];
-
-  // ── Fix Jun 2026: Horas trabajadas obligatorias antes de cerrar traspaso ──
-  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
-  if(!_horasTrab || _horasTrab <= 0){
-    var _msg = '⚠ Horas trabajadas obligatorias. Vuelve al formulario y declara las horas antes de cerrar el traspaso.';
-    var _errEl0 = document.getElementById('rec-tras-err');
-    if(_errEl0){ _errEl0.textContent = _msg; _errEl0.style.display='block'; }
-    toast(_msg, 'err');
-    var _ti = document.getElementById('t-horas');
-    if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
-    return;
-  }
 
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value); }
 
