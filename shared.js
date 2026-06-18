@@ -920,15 +920,26 @@ async function initTurnoForm(){
   document.getElementById('btn-save-turno').textContent='💾 Guardar Turno';
   const fechaInput = document.getElementById('t-fecha');
   fechaInput.value=today();
-  // Employees can only register today (unless shift is being corrected)
-  if(currentUser.rol==='empleado' && !editingShiftId){
+  // Fecha bloqueada al día actual para TODOS salvo admin (Fix Jun 2026:
+  // antes solo se bloqueaba a empleados; jefes/coords podían borrarla y
+  // guardar turnos con fecha vacía).
+  var _esAdminF = currentUser && currentUser.rol === 'admin';
+  if(!_esAdminF && !editingShiftId){
     fechaInput.min = today();
     fechaInput.max = today();
     fechaInput.setAttribute('readonly','readonly');
+    fechaInput.setAttribute('tabindex','-1');
+    fechaInput.style.pointerEvents = 'none';
+    fechaInput.style.opacity = '0.7';
+    fechaInput.style.cursor = 'not-allowed';
   } else {
     fechaInput.removeAttribute('min');
     fechaInput.removeAttribute('max');
     fechaInput.removeAttribute('readonly');
+    fechaInput.removeAttribute('tabindex');
+    fechaInput.style.pointerEvents = '';
+    fechaInput.style.opacity = '';
+    fechaInput.style.cursor = '';
   }
   const employees=await getDB('employees');
   const sel=document.getElementById('t-responsable');
@@ -1198,15 +1209,24 @@ function clearTurnoForm(){
   });
   const fechaInput = document.getElementById('t-fecha');
   if(fechaInput) fechaInput.value=today();
-  // Employees can only register today (unless shift is being corrected)
-  if(fechaInput && currentUser.rol==='empleado' && !editingShiftId){
+  // Fix Jun 2026: bloquear fecha para todos salvo admin (antes solo empleado).
+  var _esAdminCF = currentUser && currentUser.rol === 'admin';
+  if(fechaInput && !_esAdminCF && !editingShiftId){
     fechaInput.min = today();
     fechaInput.max = today();
     fechaInput.setAttribute('readonly','readonly');
+    fechaInput.setAttribute('tabindex','-1');
+    fechaInput.style.pointerEvents = 'none';
+    fechaInput.style.opacity = '0.7';
+    fechaInput.style.cursor = 'not-allowed';
   } else if(fechaInput) {
     fechaInput.removeAttribute('min');
     fechaInput.removeAttribute('max');
     fechaInput.removeAttribute('readonly');
+    fechaInput.removeAttribute('tabindex');
+    fechaInput.style.pointerEvents = '';
+    fechaInput.style.opacity = '';
+    fechaInput.style.cursor = '';
   }
   resetToggles(); mermaRows=[]; sinMermaFlag=false;
   document.getElementById('sinmerma-btn').className='tbtn';
@@ -1232,7 +1252,9 @@ async function loadForCorrection(shiftId){
   editingShiftId=shiftId;
   document.getElementById('turno-form-mode').textContent='CORRECCIÓN · '+fmtDate(s.fecha)+' · '+formatServiceOrTurn(s.servicio);
   document.getElementById('btn-save-turno').textContent='📤 Reenviar';
-  document.getElementById('t-fecha').value=s.fecha;
+  // Fix Jun 2026: si el turno original se guardó sin fecha (bug previo),
+  // autocompleta con hoy para que el empleado pueda corregir.
+  document.getElementById('t-fecha').value = s.fecha || today();
   document.getElementById('t-servicio').value=s.servicio;
   document.getElementById('t-horas').value=s.horas;
   document.getElementById('t-responsable').value=s.responsable_id||'';
@@ -1252,8 +1274,30 @@ async function loadForCorrection(shiftId){
 // ═══════════════════════════════════════════════════════════════════════
 // SAVE TURNO
 async function _doSaveTurno(){
+  // ── GUARD GLOBAL (Fix Jun 2026): Horas trabajadas son obligatorias ──
+  // Punto único por donde pasan TODOS los flows de guardar turno
+  // (Cocina/Sala vía saveTurno, Recepción vía submitRecKpi, SYNCROLAB vía caja).
+  // Antes los empleados Recepción/SYNCROLAB podían cerrar turno con horas=0
+  // porque la validación solo existía en saveTurno (botón Cocina/Sala).
+  var _horasGuard = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+  if(!_horasGuard || _horasGuard <= 0){
+    var _msgG = '⚠ Horas trabajadas obligatorias. Declara las horas en el formulario de turno antes de guardar.';
+    if(typeof toast === 'function') toast(_msgG, 'err');
+    var _aaG = document.getElementById('turno-alert-area');
+    if(_aaG) _aaG.innerHTML = '<div class="alert a-err">'+_msgG+'</div>';
+    var _tiG = document.getElementById('t-horas');
+    if(_tiG){
+      try{ _tiG.focus(); _tiG.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+      _tiG.style.borderColor = 'var(--red)';
+      _tiG.style.boxShadow = '0 0 0 2px rgba(239,68,68,.35)';
+    }
+    throw new Error('HORAS_OBLIGATORIAS');
+  }
   // ── Read all form values (already validated by saveTurno) ──
-  const fecha    = document.getElementById('t-fecha').value;
+  // Fix Jun 2026: si fecha llega vacía (input borrado por jefe/coord, navegador
+  // que ignora readonly, etc.) se usa today() como defensa.
+  var fecha    = document.getElementById('t-fecha').value;
+  if(!fecha){ fecha = today(); }
   var _isRecSave = currentUser && currentUser.area === 'Recepción';
   const servicio = _isRecSave ? getRecTurnoValue() : getServicioValue();
   const horas    = parseFloat(document.getElementById('t-horas').value)||0;
@@ -2129,7 +2173,7 @@ function _jefeDeptOptions(user){
 function initValDeptFilter(){
   var sel=document.getElementById('v-dept');
   if(!sel||!currentUser) return;
-  var allDepts=['Cocina','Sala','Recepción','Housekeeping','SYNCROLAB','Mantenimiento','Economato','Administración','RRHH'];
+  var allDepts=['Cocina','Sala','Recepción','Housekeeping','SYNCROLAB','Recepción SYNCROLAB','Mantenimiento','Economato','Administración','RRHH'];
   var fullOpts='<option value="">Todos</option>'+allDepts.map(function(d){return '<option>'+d+'</option>';}).join('');
   if(typeof isAdmin==='function' && isAdmin(currentUser)){
     sel.innerHTML=fullOpts; sel.value=''; sel.disabled=false; onValDeptChange(); return;
@@ -2181,7 +2225,17 @@ async function renderValidacion(){
   if(desde) shifts=shifts.filter(s=>s.fecha>=desde);
   if(hasta) shifts=shifts.filter(s=>s.fecha<=hasta);
   if(estado) shifts=shifts.filter(s=>s.estado===estado);
-  if(dept) shifts=shifts.filter(s=>normalizeDeptName(s.area)===normalizeDeptName(dept));
+  if(dept){
+    // Fix Jun 2026: "SYNCROLAB" como filtro = todos los del laboratorio
+    // (incluye 'Recepción SYNCROLAB', 'SyncroLab', 'Entrenadores', etc.).
+    // "Recepción SYNCROLAB" filtra solo a esa área concreta.
+    var _nDept = normalizeDeptName(dept);
+    if(_nDept === 'syncrolab'){
+      shifts = shifts.filter(function(s){ return /syncrolab|syncro lab/i.test(s.area||''); });
+    } else {
+      shifts = shifts.filter(function(s){ return normalizeDeptName(s.area) === _nDept; });
+    }
+  }
   if(serv) shifts=shifts.filter(function(s){
     if(!s.servicio) return false;
     if(s.area==='Recepción') return s.servicio===serv;
@@ -2211,7 +2265,12 @@ async function renderValidacion(){
     }
   });
   const el=document.getElementById('validacion-table');
-  if(!shifts.length){el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin registros</div></div>';return;}
+  if(!shifts.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin registros</div></div>';
+    // Fix Jun 2026: resetear KPIs a 0 cuando el filtro no devuelve resultados
+    if(typeof renderTurnosKpis==='function') renderTurnosKpis(shifts);
+    return;
+  }
   // Build validation table without nested template literals
   var valRows="";
   shifts.forEach(function(s){

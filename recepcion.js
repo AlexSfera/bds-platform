@@ -322,6 +322,14 @@ function closeRecKpiModal() {
 
 function submitRecKpi() {
   var errs = [];
+
+  // ── Fix Jun 2026: Horas trabajadas obligatorias ANTES de guardar el turno ──
+  // (Antes se ejecutaba _doSaveTurno() sin haber declarado horas → turno con 0h)
+  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+  if(!_horasTrab || _horasTrab <= 0){
+    errs.push('Horas trabajadas obligatorias — declara las horas en el formulario de turno');
+  }
+
   if(!_recKpiState.reservas_pendientes) errs.push('Indica si quedan reservas pendientes');
   if(!_recKpiState.upsell_desayuno)     errs.push('Indica si ofertaste desayunos');
   if(!_recKpiState.comms_revisadas)     errs.push('Indica si revisaste comunicaciones');
@@ -504,6 +512,20 @@ function closeRecCajaModal() {
 // ═══════════════════════════════════════════════════════════════════════
 async function submitRecCaja() {
   var errs = [];
+
+  // ── Fix Jun 2026: Horas trabajadas son obligatorias antes de cerrar caja ──
+  // (Antes se podía cerrar Caja sin declarar horas en el formulario de turno)
+  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+  if(!_horasTrab || _horasTrab <= 0){
+    var _msg = '⚠ Horas trabajadas obligatorias. Vuelve al formulario de turno y declara las horas antes de cerrar caja.';
+    var _errEl = document.getElementById('rec-caja-err');
+    if(_errEl){ _errEl.textContent = _msg; _errEl.style.display='block'; }
+    toast(_msg, 'err');
+    // Reenfocar el campo en el form base
+    var _ti = document.getElementById('t-horas');
+    if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+    return;
+  }
 
   function gv(id){ return parseFloat(document.getElementById(id) ? document.getElementById(id).value : ''); }
   function gi(id){ return parseInt(document.getElementById(id) ? document.getElementById(id).value : '')||0; }
@@ -1294,6 +1316,19 @@ function calcRecTraspaso() {
 // ── TRASPASO: guardar ───────────────────────────────────────────────────
 async function submitRecTraspaso() {
   var errs = [];
+
+  // ── Fix Jun 2026: Horas trabajadas obligatorias antes de cerrar traspaso ──
+  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+  if(!_horasTrab || _horasTrab <= 0){
+    var _msg = '⚠ Horas trabajadas obligatorias. Vuelve al formulario y declara las horas antes de cerrar el traspaso.';
+    var _errEl0 = document.getElementById('rec-tras-err');
+    if(_errEl0){ _errEl0.textContent = _msg; _errEl0.style.display='block'; }
+    toast(_msg, 'err');
+    var _ti = document.getElementById('t-horas');
+    if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+    return;
+  }
+
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value); }
 
   var turno    = _recTipoTurno || getRecTurnoValue() || '';

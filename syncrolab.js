@@ -350,6 +350,17 @@ function calcLabTraspaso(){
 }
 
 async function submitLabTraspaso(){
+  // ── Fix Jun 2026: Horas trabajadas obligatorias antes de cerrar traspaso ──
+  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+  if(!_horasTrab || _horasTrab <= 0){
+    var _msg = '⚠ Horas trabajadas obligatorias. Vuelve al formulario y declara las horas antes de cerrar el traspaso.';
+    var _errEl0 = document.getElementById('lab-tras-err');
+    if(_errEl0) _errEl0.textContent = _msg;
+    toast(_msg, 'err');
+    var _ti = document.getElementById('t-horas');
+    if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+    return;
+  }
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value); }
   var errs=[];
   var turno=_labTipoTurno||_labCurrentTurno()||'';
@@ -479,6 +490,18 @@ function calcLabCierre(){
 }
 
 async function submitLabCierre(){
+  // ── Fix Jun 2026: Horas trabajadas son obligatorias antes de cerrar caja ──
+  // (Antes empleados Recepción SYNCROLAB cerraban turno sin declarar horas)
+  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+  if(!_horasTrab || _horasTrab <= 0){
+    var _msg = '⚠ Horas trabajadas obligatorias. Vuelve al formulario de turno y declara las horas antes de cerrar caja.';
+    var _errEl0 = document.getElementById('lab-c-err');
+    if(_errEl0){ _errEl0.textContent = _msg; }
+    toast(_msg, 'err');
+    var _ti = document.getElementById('t-horas');
+    if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+    return;
+  }
   var turno=_labTipoTurno||_labCurrentTurno()||'';
   var errEl=document.getElementById('lab-c-err'); if(errEl) errEl.textContent='';
   if(!turno){ if(errEl) errEl.textContent='Selecciona turno'; toast('Selecciona turno','err'); return; }
