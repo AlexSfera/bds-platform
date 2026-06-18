@@ -16,18 +16,6 @@
       <div class="fg"><label>Check-outs realizados</label><input type="text" inputmode="decimal" id="kpi-checkouts" placeholder="0" style="color:#111827;background:#ffffff;"></div>
       <div class="fg"><label>Reservas gestionadas</label><input type="text" inputmode="decimal" id="kpi-reservas" placeholder="0" style="color:#111827;background:#ffffff;"></div>
     </div>
-    <div class="fg" style="margin-bottom:8px;">
-      <label>¿Quedan reservas pendientes para el siguiente turno?</label>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button class="tbtn" id="kpi-reserv-pend-si" onclick="setRecKpi('reservas_pendientes','si',this)">SÍ</button>
-        <button class="tbtn" id="kpi-reserv-pend-no" onclick="setRecKpi('reservas_pendientes','no',this)">NO</button>
-      </div>
-    </div>
-    <div id="kpi-reserv-pend-exp-block" style="display:none;" class="fg">
-      <label>Explicación reservas pendientes <span class="req">*</span></label>
-      <textarea id="kpi-reserv-pend-exp" rows="2" placeholder="Detalla las reservas pendientes..."></textarea>
-    </div>
-
     <!-- UPSELL DESAYUNOS -->
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;text-transform:uppercase;margin:16px 0 8px;">DESAYUNOS / UPSELL</div>
     <div class="fg" style="margin-bottom:8px;">
@@ -284,7 +272,6 @@ function setRecKpi(key, val, btn) {
     else btn.classList.add('t-na');
   }
   var deps = {
-    reservas_pendientes: 'kpi-reserv-pend-exp-block',
     upsell_desayuno:     'kpi-upsell-detail',
     comms_pendientes:    'kpi-comms-pend-exp-block',
     clientes_insatisfechos: 'kpi-clientes-detail',
@@ -303,7 +290,7 @@ function setRecKpi(key, val, btn) {
 function openRecKpiModal() {
   _recKpiState = {};
   document.querySelectorAll('#modal-rec-kpi .tbtn').forEach(function(b){ b.classList.remove('t-si','t-no','t-na'); });
-  ['kpi-reserv-pend-exp-block','kpi-upsell-detail','kpi-comms-pend-exp-block','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
+  ['kpi-upsell-detail','kpi-comms-pend-exp-block','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.style.display='none';
   });
   ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-desal-ofertados','kpi-desal-vendidos','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
@@ -330,7 +317,6 @@ function submitRecKpi() {
     errs.push('Horas trabajadas obligatorias — declara las horas en el formulario de turno');
   }
 
-  if(!_recKpiState.reservas_pendientes) errs.push('Indica si quedan reservas pendientes');
   if(!_recKpiState.upsell_desayuno)     errs.push('Indica si ofertaste desayunos');
   if(!_recKpiState.comms_revisadas)     errs.push('Indica si revisaste comunicaciones');
   if(!_recKpiState.clientes_insatisfechos) errs.push('Indica si hubo clientes insatisfechos');
