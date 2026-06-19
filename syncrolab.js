@@ -285,6 +285,7 @@ function openLabTraspasoModal(existingId){
   _labCharges = []; renderLabCharges('lab-tras-charges');
   if(!existingId){
     if(label) label.textContent = _labTipoTurno || '—';
+    invalidateCache(LAB_TABLE);
     dbGetAll(LAB_TABLE).then(function(rows){
       var sorted = rows.slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||''); });
       var ultimoNub = sorted.find(function(r){ return r.efectivo_traspasado_nubimed != null || r.fondo_recibido_nubimed != null; });
@@ -433,6 +434,7 @@ function openLabCierreModal(existingId){
   _labCharges = []; renderLabCharges('lab-c-charges');
 
   if(!existingId){
+    invalidateCache(LAB_TABLE);
     dbGetAll(LAB_TABLE).then(function(rows){
       var sorted=rows.slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'')||(b.created_at||'').localeCompare(a.created_at||''); });
       var uN=sorted.find(function(r){ return r.efectivo_traspasado_nubimed!=null||r.fondo_recibido_nubimed!=null; });

@@ -379,6 +379,7 @@ function openRecCajaModal(existingId) {
     fondoEl.style.cursor  = 'not-allowed';
   }
   if(!existingId){
+    invalidateCache(REC_TABLE);
     getDB(REC_TABLE).then(function(rows){
       var sorted = rows
         .filter(function(r){ return r.fondo_real_a_traspasar != null; })
@@ -1194,6 +1195,7 @@ function openRecTraspasoModal(existingId) {
   if(!existingId){
     if(label) label.textContent = _recTipoTurno || getRecTurnoValue() || '—';
     // Fondo recibido = fondo_real_a_traspasar del último cierre O traspaso — no editable
+    invalidateCache(REC_TABLE);
     getDB(REC_TABLE).then(function(rows){
       var sorted = rows
         .filter(function(r){ return r.fondo_real_a_traspasar != null; })
