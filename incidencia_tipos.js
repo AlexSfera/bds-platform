@@ -8,15 +8,14 @@
 var INCIDENCIA_TIPOS = {
 
   'Cocina': [
-    'Queja / cliente insatisfecho',
-    'Error de comanda / servicio',
-    'Error de cobro / TPV',
-    'Ajuste operativo / invitación / anulación',
-    'Devolución de producto / plato',
-    'Problema cocina-sala',
-    'Problema recepción / PMS',
+    'Avería de equipo (cámara, horno, plancha, freidora)',
+    'Producto sin fecha / caducado / mal estado',
+    'Rotura de cadena de frío / temperatura fuera de rango',
+    'Error de preparación / receta no seguida',
     'Falta de producto / rotura de stock',
-    'Calidad de producto',
+    'Fallo de proveedor / pedido incompleto o tarde',
+    'Problema cocina-sala',
+    'Falta de personal en turno (cobertura)',
     'APPCC / limpieza / orden / seguridad alimentaria',
     'Incumplimiento de procedimiento',
     'Retraso / disciplina',
