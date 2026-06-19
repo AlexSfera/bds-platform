@@ -420,6 +420,40 @@ function canSeeHypoxicTab(user){
   return false;
 }
 
+function canSeeMermaTab(user, dept){
+  if(!user) return false;
+  // Dept filter: solo visible cuando el filtro es Cocina (o vacío con acceso a Cocina)
+  var deptSelVal = dept !== undefined ? dept : ((document.getElementById('v-dept')||{}).value||'');
+  if(deptSelVal && deptSelVal !== 'Cocina') return false;
+  if(typeof isAdmin === 'function' && isAdmin(user)) return true;
+  if(typeof isAdjuntoDirectivo==='function' && isAdjuntoDirectivo(user)) return true;
+  if(typeof canValidateDepartment==='function' && canValidateDepartment(user,'Cocina')) return true;
+  return false;
+}
+
+function _updateMermaTabVisibility(){
+  var btn = document.getElementById('val-tab-merma');
+  if(!btn) return;
+  var visible = canSeeMermaTab(currentUser);
+  btn.style.display = visible ? 'inline-block' : 'none';
+  // Si el tab merma estaba activo y ya no es visible, volver a TURNOS
+  if(!visible){
+    var mermaDiv = document.getElementById('val-content-merma');
+    if(mermaDiv && mermaDiv.style.display !== 'none') switchValTab('followup');
+  }
+}
+
+function _updateNotasTabVisibility(){
+  var btn = document.getElementById('val-tab-notas');
+  if(!btn) return;
+  var visible = typeof _canSeeNotasTab==='function' ? _canSeeNotasTab(currentUser) : false;
+  btn.style.display = visible ? 'inline-block' : 'none';
+  if(!visible){
+    var notasDiv = document.getElementById('val-content-notas');
+    if(notasDiv && notasDiv.style.display !== 'none') switchValTab('followup');
+  }
+}
+
 function _valTabStyleActive(btn, color){
   if(!btn) return;
   btn.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid '+color+';background:'+(color==='#2ec4b6'?'rgba(46,196,182,.15)':color==='#3b82f6'?'rgba(59,130,246,.15)':'rgba(168,85,247,.15)')+';color:'+color+';font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;';
@@ -434,10 +468,14 @@ function switchValTab(tab) {
   var operativoDiv = document.getElementById('val-content-operativo');
   var cajaDiv      = document.getElementById('val-content-caja');
   var hypoxicDiv   = document.getElementById('val-content-hypoxic');
+  var mermaDiv     = document.getElementById('val-content-merma');
+  var notasDiv     = document.getElementById('val-content-notas');
   var btnF = document.getElementById('val-tab-followup');
   var btnO = document.getElementById('val-tab-operativo');
   var btnC = document.getElementById('val-tab-caja');
   var btnH = document.getElementById('val-tab-hypoxic');
+  var btnM = document.getElementById('val-tab-merma');
+  var btnN = document.getElementById('val-tab-notas');
   if(!followupDiv||!cajaDiv) { console.warn('Tab divs not found'); return; }
 
   // Hide all
@@ -445,12 +483,16 @@ function switchValTab(tab) {
   if(operativoDiv) operativoDiv.style.display = 'none';
   cajaDiv.style.display = 'none';
   if(hypoxicDiv) hypoxicDiv.style.display = 'none';
+  if(mermaDiv) mermaDiv.style.display = 'none';
+  if(notasDiv) notasDiv.style.display = 'none';
 
   // Reset all buttons inactive
   _valTabStyleInactive(btnF);
   if(btnO) _valTabStyleInactive(btnO);
   _valTabStyleInactive(btnC);
   _valTabStyleInactive(btnH);
+  if(btnM) _valTabStyleInactive(btnM);
+  if(btnN) _valTabStyleInactive(btnN);
 
   if(tab === 'caja'){
     cajaDiv.style.display = 'block';
@@ -465,6 +507,18 @@ function switchValTab(tab) {
     if(btnO) _valTabStyleActive(btnO, '#10b981');
     var _opDept = (document.getElementById('v-dept')||{}).value||'';
     if(typeof renderFollowUpExtras === 'function') renderFollowUpExtras(_opDept);
+  } else if(tab === 'merma'){
+    if(mermaDiv) mermaDiv.style.display = 'block';
+    if(btnM){
+      btnM.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid #f59e0b;background:rgba(245,158,11,.15);color:#f59e0b;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;';
+    }
+    renderValMermaList();
+  } else if(tab === 'notas'){
+    if(notasDiv) notasDiv.style.display = 'block';
+    if(btnN){
+      btnN.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid #8b5cf6;background:rgba(139,92,246,.15);color:#8b5cf6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;';
+    }
+    renderValNotasList();
   } else {
     followupDiv.style.display = 'block';
     _valTabStyleActive(btnF, '#2ec4b6');
@@ -1472,3 +1526,143 @@ async function _chkFioValidateOnly(){
   await doValidacion('Validado');
 }
 window._chkFioValidateOnly = _chkFioValidateOnly;
+
+// ── MERMA TAB ────────────────────────────────────────────────────────────
+async function renderValMermaList(){
+  var kpiEl  = document.getElementById('val-merma-kpis');
+  var tableEl = document.getElementById('val-merma-table');
+  if(!tableEl) return;
+
+  var desde  = (document.getElementById('v-desde')||{}).value || '';
+  var hasta  = (document.getElementById('v-hasta')||{}).value || '';
+
+  tableEl.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
+  if(kpiEl) kpiEl.innerHTML = '';
+
+  var all = [];
+  try { all = await getDB('merma'); } catch(e){ console.error('Error cargando merma', e); }
+
+  // Filtrar solo Cocina/Friegue
+  all = all.filter(function(m){
+    var a = (m.area||'').toLowerCase();
+    return a === 'cocina' || a === 'friegue';
+  });
+  if(desde) all = all.filter(function(m){ return (m.fecha||'') >= desde; });
+  if(hasta) all = all.filter(function(m){ return (m.fecha||'') <= hasta; });
+
+  all.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||''); });
+
+  // KPIs
+  if(kpiEl){
+    var totalLineas = all.length;
+    var totalCoste  = all.reduce(function(s,m){ return s+(m.coste_total||0); }, 0);
+    var sinCoste    = all.filter(function(m){ return !m.coste_unitario || m.coste_unitario===0; }).length;
+    kpiEl.innerHTML = '<div class="kpi-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
+      +'<div class="kpi k-orange"><div class="kpi-lbl">Líneas</div><div class="kpi-val">'+totalLineas+'</div></div>'
+      +'<div class="kpi k-orange"><div class="kpi-lbl">Coste total</div><div class="kpi-val">'+totalCoste.toFixed(2)+'€</div></div>'
+      +(sinCoste>0?'<div class="kpi k-red"><div class="kpi-lbl">Sin coste</div><div class="kpi-val">'+sinCoste+'</div><div class="kpi-sub">Pendiente valorar</div></div>':'')
+      +'</div>';
+  }
+
+  if(!all.length){
+    tableEl.innerHTML = '<div class="empty"><div class="empty-icon">🍋</div><div class="empty-text">Sin líneas de merma en el periodo</div></div>';
+    return;
+  }
+
+  var isAdminU = typeof isAdmin==='function' && isAdmin(currentUser);
+  var canEdit  = isAdminU || (typeof canValidateDepartment==='function' && canValidateDepartment(currentUser,'Cocina'));
+
+  tableEl.innerHTML = '<table>'
+    +'<tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Producto</th><th>Cant.</th><th>Causa</th><th>Observación</th><th>Coste</th></tr>'
+    +all.map(function(m){
+      var sinC = !m.coste_unitario || m.coste_unitario===0;
+      var fecha = typeof fmtDate==='function' ? fmtDate(m.fecha) : (m.fecha||'—');
+      return '<tr>'
+        +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fecha+'</td>'
+        +'<td style="font-size:12px">'+( m.nombre||'—')+'</td>'
+        +'<td style="font-size:12px">'+( m.servicio||'—')+'</td>'
+        +'<td style="font-weight:600">'+( m.producto||'—')+'</td>'
+        +'<td style="font-family:var(--font-mono);font-size:12px">'+( m.cantidad||'—')+' '+(m.unidad||'')+'</td>'
+        +'<td style="font-size:12px">'+( m.causa||'—')+'</td>'
+        +'<td style="font-size:11px;color:var(--text3)">'+( m.obs||'—')+'</td>'
+        +'<td style="font-family:var(--font-mono);'+(sinC?'color:var(--amber)':'color:var(--orange)')+'">'
+          +(sinC?'⚠ Pendiente':(m.coste_total||0).toFixed(2)+'€')+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</table>';
+}
+window.renderValMermaList = renderValMermaList;
+
+// ── NOTAS TAB (Validación) ────────────────────────────────────────────
+async function renderValNotasList(){
+  var tableEl = document.getElementById('val-notas-table');
+  var kpiEl   = document.getElementById('val-notas-kpis');
+  if(!tableEl) return;
+
+  var desde = (document.getElementById('v-desde')||{}).value || '';
+  var hasta  = (document.getElementById('v-hasta')||{}).value || '';
+  var dept   = (document.getElementById('v-dept')||{}).value  || '';
+
+  tableEl.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
+  if(kpiEl) kpiEl.innerHTML = '';
+
+  var all = [];
+  try { all = await getDB('employee_notes'); } catch(e){ console.error('employee_notes load error', e); }
+
+  // Filtro por dept si está seleccionado
+  if(dept) all = all.filter(function(n){ return n.area === dept; });
+  // Filtro por fecha
+  var toDateStr = function(ts){ return ts ? ts.slice(0,10) : ''; };
+  if(desde) all = all.filter(function(n){ return toDateStr(n.created_at) >= desde; });
+  if(hasta) all = all.filter(function(n){ return toDateStr(n.created_at) <= hasta; });
+
+  all.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  // KPIs
+  if(kpiEl){
+    var noLeidas = all.filter(function(n){ return !n.leida; }).length;
+    var cats = {};
+    all.forEach(function(n){ cats[n.categoria]=(cats[n.categoria]||0)+1; });
+    kpiEl.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
+      +'<div class="kpi k-purple"><div class="kpi-lbl">Total</div><div class="kpi-val">'+all.length+'</div></div>'
+      +Object.keys(cats).map(function(c){
+        return '<div class="kpi k-purple"><div class="kpi-lbl">'+c+'</div><div class="kpi-val">'+cats[c]+'</div></div>';
+      }).join('')
+      +(noLeidas>0?'<div class="kpi k-red"><div class="kpi-lbl">Sin leer</div><div class="kpi-val">'+noLeidas+'</div></div>':'')
+      +'</div>';
+  }
+
+  if(!all.length){
+    tableEl.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><div class="empty-text">Sin notas en el periodo / departamento seleccionado</div></div>';
+    return;
+  }
+
+  var isAdminU = typeof isAdmin==='function' && isAdmin(currentUser);
+
+  tableEl.innerHTML = '<table>'
+    +'<tr><th>Fecha</th><th>Empleado</th><th>Dpto</th><th>Categoría</th><th>Nota</th><th>Estado</th><th>Acción</th></tr>'
+    +all.map(function(n){
+      var catColor = n.categoria==='Queja'?'#ef4444':n.categoria==='Mejora'?'#10b981':'#8b5cf6';
+      var fecha = n.created_at ? new Date(n.created_at).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+      var estadoBadge = n.leida
+        ? '<span class="badge b-green">Leída</span>'
+        : '<span class="badge b-red">Nueva</span>';
+      var markBtn = !n.leida
+        ? '<button class="vbtn vbtn-sec" onclick="markNotaLeida(\''+n.id+'\')" title="Marcar leída">✓</button>'
+        : '';
+      var delBtn = isAdminU
+        ? '<button class="vbtn vbtn-del" onclick="deleteNota(\''+n.id+'\')" title="Eliminar">🗑</button>'
+        : '';
+      return '<tr>'
+        +'<td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fecha+'</td>'
+        +'<td style="font-size:12px">'+formatDisplayValue(n.nombre||'—')+'</td>'
+        +'<td><span class="dept-badge">'+formatDisplayValue(n.area||'—')+'</span></td>'
+        +'<td><span class="badge" style="color:'+catColor+';border:1px solid '+catColor+';background:rgba(139,92,246,.08);">'+n.categoria+'</span></td>'
+        +'<td style="font-size:13px;max-width:320px;">'+formatDisplayValue(n.texto)+'</td>'
+        +'<td>'+estadoBadge+'</td>'
+        +'<td style="white-space:nowrap">'+markBtn+' '+delBtn+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</table>';
+}
+window.renderValNotasList = renderValNotasList;

@@ -471,7 +471,8 @@ function getScreens(rol){
     hkRevision:  {id:'hk-revision', label:'🔍 Revisión HK'},
     fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
     incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
-    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'}
+    checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'},
+    nota:        {id:'notas-mod',   label:'💬 Nota'}
   };
 
   // ════════════════════════════════════════════════════════════════
@@ -494,7 +495,7 @@ function getScreens(rol){
   if(isAdjDir){
     return [
       ITEMS.turno, ITEMS.gestiones, ITEMS.incidencias, ITEMS.tareas,
-      ITEMS.misfio, ITEMS.fichaje,
+      ITEMS.misfio, ITEMS.fichaje, ITEMS.nota,
       {sep:true,label:'MI DEPARTAMENTO'},
       ITEMS.validacion, ITEMS.dashHK,
       {sep:true,label:'MANAGER BAR',dropdown:true},
@@ -530,6 +531,7 @@ function getScreens(rol){
   miDia.push(ITEMS.tareas);
   miDia.push(ITEMS.incidencias);
   if(isRecepcion) miDia.push(ITEMS.hypoxic);           // Hypoxic solo Recepción
+  miDia.push(ITEMS.nota);                              // Nota/Sugerencia: todos los empleados
 
   // ── MI DEPARTAMENTO ──────────────────────────────────────────────
   var miDpto = [];
@@ -799,6 +801,7 @@ async function showScreen(id){
   if(id==='hypoxic'){ renderHypoxicScreen(); }
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
+  if(id==='notas-mod'){ renderNotasMod(); }
   // ── Housekeeping ──
   if(id==='ruta-mod'    && typeof renderHKMiRuta==='function')         renderHKMiRuta();
   if(id==='hk-plan'     && typeof renderHKPlanificacion==='function')  renderHKPlanificacion();
@@ -877,8 +880,19 @@ function addMermaRow(data={}){
   document.getElementById('sinmerma-btn').className='tbtn';
   const rowId=genId(); mermaRows.push({rowId,...data}); renderMermaRows();
 }
-function removeMermaRow(rowId){ mermaRows=mermaRows.filter(r=>r.rowId!==rowId); renderMermaRows(); updMermaStatus(); }
+function removeMermaRow(rowId){ flushMermaRows(); mermaRows=mermaRows.filter(r=>r.rowId!==rowId); renderMermaRows(); updMermaStatus(); }
+function flushMermaRows(){
+  mermaRows=mermaRows.map(r=>({
+    rowId:r.rowId,
+    producto:document.getElementById('mp-'+r.rowId)?.value.trim()||r.producto||'',
+    cantidad:parseFloat(document.getElementById('mq-'+r.rowId)?.value)||r.cantidad||0,
+    unidad:document.getElementById('mu-'+r.rowId)?.value||r.unidad||'uds',
+    causa:document.getElementById('mc-'+r.rowId)?.value||r.causa||'',
+    obs:document.getElementById('mo-'+r.rowId)?.value.trim()||r.obs||''
+  }));
+}
 function renderMermaRows(){
+  flushMermaRows();
   const c=document.getElementById('merma-container'); c.innerHTML='';
   mermaRows.forEach((row,idx)=>{
     const div=document.createElement('div'); div.className='merma-row'; div.id='mrow-'+row.rowId;
@@ -1263,7 +1277,7 @@ async function loadForCorrection(shiftId){
   sinMermaFlag=s.merma_declarada==='no';
   if(sinMermaFlag) document.getElementById('sinmerma-btn').className='tbtn t-si';
   const mermas=(await getDB('merma')).filter(m=>m.shift_id===shiftId);
-  mermaRows=[]; mermas.forEach(m=>mermaRows.push({rowId:genId(),producto:m.producto,cantidad:m.cantidad,unidad:m.unidad||'uds',causa:m.causa,obs:m.observacion||''}));
+  mermaRows=[]; mermas.forEach(m=>mermaRows.push({rowId:genId(),producto:m.producto,cantidad:m.cantidad,unidad:m.unidad||'uds',causa:m.causa,obs:m.obs||''}));
   renderMermaRows();
   const inci=(await getDB('incidencias')).find(i=>i.shift_id===shiftId);
   if(inci){ document.getElementById('i-cat').value=inci.categoria||''; document.getElementById('i-sev').value=inci.severidad||''; document.getElementById('i-desc').value=inci.descripcion||''; document.getElementById('i-accion').value=inci.accion_inmediata||''; setT('reqform',inci.requiere_formacion==='Sí'?'si':'no'); setT('reqdisc',inci.requiere_disciplina==='Sí'?'si':'no'); }
@@ -2158,6 +2172,8 @@ function onValDeptChange(){
   if(cajaTab && cajaTab.style.display !== 'none' && typeof renderValCajaList === 'function'){
     renderValCajaList();
   }
+  // MERMA: mostrar/ocultar pestaña según dept y rol
+  if(typeof _updateMermaTabVisibility === 'function') _updateMermaTabVisibility();
 }
 
 // Departamentos (valores de v-dept) que corresponden al área de un jefe
@@ -2192,6 +2208,8 @@ function initValDeptFilter(){
     sel.disabled=false;
   }
   onValDeptChange();
+  if(typeof _updateMermaTabVisibility === 'function') _updateMermaTabVisibility();
+  if(typeof _updateNotasTabVisibility === 'function') _updateNotasTabVisibility();
 }
 
 function filtrarValidacion(){
@@ -3815,6 +3833,205 @@ async function deleteMermaItem(mid){
   renderMermaMod();
 }
 window.deleteMermaItem = deleteMermaItem;
+
+// ═══════════════════════════════════════════════════════════════════════
+// NOTAS / SUGERENCIAS — módulo empleado (MI DÍA) + tab Validación
+// Visible: autor + jefe de departamento + adjunto directivo + admin
+// Tabla: employee_notes (id, employee_id, nombre, area, categoria, texto,
+//        leida, created_at)
+// ═══════════════════════════════════════════════════════════════════════
+
+var _NOTA_CATS = ['Sugerencia','Queja','Mejora'];
+
+function _canSeeNotasTab(user){
+  if(!user) return false;
+  if(typeof isAdmin==='function' && isAdmin(user)) return true;
+  if(typeof isAdjuntoDirectivo==='function' && isAdjuntoDirectivo(user)) return true;
+  if(typeof isSupervisor==='function' && isSupervisor(user)) return true;
+  if(user.rol === 'jefe') return true;
+  return false;
+}
+
+async function renderNotasMod(){
+  var el = document.getElementById('screen-notas-mod');
+  if(!el) return;
+
+  var isAdminU = typeof isAdmin==='function' && isAdmin(currentUser);
+  var canSeeAll = _canSeeNotasTab(currentUser);
+  var todayStr = today();
+
+  invalidateCache('employee_notes');
+  var all = [];
+  try { all = await getDB('employee_notes'); } catch(e){ console.error('employee_notes load error',e); }
+
+  // Filtrar: empleado normal solo ve las suyas
+  var list = canSeeAll
+    ? all.slice()
+    : all.filter(function(n){ return n.employee_id === currentUser.id; });
+
+  // Jefe ve solo su dpto
+  if(canSeeAll && !isAdminU && !(typeof isAdjuntoDirectivo==='function' && isAdjuntoDirectivo(currentUser))){
+    var myDepts = typeof getSupervisorDepartments==='function'
+      ? getSupervisorDepartments(currentUser)
+      : [currentUser.area||''];
+    list = list.filter(function(n){
+      return myDepts.indexOf(n.area) >= 0 || n.employee_id === currentUser.id;
+    });
+  }
+
+  list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  // KPIs
+  var catCount = {};
+  _NOTA_CATS.forEach(function(c){ catCount[c]=0; });
+  list.forEach(function(n){ if(catCount[n.categoria]!==undefined) catCount[n.categoria]++; });
+  var noLeidas = list.filter(function(n){ return !n.leida && n.employee_id !== currentUser.id; }).length;
+
+  var kpiHtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">'
+    +'<div class="kpi k-purple"><div class="kpi-lbl">Total</div><div class="kpi-val">'+list.length+'</div></div>'
+    +_NOTA_CATS.map(function(c){
+      return '<div class="kpi k-purple"><div class="kpi-lbl">'+c+'</div><div class="kpi-val">'+catCount[c]+'</div></div>';
+    }).join('')
+    +(canSeeAll && noLeidas>0 ? '<div class="kpi k-red"><div class="kpi-lbl">Sin leer</div><div class="kpi-val">'+noLeidas+'</div></div>' : '')
+    +'</div>';
+
+  // Tarjetas
+  var cards;
+  if(!list.length){
+    cards = '<div class="empty"><div class="empty-icon">💬</div><div class="empty-text">Sin notas registradas</div></div>';
+  } else {
+    cards = list.map(function(n){
+      var hora = n.created_at ? new Date(n.created_at).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+      var catColor = n.categoria==='Queja' ? '#ef4444' : n.categoria==='Mejora' ? '#10b981' : '#8b5cf6';
+      var leidaTag = (!n.leida && canSeeAll && n.employee_id!==currentUser.id)
+        ? '<span style="font-size:10px;background:rgba(239,68,68,.15);color:#ef4444;padding:2px 7px;border-radius:6px;margin-left:6px;">Nueva</span>'
+        : '';
+      var markBtn = (canSeeAll && !n.leida && n.employee_id!==currentUser.id)
+        ? '<button class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:11px;" onclick="markNotaLeida(\''+n.id+'\')">✓ Marcar leída</button>'
+        : '';
+      var delBtn = (isAdminU || n.employee_id===currentUser.id)
+        ? ' <button class="btn btn-danger btn-sm" onclick="deleteNota(\''+n.id+'\')" title="Eliminar">🗑</button>'
+        : '';
+      return '<div class="task-card" style="'+(n.leida?'opacity:.75;':'')+'border-left:3px solid '+catColor+';">'
+        +'<div class="task-meta" style="align-items:flex-start;gap:10px;">'
+        +'<span class="badge" style="background:rgba(139,92,246,.15);color:'+catColor+';border:1px solid '+catColor+';">'+n.categoria+'</span>'
+        +'<span style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">'+hora+'</span>'
+        +leidaTag
+        +(canSeeAll?'<span class="dept-badge">'+formatDisplayValue(n.area||'—')+'</span>':'')
+        +markBtn+delBtn
+        +'</div>'
+        +'<div style="font-size:14px;color:var(--text);margin-top:8px;line-height:1.5;">'+formatDisplayValue(n.texto)+'</div>'
+        +'<div class="task-footer" style="margin-top:6px;">'
+        +'<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">👤 '+formatDisplayValue(n.nombre)+'</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  }
+
+  var totalSinLeer = list.filter(function(n){ return !n.leida && n.employee_id!==currentUser.id; }).length;
+  var subText = list.length+' nota(s)' + (totalSinLeer>0?' · <b style="color:#ef4444;">'+totalSinLeer+' sin leer</b>':'');
+
+  el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
+    +'<div><div class="page-title">💬 Notas y Sugerencias</div>'
+    +'<div class="page-sub">'+subText+'</div></div>'
+    +'<button class="btn btn-primary" onclick="openNewNotaMod()">+ Nueva nota</button>'
+    +'</div>'
+    +kpiHtml
+    +'<div>'+cards+'</div>';
+}
+window.renderNotasMod = renderNotasMod;
+
+function openNewNotaMod(){
+  var ov = document.getElementById('modal-new-nota');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-new-nota';
+    ov.className = 'modal-overlay';
+    ov.innerHTML = '<div class="modal" style="max-width:520px;">'
+      +'<div class="modal-h"><h3>💬 Nueva nota</h3>'
+      +'<button class="modal-x" onclick="closeModal(\'modal-new-nota\')">✕</button></div>'
+      +'<div class="modal-b">'
+      +'<div class="fg"><label>Categoría <span class="req">*</span></label>'
+      +'<select id="nn-cat"><option value="">— Seleccionar —</option>'
+      +_NOTA_CATS.map(function(c){return '<option>'+c+'</option>';}).join('')
+      +'</select></div>'
+      +'<div class="fg"><label>Texto <span class="req">*</span></label>'
+      +'<textarea id="nn-texto" rows="5" placeholder="Describe tu sugerencia, queja o propuesta de mejora..." style="resize:vertical;"></textarea></div>'
+      +'</div>'
+      +'<div class="modal-f">'
+      +'<button class="btn btn-secondary" onclick="closeModal(\'modal-new-nota\')">Cancelar</button>'
+      +'<button class="btn btn-primary" onclick="saveNewNotaMod()">💾 Enviar nota</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) closeModal('modal-new-nota'); });
+  }
+  var catEl = document.getElementById('nn-cat'); if(catEl) catEl.value='';
+  var txtEl = document.getElementById('nn-texto'); if(txtEl) txtEl.value='';
+  ov.classList.add('open');
+}
+window.openNewNotaMod = openNewNotaMod;
+
+async function saveNewNotaMod(){
+  var categoria = ((document.getElementById('nn-cat')||{}).value||'').trim();
+  var texto     = ((document.getElementById('nn-texto')||{}).value||'').trim();
+  if(!categoria){ toast('Selecciona una categoría','err'); return; }
+  if(!texto || texto.length < 5){ toast('Escribe al menos 5 caracteres','err'); return; }
+
+  var rec = {
+    id: genId(),
+    employee_id: currentUser.id,
+    nombre: currentUser.nombre,
+    area: currentUser.area||'',
+    categoria: categoria,
+    texto: texto,
+    leida: false,
+    created_at: localTs()
+  };
+  var result = await dbInsert('employee_notes', rec);
+  if(result === null){
+    toast('Error al guardar la nota (ver consola)','err');
+    return;
+  }
+  invalidateCache('employee_notes');
+  await auditLog('NOTA_NEW', currentUser.nombre+' · '+categoria+' · '+texto.slice(0,80));
+  toast('Nota enviada','ok');
+  closeModal('modal-new-nota');
+  renderNotasMod();
+}
+window.saveNewNotaMod = saveNewNotaMod;
+
+async function markNotaLeida(nid){
+  await dbUpdate('employee_notes', nid, { leida: true });
+  invalidateCache('employee_notes');
+  // Refrescar según pantalla activa
+  var screen = document.getElementById('screen-notas-mod');
+  if(screen && screen.classList.contains('active')) renderNotasMod();
+  if(typeof renderValNotasList==='function'){
+    var tab = document.getElementById('val-content-notas');
+    if(tab && tab.style.display!=='none') renderValNotasList();
+  }
+}
+window.markNotaLeida = markNotaLeida;
+
+async function deleteNota(nid){
+  if(!confirm('¿Eliminar esta nota?\n\nNo se puede deshacer.')) return;
+  var all = await getDB('employee_notes');
+  var n = (all||[]).find(function(x){ return x.id===nid; });
+  if(n && n.employee_id !== currentUser.id && !(typeof isAdmin==='function' && isAdmin(currentUser))){
+    toast('Solo puedes eliminar tus propias notas','err'); return;
+  }
+  await auditLog('NOTA_DELETE', nid+' | '+(n?n.texto.slice(0,60):''));
+  await dbDelete('employee_notes', nid);
+  invalidateCache('employee_notes');
+  toast('Nota eliminada','ok');
+  var screen = document.getElementById('screen-notas-mod');
+  if(screen && screen.classList.contains('active')) renderNotasMod();
+  if(typeof renderValNotasList==='function'){
+    var tab = document.getElementById('val-content-notas');
+    if(tab && tab.style.display!=='none') renderValNotasList();
+  }
+}
+window.deleteNota = deleteNota;
 
 // ═══════════════════════════════════════════════════════════════════════
 // AJUSTES — módulo Sala desde sidebar (descuentos, errores, invitaciones)
