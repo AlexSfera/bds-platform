@@ -509,7 +509,7 @@ function getScreens(rol){
   // ════════════════════════════════════════════════════════════════
 
   // ── MI DÍA ───────────────────────────────────────────────────────
-  var miDia = [ITEMS.readme];
+  var miDia = [];
 
   if(isHK){
     // HK: Mi Ruta y Revisión (gobernanta) se anteponen a Mi Turno
@@ -3132,7 +3132,7 @@ async function toggleEmp(empId, newEstado){
     { method: 'PATCH',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
                  'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ estado: newEstado, updated_at: localTs() }) }
+      body: JSON.stringify({ estado: newEstado }) }
   );
   if(!res.ok){ toast('Error al actualizar estado', 'err'); return; }
   await auditLog('EMP_ESTADO', currentUser.nombre + ' cambió estado de ' + empId + ' → ' + newEstado);

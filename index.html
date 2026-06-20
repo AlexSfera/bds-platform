@@ -672,97 +672,143 @@ tr:hover td{background:rgba(96,165,250,.06);}
     </section>
 
     <!-- Department grid -->
-    <section style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px;">
+    <section style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
 
-      <!-- COCINA — active -->
-      <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:16px;border:2px solid #f59e0b;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(245,158,11,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🍳</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+      <!-- COCINA -->
+      <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:14px;border:2px solid #f59e0b;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(245,158,11,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🍳</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
         </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Cocina</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Turnos · Mermas · Tareas</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#2ec4b6;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
-        </div>
-      </button>
-
-      <!-- SALA — active -->
-      <button onclick="pSel('sala','Sala','#3b82f6')" style="text-align:left;border-radius:16px;border:2px solid #3b82f6;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(59,130,246,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🍽</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Sala</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Caja · Incidencias · Servicio</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#2ec4b6;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Cocina</h3>
+          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Turnos · Mermas · Tareas</p>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#f59e0b;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
+          </div>
         </div>
       </button>
 
-      <!-- SOON departments -->
-      <button onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')" style="text-align:left;border-radius:16px;border:2px solid #8b5cf6;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(139,92,246,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🏨</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+      <!-- SALA -->
+      <button onclick="pSel('sala','Sala','#3b82f6')" style="text-align:left;border-radius:14px;border:2px solid #3b82f6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(59,130,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🍽</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
         </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Recepción Hotel</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Check-in · Check-out · Caja MEWS</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#8b5cf6;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
-        </div>
-      </button>
-      <button onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')" style="text-align:left;border-radius:16px;border:2px solid #06b6d4;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(6,182,212,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🔬</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Recepción SYNCROLAB</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Reservas · Clientes</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#06b6d4;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Sala</h3>
+          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Caja · Incidencias · Servicio</p>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#3b82f6;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
+          </div>
         </div>
       </button>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">💪</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Entrenadores</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Sesiones · Seguimiento</p>
-      </div>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">🩺</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Fisioterapeutas</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Tratamientos · Pacientes</p>
-      </div>
-      <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:16px;border:2px solid #f97316;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(249,115,22,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🧹</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+
+      <!-- RECEPCIÓN HOTEL -->
+      <button onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')" style="text-align:left;border-radius:14px;border:2px solid #8b5cf6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(139,92,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🏨</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
         </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Housekeeping</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Limpieza · Habitaciones · Zonas</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#f97316;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Recepción Hotel</h3>
+          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Check-in · Check-out · Caja MEWS</p>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#8b5cf6;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
+          </div>
         </div>
       </button>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">🔧</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Mantenimiento</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Incidencias · Tareas técnicas</p>
-      </div>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">📦</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Economato</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Stock · Compras · Control</p>
-      </div>
-      <button onclick="pSel('administracion','Dirección / RRHH','#a855f7')" style="text-align:left;border-radius:16px;border:2px solid #a855f7;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(168,85,247,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">👔</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
+
+      <!-- RECEPCIÓN SYNCROLAB -->
+      <button onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')" style="text-align:left;border-radius:14px;border:2px solid #06b6d4;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(6,182,212,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🔬</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
         </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Dirección / RRHH</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Administración · Recursos Humanos</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#a855f7;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Recepción SYNCROLAB</h3>
+          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Reservas · Clientes</p>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#06b6d4;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
+          </div>
+        </div>
+      </button>
+
+      <!-- ENTRENADORES — Próximamente -->
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">💪</div>
+          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
+        </div>
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Entrenadores</h3>
+          <p style="font-size:12px;color:#475569;margin:0;">Sesiones · Seguimiento</p>
+        </div>
+      </div>
+
+      <!-- FISIOTERAPEUTAS — Próximamente -->
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🩺</div>
+          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
+        </div>
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Fisioterapeutas</h3>
+          <p style="font-size:12px;color:#475569;margin:0;">Tratamientos · Pacientes</p>
+        </div>
+      </div>
+
+      <!-- HOUSEKEEPING -->
+      <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:14px;border:2px solid #f97316;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(249,115,22,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🧹</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
+        </div>
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Housekeeping</h3>
+          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Limpieza · Habitaciones · Zonas</p>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#f97316;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
+          </div>
+        </div>
+      </button>
+
+      <!-- MANTENIMIENTO — Próximamente -->
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🔧</div>
+          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
+        </div>
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Mantenimiento</h3>
+          <p style="font-size:12px;color:#475569;margin:0;">Incidencias · Tareas técnicas</p>
+        </div>
+      </div>
+
+      <!-- ECONOMATO — Próximamente -->
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">📦</div>
+          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
+        </div>
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Economato</h3>
+          <p style="font-size:12px;color:#475569;margin:0;">Stock · Compras · Control</p>
+        </div>
+      </div>
+
+      <!-- DIRECCIÓN / RRHH -->
+      <button onclick="pSel('administracion','Dirección / RRHH','#a855f7')" style="text-align:left;border-radius:14px;border:2px solid #a855f7;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+          <div style="width:52px;height:52px;background:rgba(168,85,247,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">👔</div>
+          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
+        </div>
+        <div>
+          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Dirección / RRHH</h3>
+          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Administración · Recursos Humanos</p>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#a855f7;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
+          </div>
         </div>
       </button>
     </section>

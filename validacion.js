@@ -1191,8 +1191,9 @@ async function pSel(dept, label, color){
     var parts = (nombre||'').trim().split(/\s+/);
     return (parts[0]||'').charAt(0).toUpperCase() + (parts[1]||'').charAt(0).toUpperCase();
   }
+  // Cada tarjeta es clickable → abre el PIN directamente
   function empCard(e){
-    return '<div style="display:flex;align-items:center;gap:14px;background:#0f2035;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;min-width:160px;">'
+    return '<div onclick="_pOpenPin()" style="display:flex;align-items:center;gap:14px;background:#0f2035;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 16px;min-width:160px;cursor:pointer;transition:all .15s;" onmouseover="this.style.background=\'#162840\';this.style.borderColor=\''+color+'88\'" onmouseout="this.style.background=\'#0f2035\';this.style.borderColor=\'rgba(255,255,255,.12)\'">'
       +'<div style="width:40px;height:40px;border-radius:50%;background:'+color+'33;border:2px solid '+color+'66;display:flex;align-items:center;justify-content:center;font-family:\'JetBrains Mono\',monospace;font-size:13px;font-weight:700;color:'+color+';flex-shrink:0;">'+empInitials(e.nombre)+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:#f1f5f9;">'+e.nombre+'</div>'
       +'<div style="font-size:12px;color:#94a3b8;">'+e.puesto+'</div></div>'
@@ -1209,20 +1210,14 @@ async function pSel(dept, label, color){
 
   var html = ''
     +'<div id="pdept-team-screen" style="animation:fadeIn .2s ease;">'
-    // Botón Atrás — más visible
     +'<div style="display:flex;align-items:center;gap:16px;margin-bottom:32px;">'
     +'<button onclick="pBack()" style="display:flex;align-items:center;gap:8px;background:#1e3a5f;border:2px solid '+color+';border-radius:10px;padding:10px 18px;color:#f1f5f9;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:.03em;" onmouseover="this.style.background=\''+color+'33\'" onmouseout="this.style.background=\'#1e3a5f\'">← Atrás</button>'
     +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:13px;font-weight:700;letter-spacing:.2em;color:'+color+';text-transform:uppercase;">'+label+'</div>'
     +'</div>'
-    // Secciones de equipo
     +(equipo.length       ? section('EQUIPO',                '#94a3b8', equipo)       : '')
     +(responsables.length ? section('RESPONSABLE DE TURNO',  '#2ec4b6', responsables) : '')
     +(jefes.length        ? section('JEFE / VALIDADOR',      color,     jefes)        : '')
-    +(!deptEmps.length    ? '<div style="color:#64748b;font-size:14px;padding:20px 0;">Sin empleados activos en este departamento</div>' : '')
-    // Botón Entrar
-    +'<div style="margin-top:32px;border-top:1px solid rgba(255,255,255,.08);padding-top:24px;">'
-    +'<button onclick="_pOpenPin()" style="background:'+color+';border:none;border-radius:10px;padding:14px 32px;color:#0B1F33;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.05em;transition:opacity .15s;" onmouseover="this.style.opacity=\'.85\'" onmouseout="this.style.opacity=\'1\'">Entrar con mi PIN →</button>'
-    +'</div>'
+    +(!deptEmps.length    ? '<div style="color:#64748b;font-size:14px;padding:20px 0;">Sin empleados activos — haz click aquí para entrar con PIN<br><br><button onclick="_pOpenPin()" style="background:'+color+';border:none;border-radius:8px;padding:12px 24px;color:#0B1F33;font-size:14px;font-weight:700;cursor:pointer;">Entrar con PIN →</button></div>' : '')
     +'</div>';
 
   // Ocultar secciones del portal grid y mostrar pantalla de equipo
