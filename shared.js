@@ -509,7 +509,9 @@ function getScreens(rol){
   // ════════════════════════════════════════════════════════════════
 
   // ── MI DÍA ───────────────────────────────────────────────────────
-  var miDia = [ITEMS.readme];
+  // NOTA: readme (INFO) se muestra en la fila 1 del topbar junto al logo.
+  // No se incluye aquí para no duplicarlo en la barra de navegación.
+  var miDia = [];
 
   if(isHK){
     // HK: Mi Ruta y Revisión (gobernanta) se anteponen a Mi Turno
@@ -777,6 +779,9 @@ async function showScreen(id){
   const nb=document.getElementById('nav-'+id); if(nb) nb.classList.add('active');
   const bb=document.getElementById('bnav-'+id); if(bb) bb.classList.add('active');
   const sb=document.getElementById('side-'+id); if(sb) sb.classList.add('active');
+  // Highlight del botón INFO en fila 1 cuando se muestra la pantalla readme
+  var _infoBtn = document.getElementById('topbar-info-btn');
+  if(_infoBtn) _infoBtn.style.background = (id === 'readme') ? 'rgba(46,196,182,.28)' : 'rgba(46,196,182,.12)';
   window.scrollTo(0,0);
   if(id==='readme' && typeof renderInfoScreen==='function'){ renderInfoScreen(); }
   if(id==='turno'){ initTurnoForm(); }
@@ -1287,7 +1292,15 @@ async function loadForCorrection(shiftId){
 
 // ═══════════════════════════════════════════════════════════════════════
 // SAVE TURNO
+// Flag anti-doble-click: se activa al entrar, se libera al salir (ok o error).
+var _savingTurno = false;
 async function _doSaveTurno(){
+  // ── GUARD ANTI-DOBLE-CLICK (Fix Jun 2026) ──
+  if(_savingTurno){ toast('Guardando, espera…','warn'); throw new Error('ALREADY_SAVING'); }
+  _savingTurno = true;
+  try { return await _doSaveTurnoInner(); } finally { _savingTurno = false; }
+}
+async function _doSaveTurnoInner(){
   // ── GUARD GLOBAL (Fix Jun 2026): Horas trabajadas son obligatorias ──
   // Punto único por donde pasan TODOS los flows de guardar turno
   // (Cocina/Sala vía saveTurno, Recepción vía submitRecKpi, SYNCROLAB vía caja).
@@ -1396,24 +1409,30 @@ async function _doSaveTurno(){
 
   // ── NEW SHIFT ──
   } else {
-    // GUARD: 1 turno pendiente activo por empleado/día (BUG-TURNO-03)
-    // Si ya hay un turno con estado 'Pendiente' o 'En corrección' del mismo
-    // empleado/fecha, no permitimos crear otro. Si están todos validados o
-    // rechazados (o han sido eliminados), sí se puede crear uno nuevo.
+    // GUARD: 1 turno por empleado/día — BUG-TURNO-03 + BUG-TURNO-04
+    // Bloqueamos si existe turno del mismo empleado+fecha en cualquiera de:
+    //   Pendiente, En corrección, Validado
+    // Solo permitimos nuevo turno si el anterior fue Rechazado (o no existe).
+    // Fix Jun 2026: la versión anterior solo bloqueaba Pendiente/En corrección,
+    // dejando pasar cuando el turno ya estaba Validado → origen de duplicados.
+    // La caché se invalida ANTES de leer para evitar race condition por doble-click.
     try {
+      invalidateCache('shifts');
       var allShifts = await getDB('shifts');
       var bloqueante = (allShifts||[]).find(function(s){
         return s.employee_id === currentUser.id
           && (s.fecha||'').slice(0,10) === (fecha||'').slice(0,10)
-          && (s.estado === 'Pendiente' || s.estado === 'En corrección');
+          && (s.estado === 'Pendiente' || s.estado === 'En corrección' || s.estado === 'Validado');
       });
       if(bloqueante){
         const alertArea = document.getElementById('turno-alert-area');
+        var msg = (bloqueante.estado === 'Validado')
+          ? 'Tu turno de hoy ('+formatDisplayValue(bloqueante.servicio)+') ya está VALIDADO. No se puede crear un segundo turno para el mismo día.'
+          : 'Ya tienes un turno PENDIENTE de hoy ('+formatDisplayValue(bloqueante.servicio)+'). Espera a que tu jefe lo valide o pídele que lo rechace antes de crear otro.';
         if(alertArea){
-          alertArea.innerHTML = '<div class="alert a-err">Ya tienes un turno PENDIENTE de hoy ('+formatDisplayValue(bloqueante.servicio)+'). '
-            + 'Espera a que tu jefe lo valide o pídele que lo rechace antes de crear otro.</div>';
+          alertArea.innerHTML = '<div class="alert a-err">'+msg+'</div>';
         }
-        toast('Ya hay turno pendiente hoy','err');
+        toast('Turno duplicado bloqueado','err');
         return;
       }
     } catch(eGuard){
