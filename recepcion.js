@@ -349,10 +349,19 @@ function submitRecKpi() {
 
   closeRecKpiModal();
   // BUG-01 FIX: guardar turno PRIMERO, luego ventas cross-sell, luego abrir caja
+  // BUG-REC-VENTAS: .catch() añadido — si _doSaveTurno lanza (insert fallido o horas=0)
+  // la cadena se corta y NO se abre caja ni se pierden ventas silenciosamente
   _doSaveTurno().then(function() {
     _saveRecepcionVentas(window._lastSavedShiftId).then(function(){
       openRecCajaChoice();
     });
+  }).catch(function(e){
+    // HORAS_OBLIGATORIAS y SHIFT_INSERT_FAILED ya muestran su propio toast/alerta
+    if(e && e.message !== 'HORAS_OBLIGATORIAS' && e.message !== 'SHIFT_INSERT_FAILED'){
+      console.error('Error en flujo guardar turno Recepción:', e);
+      toast('Error al guardar el turno. Revisa los datos e inténtalo de nuevo.','err');
+    }
+    // No abrir caja — el empleado debe corregir y reenviar
   });
 }
 

@@ -1675,10 +1675,10 @@ async function renderValMermaList(){
   var all = [];
   try { all = await getDB('merma'); } catch(e){ console.error('Error cargando merma', e); }
 
-  // Filtrar solo Cocina/Friegue
+  // Filtrar solo Cocina/Friegue/FnB (campo puede ser area o departamento)
   all = all.filter(function(m){
-    var a = (m.area||'').toLowerCase();
-    return a === 'cocina' || a === 'friegue';
+    var a = (m.area || m.departamento || '').toLowerCase();
+    return a === 'cocina' || a === 'friegue' || a === 'fnb';
   });
   if(desde) all = all.filter(function(m){ return (m.fecha||'') >= desde; });
   if(hasta) all = all.filter(function(m){ return (m.fecha||'') <= hasta; });
@@ -1706,7 +1706,7 @@ async function renderValMermaList(){
   var canEdit  = isAdminU || (typeof canValidateDepartment==='function' && canValidateDepartment(currentUser,'Cocina'));
 
   tableEl.innerHTML = '<table>'
-    +'<tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Producto</th><th>Cant.</th><th>Causa</th><th>Observación</th><th>Coste</th></tr>'
+    +'<tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Producto</th><th>Cant.</th><th>Causa</th><th>Observación</th><th>Coste</th>'+(canEdit?'<th></th>':'')+'</tr>'
     +all.map(function(m){
       var sinC = !m.coste_unitario || m.coste_unitario===0;
       var fecha = typeof fmtDate==='function' ? fmtDate(m.fecha) : (m.fecha||'—');
@@ -1719,12 +1719,108 @@ async function renderValMermaList(){
         +'<td style="font-size:12px">'+( m.causa||'—')+'</td>'
         +'<td style="font-size:11px;color:var(--text3)">'+( m.obs||'—')+'</td>'
         +'<td style="font-family:var(--font-mono);'+(sinC?'color:var(--amber)':'color:var(--orange)')+'">'
-          +(sinC?'⚠ Pendiente':(m.coste_total||0).toFixed(2)+'€')+'</td>'
-        +'</tr>';
+          +(sinC?'⚠ Pendiente':(m.coste_total||0).toFixed(2)+'€')+'</td>'        +(canEdit          ?'<td><button class="vbtn vbtn-sec" onclick="valMermaEditCoste(\''+m.id+'\',\''+encodeURIComponent(m.producto||'')+'\',' +(m.cantidad||0)+',\''+( m.unidad||'g')+'\','+( m.coste_unitario||0)+')" title="Valorar">✏️</button></td>'          :'')        +'</tr>';
     }).join('')
     +'</table>';
 }
 window.renderValMermaList = renderValMermaList;
+
+
+// ── EDITAR COSTE DE MERMA desde pestaña Validación ───────────────────
+var _vmc_current = {}; // estado del modal activo
+
+function valMermaEditCoste(id, productoEnc, cantidad, unidad, costeActual) {
+  _vmc_current = { id: id, cantidad: cantidad };
+  var producto = decodeURIComponent(productoEnc);
+
+  var existing = document.getElementById('modal-val-merma-coste');
+  if (existing) existing.remove();
+
+  var div = document.createElement('div');
+  div.id = 'modal-val-merma-coste';
+  div.className = 'modal-overlay';
+  div.innerHTML = '<div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">'
+    + '<div class="modal-h"><h3>✏️ Valorar merma</h3>'
+    + '<button class="modal-x" onclick="_valMermaCloseModal()">✕</button></div>'
+    + '<div class="modal-b">'
+    + '<div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:16px;">'
+    + '<div style="font-weight:600;font-size:14px;">' + producto + '</div>'
+    + '<div style="font-size:12px;color:var(--text2);margin-top:4px;">' + cantidad + ' ' + unidad + '</div>'
+    + '</div>'
+    + '<div class="fg">'
+    + '<label>Coste unitario (€/' + unidad + ') <span class="req">*</span></label>'
+    + '<input id="vmc-coste-unit" type="number" min="0" step="0.00001" value="' + (costeActual || '') + '" placeholder="ej: 0.01888">'
+    + '</div>'
+    + '<div id="vmc-preview" style="text-align:center;padding:10px;background:var(--bg3);border-radius:8px;margin-top:8px;display:none;">'
+    + '<span style="font-size:12px;color:var(--text2)">Coste total: </span>'
+    + '<span id="vmc-total" style="font-size:20px;font-weight:700;color:var(--orange)"></span>'
+    + '</div>'
+    + '</div>'
+    + '<div class="modal-f">'
+    + '<button class="btn btn-secondary" onclick="_valMermaCloseModal()">Cancelar</button>'
+    + '<button class="btn btn-primary" onclick="valMermaSaveCoste()">💾 Guardar coste</button>'
+    + '</div></div>';
+
+  document.body.appendChild(div);
+  div.addEventListener('click', function(e) { if (e.target === div) _valMermaCloseModal(); });
+  div.classList.add('open');
+
+  var inp = document.getElementById('vmc-coste-unit');
+  if (inp) {
+    inp.focus(); inp.select();
+    inp.addEventListener('input', function() {
+      var cu = parseFloat(inp.value) || 0;
+      var total = cu * cantidad;
+      var prev = document.getElementById('vmc-preview');
+      var tot  = document.getElementById('vmc-total');
+      if (cu > 0) { if(tot) tot.textContent = total.toFixed(2) + '€'; if(prev) prev.style.display = 'block'; }
+      else { if(prev) prev.style.display = 'none'; }
+    });
+  }
+}
+window.valMermaEditCoste = valMermaEditCoste;
+
+function _valMermaCloseModal() {
+  var m = document.getElementById('modal-val-merma-coste');
+  if (m) m.remove();
+  _vmc_current = {};
+}
+window._valMermaCloseModal = _valMermaCloseModal;
+
+async function valMermaSaveCoste() {
+  var id       = _vmc_current.id;
+  var cantidad = _vmc_current.cantidad;
+  if (!id) { toast('Error: sin referencia de merma', 'err'); return; }
+
+  var inp = document.getElementById('vmc-coste-unit');
+  var costeUnit = parseFloat((inp || {}).value);
+  if (!costeUnit || costeUnit <= 0) { toast('Introduce el coste unitario', 'err'); return; }
+
+  var costeTotal = parseFloat((costeUnit * cantidad).toFixed(2));
+
+  try {
+    var res = await fetch(SUPABASE_URL + '/rest/v1/merma?id=eq.' + id, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ coste_unitario: costeUnit, coste_total: costeTotal })
+    });
+    if (!res.ok) { var e = await res.text(); toast('Error: ' + e, 'err'); return; }
+
+    invalidateCache('merma');
+    _valMermaCloseModal();
+    toast('Coste guardado — ' + costeTotal.toFixed(2) + '€', 'ok');
+    renderValMermaList();
+  } catch(e) {
+    toast('Error: ' + (e.message || e), 'err');
+  }
+}
+window.valMermaSaveCoste = valMermaSaveCoste;
+
 
 // ── NOTAS TAB (Validación) ────────────────────────────────────────────
 async function renderValNotasList(){

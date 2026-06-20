@@ -1432,7 +1432,7 @@ async function _doSaveTurno(){
       console.error('Shift insert failed',shift);
       const alertArea=document.getElementById('turno-alert-area');
       if(alertArea) alertArea.innerHTML='<div class="alert a-err">No se pudo guardar el turno. Inténtalo de nuevo.</div>';
-      return;
+      throw new Error('SHIFT_INSERT_FAILED');
     }
     invalidateCache('shifts');
     auditLog('SAVE_SHIFT', currentUser.nombre+' — '+fecha+' — '+servicio);
