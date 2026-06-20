@@ -186,7 +186,7 @@ function _mermaCalcCoste(item, cantidad) {
 
 // ── RENDER PANTALLA MERMA ─────────────────────────────────────────────
 async function renderMermaScreen() {
-  var el = document.getElementById('screen-merma');
+  var el = document.getElementById('screen-merma-mod');
   if (!el) return;
 
   if (!canRegistrarMerma(currentUser) && !canGestionarMerma(currentUser)) {
