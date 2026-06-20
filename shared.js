@@ -509,9 +509,7 @@ function getScreens(rol){
   // ════════════════════════════════════════════════════════════════
 
   // ── MI DÍA ───────────────────────────────────────────────────────
-  // NOTA: readme (INFO) se muestra en la fila 1 del topbar junto al logo.
-  // No se incluye aquí para no duplicarlo en la barra de navegación.
-  var miDia = [];
+  var miDia = [ITEMS.readme];
 
   if(isHK){
     // HK: Mi Ruta y Revisión (gobernanta) se anteponen a Mi Turno
@@ -779,9 +777,6 @@ async function showScreen(id){
   const nb=document.getElementById('nav-'+id); if(nb) nb.classList.add('active');
   const bb=document.getElementById('bnav-'+id); if(bb) bb.classList.add('active');
   const sb=document.getElementById('side-'+id); if(sb) sb.classList.add('active');
-  // Highlight del botón INFO en fila 1 cuando se muestra la pantalla readme
-  var _infoBtn = document.getElementById('topbar-info-btn');
-  if(_infoBtn) _infoBtn.style.background = (id === 'readme') ? 'rgba(46,196,182,.28)' : 'rgba(46,196,182,.12)';
   window.scrollTo(0,0);
   if(id==='readme' && typeof renderInfoScreen==='function'){ renderInfoScreen(); }
   if(id==='turno'){ initTurnoForm(); }
@@ -1292,15 +1287,7 @@ async function loadForCorrection(shiftId){
 
 // ═══════════════════════════════════════════════════════════════════════
 // SAVE TURNO
-// Flag anti-doble-click: se activa al entrar, se libera al salir (ok o error).
-var _savingTurno = false;
 async function _doSaveTurno(){
-  // ── GUARD ANTI-DOBLE-CLICK (Fix Jun 2026) ──
-  if(_savingTurno){ toast('Guardando, espera…','warn'); throw new Error('ALREADY_SAVING'); }
-  _savingTurno = true;
-  try { return await _doSaveTurnoInner(); } finally { _savingTurno = false; }
-}
-async function _doSaveTurnoInner(){
   // ── GUARD GLOBAL (Fix Jun 2026): Horas trabajadas son obligatorias ──
   // Punto único por donde pasan TODOS los flows de guardar turno
   // (Cocina/Sala vía saveTurno, Recepción vía submitRecKpi, SYNCROLAB vía caja).
@@ -1409,30 +1396,24 @@ async function _doSaveTurnoInner(){
 
   // ── NEW SHIFT ──
   } else {
-    // GUARD: 1 turno por empleado/día — BUG-TURNO-03 + BUG-TURNO-04
-    // Bloqueamos si existe turno del mismo empleado+fecha en cualquiera de:
-    //   Pendiente, En corrección, Validado
-    // Solo permitimos nuevo turno si el anterior fue Rechazado (o no existe).
-    // Fix Jun 2026: la versión anterior solo bloqueaba Pendiente/En corrección,
-    // dejando pasar cuando el turno ya estaba Validado → origen de duplicados.
-    // La caché se invalida ANTES de leer para evitar race condition por doble-click.
+    // GUARD: 1 turno pendiente activo por empleado/día (BUG-TURNO-03)
+    // Si ya hay un turno con estado 'Pendiente' o 'En corrección' del mismo
+    // empleado/fecha, no permitimos crear otro. Si están todos validados o
+    // rechazados (o han sido eliminados), sí se puede crear uno nuevo.
     try {
-      invalidateCache('shifts');
       var allShifts = await getDB('shifts');
       var bloqueante = (allShifts||[]).find(function(s){
         return s.employee_id === currentUser.id
           && (s.fecha||'').slice(0,10) === (fecha||'').slice(0,10)
-          && (s.estado === 'Pendiente' || s.estado === 'En corrección' || s.estado === 'Validado');
+          && (s.estado === 'Pendiente' || s.estado === 'En corrección');
       });
       if(bloqueante){
         const alertArea = document.getElementById('turno-alert-area');
-        var msg = (bloqueante.estado === 'Validado')
-          ? 'Tu turno de hoy ('+formatDisplayValue(bloqueante.servicio)+') ya está VALIDADO. No se puede crear un segundo turno para el mismo día.'
-          : 'Ya tienes un turno PENDIENTE de hoy ('+formatDisplayValue(bloqueante.servicio)+'). Espera a que tu jefe lo valide o pídele que lo rechace antes de crear otro.';
         if(alertArea){
-          alertArea.innerHTML = '<div class="alert a-err">'+msg+'</div>';
+          alertArea.innerHTML = '<div class="alert a-err">Ya tienes un turno PENDIENTE de hoy ('+formatDisplayValue(bloqueante.servicio)+'). '
+            + 'Espera a que tu jefe lo valide o pídele que lo rechace antes de crear otro.</div>';
         }
-        toast('Turno duplicado bloqueado','err');
+        toast('Ya hay turno pendiente hoy','err');
         return;
       }
     } catch(eGuard){
@@ -2923,7 +2904,12 @@ function _syncAreaFromPuesto(){
 }
 
 async function renderMaestro(){
-  const employees=(await getDB('employees')).filter(e=>e.id!=='E13');
+  var estadoFilt = (document.getElementById('maestro-estado-filter')||{value:'Activo'}).value;
+  // Si el select aún no existe en DOM (primera carga), defecto = Activo
+  if(estadoFilt === undefined) estadoFilt = 'Activo';
+  var allEmps = (await getDB('employees')).filter(function(e){ return e.id !== 'E13'; });
+  var employees = estadoFilt === '' ? allEmps : allEmps.filter(function(e){ return e.estado === estadoFilt; });
+
   // Permisos: adjunto_directivo NO puede modificar/eliminar/ver-PIN de fila con rol=admin
   function canEditRow(e){
     if(isAdjuntoDirectivo(currentUser) && e.rol === 'admin') return false;
@@ -2934,14 +2920,43 @@ async function renderMaestro(){
     if(isAdmin(currentUser)) return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">'+e.pin+'</span>';
     return '<span style="color:var(--text3)">●●●●</span>';
   }
-  document.getElementById('maestro-table').innerHTML=`<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Acciones</th></tr>
-  ${employees.map(e=>`<tr><td><strong>${e.nombre}</strong></td><td>${deptBadge(e.area)}</td><td style="font-size:11px">${e.puesto}</td><td>${e.estado==='Activo'?'<span class="badge b-green">Activo</span>':e.estado==='Baja'?'<span class="badge b-red">Baja</span>':'<span class="badge b-yellow">'+e.estado+'</span>'}</td><td>${e.responsable==1?'<span class="badge b-blue">SÍ</span>':'—'}</td><td>${e.validador==1?'<span class="badge b-yellow">SÍ</span>':'—'}</td><td style="font-family:var(--font-mono);font-size:10px">${e.rol}</td><td style="font-family:var(--font-mono)">${parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—'}</td><td>${pinCell(e)}</td><td style="white-space:nowrap">${canEditRow(e) ? `<button class="btn btn-secondary btn-sm" onclick="openEmpModal('${e.id}')">Editar</button> ${(canActAsAdmin(currentUser)||(currentUser.rol==='fb'&&e.rol!=='admin'))?
-              (e.estado==='Activo'?
-                `<button class="btn btn-danger btn-sm" onclick="toggleEmp('${e.id}','Baja')">Baja</button>`:
-                `<button class="btn btn-success btn-sm" onclick="toggleEmp('${e.id}','Activo')">Activar</button>`
-              ):
-              '<span style="font-size:11px;color:var(--text3);">—</span>'
-            }` : '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>'}</td></tr>`).join('')}</table>`;
+  function accionesCell(e){
+    if(!canEditRow(e)) return '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>';
+    var canToggle = canActAsAdmin(currentUser) || (currentUser.rol === 'fb' && e.rol !== 'admin');
+    var html = '<button class="btn btn-secondary btn-sm" onclick="openEmpModal(\''+e.id+'\')">Editar</button> ';
+    if(canToggle){
+      if(e.estado === 'Activo'){
+        html += '<button class="btn btn-danger btn-sm" onclick="toggleEmp(\''+e.id+'\',\'Baja\')">Baja</button>';
+      } else {
+        html += '<button class="btn btn-success btn-sm" onclick="toggleEmp(\''+e.id+'\',\'Activo\')">Activar</button>';
+        if(isAdmin(currentUser)){
+          html += ' <button class="btn btn-sm" style="background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b;" onclick="deleteEmp(\''+e.id+'\',\''+e.nombre.replace(/'/g,"\\'")+'\')" title="Eliminar definitivamente">🗑 Eliminar</button>';
+        }
+      }
+    } else {
+      html += '<span style="font-size:11px;color:var(--text3);">—</span>';
+    }
+    return html;
+  }
+
+  var rows = employees.length === 0
+    ? '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px;">Sin empleados con este filtro</td></tr>'
+    : employees.map(function(e){
+        return '<tr>'
+          +'<td><strong>'+e.nombre+'</strong></td>'
+          +'<td>'+deptBadge(e.area)+'</td>'
+          +'<td style="font-size:11px">'+e.puesto+'</td>'
+          +'<td>'+(e.estado==='Activo'?'<span class="badge b-green">Activo</span>':e.estado==='Baja'?'<span class="badge b-red">Baja</span>':'<span class="badge b-yellow">'+e.estado+'</span>')+'</td>'
+          +'<td>'+(e.responsable==1?'<span class="badge b-blue">SÍ</span>':'—')+'</td>'
+          +'<td>'+(e.validador==1?'<span class="badge b-yellow">SÍ</span>':'—')+'</td>'
+          +'<td style="font-family:var(--font-mono);font-size:10px">'+e.rol+'</td>'
+          +'<td style="font-family:var(--font-mono)">'+(parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—')+'</td>'
+          +'<td>'+pinCell(e)+'</td>'
+          +'<td style="white-space:nowrap">'+accionesCell(e)+'</td>'
+          +'</tr>';
+      }).join('');
+
+  document.getElementById('maestro-table').innerHTML = '<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Acciones</th></tr>'+rows+'</table>';
 }
 async function openEmpModal(empId){
   _editEmpId=empId||null;
@@ -3092,17 +3107,57 @@ async function saveEmpleado(){
     toast((_editEmpId?'Empleado actualizado':'Empleado creado')+' — coste: '+costeVal+'€/h','ok');
   }, 200);
 }
-function filterMaestro(q){
-  var query=(q||'').toLowerCase();
-  var table=document.getElementById('maestro-table');
+function filterMaestro(){
+  var query = ((document.getElementById('maestro-search')||{}).value||'').toLowerCase();
+  var estadoFilt = (document.getElementById('maestro-estado-filter')||{}).value||'';
+  var table = document.getElementById('maestro-table');
   if(!table) return;
-  table.querySelectorAll('tbody tr, tr').forEach(function(row,i){
-    if(i===0) return; // header
-    var txt=(row.textContent||'').toLowerCase();
-    row.style.display=(query===''||txt.indexOf(query)!==-1)?'':'none';
+  // Si hay filtro de estado, re-renderizar (los datos cambian en DB); si solo texto, filtrar DOM
+  var hasEstadoChange = estadoFilt !== undefined;
+  if(hasEstadoChange && query === ''){
+    // Re-render completo para respetar filtro de estado desde DB
+    renderMaestro(); return;
+  }
+  // Filtro DOM rápido (búsqueda de texto — la tabla ya tiene el estado correcto)
+  table.querySelectorAll('tbody tr, tr').forEach(function(row, i){
+    if(i === 0) return; // header
+    var txt = (row.textContent||'').toLowerCase();
+    row.style.display = (query === '' || txt.indexOf(query) !== -1) ? '' : 'none';
   });
 }
-async function toggleEmp(empId,newEstado){ const employees=await getDB('employees'); const idx=employees.findIndex(e=>e.id===empId); if(idx===-1) return; employees[idx].estado=newEstado; await setDB('employees',employees); renderMaestro(); toast('Estado: '+newEstado,'ok'); }
+async function toggleEmp(empId, newEstado){
+  // BUG-EMP-01 fix: usar dbUpdate puntual en lugar de setDB (bulk upsert)
+  var res = await fetch(
+    SUPABASE_URL + '/rest/v1/employees?id=eq.' + encodeURIComponent(empId),
+    { method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
+                 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ estado: newEstado, updated_at: localTs() }) }
+  );
+  if(!res.ok){ toast('Error al actualizar estado', 'err'); return; }
+  await auditLog('EMP_ESTADO', currentUser.nombre + ' cambió estado de ' + empId + ' → ' + newEstado);
+  invalidateCache('employees');
+  await renderMaestro();
+  toast('Estado: ' + newEstado, 'ok');
+}
+
+async function deleteEmp(empId, empNombre){
+  if(!isAdmin(currentUser)){ toast('Solo admin puede eliminar empleados', 'err'); return; }
+  var ok = confirm('¿Eliminar definitivamente a "' + empNombre + '"?\nEsta acción no se puede deshacer.\nSolo es posible si el empleado está en Baja.');
+  if(!ok) return;
+  // Verificar que sigue en Baja antes de borrar
+  var emps = await getDB('employees');
+  var emp = emps.find(function(e){ return e.id === empId; });
+  if(!emp){ toast('Empleado no encontrado', 'err'); return; }
+  if(emp.estado !== 'Baja'){ toast('Solo se pueden eliminar empleados en estado Baja', 'err'); return; }
+  // Audit log ANTES del delete (regla: audit_log antes de DELETE)
+  await auditLog('DELETE_EMP', currentUser.nombre + ' eliminó empleado: ' + empNombre + ' (id:' + empId + ', área:' + emp.area + ', puesto:' + emp.puesto + ')');
+  var delRes = await sbRequest('DELETE', 'employees', null, 'id=eq.' + encodeURIComponent(empId));
+  if(delRes === null){ toast('Error al eliminar empleado', 'err'); return; }
+  invalidateCache('employees');
+  await renderMaestro();
+  toast(empNombre + ' eliminado definitivamente', 'ok');
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // EXPORT
