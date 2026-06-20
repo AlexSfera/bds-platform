@@ -259,7 +259,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 
 /* ── PORTAL DEPT GRID ── */
 .portal-dept-grid { grid-template-columns: repeat(2, 1fr); }
-@media(min-width:768px){ .portal-dept-grid { grid-template-columns: repeat(4, 1fr); } }
+@media(min-width:768px){ .portal-dept-grid { grid-template-columns: repeat(3, 1fr); } }
+@media(min-width:1100px){ .portal-dept-grid { grid-template-columns: repeat(4, 1fr); } }
 
 /* ── BOTTOM NAV (mobile-first) ── */
 #bottom-nav{
@@ -672,10 +673,10 @@ tr:hover td{background:rgba(96,165,250,.06);}
     </section>
 
     <!-- Department grid -->
-    <section style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
+    <section class="portal-dept-grid" style="display:grid;gap:14px;">
 
       <!-- COCINA -->
-      <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:14px;border:2px solid #f59e0b;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+      <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:14px;border:2px solid #f59e0b;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(245,158,11,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🍳</div>
           <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
@@ -690,7 +691,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </button>
 
       <!-- SALA -->
-      <button onclick="pSel('sala','Sala','#3b82f6')" style="text-align:left;border-radius:14px;border:2px solid #3b82f6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+      <button onclick="pSel('sala','Sala','#3b82f6')" style="text-align:left;border-radius:14px;border:2px solid #3b82f6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(59,130,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🍽</div>
           <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
@@ -705,7 +706,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </button>
 
       <!-- RECEPCIÓN HOTEL -->
-      <button onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')" style="text-align:left;border-radius:14px;border:2px solid #8b5cf6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+      <button onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')" style="text-align:left;border-radius:14px;border:2px solid #8b5cf6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(139,92,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🏨</div>
           <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
@@ -720,7 +721,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </button>
 
       <!-- RECEPCIÓN SYNCROLAB -->
-      <button onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')" style="text-align:left;border-radius:14px;border:2px solid #06b6d4;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+      <button onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')" style="text-align:left;border-radius:14px;border:2px solid #06b6d4;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(6,182,212,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🔬</div>
           <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
@@ -735,7 +736,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </button>
 
       <!-- ENTRENADORES — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">💪</div>
           <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
@@ -747,7 +748,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </div>
 
       <!-- FISIOTERAPEUTAS — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🩺</div>
           <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
@@ -759,7 +760,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </div>
 
       <!-- HOUSEKEEPING -->
-      <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:14px;border:2px solid #f97316;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+      <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:14px;border:2px solid #f97316;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(249,115,22,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🧹</div>
           <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
@@ -774,7 +775,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </button>
 
       <!-- MANTENIMIENTO — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🔧</div>
           <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
@@ -786,7 +787,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </div>
 
       <!-- ECONOMATO — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">📦</div>
           <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
@@ -798,7 +799,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
       </div>
 
       <!-- DIRECCIÓN / RRHH -->
-      <button onclick="pSel('administracion','Dirección / RRHH','#a855f7')" style="text-align:left;border-radius:14px;border:2px solid #a855f7;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+      <button onclick="pSel('administracion','Dirección / RRHH','#a855f7')" style="text-align:left;border-radius:14px;border:2px solid #a855f7;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;">
           <div style="width:52px;height:52px;background:rgba(168,85,247,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">👔</div>
           <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
