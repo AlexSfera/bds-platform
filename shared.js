@@ -3137,6 +3137,10 @@ async function toggleEmp(empId, newEstado){
   if(!res.ok){ toast('Error al actualizar estado', 'err'); return; }
   await auditLog('EMP_ESTADO', currentUser.nombre + ' cambió estado de ' + empId + ' → ' + newEstado);
   invalidateCache('employees');
+  // Si ponemos en Baja → cambiar filtro a "Solo Baja" para que aparezca el botón Eliminar
+  // Si activamos → volver a "Solo Activos"
+  var fEl = document.getElementById('maestro-estado-filter');
+  if(fEl) fEl.value = (newEstado === 'Baja') ? 'Baja' : 'Activo';
   await renderMaestro();
   toast('Estado: ' + newEstado, 'ok');
 }
