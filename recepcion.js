@@ -279,9 +279,14 @@ function setRecKpi(key, val, btn) {
 function openRecKpiModal() {
   _recKpiState = {};
   document.querySelectorAll('#modal-rec-kpi .tbtn').forEach(function(b){ b.classList.remove('t-si','t-no','t-na'); });
-  ['desayuno-ventas-block','cena-ventas-block','kpi-clientes-detail','kpi-lead-block','kpi-syncro-block'].forEach(function(id){
+  ['desayuno-ventas-block','cena-ventas-block','kpi-clientes-detail','kpi-syncro-block','kpi-lead-block'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.style.display='none';
   });
+  // Limpiar filas dinámicas y resetear índices
+  ['desayuno-ventas-container','cena-ventas-container','syncro-ventas-container'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.innerHTML='';
+  });
+  _desayunoVentaIdx=0; _cenaVentaIdx=0; _syncroVentaIdx=0;
   ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-desal-ofertados','kpi-desal-vendidos','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
@@ -335,16 +340,19 @@ function submitRecKpi() {
   _recKpiState.checkouts = parseInt((document.getElementById('kpi-checkouts')||{}).value)||0;
   _recKpiState.reservas  = parseInt((document.getElementById('kpi-reservas')||{}).value)||0;
   _recKpiState.syncrolab_ventas_data = collectSyncroVentas();
+  _recKpiState.desayuno_ventas_data  = collectDesayunoVentas();
+  _recKpiState.cena_ventas_data      = collectCenaVentas();
   _recKpiState.lead_desc   = (document.getElementById('kpi-lead-desc')||{}).value||'';
   _recKpiState.lead_resp   = (document.getElementById('kpi-lead-resp')||{}).value||'';
   _recKpiState.lead_fecha  = (document.getElementById('kpi-lead-fecha')||{}).value||'';
   _recKpiState.clientes_num = parseInt((document.getElementById('kpi-clientes-num')||{}).value)||0;
 
   closeRecKpiModal();
-  // BUG-01 FIX: guardar turno PRIMERO, luego abrir caja
-  // CAJA-V2: pregunta traspaso o cierre en vez de abrir cierre directo
+  // BUG-01 FIX: guardar turno PRIMERO, luego ventas cross-sell, luego abrir caja
   _doSaveTurno().then(function() {
-    openRecCajaChoice();
+    _saveRecepcionVentas(window._lastSavedShiftId).then(function(){
+      openRecCajaChoice();
+    });
   });
 }
 
@@ -833,6 +841,166 @@ async function reabrirTurnoValidado(shiftId) {
   } catch(e){ toast('Error: '+e.message,'err'); }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════
+// RECEPCIÓN VENTAS CROSS-SELL — persistencia en recepcion_ventas
+// Fuente de verdad para motor de incentivos
+// ═══════════════════════════════════════════════════════════════════════
+
+// Cálculo neto e incentivo según tipo
+function _calcRecVenta(importeBruto, tipoVenta) {
+  var ivaPct = tipoVenta === 'syncrolab' ? 21 : 10;
+  var neto   = importeBruto / (1 + ivaPct / 100);
+  return {
+    iva_pct:      ivaPct,
+    importe_neto: Math.round(neto * 100) / 100,
+    incentivo:    Math.round(neto * 0.10 * 100) / 100
+  };
+}
+
+async function _saveRecepcionVentas(shiftId) {
+  if(!currentUser || !shiftId) return;
+  var fecha  = (document.getElementById('t-fecha')||{}).value || today();
+  var turno  = getRecTurnoValue ? (getRecTurnoValue()||'—') : '—';
+  var ts     = localTs();
+  var filas  = [];
+
+  // Desayunos
+  (_recKpiState.desayuno_ventas_data||[]).forEach(function(v){
+    if(!v.importe || v.importe <= 0) return;
+    var calc = _calcRecVenta(v.importe, 'desayuno');
+    filas.push({
+      id: genId(), shift_id: shiftId,
+      employee_id: currentUser.id, nombre: currentUser.nombre,
+      fecha: fecha, turno: turno,
+      tipo_venta: 'desayuno', tipo_servicio: null,
+      importe_bruto: v.importe, iva_pct: calc.iva_pct,
+      importe_neto: calc.importe_neto, incentivo: calc.incentivo,
+      pax: v.pax||0, mews_ref: v.mews||null,
+      comentario: v.obs||null, created_at: ts
+    });
+  });
+
+  // Comida/Cena
+  (_recKpiState.cena_ventas_data||[]).forEach(function(v){
+    if(!v.importe || v.importe <= 0) return;
+    var calc = _calcRecVenta(v.importe, 'comida_cena');
+    filas.push({
+      id: genId(), shift_id: shiftId,
+      employee_id: currentUser.id, nombre: currentUser.nombre,
+      fecha: fecha, turno: turno,
+      tipo_venta: 'comida_cena', tipo_servicio: null,
+      importe_bruto: v.importe, iva_pct: calc.iva_pct,
+      importe_neto: calc.importe_neto, incentivo: calc.incentivo,
+      pax: v.pax||0, mews_ref: v.mews||null,
+      comentario: v.obs||null, created_at: ts
+    });
+  });
+
+  // SYNCROLAB
+  (_recKpiState.syncrolab_ventas_data||[]).forEach(function(v){
+    if(!v.importe || v.importe <= 0) return;
+    var calc = _calcRecVenta(v.importe, 'syncrolab');
+    filas.push({
+      id: genId(), shift_id: shiftId,
+      employee_id: currentUser.id, nombre: currentUser.nombre,
+      fecha: fecha, turno: turno,
+      tipo_venta: 'syncrolab', tipo_servicio: v.tipo||null,
+      importe_bruto: v.importe, iva_pct: calc.iva_pct,
+      importe_neto: calc.importe_neto, incentivo: calc.incentivo,
+      pax: 0, mews_ref: v.mews||null,
+      comentario: v.obs||null, created_at: ts
+    });
+  });
+
+  if(!filas.length) return;
+
+  for(var i=0; i<filas.length; i++){
+    try { await dbInsert('recepcion_ventas', filas[i]); } catch(e){ console.error('recepcion_ventas insert err', e); }
+  }
+  invalidateCache('recepcion_ventas');
+  await auditLog('REC_VENTAS_SAVE', currentUser.nombre+' registró '+filas.length+' venta(s) cross-sell · turno '+turno+' · '+fecha);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DESAYUNO VENTAS (cross-sell)
+// ═══════════════════════════════════════════════════════════════════════
+var _desayunoVentaIdx = 0;
+
+function addDesayunoVenta() {
+  var idx = _desayunoVentaIdx++;
+  var c = document.getElementById('desayuno-ventas-container');
+  if(!c) return;
+  var div = document.createElement('div');
+  div.id = 'desayuno-venta-'+idx;
+  div.style.cssText = 'border:1px solid #f59e0b;border-radius:6px;padding:10px;margin-bottom:8px;position:relative;';
+  div.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+    + '<div class="fg"><label>Importe (€ con IVA 10%) <span class="req">*</span></label><input type="text" inputmode="decimal" id="dv-importe-'+idx+'" placeholder="0.00" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Nº personas <span class="req">*</span></label><input type="number" inputmode="numeric" id="dv-pax-'+idx+'" min="1" placeholder="1" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Nº reserva MEWS <span class="req">*</span></label><input type="text" id="dv-mews-'+idx+'" placeholder="Nº reserva" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Comentario</label><input type="text" id="dv-obs-'+idx+'" placeholder="Opcional" style="color:#111827;background:#ffffff;"></div>'
+    + '</div>'
+    + '<button onclick="removeDesayunoVenta('+idx+')" style="position:absolute;top:8px;right:8px;background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">✕</button>';
+  c.appendChild(div);
+}
+
+function removeDesayunoVenta(idx) {
+  var el = document.getElementById('desayuno-venta-'+idx);
+  if(el) el.remove();
+}
+
+function collectDesayunoVentas() {
+  var result = [];
+  document.querySelectorAll('#desayuno-ventas-container > div').forEach(function(div){
+    var id      = div.id.replace('desayuno-venta-','');
+    var importe = parseFloat((document.getElementById('dv-importe-'+id)||{value:''}).value)||0;
+    var pax     = parseInt((document.getElementById('dv-pax-'+id)||{value:''}).value)||0;
+    var mews    = (document.getElementById('dv-mews-'+id)||{value:''}).value;
+    var obs     = (document.getElementById('dv-obs-'+id)||{value:''}).value;
+    if(importe || mews) result.push({importe:importe, pax:pax, mews:mews, obs:obs});
+  });
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// COMIDA/CENA VENTAS (cross-sell)
+// ═══════════════════════════════════════════════════════════════════════
+var _cenaVentaIdx = 0;
+
+function addCenaVenta() {
+  var idx = _cenaVentaIdx++;
+  var c = document.getElementById('cena-ventas-container');
+  if(!c) return;
+  var div = document.createElement('div');
+  div.id = 'cena-venta-'+idx;
+  div.style.cssText = 'border:1px solid #ef4444;border-radius:6px;padding:10px;margin-bottom:8px;position:relative;';
+  div.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+    + '<div class="fg"><label>Importe (€ con IVA 10%) <span class="req">*</span></label><input type="text" inputmode="decimal" id="cv-importe-'+idx+'" placeholder="0.00" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Nº personas <span class="req">*</span></label><input type="number" inputmode="numeric" id="cv-pax-'+idx+'" min="1" placeholder="1" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Nº reserva MEWS <span class="req">*</span></label><input type="text" id="cv-mews-'+idx+'" placeholder="Nº reserva" style="color:#111827;background:#ffffff;"></div>'
+    + '<div class="fg"><label>Comentario</label><input type="text" id="cv-obs-'+idx+'" placeholder="Opcional" style="color:#111827;background:#ffffff;"></div>'
+    + '</div>'
+    + '<button onclick="removeCenaVenta('+idx+')" style="position:absolute;top:8px;right:8px;background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;">✕</button>';
+  c.appendChild(div);
+}
+
+function removeCenaVenta(idx) {
+  var el = document.getElementById('cena-venta-'+idx);
+  if(el) el.remove();
+}
+
+function collectCenaVentas() {
+  var result = [];
+  document.querySelectorAll('#cena-ventas-container > div').forEach(function(div){
+    var id      = div.id.replace('cena-venta-','');
+    var importe = parseFloat((document.getElementById('cv-importe-'+id)||{value:''}).value)||0;
+    var pax     = parseInt((document.getElementById('cv-pax-'+id)||{value:''}).value)||0;
+    var mews    = (document.getElementById('cv-mews-'+id)||{value:''}).value;
+    var obs     = (document.getElementById('cv-obs-'+id)||{value:''}).value;
+    if(importe || mews) result.push({importe:importe, pax:pax, mews:mews, obs:obs});
+  });
+  return result;
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // SYNCROLAB VENTAS

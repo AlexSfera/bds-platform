@@ -66,8 +66,11 @@ window.renderIncentivos = renderIncentivos;
 // ── VISTA EMPLEADO ───────────────────────────────────────────────────
 
 async function renderIncentivosEmpleado(el){
-  // Solo empleados de Sala ven esta pantalla por ahora
-  if(currentUser.area !== 'Sala' && currentUser.area !== 'Jefe de Sala'){
+  var area = currentUser.area || '';
+  var esSala = area === 'Sala' || area === 'Jefe de Sala';
+  var esRecepcion = area === 'Recepción';
+
+  if(!esSala && !esRecepcion){
     el.innerHTML = '<div class="card"><p style="color:var(--text3);padding:20px 0;">💰 Sistema de incentivos no disponible para tu departamento aún.</p></div>';
     return;
   }
@@ -87,12 +90,21 @@ async function renderIncentivosEmpleado(el){
     +'<div id="inc-emp-content"><p style="color:var(--text3);">Cargando…</p></div>'
     +'</div>';
 
-  await loadIncentivosEmpleado();
+  if(esRecepcion) {
+    await loadIncentivosEmpleadoRecepcion();
+  } else {
+    await loadIncentivosEmpleado();
+  }
 }
 
 async function onIncEmpleadoMonthChange(val){
   _incentivosSelectedMonth = val;
-  await loadIncentivosEmpleado();
+  var area = currentUser && (currentUser.area||'');
+  if(area === 'Recepción') {
+    await loadIncentivosEmpleadoRecepcion();
+  } else {
+    await loadIncentivosEmpleado();
+  }
 }
 window.onIncEmpleadoMonthChange = onIncEmpleadoMonthChange;
 
@@ -212,6 +224,102 @@ async function loadIncentivosEmpleado(){
     +'<p style="font-size:11px;color:var(--text3);margin-top:10px;">* Pendiente de revisión y aprobación por dirección.</p>'
     +'</div>';
 }
+// ── VISTA EMPLEADO RECEPCIÓN ─────────────────────────────────────────
+// Incentivo = 10% sobre neto (IVA 21% SYNCROLAB, 10% desayuno/comida_cena)
+// Fuente: tabla recepcion_ventas (una fila por venta)
+
+async function loadIncentivosEmpleadoRecepcion(){
+  var el = document.getElementById('inc-emp-content');
+  if(!el) return;
+  el.innerHTML = '<p style="color:var(--text3);">Calculando…</p>';
+
+  var ym    = _incentivosSelectedMonth;
+  var range = getMonthDateRange(ym);
+  var empId = currentUser.id;
+  var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var parts = ym.split('-');
+  var mesLabel = meses[parseInt(parts[1])-1]+' '+parts[0];
+
+  // 1. Ventas del mes de este empleado
+  var ventasRes = await fetch(
+    SUPABASE_URL+'/rest/v1/recepcion_ventas?employee_id=eq.'+encodeURIComponent(empId)
+      +'&fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
+      +'&select=*&order=fecha.asc',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  );
+  var ventas = ventasRes.ok ? await ventasRes.json() : [];
+
+  // 2. FIO del mes
+  var fioRes = await fetch(
+    SUPABASE_URL+'/rest/v1/fio?employee_id=eq.'+encodeURIComponent(empId)
+      +'&incentive_month=eq.'+ym+'&estado=in.(Validado,Cerrado)&select=applied_points',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  );
+  var fios = fioRes.ok ? await fioRes.json() : [];
+  var totalPuntosFio = (fios||[]).reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
+
+  // 3. Calcular totales por tipo
+  var totales = { desayuno:0, comida_cena:0, syncrolab:0 };
+  var incentivoBruto = 0;
+  (ventas||[]).forEach(function(v){
+    var inc = parseFloat(v.incentivo||0);
+    incentivoBruto += inc;
+    if(v.tipo_venta === 'desayuno')    totales.desayuno    += parseFloat(v.importe_neto||0);
+    if(v.tipo_venta === 'comida_cena') totales.comida_cena += parseFloat(v.importe_neto||0);
+    if(v.tipo_venta === 'syncrolab')   totales.syncrolab   += parseFloat(v.importe_neto||0);
+  });
+
+  var penPct   = getFioPenalizacion(totalPuntosFio);
+  var penEur   = incentivoBruto * penPct;
+  var incFinal = Math.max(0, incentivoBruto - penEur);
+
+  // 4. Tabla detalle ventas
+  var TIPO_LABEL = {desayuno:'🌅 Desayuno', comida_cena:'🍽 Comida/Cena', syncrolab:'💪 SYNCROLAB'};
+  var filaVentas = (ventas||[]).length ? ventas.map(function(v){
+    return '<tr>'
+      +'<td>'+fmtDate(v.fecha)+'</td>'
+      +'<td>'+(TIPO_LABEL[v.tipo_venta]||v.tipo_venta)+(v.tipo_servicio?' · <span style="color:var(--text3);">'+v.tipo_servicio+'</span>':'')+'</td>'
+      +'<td style="font-family:var(--font-mono);">'+parseFloat(v.importe_bruto||0).toFixed(2)+'€</td>'
+      +'<td style="font-family:var(--font-mono);color:var(--text2);">'+parseFloat(v.importe_neto||0).toFixed(2)+'€</td>'
+      +'<td style="font-family:var(--font-mono);color:var(--green);">+'+parseFloat(v.incentivo||0).toFixed(2)+'€</td>'
+      +'<td style="color:var(--text3);">'+(v.mews_ref||'—')+'</td>'
+      +'</tr>';
+  }).join('') : '<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin ventas registradas este mes</td></tr>';
+
+  var penBadge = penPct > 0
+    ? '<span class="badge b-red">−'+Math.round(penPct*100)+'% FIO ('+totalPuntosFio.toFixed(1)+' pts)</span>'
+    : '<span class="badge b-green">Sin penalización FIO</span>';
+
+  el.innerHTML = ''
+    +'<h3 style="margin:0 0 16px;font-size:15px;color:var(--text2);">'+mesLabel+' · '+currentUser.nombre+'</h3>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;">'
+    +_kpiBox('Desayunos','€',totales.desayuno,'var(--amber)')
+    +_kpiBox('Comida/Cena','€',totales.comida_cena,'var(--orange)')
+    +_kpiBox('SYNCROLAB','€',totales.syncrolab,'var(--cyan)')
+    +_kpiBox('Incentivo bruto','€',incentivoBruto,'var(--green)')
+    +_kpiBox('Penalización FIO','€',penEur,'var(--red)')
+    +_kpiBox('INCENTIVO FINAL','€',incFinal,incFinal>0?'var(--green)':'var(--text3)')
+    +'</div>'
+    +'<div class="card" style="margin-bottom:16px;">'
+    +'<div style="font-weight:600;margin-bottom:10px;">📋 Detalle ventas '+mesLabel+'</div>'
+    +'<div class="tbl-wrap"><table>'
+    +'<tr><th>Fecha</th><th>Tipo</th><th>Bruto</th><th>Neto</th><th>Incentivo</th><th>MEWS ref</th></tr>'
+    +filaVentas+'</table></div></div>'
+    +'<div class="card">'
+    +'<div style="font-weight:600;margin-bottom:12px;">💰 Resumen '+mesLabel+'</div>'
+    +'<table>'
+    +'<tr><td>Incentivo bruto (10% neto ventas)</td><td style="font-family:var(--font-mono);text-align:right;">'+incentivoBruto.toFixed(2)+'€</td></tr>'
+    +'<tr><td>Penalización FIO · '+penBadge+'</td><td style="font-family:var(--font-mono);text-align:right;color:var(--red);">−'+penEur.toFixed(2)+'€</td></tr>'
+    +'<tr style="border-top:2px solid var(--border);font-weight:700;">'
+    +'<td>INCENTIVO FINAL</td>'
+    +'<td style="font-family:var(--font-mono);text-align:right;font-size:16px;color:'+(incFinal>0?'var(--green)':'var(--text3)')+';">'+incFinal.toFixed(2)+'€</td>'
+    +'</tr></table>'
+    +'<p style="font-size:11px;color:var(--text3);margin-top:10px;">* Pendiente de revisión y aprobación por dirección. IVA: Desayuno/Comida 10%, SYNCROLAB 21%.</p>'
+    +'</div>';
+}
+window.loadIncentivosEmpleadoRecepcion = loadIncentivosEmpleadoRecepcion;
+
 window.loadIncentivosEmpleado = loadIncentivosEmpleado;
 
 function _kpiBox(label, unit, val, color){
@@ -442,12 +550,12 @@ async function calcularIncentivosGestor(){
   var parts = ym.split('-');
   var mesLabel = meses[parseInt(parts[1])-1]+' '+parts[0];
 
+  // ── SALA ──────────────────────────────────────────────────────────
   var allEmps = await getDB('employees');
-  var emps = allEmps.filter(function(e){
+  var empsSala = allEmps.filter(function(e){
     return e.estado==='Activo' && e.id!=='E13'
       && (e.area==='Sala'||e.area==='Jefe de Sala');
   });
-  if(!emps.length){ el.innerHTML='<p style="color:var(--text3);">Sin empleados activos en Sala.</p>'; return; }
 
   var allRules = await getDB('dept_incentive_rules');
   var rules    = (allRules||[]).filter(function(r){ return r.activo && (r.departamento==='Sala'||r.departamento==='Jefe de Sala'); });
@@ -464,51 +572,89 @@ async function calcularIncentivosGestor(){
   );
   var ventasData = ventasRes.ok ? await ventasRes.json() : [];
 
-  var empIds = emps.map(function(e){ return e.id; }).join(',');
-  var fioRes = await fetch(
-    SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIds+')'
+  var empIdsSala = empsSala.map(function(e){ return e.id; }).join(',');
+  var fioResSala = empIdsSala ? await fetch(
+    SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsSala+')'
       +'&incentive_month=eq.'+ym+'&estado=in.(Validado,Cerrado)&select=employee_id,applied_points',
     {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  );
-  var fioData = fioRes.ok ? await fioRes.json() : [];
+  ) : null;
+  var fioDataSala = (fioResSala && fioResSala.ok) ? await fioResSala.json() : [];
 
-  var resultados = emps.map(function(e){
+  var resultadosSala = empsSala.map(function(e){
     var misVentas = (ventasData||[]).filter(function(v){ return v.employee_id===e.id; });
     var totalMes  = misVentas.reduce(function(s,v){ return s+parseFloat(v.ventas||0); },0);
     var semanasOk = rSemanal ? misVentas.filter(function(v){ return parseFloat(v.ventas||0)>=parseFloat(rSemanal.objetivo||0); }).length : 0;
     var bonusSemanal = rSemanal ? semanasOk*parseFloat(rSemanal.importe_bonus||0) : 0;
     var bonusMensual = (rMensual&&totalMes>=parseFloat(rMensual.objetivo||0)) ? parseFloat(rMensual.importe_bonus||0) : 0;
     var bonusBruto   = bonusSemanal+bonusMensual;
-    var misFio   = (fioData||[]).filter(function(f){ return f.employee_id===e.id; });
+    var misFio   = (fioDataSala||[]).filter(function(f){ return f.employee_id===e.id; });
     var ptosFio  = misFio.reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
     var penPct   = getFioPenalizacion(ptosFio);
     var bonusFinal = Math.max(0, bonusBruto*(1-penPct));
-    return { emp:e, totalMes:totalMes, semanasOk:semanasOk, semanasTotales:misVentas.length,
+    return { emp:e, dept:'Sala', ventasMes:totalMes, semanasOk:semanasOk, semanasTotales:misVentas.length,
              bonusBruto:bonusBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:bonusFinal };
   });
 
-  var totalBonuses = resultados.reduce(function(s,r){ return s+r.bonusFinal; },0);
-  var rows = resultados.map(function(r){
+  // ── RECEPCIÓN ────────────────────────────────────────────────────
+  var empsRec = allEmps.filter(function(e){
+    return e.estado==='Activo' && e.area==='Recepción';
+  });
+
+  var recVentasRes = empsRec.length ? await fetch(
+    SUPABASE_URL+'/rest/v1/recepcion_ventas'
+      +'?fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
+      +'&select=employee_id,incentivo,tipo_venta',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  ) : null;
+  var recVentasData = (recVentasRes && recVentasRes.ok) ? await recVentasRes.json() : [];
+
+  var empIdsRec = empsRec.map(function(e){ return e.id; }).join(',');
+  var fioResRec = empIdsRec ? await fetch(
+    SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsRec+')'
+      +'&incentive_month=eq.'+ym+'&estado=in.(Validado,Cerrado)&select=employee_id,applied_points',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  ) : null;
+  var fioDataRec = (fioResRec && fioResRec.ok) ? await fioResRec.json() : [];
+
+  var resultadosRec = empsRec.map(function(e){
+    var misVentas  = (recVentasData||[]).filter(function(v){ return v.employee_id===e.id; });
+    var incBruto   = misVentas.reduce(function(s,v){ return s+parseFloat(v.incentivo||0); },0);
+    var misFio     = (fioDataRec||[]).filter(function(f){ return f.employee_id===e.id; });
+    var ptosFio    = misFio.reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
+    var penPct     = getFioPenalizacion(ptosFio);
+    var incFinal   = Math.max(0, incBruto*(1-penPct));
+    return { emp:e, dept:'Recepción', ventasMes:incBruto/0.10||0, semanasOk:'—', semanasTotales:'—',
+             bonusBruto:incBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:incFinal };
+  });
+
+  // ── RENDER UNIFICADO ─────────────────────────────────────────────
+  var todos = resultadosSala.concat(resultadosRec);
+  var totalBonuses = todos.reduce(function(s,r){ return s+r.bonusFinal; },0);
+
+  var rows = todos.map(function(r){
     var penBadge = r.penPct>0 ? '<span class="badge b-red">−'+Math.round(r.penPct*100)+'%</span>' : '—';
-    return '<tr><td><strong>'+r.emp.nombre+'</strong></td>'
-      +'<td style="font-family:var(--font-mono);">'+r.totalMes.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
-      +'<td style="text-align:center;">'+r.semanasOk+'/'+r.semanasTotales+'</td>'
+    var deptColor = r.dept==='Recepción' ? 'var(--purple)' : 'var(--amber)';
+    return '<tr>'
+      +'<td><strong>'+r.emp.nombre+'</strong> <span style="font-size:10px;color:'+deptColor+';">'+r.dept+'</span></td>'
+      +'<td style="font-family:var(--font-mono);">'+(typeof r.ventasMes==='number'?r.ventasMes.toLocaleString('es-ES',{minimumFractionDigits:2})+'€':'—')+'</td>'
+      +'<td style="text-align:center;">'+(typeof r.semanasOk==='number'?r.semanasOk+'/'+r.semanasTotales:r.semanasOk)+'</td>'
       +'<td style="font-family:var(--font-mono);">'+r.bonusBruto.toFixed(2)+'€</td>'
       +'<td style="text-align:center;">'+r.ptosFio.toFixed(1)+'pts '+penBadge+'</td>'
-      +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(r.bonusFinal>0?'var(--green)':'var(--text3)')+';">'+r.bonusFinal.toFixed(2)+'€</td></tr>';
+      +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(r.bonusFinal>0?'var(--green)':'var(--text3)')+';">'+r.bonusFinal.toFixed(2)+'€</td>'
+      +'</tr>';
   }).join('');
 
-  el.innerHTML = '<h3 style="margin:0 0 14px;font-size:15px;">Sala · '+mesLabel+'</h3>'
+  el.innerHTML = '<h3 style="margin:0 0 14px;font-size:15px;">Sala + Recepción · '+mesLabel+'</h3>'
     +'<div class="tbl-wrap"><table>'
-    +'<tr><th>Empleado</th><th>Ventas mes</th><th>Sem. OK</th><th>Bonus bruto</th><th>FIO</th><th>Bonus final</th></tr>'
-    +rows
+    +'<tr><th>Empleado</th><th>Ventas mes</th><th>Sem. OK</th><th>Incentivo bruto</th><th>FIO</th><th>Incentivo final</th></tr>'
+    +(rows||'<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin empleados activos</td></tr>')
     +'<tr style="border-top:2px solid var(--border);font-weight:700;">'
     +'<td colspan="5">TOTAL A PAGAR</td>'
     +'<td style="font-family:var(--font-mono);font-size:15px;color:var(--amber);">'+totalBonuses.toFixed(2)+'€</td>'
     +'</tr></table></div>'
     +'<p style="font-size:11px;color:var(--text3);margin-top:12px;">'
-    +(rSemanal?'Regla semanal: ≥'+parseFloat(rSemanal.objetivo||0).toLocaleString('es-ES')+'€ → +'+parseFloat(rSemanal.importe_bonus||0)+'€. ':'')
-    +(rMensual?'Regla mensual: ≥'+parseFloat(rMensual.objetivo||0).toLocaleString('es-ES')+'€ → +'+parseFloat(rMensual.importe_bonus||0)+'€.':'')
+    +'Sala: '+(rSemanal?'objetivo sem. '+parseFloat(rSemanal.objetivo||0).toLocaleString('es-ES')+'€ → +'+parseFloat(rSemanal.importe_bonus||0)+'€. ':'sin regla. ')
+    +'Recepción: 10% neto sobre ventas cross-sell declaradas en turno.'
     +'</p>';
 }
 window.calcularIncentivosGestor = calcularIncentivosGestor;
