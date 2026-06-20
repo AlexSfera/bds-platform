@@ -56,8 +56,16 @@ var _mermaPlatosCache = null;
 async function _loadMermaProductos() {
   if (_mermaProductosCache) return _mermaProductosCache;
   try {
-    _mermaProductosCache = await getDB('productos_compra');
+    // Cargar en páginas de 500 para superar límite PostgREST
+    var page1 = await sbRequest('GET', 'productos_compra', null,
+      'select=id,sku,nombre,nombre_busqueda,categoria,unidad_compra,cantidad_unidad_g,merma_pct,coste_unidad_compra,coste_por_g,unidad_escandallo,activo&order=nombre.asc&limit=500&offset=0');
+    var page2 = await sbRequest('GET', 'productos_compra', null,
+      'select=id,sku,nombre,nombre_busqueda,categoria,unidad_compra,cantidad_unidad_g,merma_pct,coste_unidad_compra,coste_por_g,unidad_escandallo,activo&order=nombre.asc&limit=500&offset=500');
+    var page3 = await sbRequest('GET', 'productos_compra', null,
+      'select=id,sku,nombre,nombre_busqueda,categoria,unidad_compra,cantidad_unidad_g,merma_pct,coste_unidad_compra,coste_por_g,unidad_escandallo,activo&order=nombre.asc&limit=500&offset=1000');
+    _mermaProductosCache = (page1||[]).concat(page2||[]).concat(page3||[]);
   } catch(e) {
+    console.error('Error cargando productos_compra:', e);
     _mermaProductosCache = [];
   }
   return _mermaProductosCache;
@@ -66,7 +74,9 @@ async function _loadMermaProductos() {
 async function _loadMermaPlatos() {
   if (_mermaPlatosCache) return _mermaPlatosCache;
   try {
-    _mermaPlatosCache = await getDB('platos_carta');
+    _mermaPlatosCache = await sbRequest('GET', 'platos_carta', null,
+      'select=id,nombre,nombre_busqueda,categoria,precio_venta,activo&order=nombre.asc&limit=100');
+    if (!_mermaPlatosCache) _mermaPlatosCache = [];
   } catch(e) {
     _mermaPlatosCache = [];
   }
@@ -311,67 +321,7 @@ function _renderMermaTabla(all) {
 
 // ── MODAL HTML ────────────────────────────────────────────────────────
 function _mermaModalHTML() {
-  return '<div id="modal-merma" class="modal-backdrop" style="display:none" onclick="_mermaBackdropClose(event)">'
-    + '<div class="modal-box" style="max-width:520px" onclick="event.stopPropagation()">'
-    + '  <div class="modal-header">'
-    + '    <span class="modal-title">📦 Registrar merma</span>'
-    + '    <button class="modal-close" onclick="closeMermaModal()">✕</button>'
-    + '  </div>'
-    + '  <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">'
-
-    // Buscador
-    + '  <div>'
-    + '    <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Producto o plato <span style="color:var(--red)">*</span></label>'
-    + '    <input id="merma-search-input" type="text" placeholder="Escribe nombre del producto o plato..." autocomplete="off"'
-    + '      style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;"'
-    + '      oninput="_mermaBuscarDebounce(this.value)">'
-    + '    <div id="merma-search-results" style="display:none;background:var(--bg2);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;"></div>'
-    + '    <div id="merma-seleccionado" style="display:none;margin-top:8px;padding:10px 12px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--orange);">'
-    + '      <div style="font-weight:600;font-size:14px" id="merma-sel-nombre"></div>'
-    + '      <div style="font-size:12px;color:var(--text2);margin-top:2px" id="merma-sel-coste"></div>'
-    + '    </div>'
-    + '  </div>'
-
-    // Cantidad
-    + '  <div style="display:flex;gap:10px;align-items:flex-end">'
-    + '    <div style="flex:1">'
-    + '      <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Cantidad <span style="color:var(--red)">*</span></label>'
-    + '      <input id="merma-cantidad" type="number" min="0" step="0.1" placeholder="0"'
-    + '        style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;"'
-    + '        oninput="_mermaActualizarCoste()">'
-    + '    </div>'
-    + '    <div style="padding-bottom:10px;font-size:14px;color:var(--text2);min-width:50px;text-align:center" id="merma-unidad-label">g</div>'
-    + '  </div>'
-
-    // Coste calculado
-    + '  <div id="merma-coste-calc" style="display:none;padding:10px 12px;background:var(--bg3);border-radius:8px;text-align:center;">'
-    + '    <span style="font-size:12px;color:var(--text2)">Coste estimado: </span>'
-    + '    <span id="merma-coste-val" style="font-size:18px;font-weight:700;color:var(--orange)">0.00€</span>'
-    + '  </div>'
-
-    // Causa
-    + '  <div>'
-    + '    <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Causa <span style="color:var(--red)">*</span></label>'
-    + '    <select id="merma-causa" style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">'
-    + '      <option value="">— Selecciona causa —</option>'
-    + MERMA_CAUSAS.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join('')
-    + '    </select>'
-    + '  </div>'
-
-    // Notas
-    + '  <div>'
-    + '    <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Notas (opcional)</label>'
-    + '    <textarea id="merma-notas" rows="2" placeholder="Descripción adicional..."'
-    + '      style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;resize:vertical;"></textarea>'
-    + '  </div>'
-
-    // Botones
-    + '  <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:4px;">'
-    + '    <button class="btn-secondary" onclick="closeMermaModal()">Cancelar</button>'
-    + '    <button class="btn-primary" onclick="saveMerma()">💾 Guardar merma</button>'
-    + '  </div>'
-    + '  </div>'
-    + '</div></div>';
+  return '<div id="modal-merma" class="modal-overlay" onclick="_mermaBackdropClose(event)">'    + '<div class="modal" style="max-width:520px;width:100%;" onclick="event.stopPropagation()">'    + '  <div class="modal-h">'    + '    <h3>📦 Registrar merma</h3>'    + '    <button class="modal-x" onclick="closeMermaModal()">✕</button>'    + '  </div>'    + '  <div class="modal-b">'    + '  <div>'    + '    <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Producto o plato <span style="color:var(--red)">*</span></label>'    + '    <input id="merma-search-input" type="text" placeholder="Escribe nombre del producto o plato..." autocomplete="off"'    + '      style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;"'    + '      oninput="_mermaBuscarDebounce(this.value)">'    + '    <div id="merma-search-results" style="display:none;background:var(--bg2);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;"></div>'    + '    <div id="merma-seleccionado" style="display:none;margin-top:8px;padding:10px 12px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--orange);">'    + '      <div style="font-weight:600;font-size:14px" id="merma-sel-nombre"></div>'    + '      <div style="font-size:12px;color:var(--text2);margin-top:2px" id="merma-sel-coste"></div>'    + '    </div>'    + '  </div>'    + '  <div style="display:flex;gap:10px;align-items:flex-end;margin-top:12px;">'    + '    <div style="flex:1">'    + '      <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Cantidad <span style="color:var(--red)">*</span></label>'    + '      <input id="merma-cantidad" type="number" min="0" step="0.1" placeholder="0"'    + '        style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;"'    + '        oninput="_mermaActualizarCoste()">'    + '    </div>'    + '    <div style="padding-bottom:10px;font-size:14px;color:var(--text2);min-width:50px;text-align:center" id="merma-unidad-label">g</div>'    + '  </div>'    + '  <div id="merma-coste-calc" style="display:none;padding:10px 12px;background:var(--bg3);border-radius:8px;text-align:center;margin-top:8px;">'    + '    <span style="font-size:12px;color:var(--text2)">Coste estimado: </span>'    + '    <span id="merma-coste-val" style="font-size:18px;font-weight:700;color:var(--orange)">0.00€</span>'    + '  </div>'    + '  <div style="margin-top:12px;">'    + '    <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Causa <span style="color:var(--red)">*</span></label>'    + '    <select id="merma-causa" style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">'    + '      <option value="">— Selecciona causa —</option>'    + '      <option>Caducidad / fecha vencida</option>'    + '      <option>Mal almacenamiento</option>'    + '      <option>Error de producción</option>'    + '      <option>Exceso de producción</option>'    + '      <option>Rotura / accidente</option>'    + '      <option>Deterioro por temperatura</option>'    + '      <option>Devolución cliente</option>'    + '      <option>Control de calidad</option>'    + '      <option>Otra causa</option>'    + '    </select>'    + '  </div>'    + '  <div style="margin-top:12px;">'    + '    <label style="font-size:12px;color:var(--text2);margin-bottom:4px;display:block">Notas (opcional)</label>'    + '    <textarea id="merma-notas" rows="2" placeholder="Descripción adicional..."'    + '      style="width:100%;box-sizing:border-box;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;resize:vertical;"></textarea>'    + '  </div>'    + '  </div>'    + '  <div class="modal-f">'    + '    <button class="btn btn-secondary" onclick="closeMermaModal()">Cancelar</button>'    + '    <button class="btn btn-primary" onclick="saveMerma()">💾 Guardar merma</button>'    + '  </div>'    + '</div></div>';
 }
 
 // ── ESTADO DEL MODAL ──────────────────────────────────────────────────
@@ -400,7 +350,7 @@ function openMermaModal() {
   var calc = document.getElementById('merma-coste-calc');
   if (calc) calc.style.display = 'none';
 
-  m.style.display = 'flex';
+  m.classList.add('open');
   setTimeout(function() {
     var inp2 = document.getElementById('merma-search-input');
     if (inp2) inp2.focus();
@@ -409,12 +359,12 @@ function openMermaModal() {
 
 function closeMermaModal() {
   var m = document.getElementById('modal-merma');
-  if (m) m.style.display = 'none';
+  if (m) m.classList.remove('open');
   _mermaItemSeleccionado = null;
 }
 
 function _mermaBackdropClose(e) {
-  if (e.target.id === 'modal-merma') closeMermaModal();
+  if (e.target === document.getElementById('modal-merma')) closeMermaModal();
 }
 
 // ── BUSCADOR CON DEBOUNCE ─────────────────────────────────────────────
