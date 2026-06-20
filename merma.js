@@ -53,34 +53,44 @@ var MERMA_CAUSAS = [
 var _mermaProductosCache = null;
 var _mermaPlatosCache = null;
 
-async function _loadMermaProductos() {
-  if (_mermaProductosCache) return _mermaProductosCache;
+// Búsqueda server-side con ilike — fetch directo sin Prefer:return=minimal
+async function _mermaFetchDirect(params) {
+  var url = SUPABASE_URL + '/rest/v1/' + params;
   try {
-    // Cargar en páginas de 500 para superar límite PostgREST
-    var page1 = await sbRequest('GET', 'productos_compra', null,
-      'select=id,sku,nombre,nombre_busqueda,categoria,unidad_compra,cantidad_unidad_g,merma_pct,coste_unidad_compra,coste_por_g,unidad_escandallo,activo&order=nombre.asc&limit=500&offset=0');
-    var page2 = await sbRequest('GET', 'productos_compra', null,
-      'select=id,sku,nombre,nombre_busqueda,categoria,unidad_compra,cantidad_unidad_g,merma_pct,coste_unidad_compra,coste_por_g,unidad_escandallo,activo&order=nombre.asc&limit=500&offset=500');
-    var page3 = await sbRequest('GET', 'productos_compra', null,
-      'select=id,sku,nombre,nombre_busqueda,categoria,unidad_compra,cantidad_unidad_g,merma_pct,coste_unidad_compra,coste_por_g,unidad_escandallo,activo&order=nombre.asc&limit=500&offset=1000');
-    _mermaProductosCache = (page1||[]).concat(page2||[]).concat(page3||[]);
+    var res = await fetch(url, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Accept': 'application/json'
+      }
+    });
+    if (!res.ok) {
+      var err = await res.text();
+      console.error('merma fetch error:', err);
+      return [];
+    }
+    var text = await res.text();
+    if (!text || text === 'null') return [];
+    return JSON.parse(text);
   } catch(e) {
-    console.error('Error cargando productos_compra:', e);
-    _mermaProductosCache = [];
+    console.error('merma fetch exception:', e);
+    return [];
   }
-  return _mermaProductosCache;
+}
+
+async function _loadMermaProductos() {
+  // No cachear — búsqueda server-side por query
+  return []; // placeholder, la búsqueda se hace en mermaSearchProducto
 }
 
 async function _loadMermaPlatos() {
   if (_mermaPlatosCache) return _mermaPlatosCache;
   try {
-    _mermaPlatosCache = await sbRequest('GET', 'platos_carta', null,
-      'select=id,nombre,nombre_busqueda,categoria,precio_venta,activo&order=nombre.asc&limit=100');
-    if (!_mermaPlatosCache) _mermaPlatosCache = [];
-  } catch(e) {
-    _mermaPlatosCache = [];
-  }
-  return _mermaPlatosCache;
+    _mermaPlatosCache = await _mermaFetchDirect(
+      'platos_carta?select=id,nombre,nombre_busqueda,categoria,precio_venta,activo&order=nombre.asc&limit=100'
+    );
+  } catch(e) { _mermaPlatosCache = []; }
+  return _mermaPlatosCache || [];
 }
 
 // ── BUSCADOR DUAL: productos raw + platos preparados ──────────────────
@@ -89,42 +99,40 @@ async function _loadMermaPlatos() {
 async function mermaSearchProducto(query) {
   if (!query || query.trim().length < 2) return [];
 
-  var q = query.toLowerCase().trim();
-  // Normalizar: quitar tildes
-  q = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Normalizar query: minúsculas sin tildes
+  var q = query.trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 
-  var productos = await _loadMermaProductos();
-  var platos = await _loadMermaPlatos();
+  // Búsqueda server-side con ilike en nombre_busqueda
+  var encQ = encodeURIComponent('*' + q + '*');
 
-  // Buscar en productos (solo activos, con precio)
-  var resProductos = productos
+  var resProductos = await _mermaFetchDirect(
+    'productos_compra?select=id,nombre,nombre_busqueda,categoria,unidad_compra,cantidad_unidad_g,merma_pct,coste_unidad_compra,coste_por_g,unidad_escandallo' +
+    '&nombre_busqueda=ilike.' + encQ +
+    '&activo=eq.true' +
+    '&order=nombre.asc&limit=8'
+  );
+
+  var productos = (resProductos || []).map(function(p) {
+    return {
+      tipo: 'producto',
+      id: p.id,
+      nombre: p.nombre,
+      categoria: p.categoria || '',
+      unidad_compra: p.unidad_compra || 'unidad',
+      unidad_escandallo: p.unidad_escandallo || 'g',
+      coste_por_g: p.coste_por_g || null,
+      coste_unidad: p.coste_unidad_compra || 0,
+      cantidad_unidad_g: p.cantidad_unidad_g || null,
+      merma_pct: p.merma_pct || 0
+    };
+  });
+
+  // Platos: buscar en cache local (solo 29 platos)
+  var todosPlatos = await _loadMermaPlatos();
+  var platos = todosPlatos
     .filter(function(p) {
-      if (!p.activo && p.activo !== undefined) return false;
-      if (!p.coste_unidad_compra && !p.coste_por_g) return false;
-      var nombre = (p.nombre_busqueda || p.nombre || '')
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      return nombre.indexOf(q) >= 0;
-    })
-    .slice(0, 8)
-    .map(function(p) {
-      return {
-        tipo: 'producto',
-        id: p.id,
-        nombre: p.nombre,
-        categoria: p.categoria || '',
-        unidad_compra: p.unidad_compra || 'unidad',
-        unidad_escandallo: p.unidad_escandallo || 'g',
-        coste_por_g: p.coste_por_g || null,
-        coste_unidad: p.coste_unidad_compra || 0,
-        cantidad_unidad_g: p.cantidad_unidad_g || null,
-        merma_pct: p.merma_pct || 0
-      };
-    });
-
-  // Buscar en platos preparados
-  var resPlatos = platos
-    .filter(function(p) {
-      if (!p.activo && p.activo !== undefined) return false;
       var nombre = (p.nombre_busqueda || p.nombre || '')
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
       return nombre.indexOf(q) >= 0;
@@ -142,7 +150,7 @@ async function mermaSearchProducto(query) {
       };
     });
 
-  return resProductos.concat(resPlatos);
+  return productos.concat(platos);
 }
 
 // ── FORMATEAR COSTE PARA MOSTRAR EN BUSCADOR ──────────────────────────
@@ -218,71 +226,63 @@ async function renderMermaScreen() {
 
   if (!canRegistrarMerma(currentUser) && !canGestionarMerma(currentUser)) {
     el.innerHTML = '<div class="page-header"><div class="page-title">📦 Merma</div>'
-      + '<div class="page-sub">Sin acceso. Solo Cocina, Friegue y FnB.</div></div>';
+      + '<div class="page-sub">Solo Cocina, Friegue y FnB.</div></div>';
     return;
   }
 
   var all = [];
   try { all = await getDB('merma'); } catch(e) { all = []; }
 
-  // Filtrar por departamento si no es admin/supervisor
-  if (!canGestionarMerma(currentUser)) {
+  var esManager = canGestionarMerma(currentUser);
+
+  // Cocinero: solo ve su departamento y el día de hoy
+  if (!esManager) {
     var dept = currentUser.area || '';
-    all = all.filter(function(m) { return m.departamento === dept; });
+    var hoy = today();
+    all = all.filter(function(m) {
+      return (m.departamento === dept || m.area === dept) && (m.fecha || '').slice(0,10) === hoy;
+    });
   }
 
-  // Ordenar por fecha desc
   all.sort(function(a, b) {
-    var ta = b.created_at || b.fecha || '';
-    var tb = a.created_at || a.fecha || '';
-    return ta.localeCompare(tb);
+    return (b.created_at || b.fecha || '').localeCompare(a.created_at || a.fecha || '');
   });
 
-  // KPIs
-  var hoy = today();
-  var semana = new Date(); semana.setDate(semana.getDate() - 7);
-  var semanaStr = semana.toISOString().slice(0, 10);
-  var delaSemana = all.filter(function(m) { return (m.fecha || '') >= semanaStr; });
-  var costeTotal = delaSemana.reduce(function(a, m) { return a + (parseFloat(m.coste_total) || 0); }, 0);
-  var sinCoste = all.filter(function(m) { return !m.coste_unitario || parseFloat(m.coste_unitario) === 0; }).length;
-
-  el.innerHTML = ''
-    + '<div class="page-header">'
-    + '  <div class="page-title">📦 Merma</div>'
-    + '  <div class="page-sub">Registro de pérdidas — Cocina · Friegue · FnB</div>'
+  // Render simple: botón grande + lista de lo registrado hoy
+  el.innerHTML = '<div class="page-header">'
+    + '<div class="page-title">📦 Merma</div>'
+    + '<div class="page-sub">' + (esManager ? 'Gestión de merma del departamento' : 'Registra lo que has tirado hoy') + '</div>'
     + '</div>'
-
-    // KPIs
-    + '<div class="kpi-row" id="kpi-merma-screen">'
-    + '  <div class="kpi k-orange"><div class="kpi-lbl">Esta semana</div><div class="kpi-val">' + delaSemana.length + '</div><div class="kpi-sub">líneas</div></div>'
-    + '  <div class="kpi k-orange"><div class="kpi-lbl">Coste semana</div><div class="kpi-val">' + costeTotal.toFixed(0) + '€</div></div>'
-    + '  <div class="kpi k-red"><div class="kpi-lbl">Sin valorar</div><div class="kpi-val">' + sinCoste + '</div><div class="kpi-sub">pendiente coste</div></div>'
+    + '<div style="margin-bottom:16px;">'
+    + '<button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;" onclick="openMermaModal()">+ Añadir merma</button>'
     + '</div>'
+    + (esManager ? _mermaFiltrosHTML() : '')
+    + '<div id="merma-tabla-container"></div>';
 
-    // Botón nueva merma
-    + '<div style="margin:16px 0;">'
-    + '  <button class="btn-primary" onclick="openMermaModal()">+ Registrar merma</button>'
-    + '</div>'
-
-    // Filtros
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'
-    + '  <select id="mfilt-causa" onchange="renderMermaScreen()" style="font-size:13px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;">'
-    + '    <option value="">Todas las causas</option>'
-    + MERMA_CAUSAS.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join('')
-    + '  </select>'
-    + '  <input id="mfilt-fecha" type="date" onchange="renderMermaScreen()" style="font-size:13px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;" placeholder="Desde fecha">'
-    + '</div>'
-
-    // Tabla
-    + '<div id="merma-tabla-container"></div>'
-
-    // Modal
-    ;  // modal gestionado por _mermaEnsureModal()
-
-  _renderMermaTabla(all);
+  _renderMermaTabla(all, esManager);
 }
 
-function _renderMermaTabla(all) {
+function _mermaFiltrosHTML() {
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'
+    + '<select id="mfilt-causa" onchange="_mermaRefresh()" style="font-size:13px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;">'
+    + '<option value="">Todas las causas</option>'
+    + MERMA_CAUSAS.map(function(c) { return '<option>' + c + '</option>'; }).join('')
+    + '</select>'
+    + '<input id="mfilt-fecha" type="date" onchange="_mermaRefresh()" style="font-size:13px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;">'
+    + '</div>';
+}
+
+async function _mermaRefresh() {
+  var all = [];
+  try { all = await getDB('merma'); } catch(e) {}
+  all.sort(function(a, b) {
+    return (b.created_at || b.fecha || '').localeCompare(a.created_at || a.fecha || '');
+  });
+  _renderMermaTabla(all, true);
+}
+
+
+function _renderMermaTabla(all, esManager) {
   var el = document.getElementById('merma-tabla-container');
   if (!el) return;
 
@@ -294,13 +294,31 @@ function _renderMermaTabla(all) {
   if (desde) filtered = filtered.filter(function(m) { return (m.fecha || '') >= desde; });
 
   if (!filtered.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-text">Sin merma en el periodo seleccionado</div></div>';
+    el.innerHTML = '<div class="empty"><div class="empty-text">Sin merma registrada — pulsa + Añadir merma</div></div>';
     return;
   }
 
+  // Vista cocinero: tarjetas simples
+  if (!esManager) {
+    el.innerHTML = filtered.map(function(m) {
+      var hora = '';
+      try { hora = new Date(m.created_at || m.fecha).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); } catch(e){}
+      return '<div class="task-card" style="margin-bottom:8px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '  <span style="font-weight:600;font-size:14px;">' + (m.producto || '—') + '</span>'
+        + '  <span class="badge b-orange">' + (m.cantidad || '—') + ' ' + (m.unidad || '') + '</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:var(--text2);margin-top:4px;">' + (m.causa || '—') + '</div>'
+        + (hora ? '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--font-mono);">' + hora + '</div>' : '')
+        + '</div>';
+    }).join('');
+    return;
+  }
+
+  // Vista manager: tabla completa con coste
   el.innerHTML = '<div style="overflow-x:auto;">'
     + '<table>'
-    + '<tr><th>Fecha</th><th>Producto / Plato</th><th>Cantidad</th><th>Causa</th><th>Coste</th><th>Dept.</th><th>Registrado por</th></tr>'
+    + '<tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Causa</th><th>Coste</th><th>Dept.</th><th>Empleado</th></tr>'
     + filtered.map(function(m) {
         var sinC = !m.coste_unitario || parseFloat(m.coste_unitario) === 0;
         var esPlato = m.tipo === 'plato';
@@ -311,13 +329,14 @@ function _renderMermaTabla(all) {
           + '<td style="font-family:var(--font-mono)">' + (m.cantidad || '—') + ' ' + (m.unidad || '') + '</td>'
           + '<td style="font-size:12px;color:var(--text2)">' + (m.causa || '—') + '</td>'
           + '<td style="font-family:var(--font-mono);' + (sinC ? 'color:var(--amber)' : 'color:var(--orange);font-weight:600') + '">'
-          + (sinC ? '⚠ Pendiente' : (parseFloat(m.coste_total) || 0).toFixed(2) + '€') + '</td>'
+          + (sinC ? '⚠ Sin coste' : (parseFloat(m.coste_total) || 0).toFixed(2) + '€') + '</td>'
           + '<td style="font-size:12px">' + (m.departamento || '—') + '</td>'
           + '<td style="font-size:12px;color:var(--text2)">' + (m.nombre || '—') + '</td>'
           + '</tr>';
       }).join('')
     + '</table></div>';
 }
+
 
 // ── MODAL HTML ────────────────────────────────────────────────────────
 function _mermaModalHTML() {
