@@ -1135,6 +1135,27 @@ function updatePortalClock(){
 updatePortalClock();
 setInterval(updatePortalClock, 30000);
 
+// ── GRID RESPONSIVE DEL PORTAL (JS puro — inmune a conflictos CSS) ──
+function _pGridCols(){
+  var g = document.getElementById('portal-dept-grid');
+  if(!g) return;
+  var w = window.innerWidth;
+  var cols = w >= 900 ? 4 : w >= 600 ? 3 : 2;
+  g.style.gridTemplateColumns = 'repeat('+cols+',1fr)';
+}
+window.addEventListener('resize', _pGridCols);
+// Llamar también cuando el portal se hace visible
+var _pGridObserver = new MutationObserver(function(mutations){
+  mutations.forEach(function(m){
+    if(m.target.id === 'portal-screen' && m.target.style.display !== 'none') _pGridCols();
+  });
+});
+(function(){
+  var ps = document.getElementById('portal-screen');
+  if(ps) _pGridObserver.observe(ps, { attributes: true, attributeFilter: ['style'] });
+  _pGridCols();
+})();
+
 var _pD='',_pP='',_pGoBusy=false;
 var _pLabel = '', _pColor = '#2ec4b6';
 
@@ -1177,15 +1198,38 @@ async function pSel(dept, label, color){
   });
 
   // Clasificar por rol
-  var equipo = deptEmps.filter(function(e){ return e.rol === 'empleado'; });
-  var responsables = deptEmps.filter(function(e){ return e.responsable == 1 && e.rol !== 'jefe' && e.rol !== 'admin' && e.rol !== 'fb'; });
+  // JEFES: rol admin/fb/jefe/adjunto — pero solo del área nativa del dept
+  // Excepción: fb siempre aparece en cocina/sala/administracion (cross-dept)
   var jefes = deptEmps.filter(function(e){
-    return e.rol === 'jefe' || e.rol === 'admin' || e.rol === 'fb' || e.rol === 'adjunto' || e.validador == 1;
+    if(e.rol === 'admin' || e.rol === 'fb' || e.rol === 'adjunto') return true;
+    if(e.rol === 'jefe'){
+      // Jefe de departamento: solo si su área es nativa de este dept (no cross-dept)
+      // Para administracion: solo incluir jefes cuya área sea Administración/RRHH/Recursos Humanos
+      if(dept === 'administracion'){
+        var nativeAdmon = ['administración','rrhh','recursos humanos'];
+        return nativeAdmon.indexOf((e.area||'').trim().toLowerCase()) !== -1;
+      }
+      return true;
+    }
+    // validador sin rol jefe: solo en su área nativa
+    if(e.validador == 1) return true;
+    return false;
   });
-  // Evitar duplicados entre jefes y equipo
+
+  // RESPONSABLES: responsable==1, rol empleado — no tiene sentido en administracion
+  var responsables = dept === 'administracion' ? [] : deptEmps.filter(function(e){
+    return e.responsable == 1 && e.rol !== 'jefe' && e.rol !== 'admin' && e.rol !== 'fb' && e.rol !== 'adjunto';
+  });
+
+  // EQUIPO: empleados sin rol especial, sin duplicar
   var jefeIds = jefes.map(function(e){ return e.id; });
   var respIds = responsables.map(function(e){ return e.id; });
-  equipo = equipo.filter(function(e){ return jefeIds.indexOf(e.id) === -1 && respIds.indexOf(e.id) === -1; });
+  // Quitar de responsables a quien ya está en jefes (Angélica: admin + responsable==1)
+  responsables = responsables.filter(function(e){ return jefeIds.indexOf(e.id) === -1; });
+  respIds = responsables.map(function(e){ return e.id; });
+  var equipo = deptEmps.filter(function(e){
+    return e.rol === 'empleado' && jefeIds.indexOf(e.id) === -1 && respIds.indexOf(e.id) === -1;
+  });
 
   function empInitials(nombre){
     var parts = (nombre||'').trim().split(/\s+/);
