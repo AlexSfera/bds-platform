@@ -1397,9 +1397,13 @@ async function _doSaveTurno(){
     for(const m of allMerma){ if(m.shift_id===editingShiftId) await dbDelete('merma',m.id); }
     const allIncis = await getDB('incidencias');
     for(const i of allIncis){ if(i.shift_id===editingShiftId) await dbDelete('incidencias',i.id); }
-    invalidateCache('merma'); invalidateCache('incidencias');
+    // BUG-REC-VENTAS-2: borrar ventas cross-sell antiguas del turno para evitar duplicados en reenvío
+    const allRecVentas = await getDB('recepcion_ventas');
+    for(const v of allRecVentas){ if(v.shift_id===editingShiftId) await dbDelete('recepcion_ventas',v.id); }
+    invalidateCache('merma'); invalidateCache('incidencias'); invalidateCache('recepcion_ventas');
     auditLog('CORRECTION_RESEND', currentUser.nombre+' — '+fecha+' — '+servicio);
     toast('Turno corregido y reenviado','ok');
+    window._lastSavedShiftId = editingShiftId; // BUG-REC-VENTAS-2: necesario para _saveRecepcionVentas en corrección
 
   // ── NEW SHIFT ──
   } else {
@@ -1432,7 +1436,7 @@ async function _doSaveTurno(){
       console.error('Shift insert failed',shift);
       const alertArea=document.getElementById('turno-alert-area');
       if(alertArea) alertArea.innerHTML='<div class="alert a-err">No se pudo guardar el turno. Inténtalo de nuevo.</div>';
-      throw new Error('SHIFT_INSERT_FAILED');
+      return;
     }
     invalidateCache('shifts');
     auditLog('SAVE_SHIFT', currentUser.nombre+' — '+fecha+' — '+servicio);
