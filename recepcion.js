@@ -262,14 +262,14 @@ function setRecKpi(key, val, btn) {
     else btn.classList.add('t-na');
   }
   var deps = {
-    upsell_desayuno:        'kpi-upsell-detail',
+    upsell_desayuno:        'desayuno-ventas-block',
+    upsell_cena:            'cena-ventas-block',
     clientes_insatisfechos: 'kpi-clientes-detail',
-    syncrolab_ventas:    'syncro-ventas-container',
-    lead_pendiente:      'kpi-lead-block'
+    lead_pendiente:         'kpi-lead-block'
   };
   if(deps[key]){
     var bl = document.getElementById(deps[key]);
-    if(bl) bl.style.display = val==='si' ? (key==='upsell_desayuno'?'grid':'block') : 'none';
+    if(bl) bl.style.display = val==='si' ? 'block' : 'none';
   }
 }
 
@@ -279,7 +279,7 @@ function setRecKpi(key, val, btn) {
 function openRecKpiModal() {
   _recKpiState = {};
   document.querySelectorAll('#modal-rec-kpi .tbtn').forEach(function(b){ b.classList.remove('t-si','t-no','t-na'); });
-  ['kpi-upsell-detail','kpi-clientes-detail','syncro-ventas-container','kpi-lead-block'].forEach(function(id){
+  ['desayuno-ventas-block','cena-ventas-block','kpi-clientes-detail','kpi-lead-block','kpi-syncro-block'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.style.display='none';
   });
   ['kpi-checkins','kpi-checkouts','kpi-reservas','kpi-desal-ofertados','kpi-desal-vendidos','kpi-clientes-num','kpi-tareas-creadas','kpi-tareas-cerradas'].forEach(function(id){
@@ -379,7 +379,6 @@ function openRecCajaModal(existingId) {
     fondoEl.style.cursor  = 'not-allowed';
   }
   if(!existingId){
-    invalidateCache(REC_TABLE);
     getDB(REC_TABLE).then(function(rows){
       var sorted = rows
         .filter(function(r){ return r.fondo_real_a_traspasar != null; })
@@ -1195,7 +1194,6 @@ function openRecTraspasoModal(existingId) {
   if(!existingId){
     if(label) label.textContent = _recTipoTurno || getRecTurnoValue() || '—';
     // Fondo recibido = fondo_real_a_traspasar del último cierre O traspaso — no editable
-    invalidateCache(REC_TABLE);
     getDB(REC_TABLE).then(function(rows){
       var sorted = rows
         .filter(function(r){ return r.fondo_real_a_traspasar != null; })

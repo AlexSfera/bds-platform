@@ -287,6 +287,7 @@ function openCajaForm(existingId) {
   var fondoIniEl = document.getElementById('caja-fondo-ini');
   if(fondoIniEl) fondoIniEl.value = '';
   if(!existingId){
+    invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
       var sorted = rows
         .filter(function(r){ return r.fondo_real_sala != null || r.fondo_final != null; })
@@ -604,7 +605,7 @@ async function renderCajaList() {
       if(filter==='mes') return c.fecha >= startOfMonth();
       return true;
     });
-    data.sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+    data.sort(function(a,b){ return b.fecha.localeCompare(a.fecha) || (b.created_at||'').localeCompare(a.created_at||''); });
     if(!data.length){
       el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo seleccionado</div></div>';
       return;
@@ -843,7 +844,7 @@ async function renderValCajaList() {
       if(periodo==='mes') return c.fecha>=startOfMonth();
       return true;
     });
-    data.sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
+    data.sort(function(a,b){return b.fecha.localeCompare(a.fecha)||(b.created_at||'').localeCompare(a.created_at||'');});
     if(!data.length){
       el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo</div></div>';
       return;
@@ -1255,6 +1256,7 @@ function openSalaTraspasoModal(existingId) {
 
   if(!existingId){
     if(label) label.textContent = _salaTipoServ || '—';
+    invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
       var sorted = rows
         .filter(function(r){ return r.fondo_real_sala != null || r.fondo_final != null; })
