@@ -1121,98 +1121,246 @@ function switchDept(newDept) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PORTAL PIN — Entrada por departamento
+// PORTAL V2 — Departamento → Empleados → PIN overlay
 // ═══════════════════════════════════════════════════════════════
 
-function updatePortalClock(){
-  var el=document.getElementById('portal-clock');
-  if(!el) return;
+// Reloj (dos IDs: portal-clock en header + pclock en body antiguo)
+function _pClkUpdate(){
   var d=new Date();
-  var days=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  var months=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  el.textContent=days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear()+' · '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-}
-updatePortalClock();
-setInterval(updatePortalClock, 30000);
-
-var _pD='',_pP='',_pGoBusy=false;
-
-function _pClk(){
-  var d=new Date();
-  var ds=['Dom','Lun','Mar','Mie','Jue','Vie','Sab'];
+  var ds=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   var ms=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var h=String(d.getHours()).padStart(2,'0');
-  var m=String(d.getMinutes()).padStart(2,'0');
-  var el=document.getElementById('pclock');
-  if(el) el.textContent=ds[d.getDay()]+' '+d.getDate()+' '+ms[d.getMonth()]+' '+d.getFullYear()+'  -  '+h+':'+m;
+  var txt=ds[d.getDay()]+' '+d.getDate()+' '+ms[d.getMonth()]+' '+d.getFullYear()
+        +' · '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  ['portal-clock','pclock'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.textContent=txt;
+  });
 }
-_pClk();
-setInterval(_pClk,30000);
+_pClkUpdate();
+setInterval(_pClkUpdate,30000);
 
-function pSel(dept,label,color){
-  _pD=dept; _pP=''; _pGoBusy=false;
-  var box=document.getElementById('p-pin-box');
-  var lbl=document.getElementById('pdept-lbl');
-  var err=document.getElementById('p-err');
-  if(box){box.textContent='* * * *';box.className='p-pin-box';box.style.borderColor='rgba(46,196,182,.3)';box.style.color='#2ec4b6';}
-  if(lbl){lbl.textContent=label;lbl.style.color=color;}
-  if(err){err.style.display='none';err.textContent='';}
+// ── Mapa departamento portal → áreas BD ──────────────────────
+var PORTAL_DEPT_AREAS = {
+  'cocina':       ['Cocina','Friegue'],
+  'sala':         ['Sala','Jefe de Sala'],
+  'recepcion':    ['Recepción','Recepción SFERA'],
+  'syncrolab':    ['SYNCROLAB','Recepción SYNCROLAB','Entrenadores','Fisioterapeutas'],
+  'housekeeping': ['HK','Housekeeping','Limpieza'],
+  'mantenimiento':['Mantenimiento'],
+  'direccion':    ['Administración','Dirección']   // + roles admin/adjunto/fb se añaden por rol
+};
+// Roles que siempre aparecen en "Dirección / RRHH" independientemente del área
+var PORTAL_DIR_ROLES = ['admin','adjunto','adjunto_directivo','fb'];
+
+// Iniciales de un nombre (máx 2 chars)
+function _pInitials(nombre){
+  var parts=(nombre||'').trim().split(/\s+/);
+  if(parts.length>=2) return (parts[0][0]+(parts[1][0]||'')).toUpperCase();
+  return (nombre||'').slice(0,2).toUpperCase();
+}
+
+// Estado portal: null=dept grid | 'dept_key'=empleados de ese dpto
+var _pActiveDept = null;
+var _pP = '';
+var _pGoBusy = false;
+var _pSelectedEmp = null;  // objeto empleado seleccionado para PIN
+
+// ── CAPA 1: click en tarjeta de departamento ─────────────────
+async function pSel(deptKey, label, color){
+  _pActiveDept = deptKey;
+  _pP = ''; _pGoBusy = false; _pSelectedEmp = null;
+
+  // Obtener empleados activos del departamento
+  runMigrations(); seedEmployees();
+  var allEmps = await getDB('employees');
+  var areas = PORTAL_DEPT_AREAS[deptKey] || [];
+
+  var emps = allEmps.filter(function(e){
+    if(e.estado !== 'Activo') return false;
+    var enArea = areas.indexOf(e.area||'') >= 0
+              || areas.indexOf(e.puesto||'') >= 0;
+    var enDir  = deptKey==='direccion' && PORTAL_DIR_ROLES.indexOf(e.rol||'') >= 0;
+    return enArea || enDir;
+  });
+
+  // Separar en 3 filas: empleados base | responsables de turno | jefes/validadores
+  var base  = emps.filter(function(e){ return !_isResponsable(e) && !_isJefePortal(e); });
+  var resps = emps.filter(function(e){ return _isResponsable(e) && !_isJefePortal(e); });
+  var jefes = emps.filter(function(e){ return _isJefePortal(e); });
+
+  // Construir HTML del panel de empleados
+  var html = '';
+  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">'
+        +'<button onclick="pBackToDepts()" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#94a3b8;padding:6px 12px;cursor:pointer;font-family:\'JetBrains Mono\',monospace;font-size:11px;font-weight:700;letter-spacing:.05em;">← Atrás</button>'
+        +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:'+color+';text-transform:uppercase;">'+label+'</div>'
+        +'</div>';
+
+  if(!emps.length){
+    html += '<div style="color:#64748b;font-size:13px;padding:16px 0;">No hay empleados activos en este departamento.</div>';
+  } else {
+    if(base.length){
+      html += _pEmpSection('Equipo', base, '#94a3b8', color);
+    }
+    if(resps.length){
+      html += _pEmpSection('Responsable de turno', resps, '#34d399', color);
+    }
+    if(jefes.length){
+      html += _pEmpSection('Jefe / Validador', jefes, '#fbbf24', color);
+    }
+  }
+
+  // Mostrar panel
+  var panel = document.getElementById('portal-emp-panel');
+  var deptGrid = document.getElementById('portal-dept-section');
+  if(panel){
+    panel.innerHTML = html;
+    panel.style.display = 'block';
+  }
+  if(deptGrid) deptGrid.style.display = 'none';
+
+  // Scroll arriba
+  var ps = document.getElementById('portal-screen');
+  if(ps) ps.scrollTop = 0;
+}
+
+function _isResponsable(e){
+  return e.responsable==1||e.responsable===true||e.responsable==='1'||e.responsable==='true';
+}
+function _isJefePortal(e){
+  var jefeRoles=['jefe','chef','fb','jefe_recepcion','supervisor','gobernante',
+                 'coord_recepcion_syncrolab','coord_entrenadores','coord_fisioterapeutas',
+                 'admin','adjunto','adjunto_directivo'];
+  return jefeRoles.indexOf(e.rol||'') >= 0;
+}
+
+function _pEmpSection(titulo, emps, labelColor, accentColor){
+  var html = '<div style="margin-bottom:14px;">';
+  html += '<div style="font-family:\'JetBrains Mono\',monospace;font-size:9px;font-weight:700;'
+        +'letter-spacing:.18em;text-transform:uppercase;color:'+labelColor+';margin-bottom:8px;">'+titulo+'</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  emps.forEach(function(e){
+    var initials = _pInitials(e.nombre);
+    var avatarBg = titulo==='Jefe / Validador'
+      ? 'rgba(251,191,36,.18)' : titulo==='Responsable de turno'
+      ? 'rgba(52,211,153,.18)' : 'rgba(148,163,184,.12)';
+    var avatarColor = titulo==='Jefe / Validador'
+      ? '#fbbf24' : titulo==='Responsable de turno'
+      ? '#34d399' : '#94a3b8';
+    var borderColor = titulo==='Jefe / Validador'
+      ? 'rgba(251,191,36,.35)' : titulo==='Responsable de turno'
+      ? 'rgba(52,211,153,.35)' : 'rgba(148,163,184,.2)';
+    html += '<button onclick="pSelEmp(\''+e.id+'\')" '
+          +'style="display:flex;align-items:center;gap:9px;background:#102B3A;'
+          +'border:1px solid '+borderColor+';border-radius:10px;padding:9px 14px;'
+          +'cursor:pointer;transition:all .15s;text-align:left;max-width:200px;" '
+          +'onmouseover="this.style.background=\'#163348\';this.style.borderColor=\''+accentColor+'\'" '
+          +'onmouseout="this.style.background=\'#102B3A\';this.style.borderColor=\''+borderColor+'\'">'
+          +'<div style="width:34px;height:34px;border-radius:50%;background:'+avatarBg+';'
+          +'display:flex;align-items:center;justify-content:center;font-family:\'JetBrains Mono\',monospace;'
+          +'font-size:11px;font-weight:700;color:'+avatarColor+';flex-shrink:0;">'+initials+'</div>'
+          +'<div><div style="font-size:13px;font-weight:600;color:#f1f5f9;white-space:nowrap;overflow:hidden;'
+          +'text-overflow:ellipsis;max-width:130px;">'+e.nombre+'</div>'
+          +'<div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;'
+          +'text-overflow:ellipsis;max-width:130px;">'+e.puesto+'</div>'
+          +'</div></button>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// ── CAPA 2: click en empleado → abrir overlay PIN ────────────
+async function pSelEmp(empId){
+  var allEmps = await getDB('employees');
+  var emp = allEmps.find(function(e){ return e.id===empId; });
+  if(!emp) return;
+  _pSelectedEmp = emp;
+  _pP = ''; _pGoBusy = false;
+
+  // Rellenar overlay
+  var nameEl = document.getElementById('p-emp-name');
+  var puestoEl = document.getElementById('p-emp-puesto');
+  var box = document.getElementById('p-pin-box');
+  var err = document.getElementById('p-err');
+  if(nameEl) nameEl.textContent = emp.nombre;
+  if(puestoEl) puestoEl.textContent = emp.puesto || '';
+  if(box){ box.textContent='· · · ·'; box.className='p-pin-box'; box.style.borderColor='rgba(46,196,182,.3)'; box.style.color='#2ec4b6'; }
+  if(err){ err.style.display='none'; err.textContent=''; }
+
   document.getElementById('portal-pin-modal').style.display='flex';
 }
 
+// ── Volver al grid de departamentos ──────────────────────────
+function pBackToDepts(){
+  var panel = document.getElementById('portal-emp-panel');
+  var deptGrid = document.getElementById('portal-dept-section');
+  if(panel){ panel.style.display='none'; panel.innerHTML=''; }
+  if(deptGrid) deptGrid.style.display='';
+  _pActiveDept = null; _pSelectedEmp = null;
+}
+
+// ── Teclado PIN ───────────────────────────────────────────────
 function pK(d){
   if(_pGoBusy||_pP.length>=6) return;
   _pP+=d;
   var box=document.getElementById('p-pin-box');
-  if(box) box.textContent=_pP.replace(/./g,'*');
+  if(box) box.textContent=_pP.replace(/./g,'●');
 }
 
 function pBk(){
   if(_pGoBusy) return;
   _pP=_pP.slice(0,-1);
   var box=document.getElementById('p-pin-box');
-  if(box) box.textContent=_pP.length===0?'* * * *':_pP.replace(/./g,'*');
+  if(box) box.textContent=_pP.length===0?'· · · ·':_pP.replace(/./g,'●');
 }
 
 function pClose(){
-  _pP=''; _pGoBusy=false;
+  _pP=''; _pGoBusy=false; _pSelectedEmp=null;
   document.getElementById('portal-pin-modal').style.display='none';
 }
 
+// ── Validar PIN ───────────────────────────────────────────────
 async function pGo(){
   if(_pGoBusy) return;
   if(_pP.length < 4) return;
   _pGoBusy=true;
   var pin=_pP;
-  runMigrations();
-  seedEmployees();
-  var RP={'300415':'admin','0101':'chef','1010':'fb'};
+  runMigrations(); seedEmployees();
   var emps=await getDB('employees');
   var u=null;
-  if(RP[pin]){
-    var r=RP[pin];
-    u=emps.find(function(e){return e.rol===r&&e.estado==='Activo';});
+
+  if(_pSelectedEmp){
+    // Flujo normal: verificar que el PIN coincide con el empleado seleccionado
+    u = (_pSelectedEmp.pin===pin && _pSelectedEmp.estado==='Activo') ? _pSelectedEmp : null;
+    // Compatibilidad PINs de reserva de sistema
     if(!u){
-      u={id:'SYS_'+r,
-         nombre:r==='admin'?'Administrador':r==='chef'?'Chef':'F&B Manager',
-         rol:r,estado:'Activo',pin:pin,
-         responsable:r==='chef'?1:0,validador:1,
-         area:'Administracion',
-         puesto:r==='admin'?'Administrador':r==='chef'?'Jefe de Cocina':'F&B Manager',
-         coste:0,obs:'',
-         fecha_alta:localTs().slice(0,10)};
+      var RP={'300415':'admin','0101':'chef','1010':'fb'};
+      if(RP[pin]){
+        var r=RP[pin];
+        if(_pSelectedEmp.rol===r) u=_pSelectedEmp;
+      }
     }
   } else {
-    u=emps.find(function(e){return e.pin===pin&&e.estado==='Activo';});
+    // Fallback: sin empleado seleccionado (acceso directo legacy)
+    var RP2={'300415':'admin','0101':'chef','1010':'fb'};
+    if(RP2[pin]){
+      var r2=RP2[pin];
+      u=emps.find(function(e){return e.rol===r2&&e.estado==='Activo';});
+      if(!u) u={id:'SYS_'+r2,nombre:r2==='admin'?'Administrador':r2==='chef'?'Chef':'F&B Manager',
+                rol:r2,estado:'Activo',pin:pin,responsable:r2==='chef'?1:0,validador:1,
+                area:'Administración',puesto:r2==='admin'?'Administrador':r2==='chef'?'Jefe de Cocina':'F&B Manager',
+                coste:0,obs:'',fecha_alta:localTs().slice(0,10)};
+    } else {
+      u=emps.find(function(e){return e.pin===pin&&e.estado==='Activo';});
+    }
   }
+
   if(!u){
     var box=document.getElementById('p-pin-box');
     var err=document.getElementById('p-err');
     if(box){box.className='p-pin-box p-err';box.textContent='PIN incorrecto';box.style.borderColor='#ef4444';box.style.color='#ef4444';}
-    if(err){err.textContent='Inténtalo de nuevo';err.style.display='block';}
+    if(err){err.textContent='PIN incorrecto · inténtalo de nuevo';err.style.display='block';}
     setTimeout(function(){
       _pP=''; _pGoBusy=false;
-      if(box){box.className='p-pin-box';box.textContent='* * * *';box.style.borderColor='rgba(46,196,182,.3)';box.style.color='#2ec4b6';}
+      if(box){box.className='p-pin-box';box.textContent='· · · ·';box.style.borderColor='rgba(46,196,182,.3)';box.style.color='#2ec4b6';}
       if(err){err.style.display='none';err.textContent='';}
     },1500);
     return;

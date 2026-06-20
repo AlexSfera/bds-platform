@@ -611,158 +611,106 @@ tr:hover td{background:rgba(96,165,250,.06);}
 <body>
 <div id="portal-screen" style="position:fixed;inset:0;z-index:1000;overflow-y:auto;background:#0B1F33;display:flex;flex-direction:column;">
 
-  <!-- PIN MODAL -->
-  <div id="portal-pin-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,20,.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
-    <div style="background:#0f2a3d;border:1px solid rgba(46,196,182,.4);border-radius:16px;padding:28px 24px;width:100%;max-width:340px;text-align:center;">
-      <div id="pdept-lbl" style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.25em;color:#2ec4b6;text-transform:uppercase;margin-bottom:8px;"></div>
-      <div style="font-size:17px;font-weight:600;color:#fff;margin-bottom:20px;">Introduce tu PIN</div>
-      <div id="p-pin-box" style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:#2ec4b6;letter-spacing:.4em;background:#071825;border:2px solid rgba(46,196,182,.3);border-radius:10px;padding:14px;margin-bottom:8px;">* * * *</div>
-      <div id="p-err" style="height:20px;color:#ef4444;font-size:12px;margin-bottom:12px;font-family:monospace;"></div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px;">
+  <!-- ══ OVERLAY PIN (centrado, aparece sobre los empleados) ══ -->
+  <div id="portal-pin-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,20,.82);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#0f2a3d;border:1px solid rgba(46,196,182,.4);border-radius:18px;padding:28px 24px;width:100%;max-width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.7);">
+      <!-- Empleado seleccionado -->
+      <div style="margin-bottom:18px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.22em;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Entrando como</div>
+        <div id="p-emp-name" style="font-size:17px;font-weight:700;color:#f1f5f9;line-height:1.2;"></div>
+        <div id="p-emp-puesto" style="font-size:12px;color:#64748b;margin-top:3px;"></div>
+      </div>
+      <!-- Display PIN -->
+      <div id="p-pin-box" style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:#2ec4b6;letter-spacing:.5em;background:#071825;border:2px solid rgba(46,196,182,.3);border-radius:10px;padding:14px 10px 14px 20px;margin-bottom:6px;min-height:62px;display:flex;align-items:center;justify-content:center;user-select:none;transition:border-color .2s,color .2s;">· · · ·</div>
+      <div id="p-err" style="height:18px;color:#f87171;font-size:11px;margin-bottom:10px;font-family:'JetBrains Mono',monospace;display:none;"></div>
+      <!-- Teclado numérico -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
         <button class="p-key" onclick="pK('1')">1</button><button class="p-key" onclick="pK('2')">2</button><button class="p-key" onclick="pK('3')">3</button>
         <button class="p-key" onclick="pK('4')">4</button><button class="p-key" onclick="pK('5')">5</button><button class="p-key" onclick="pK('6')">6</button>
         <button class="p-key" onclick="pK('7')">7</button><button class="p-key" onclick="pK('8')">8</button><button class="p-key" onclick="pK('9')">9</button>
-        <button class="p-key" onclick="pClose()" style="color:#6b7280;">✕</button>
+        <button class="p-key" onclick="pClose()" style="color:#6b7280;font-size:13px;">✕</button>
         <button class="p-key" onclick="pK('0')">0</button>
-        <button class="p-key" onclick="pBk()" style="color:#f59e0b;">⌫</button>
+        <button class="p-key" onclick="pBk()" style="color:#f59e0b;font-size:16px;">⌫</button>
       </div>
-      <button onclick="pGo()" style="width:100%;padding:12px;background:#2ec4b6;border:none;border-radius:8px;color:#0B1F33;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.05em;touch-action:manipulation;user-select:none;">ENTRAR →</button>
+      <button onclick="pGo()" style="width:100%;padding:13px;background:#2ec4b6;border:none;border-radius:9px;color:#071825;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.06em;touch-action:manipulation;user-select:none;transition:opacity .15s;" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">ENTRAR →</button>
     </div>
   </div>
 
-  <!-- MAIN PORTAL CONTENT -->
-  <main style="flex:1;padding:32px 24px;max-width:1100px;margin:0 auto;width:100%;">
+  <!-- ══ CONTENIDO PRINCIPAL ══ -->
+  <main style="flex:1;padding:32px 20px;max-width:1000px;margin:0 auto;width:100%;">
 
     <!-- Header -->
-    <header style="text-align:center;margin-bottom:40px;">
-      <p style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.45em;color:#2ec4b6;text-transform:uppercase;margin-bottom:14px;">Health · Sport · Hotel</p>
-      <h1 style="font-family:'JetBrains Mono',monospace;font-size:clamp(28px,5vw,48px);font-weight:700;letter-spacing:.22em;color:#2ec4b6;margin:0 0 12px;">SYNCROSFERA</h1>
-      <div style="width:64px;height:2px;background:#2ec4b6;margin:0 auto 20px;"></div>
-      <h2 style="font-size:22px;font-weight:600;color:#fff;margin:0 0 8px;">Portal Operativo</h2>
-      <p style="font-size:14px;color:#94a3b8;margin:0 0 14px;">Gestión diaria del equipo</p>
-      <div style="max-width:640px;margin:0 auto 8px;text-align:center;">
-        <p style="font-family:'Inter',sans-serif;font-style:italic;font-size:15px;color:#cbd5e1;line-height:1.55;margin:0;">"Cada día es una oportunidad de ser mejor versión de ti."</p>
-        <p style="font-family:'Inter',sans-serif;font-size:15px;color:#2ec4b6;font-weight:600;line-height:1.55;margin:6px 0 0;">En equipo alcanzamos la excelencia.</p>
-      </div>
-      <p id="portal-clock" style="font-size:12px;color:#64748b;margin-top:10px;"></p>
+    <header style="text-align:center;margin-bottom:32px;">
+      <p style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.45em;color:#2ec4b6;text-transform:uppercase;margin-bottom:10px;">Health · Sport · Hotel</p>
+      <h1 style="font-family:'JetBrains Mono',monospace;font-size:clamp(24px,5vw,42px);font-weight:700;letter-spacing:.22em;color:#2ec4b6;margin:0 0 10px;">SYNCROSFERA</h1>
+      <div style="width:56px;height:2px;background:#2ec4b6;margin:0 auto 16px;"></div>
+      <h2 style="font-size:19px;font-weight:600;color:#fff;margin:0 0 6px;">Portal Operativo</h2>
+      <p id="portal-clock" style="font-size:12px;color:#64748b;margin:8px 0 0;font-family:'JetBrains Mono',monospace;"></p>
     </header>
 
-    <!-- Status bar -->
-    <section style="margin-bottom:32px;border-radius:16px;border:1px solid rgba(46,196,182,.25);background:rgba(255,255,255,.04);padding:20px 24px;box-shadow:0 4px 24px rgba(0,100,80,.15);">
-      <div style="display:flex;flex-direction:column;gap:16px;">
-        <div>
-          <p style="font-size:13px;color:#94a3b8;margin:0 0 4px;">Bienvenido</p>
-          <h3 style="font-size:18px;font-weight:600;color:#fff;margin:0;">Selecciona tu departamento</h3>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
-          <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#2ec4b6;margin:0 0 4px;">5</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0;">Activos</p>
-          </div>
-          <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#f59e0b;margin:0 0 4px;">5</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0;">Próximamente</p>
-          </div>
-          <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#fff;margin:0 0 4px;">v4.0</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0;">Versión</p>
-          </div>
-        </div>
+    <!-- ══ CAPA 1: Grid de departamentos ══ -->
+    <section id="portal-dept-section">
+      <p style="font-size:13px;color:#64748b;text-align:center;margin-bottom:20px;font-family:'JetBrains Mono',monospace;letter-spacing:.06em;">SELECCIONA TU DEPARTAMENTO</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+
+        <!-- COCINA -->
+        <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:14px;border:2px solid #f59e0b;background:#102B3A;padding:18px;cursor:pointer;transition:all .18s;" onmouseover="this.style.background='#163348';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+          <div style="font-size:28px;margin-bottom:10px;">🍳</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;">Cocina</div>
+          <div style="font-size:11px;color:#64748b;">Turnos · Merma · APPCC</div>
+        </button>
+
+        <!-- SALA -->
+        <button onclick="pSel('sala','Sala','#3b82f6')" style="text-align:left;border-radius:14px;border:2px solid #3b82f6;background:#102B3A;padding:18px;cursor:pointer;transition:all .18s;" onmouseover="this.style.background='#163348';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+          <div style="font-size:28px;margin-bottom:10px;">🍽</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;">Sala</div>
+          <div style="font-size:11px;color:#64748b;">Caja · Servicio · Incidencias</div>
+        </button>
+
+        <!-- RECEPCIÓN HOTEL -->
+        <button onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')" style="text-align:left;border-radius:14px;border:2px solid #8b5cf6;background:#102B3A;padding:18px;cursor:pointer;transition:all .18s;" onmouseover="this.style.background='#163348';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+          <div style="font-size:28px;margin-bottom:10px;">🏨</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;">Recepción Hotel</div>
+          <div style="font-size:11px;color:#64748b;">Check-in · Caja MEWS</div>
+        </button>
+
+        <!-- SYNCROLAB -->
+        <button onclick="pSel('syncrolab','SYNCROLAB','#06b6d4')" style="text-align:left;border-radius:14px;border:2px solid #06b6d4;background:#102B3A;padding:18px;cursor:pointer;transition:all .18s;" onmouseover="this.style.background='#163348';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+          <div style="font-size:28px;margin-bottom:10px;">🔬</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;">SYNCROLAB</div>
+          <div style="font-size:11px;color:#64748b;">Clientes · Caja · Tratamientos</div>
+        </button>
+
+        <!-- HOUSEKEEPING -->
+        <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:14px;border:2px solid #f97316;background:#102B3A;padding:18px;cursor:pointer;transition:all .18s;" onmouseover="this.style.background='#163348';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+          <div style="font-size:28px;margin-bottom:10px;">🧹</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;">Housekeeping</div>
+          <div style="font-size:11px;color:#64748b;">Habitaciones · Limpieza</div>
+        </button>
+
+        <!-- MANTENIMIENTO -->
+        <button onclick="pSel('mantenimiento','Mantenimiento','#ef4444')" style="text-align:left;border-radius:14px;border:2px solid #ef4444;background:#102B3A;padding:18px;cursor:pointer;transition:all .18s;" onmouseover="this.style.background='#163348';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+          <div style="font-size:28px;margin-bottom:10px;">🔧</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;">Mantenimiento</div>
+          <div style="font-size:11px;color:#64748b;">Incidencias · Compras</div>
+        </button>
+
+        <!-- DIRECCIÓN / RRHH -->
+        <button onclick="pSel('direccion','Dirección / RRHH','#a855f7')" style="text-align:left;border-radius:14px;border:2px solid #a855f7;background:#102B3A;padding:18px;cursor:pointer;transition:all .18s;" onmouseover="this.style.background='#163348';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
+          <div style="font-size:28px;margin-bottom:10px;">👔</div>
+          <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;">Dirección / RRHH</div>
+          <div style="font-size:11px;color:#64748b;">Admin · F&amp;B · Gestión</div>
+        </button>
+
       </div>
     </section>
 
-    <!-- Department grid -->
-    <section style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px;">
-
-      <!-- COCINA — active -->
-      <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:16px;border:2px solid #f59e0b;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(245,158,11,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🍳</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Cocina</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Turnos · Mermas · Tareas</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#2ec4b6;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
-        </div>
-      </button>
-
-      <!-- SALA — active -->
-      <button onclick="pSel('sala','Sala','#3b82f6')" style="text-align:left;border-radius:16px;border:2px solid #3b82f6;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(59,130,246,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🍽</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Sala</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Caja · Incidencias · Servicio</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#2ec4b6;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
-        </div>
-      </button>
-
-      <!-- SOON departments -->
-      <button onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')" style="text-align:left;border-radius:16px;border:2px solid #8b5cf6;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(139,92,246,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🏨</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Recepción Hotel</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Check-in · Check-out · Caja MEWS</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#8b5cf6;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
-        </div>
-      </button>
-      <button onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')" style="text-align:left;border-radius:16px;border:2px solid #06b6d4;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(6,182,212,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🔬</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Recepción SYNCROLAB</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Reservas · Clientes</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#06b6d4;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
-        </div>
-      </button>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">💪</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Entrenadores</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Sesiones · Seguimiento</p>
-      </div>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">🩺</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Fisioterapeutas</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Tratamientos · Pacientes</p>
-      </div>
-      <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:16px;border:2px solid #f97316;background:#102B3A;padding:20px;min-height:170px;cursor:pointer;transition:all .2s;position:relative;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-3px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;">
-          <div style="width:48px;height:48px;background:rgba(249,115,22,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;">🧹</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Activo</span>
-        </div>
-        <h3 style="font-size:17px;font-weight:700;color:#fff;margin:0 0 6px;">Housekeeping</h3>
-        <p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Limpieza · Habitaciones · Zonas</p>
-        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#f97316;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;"></span>Entrar al módulo
-        </div>
-      </button>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">🔧</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Mantenimiento</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Incidencias · Tareas técnicas</p>
-      </div>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">📦</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Economato</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Stock · Compras · Control</p>
-      </div>
-      <div style="border-radius:16px;border:2px solid #334155;background:rgba(51,65,85,.3);padding:20px;min-height:170px;opacity:.55;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:24px;"><div style="font-size:26px;">👔</div><span style="background:rgba(0,0,0,.2);color:#475569;border-radius:20px;padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Próximamente</span></div>
-        <h3 style="font-size:17px;font-weight:700;color:#94a3b8;margin:0 0 6px;">Recursos Humanos</h3>
-        <p style="font-size:13px;color:#64748b;margin:0;">Personal · Gestión · Control</p>
-      </div>
+    <!-- ══ CAPA 2: Panel de empleados del departamento (dinámico) ══ -->
+    <section id="portal-emp-panel" style="display:none;">
+      <!-- Se rellena dinámicamente por pSel() en validacion.js -->
     </section>
 
-    <!-- Footer -->
-    <footer style="margin-top:48px;text-align:center;font-size:12px;color:#334155;">
+    <footer style="margin-top:40px;text-align:center;font-size:11px;color:#1e3a5f;font-family:'JetBrains Mono',monospace;">
       SYNCROSFERA · Health Sport Hotel · v4.0
     </footer>
   </main>
@@ -778,17 +726,9 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
   <div class="app-shell">
   <div class="topbar">
-    <!-- Fila 1: identidad (logo + INFO + chips usuario + SALIR) -->
+    <!-- Fila 1: identidad (logo + chips usuario + SALIR) -->
     <div class="topbar-header">
-      <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
-        <div class="topbar-logo">SYNCRO SHIFT <em>V4.0</em></div>
-        <button id="topbar-info-btn" onclick="showScreen('readme')"
-          style="background:rgba(46,196,182,.12);border:1px solid #2ec4b6;color:#5eead4;
-                 padding:5px 11px;border-radius:6px;cursor:pointer;
-                 font-family:var(--font-mono);font-size:11px;font-weight:700;
-                 letter-spacing:.06em;white-space:nowrap;transition:all .15s;"
-          title="Instrucciones">📋 INFO</button>
-      </div>
+      <div class="topbar-logo">SYNCRO SHIFT <em>V4.0</em></div>
       <div class="topbar-user">
         <span class="topbar-dept"   id="topbar-dept"></span>
         <span class="topbar-puesto" id="topbar-puesto"></span>
