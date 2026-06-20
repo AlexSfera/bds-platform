@@ -185,6 +185,23 @@ function _mermaCalcCoste(item, cantidad) {
 }
 
 // ── RENDER PANTALLA MERMA ─────────────────────────────────────────────
+
+// ── MODAL GLOBAL — se inyecta en body al cargar merma.js ─────────────
+// Así está disponible desde cualquier pantalla (Mi Turno, Merma, etc.)
+function _mermaEnsureModal() {
+  if (document.getElementById('modal-merma')) return; // ya existe
+  var div = document.createElement('div');
+  div.innerHTML = _mermaModalHTML();
+  document.body.appendChild(div.firstElementChild);
+}
+
+// Auto-inicializar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _mermaEnsureModal);
+} else {
+  _mermaEnsureModal();
+}
+
 async function renderMermaScreen() {
   var el = document.getElementById('screen-merma-mod');
   if (!el) return;
@@ -250,7 +267,7 @@ async function renderMermaScreen() {
     + '<div id="merma-tabla-container"></div>'
 
     // Modal
-    + _mermaModalHTML();
+    ;  // modal gestionado por _mermaEnsureModal()
 
   _renderMermaTabla(all);
 }
@@ -363,6 +380,7 @@ var _mermaBuscarTimer = null;
 
 function openMermaModal() {
   _mermaItemSeleccionado = null;
+  _mermaEnsureModal(); // garantiza que el modal está en el DOM
   var m = document.getElementById('modal-merma');
   if (!m) return;
 
