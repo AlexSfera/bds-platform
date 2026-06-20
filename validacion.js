@@ -1152,8 +1152,8 @@ setInterval(_pClk,30000);
 
 // ── MAPA dept ID → áreas de employees ──────────────────────────
 var _pDeptAreas = {
-  'cocina':       ['Cocina','Friegue'],
-  'sala':         ['Sala'],
+  'cocina':       ['Cocina','Friegue','F&B'],
+  'sala':         ['Sala','F&B'],
   'recepcion':    ['Recepción','Recepción SFERA'],
   'rec-syncrolab':['Recepción SYNCROLAB','SYNCROLAB'],
   'housekeeping': ['Housekeeping'],
