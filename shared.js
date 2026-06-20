@@ -1397,13 +1397,13 @@ async function _doSaveTurno(){
     for(const m of allMerma){ if(m.shift_id===editingShiftId) await dbDelete('merma',m.id); }
     const allIncis = await getDB('incidencias');
     for(const i of allIncis){ if(i.shift_id===editingShiftId) await dbDelete('incidencias',i.id); }
-    // BUG-REC-VENTAS-2: borrar ventas cross-sell antiguas del turno para evitar duplicados en reenvío
+    // BUG-REC-VENTAS: borrar ventas cross-sell antiguas del turno para evitar duplicados en reenvio
     const allRecVentas = await getDB('recepcion_ventas');
     for(const v of allRecVentas){ if(v.shift_id===editingShiftId) await dbDelete('recepcion_ventas',v.id); }
     invalidateCache('merma'); invalidateCache('incidencias'); invalidateCache('recepcion_ventas');
     auditLog('CORRECTION_RESEND', currentUser.nombre+' — '+fecha+' — '+servicio);
     toast('Turno corregido y reenviado','ok');
-    window._lastSavedShiftId = editingShiftId; // BUG-REC-VENTAS-2: necesario para _saveRecepcionVentas en corrección
+    window._lastSavedShiftId = editingShiftId; // BUG-REC-VENTAS: necesario para _saveRecepcionVentas en correccion
 
   // ── NEW SHIFT ──
   } else {
@@ -1436,7 +1436,7 @@ async function _doSaveTurno(){
       console.error('Shift insert failed',shift);
       const alertArea=document.getElementById('turno-alert-area');
       if(alertArea) alertArea.innerHTML='<div class="alert a-err">No se pudo guardar el turno. Inténtalo de nuevo.</div>';
-      return;
+      throw new Error('SHIFT_INSERT_FAILED');
     }
     invalidateCache('shifts');
     auditLog('SAVE_SHIFT', currentUser.nombre+' — '+fecha+' — '+servicio);
@@ -2397,6 +2397,19 @@ async function openValidarModal(shiftId){
     return (g.shift_id===shiftId || g.employee_id===s.employee_id)
       && g.estado !== 'Cerrada';  // BUG-47b: no mostrar cerradas
   });
+  // Cargar KPI Recepción desde recepcion_cash (tabla separada)
+  var recKpiRow = null;
+  if(s.area === 'Recepción'){
+    try {
+      var allRecCash = await getDB('recepcion_cash');
+      // Normalizar servicio del shift para matching
+      var _sServ = (typeof formatServiceOrTurn==='function') ? formatServiceOrTurn(s.servicio) : (s.servicio||'');
+      recKpiRow = allRecCash.find(function(r){
+        return r.employee_id === s.employee_id
+          && (r.fecha||'').slice(0,10) === (s.fecha||'').slice(0,10);
+      }) || null;
+    } catch(e){ recKpiRow = null; }
+  }
   document.getElementById('mv-title').textContent=`${formatDisplayValue(s.nombre)} — ${fmtDateTs(s.fecha,s.created_at)} — ${formatServiceOrTurn(s.servicio)}`;
   // ── BUILD FULL SHIFT DETAIL FOR SUPERVISOR ──
   var info = '';
@@ -2413,6 +2426,111 @@ async function openValidarModal(shiftId){
   if(s.area!=='Recepción') info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   if(s.observacion) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+formatDisplayValue(s.observacion)+'</div>';
   info += '</div></div>';
+
+  // Block 1.5: KPI declarados por el empleado (por departamento)
+  (function(){
+    var _area = s.area || '';
+    var kpiHtml = '';
+
+    // ── SALA: ajustes_sala (JSON array de líneas) ──
+    if(_area === 'Sala' || _area === 'F&B'){
+      var ajLines = [];
+      try { ajLines = s.ajustes_sala ? JSON.parse(s.ajustes_sala) : []; } catch(e){ ajLines = []; }
+      if(ajLines.length > 0){
+        var totalAj = ajLines.reduce(function(a,l){ return a+(parseFloat(l.importe)||0); },0);
+        kpiHtml += '<table style="font-size:12px;width:100%;border-collapse:collapse;">'
+          +'<tr><th style="text-align:left;padding:4px 8px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);">Tipo</th>'
+          +'<th style="text-align:center;padding:4px 8px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);">Nº</th>'
+          +'<th style="text-align:right;padding:4px 8px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);">Importe</th>'
+          +'<th style="text-align:center;padding:4px 8px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);">Comunicado</th>'
+          +'<th style="text-align:left;padding:4px 8px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);">Motivo</th></tr>';
+        ajLines.forEach(function(l){
+          var imp = parseFloat(l.importe)||0;
+          var impCol = imp < 0 ? 'var(--red)' : imp > 0 ? 'var(--amber)' : 'var(--text3)';
+          var comBadge = l.comunicado_responsable === 'si'
+            ? '<span class="badge b-green">✓ Sí</span>'
+            : '<span class="badge b-gray">✗ No</span>';
+          kpiHtml += '<tr>'
+            +'<td style="padding:4px 8px;"><span class="badge b-yellow">'+formatDisplayValue(l.tipo)+'</span></td>'
+            +'<td style="padding:4px 8px;text-align:center;font-family:var(--font-mono);">'+(l.num||1)+'</td>'
+            +'<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);font-weight:600;color:'+impCol+';">'+(imp!==0?(imp>0?'+':'')+imp.toFixed(2)+' €':'—')+'</td>'
+            +'<td style="padding:4px 8px;text-align:center;">'+comBadge+'</td>'
+            +'<td style="padding:4px 8px;color:var(--text3);">'+formatDisplayValue(l.motivo||'—')+'</td>'
+            +'</tr>';
+        });
+        kpiHtml += '</table>'
+          +'<div style="text-align:right;padding:4px 8px;font-size:11px;font-family:var(--font-mono);color:var(--amber);">Total declarado: '+(totalAj!==0?(totalAj>0?'+':'')+totalAj.toFixed(2)+' €':'—')+'</div>';
+      } else {
+        kpiHtml += '<div style="font-size:12px;color:var(--text3);">Sin ajustes declarados</div>';
+      }
+      info += '<div style="background:var(--bg);border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:10px;">'
+        +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:8px;">KPI · AJUSTES DECLARADOS POR EMPLEADO</div>'
+        +kpiHtml+'</div>';
+    }
+
+    // ── RECEPCIÓN: datos de recepcion_cash (checkins, checkouts, reservas, ventas, lead) ──
+    if(_area === 'Recepción'){
+      var r = recKpiRow;
+      if(r){
+        var kRow = function(lbl, val, mono, col){
+          if(val === null || val === undefined || val === '' || val === 0) return '';
+          return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;">'
+            +'<span style="color:var(--text3);">'+lbl+'</span>'
+            +'<span style="'+(mono?'font-family:var(--font-mono);':'')+' '+(col?'color:'+col+';font-weight:600;':'')+'">'+(typeof val==='number'?(val%1===0?val:val.toFixed(2)):val)+'</span>'
+            +'</div>';
+        };
+        var checkins  = parseInt(r.checkins)||0;
+        var checkouts = parseInt(r.checkouts)||0;
+        var reservas  = parseInt(r.reservas)||0;
+        var clientes  = parseInt(r.clientes_num)||0;
+        var leadPend  = r.lead_pendiente === 'si';
+        // Ventas SYNCROLAB si existen
+        var syncroVentas = 0;
+        try { (JSON.parse(r.syncrolab_ventas_data||'[]')||[]).forEach(function(v){ syncroVentas += parseFloat(v.importe)||0; }); } catch(e){}
+        var desayVentas = 0;
+        try { (JSON.parse(r.desayuno_ventas_data||'[]')||[]).forEach(function(v){ desayVentas += parseFloat(v.importe)||0; }); } catch(e){}
+        var cenaVentas = 0;
+        try { (JSON.parse(r.cena_ventas_data||'[]')||[]).forEach(function(v){ cenaVentas += parseFloat(v.importe)||0; }); } catch(e){}
+
+        kpiHtml  = kRow('Check-ins', checkins||'—', true);
+        kpiHtml += kRow('Check-outs', checkouts||'—', true);
+        kpiHtml += kRow('Reservas gestionadas', reservas||'—', true);
+        kpiHtml += kRow('Clientes insatisfechos', clientes||'—', true, clientes>0?'var(--amber)':null);
+        if(leadPend) kpiHtml += kRow('Lead pendiente', r.lead_desc||'Sí', false, 'var(--amber)');
+        if(syncroVentas>0) kpiHtml += kRow('Ventas SYNCROLAB', syncroVentas.toFixed(2)+' €', true, 'var(--green)');
+        if(desayVentas>0)  kpiHtml += kRow('Ventas desayuno', desayVentas.toFixed(2)+' €', true, 'var(--green)');
+        if(cenaVentas>0)   kpiHtml += kRow('Ventas cena', cenaVentas.toFixed(2)+' €', true, 'var(--green)');
+
+        if(kpiHtml){
+          info += '<div style="background:var(--bg);border:1px solid #8b5cf6;border-radius:8px;padding:12px;margin-bottom:10px;">'
+            +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">KPI · DATOS OPERATIVOS RECEPCIÓN</div>'
+            +kpiHtml+'</div>';
+        }
+      } else {
+        // No se encontró cierre recepcion_cash para este turno
+        info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">KPI Recepción: sin cierre de caja registrado para este turno</div>';
+      }
+    }
+
+    // ── HOUSEKEEPING: campos propios (si existen en el shift) ──
+    if(_area === 'Housekeeping'){
+      var hkFields = [];
+      if(s.habitaciones_limpiadas) hkFields.push({lbl:'Habitaciones limpiadas', val: s.habitaciones_limpiadas});
+      if(s.habitaciones_repasos)   hkFields.push({lbl:'Repasos', val: s.habitaciones_repasos});
+      if(s.habitaciones_salida)    hkFields.push({lbl:'Salidas', val: s.habitaciones_salida});
+      if(hkFields.length > 0){
+        var hkHtml = hkFields.map(function(f){
+          return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;">'
+            +'<span style="color:var(--text3);">'+f.lbl+'</span>'
+            +'<span style="font-family:var(--font-mono);font-weight:600;">'+f.val+'</span>'
+            +'</div>';
+        }).join('');
+        info += '<div style="background:var(--bg);border:1px solid var(--green);border-radius:8px;padding:12px;margin-bottom:10px;">'
+          +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:8px;">KPI · HOUSEKEEPING</div>'
+          +hkHtml+'</div>';
+      }
+    }
+  })();
 
   // Block 2: Checklist
   if(s.checklist_items){

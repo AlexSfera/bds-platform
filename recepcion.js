@@ -349,19 +349,10 @@ function submitRecKpi() {
 
   closeRecKpiModal();
   // BUG-01 FIX: guardar turno PRIMERO, luego ventas cross-sell, luego abrir caja
-  // BUG-REC-VENTAS: .catch() añadido — si _doSaveTurno lanza (insert fallido o horas=0)
-  // la cadena se corta y NO se abre caja ni se pierden ventas silenciosamente
   _doSaveTurno().then(function() {
     _saveRecepcionVentas(window._lastSavedShiftId).then(function(){
       openRecCajaChoice();
     });
-  }).catch(function(e){
-    // HORAS_OBLIGATORIAS y SHIFT_INSERT_FAILED ya muestran su propio toast/alerta
-    if(e && e.message !== 'HORAS_OBLIGATORIAS' && e.message !== 'SHIFT_INSERT_FAILED'){
-      console.error('Error en flujo guardar turno Recepción:', e);
-      toast('Error al guardar el turno. Revisa los datos e inténtalo de nuevo.','err');
-    }
-    // No abrir caja — el empleado debe corregir y reenviar
   });
 }
 
@@ -868,7 +859,7 @@ function _calcRecVenta(importeBruto, tipoVenta) {
 }
 
 async function _saveRecepcionVentas(shiftId) {
-  if(!currentUser || !shiftId) return;
+  if(!currentUser || !shiftId){ console.warn('[REC_VENTAS] abortado — currentUser:',!!currentUser,'shiftId:',shiftId); return; }
   var fecha  = (document.getElementById('t-fecha')||{}).value || today();
   var turno  = getRecTurnoValue ? (getRecTurnoValue()||'—') : '—';
   var ts     = localTs();
@@ -886,7 +877,7 @@ async function _saveRecepcionVentas(shiftId) {
       importe_bruto: v.importe, iva_pct: calc.iva_pct,
       importe_neto: calc.importe_neto, incentivo: calc.incentivo,
       pax: v.pax||0, mews_ref: v.mews||null,
-      comentario: v.obs||null, created_at: ts
+      created_at: ts
     });
   });
 
@@ -902,7 +893,7 @@ async function _saveRecepcionVentas(shiftId) {
       importe_bruto: v.importe, iva_pct: calc.iva_pct,
       importe_neto: calc.importe_neto, incentivo: calc.incentivo,
       pax: v.pax||0, mews_ref: v.mews||null,
-      comentario: v.obs||null, created_at: ts
+      created_at: ts
     });
   });
 
@@ -918,17 +909,26 @@ async function _saveRecepcionVentas(shiftId) {
       importe_bruto: v.importe, iva_pct: calc.iva_pct,
       importe_neto: calc.importe_neto, incentivo: calc.incentivo,
       pax: 0, mews_ref: v.mews||null,
-      comentario: v.obs||null, created_at: ts
+      created_at: ts
     });
   });
 
-  if(!filas.length) return;
+  console.log('[REC_VENTAS] shiftId:', shiftId, '| filas a insertar:', filas.length, filas);
+  if(!filas.length){ console.warn('[REC_VENTAS] sin filas — _recKpiState:', JSON.stringify(_recKpiState)); return; }
 
+  var errores = 0;
   for(var i=0; i<filas.length; i++){
-    try { await dbInsert('recepcion_ventas', filas[i]); } catch(e){ console.error('recepcion_ventas insert err', e); }
+    try {
+      var r = await dbInsert('recepcion_ventas', filas[i]);
+      if(!r){ console.error('[REC_VENTAS] INSERT devolvio null para fila', filas[i]); errores++; }
+    } catch(e){
+      console.error('[REC_VENTAS] INSERT excepcion fila', filas[i], e);
+      errores++;
+    }
   }
+  if(errores > 0) toast('Error guardando '+ errores +' venta(s). Contacta con soporte.','err');
   invalidateCache('recepcion_ventas');
-  await auditLog('REC_VENTAS_SAVE', currentUser.nombre+' registró '+filas.length+' venta(s) cross-sell · turno '+turno+' · '+fecha);
+  await auditLog('REC_VENTAS_SAVE', currentUser.nombre+' registro '+(filas.length-errores)+'/'+filas.length+' venta(s) cross-sell · turno '+turno+' · '+fecha);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
