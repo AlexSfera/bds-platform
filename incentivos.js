@@ -242,8 +242,10 @@ async function loadIncentivosEmpleadoRecepcion(){
   var mesLabel = meses[parseInt(parts[1])-1]+' '+parts[0];
 
   // 1. Ventas del mes de este empleado
+  // ESQUEMA REAL: empleado_id, importe (bruto con IVA), reserva_mews, servicio_detalle
+  // Neto e incentivo se calculan aqui: IVA 10% desayuno/comida_cena, 21% syncrolab
   var ventasRes = await fetch(
-    SUPABASE_URL+'/rest/v1/recepcion_ventas?employee_id=eq.'+encodeURIComponent(empId)
+    SUPABASE_URL+'/rest/v1/recepcion_ventas?empleado_id=eq.'+encodeURIComponent(empId)
       +'&fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
       +'&select=*&order=fecha.asc',
     {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
@@ -259,15 +261,21 @@ async function loadIncentivosEmpleadoRecepcion(){
   var fios = fioRes.ok ? await fioRes.json() : [];
   var totalPuntosFio = (fios||[]).reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
 
-  // 3. Calcular totales por tipo
+  // 3. Calcular neto e incentivo on-the-fly desde importe bruto con IVA
+  // IVA: desayuno/comida_cena = 10%, syncrolab = 21% — incentivo = 10% sobre neto
+  function _ivaFactor(tipo){ return tipo === 'syncrolab' ? 1.21 : 1.10; }
   var totales = { desayuno:0, comida_cena:0, syncrolab:0 };
   var incentivoBruto = 0;
   (ventas||[]).forEach(function(v){
-    var inc = parseFloat(v.incentivo||0);
+    var bruto = parseFloat(v.importe||0);
+    var neto  = bruto / _ivaFactor(v.tipo_venta);
+    var inc   = neto * 0.10;
+    v._neto   = neto;
+    v._inc    = inc;
     incentivoBruto += inc;
-    if(v.tipo_venta === 'desayuno')    totales.desayuno    += parseFloat(v.importe_neto||0);
-    if(v.tipo_venta === 'comida_cena') totales.comida_cena += parseFloat(v.importe_neto||0);
-    if(v.tipo_venta === 'syncrolab')   totales.syncrolab   += parseFloat(v.importe_neto||0);
+    if(v.tipo_venta === 'desayuno')    totales.desayuno    += neto;
+    if(v.tipo_venta === 'comida_cena') totales.comida_cena += neto;
+    if(v.tipo_venta === 'syncrolab')   totales.syncrolab   += neto;
   });
 
   var penPct   = getFioPenalizacion(totalPuntosFio);
@@ -279,11 +287,11 @@ async function loadIncentivosEmpleadoRecepcion(){
   var filaVentas = (ventas||[]).length ? ventas.map(function(v){
     return '<tr>'
       +'<td>'+fmtDate(v.fecha)+'</td>'
-      +'<td>'+(TIPO_LABEL[v.tipo_venta]||v.tipo_venta)+(v.tipo_servicio?' · <span style="color:var(--text3);">'+v.tipo_servicio+'</span>':'')+'</td>'
-      +'<td style="font-family:var(--font-mono);">'+parseFloat(v.importe_bruto||0).toFixed(2)+'€</td>'
-      +'<td style="font-family:var(--font-mono);color:var(--text2);">'+parseFloat(v.importe_neto||0).toFixed(2)+'€</td>'
-      +'<td style="font-family:var(--font-mono);color:var(--green);">+'+parseFloat(v.incentivo||0).toFixed(2)+'€</td>'
-      +'<td style="color:var(--text3);">'+(v.mews_ref||'—')+'</td>'
+      +'<td>'+(TIPO_LABEL[v.tipo_venta]||v.tipo_venta)+(v.servicio_detalle?' · <span style="color:var(--text3);">'+v.servicio_detalle+'</span>':'')+'</td>'
+      +'<td style="font-family:var(--font-mono);">'+parseFloat(v.importe||0).toFixed(2)+'€</td>'
+      +'<td style="font-family:var(--font-mono);color:var(--text2);">'+(v._neto||0).toFixed(2)+'€</td>'
+      +'<td style="font-family:var(--font-mono);color:var(--green);">+'+(v._inc||0).toFixed(2)+'€</td>'
+      +'<td style="color:var(--text3);">'+(v.reserva_mews||'—')+'</td>'
       +'</tr>';
   }).join('') : '<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin ventas registradas este mes</td></tr>';
 
