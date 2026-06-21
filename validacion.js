@@ -1291,6 +1291,7 @@ function pBack(){
   var main = document.querySelector('#portal-screen > main');
   if(main) main.querySelectorAll('section').forEach(function(s){ s.style.display = ''; });
   _pD = ''; _pP = '';
+  _pGridCols(); // restaurar columnas correctas según ancho actual
 }
 
 function pK(d){
