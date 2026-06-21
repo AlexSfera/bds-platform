@@ -38,15 +38,17 @@ window._valChecklistItems = _valChecklistItems;
 async function deleteShift(shiftId){
   if(currentUser.rol!=='admin') return;
   if(!confirm('¿Eliminar este registro permanentemente? Esta acción no se puede deshacer.')) return;
-  // Delete related merma, ajustes e incidencias
+  // Delete related merma, ajustes, incidencias y recepcion_ventas (cross-sell)
   const allMerma = await getDB('merma');
   for(const m of allMerma){ if(m.shift_id===shiftId) await dbDelete('merma',m.id); }
   const allAjustes = await getDB('ajustes');
   for(const a of allAjustes){ if(a.shift_id===shiftId) await dbDelete('ajustes',a.id); }
   const allIncis = await getDB('incidencias');
   for(const i of allIncis){ if(i.shift_id===shiftId) await dbDelete('incidencias',i.id); }
+  const allRecVentas = await getDB('recepcion_ventas');
+  for(const v of allRecVentas){ if(v.shift_id===shiftId) await dbDelete('recepcion_ventas',v.id); }
   await dbDelete('shifts',shiftId);
-  invalidateCache('shifts'); invalidateCache('merma'); invalidateCache('ajustes'); invalidateCache('incidencias');
+  invalidateCache('shifts'); invalidateCache('merma'); invalidateCache('ajustes'); invalidateCache('incidencias'); invalidateCache('recepcion_ventas');
   await auditLog('DELETE_SHIFT','Admin deleted shift '+shiftId);
   toast('Registro eliminado','ok');
   await renderValidacion();
@@ -59,6 +61,7 @@ async function openShiftDetail(shiftId){
   if(!s) return;
   const mermas = (await getDB('merma')).filter(m=>m.shift_id===shiftId);
   const ajustes= (await getDB('ajustes')).filter(a=>a.shift_id===shiftId);
+  const recVentas = (await getDB('recepcion_ventas')).filter(function(v){ return v.shift_id===shiftId; });
   const incis  = (await getDB('incidencias')).filter(function(i){return recordMatchesShift(i,s);});
   const allTareas = (await getDB('tareas')).filter(function(t){return recordMatchesShift(t,s);});
 
@@ -202,6 +205,36 @@ async function openShiftDetail(shiftId){
       html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);">4 · Sin ajustes declarados</div>';
     }
   }
+  // ── BLOQUE 5B: Cross-selling Recepción ──
+  var esRecepcion = (s.area||'').toLowerCase().includes('recep');
+  if(esRecepcion){
+    var TIPO_LABEL_RV = {desayuno:'🌅 Desayuno', comida_cena:'🍽️ Comida/Cena', syncrolab:'💪 SYNCROLAB'};
+    function _ivaFactorVal(tipo){ return tipo === 'syncrolab' ? 1.21 : 1.10; }
+    if(recVentas.length > 0){
+      var totalBruto = 0; var totalIncentivo = 0;
+      recVentas.forEach(function(v){ totalBruto += parseFloat(v.importe||0); totalIncentivo += parseFloat(v.importe||0) / _ivaFactorVal(v.tipo_venta) * 0.10; });
+      html += '<div style="background:var(--bg2);border:1px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;">';
+      html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:10px;">5B · CROSS-SELLING ('+recVentas.length+' venta(s) · incentivo estimado '+totalIncentivo.toFixed(2)+'€)</div>';
+      html += '<div class="tbl-wrap"><table style="font-size:12px;width:100%;">';
+      html += '<tr style="color:var(--text3);"><th style="text-align:left;padding:4px 8px;">Tipo</th><th style="text-align:right;padding:4px 8px;">Bruto</th><th style="text-align:right;padding:4px 8px;">Neto</th><th style="text-align:right;padding:4px 8px;">Incentivo</th><th style="text-align:left;padding:4px 8px;">MEWS ref</th></tr>';
+      recVentas.forEach(function(v){
+        var bruto = parseFloat(v.importe||0);
+        var neto  = bruto / _ivaFactorVal(v.tipo_venta);
+        var inc   = neto * 0.10;
+        html += '<tr style="border-top:1px solid var(--border);">';
+        html += '<td style="padding:4px 8px;">'+(TIPO_LABEL_RV[v.tipo_venta]||v.tipo_venta)+(v.servicio_detalle?' · <span style="color:var(--text3);">'+v.servicio_detalle+'</span>':'')+'</td>';
+        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">'+bruto.toFixed(2)+'€</td>';
+        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--text2);">'+neto.toFixed(2)+'€</td>';
+        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--green);">+'+inc.toFixed(2)+'€</td>';
+        html += '<td style="padding:4px 8px;color:var(--text3);">'+(v.reserva_mews||'—')+'</td>';
+        html += '</tr>';
+      });
+      html += '</table></div></div>';
+    } else {
+      html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text3);">5B · Sin ventas cross-sell registradas</div>';
+    }
+  }
+
   // ── BLOQUE 6: Tarea generada ──
   if(allTareas.length>0){
     html += '<div style="background:var(--bg2);border:1px solid var(--purple);border-radius:8px;padding:14px;margin-bottom:12px;">';
@@ -1291,7 +1324,6 @@ function pBack(){
   var main = document.querySelector('#portal-screen > main');
   if(main) main.querySelectorAll('section').forEach(function(s){ s.style.display = ''; });
   _pD = ''; _pP = '';
-  setTimeout(_pGridCols, 0); // esperar un tick a que el DOM procese los display antes de calcular columnas
 }
 
 function pK(d){

@@ -258,7 +258,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-heigh
 #groupnav{display:none !important;}
 
 /* ── PORTAL DEPT GRID ── */
-.portal-dept-grid { grid-template-columns: repeat(2, 1fr); }
+.portal-dept-grid { display:grid; grid-template-columns: repeat(2, 1fr); }
 @media(min-width:600px){ .portal-dept-grid { grid-template-columns: repeat(3, 1fr); } }
 @media(min-width:900px){ .portal-dept-grid { grid-template-columns: repeat(4, 1fr); } }
 
@@ -673,7 +673,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     </section>
 
     <!-- Department grid -->
-    <section id="portal-dept-grid" class="portal-dept-grid" style="display:grid;gap:14px;">
+    <section id="portal-dept-grid" class="portal-dept-grid" style="gap:14px;">
 
       <!-- COCINA -->
       <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:14px;border:2px solid #f59e0b;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
