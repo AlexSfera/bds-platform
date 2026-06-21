@@ -267,9 +267,28 @@ function chkOpen(pendingData){
   }
   else{sections=CHK_COCINA_SECTIONS;items=CHK_COCINA_ITEMS;}
   if(!_chkInitialized || _chkState.length !== items.length){
-    // Intentar recuperar borrador del día (mismo usuario, fecha, área, turno)
-    var draft = _chkLoadLs(items.length);
-    _chkState = draft || Array(items.length).fill(false);
+    // Si ya hay un turno validado (o cerrado) hoy para este empleado,
+    // el borrador del LS es obsoleto — limpiar y empezar en blanco.
+    var _chkHasTurnoCerrado = false;
+    try {
+      var _allSh = (typeof _cache !== 'undefined' && _cache['shifts']) ? _cache['shifts'] : null;
+      if(_allSh && currentUser){
+        var _today = (typeof today === 'function') ? today() : new Date().toISOString().slice(0,10);
+        _chkHasTurnoCerrado = _allSh.some(function(s){
+          return s.employee_id === currentUser.id
+            && (s.fecha||'').slice(0,10) === _today
+            && (s.estado === 'Validado' || s.estado === 'Cerrado');
+        });
+      }
+    } catch(e){}
+    if(_chkHasTurnoCerrado){
+      clearChkLocalStorage();
+      _chkState = Array(items.length).fill(false);
+    } else {
+      // Intentar recuperar borrador del día (mismo usuario, fecha, área, turno)
+      var draft = _chkLoadLs(items.length);
+      _chkState = draft || Array(items.length).fill(false);
+    }
     _chkInitialized=true;
   }
   document.getElementById('chk-items').innerHTML=buildChkHTML(sections,items);

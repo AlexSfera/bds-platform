@@ -1407,16 +1407,21 @@ async function _doSaveTurno(){
 
   // ── NEW SHIFT ──
   } else {
-    // GUARD: 1 turno pendiente activo por empleado/día (BUG-TURNO-03)
-    // Si ya hay un turno con estado 'Pendiente' o 'En corrección' del mismo
-    // empleado/fecha, no permitimos crear otro. Si están todos validados o
-    // rechazados (o han sido eliminados), sí se puede crear uno nuevo.
+    // GUARD: lógica de turnos por día (BUG-TURNO-03 + regla 2 turnos/día)
+    // Reglas:
+    //   1) Si hay turno Pendiente o En corrección → bloqueado (jefe debe validar primero).
+    //   2) Si ya hay 1 turno Validado con horas < 5 → se permite un segundo turno.
+    //   3) Si ya hay 1 turno Validado con horas >= 5 → no se permite otro en el mismo día.
+    //   4) Si ya hay 2 turnos Validados → bloqueado siempre.
     try {
       var allShifts = await getDB('shifts');
-      var bloqueante = (allShifts||[]).find(function(s){
+      var turnosHoy = (allShifts||[]).filter(function(s){
         return s.employee_id === currentUser.id
-          && (s.fecha||'').slice(0,10) === (fecha||'').slice(0,10)
-          && (s.estado === 'Pendiente' || s.estado === 'En corrección');
+          && (s.fecha||'').slice(0,10) === (fecha||'').slice(0,10);
+      });
+      // Regla 1: turno pendiente activo → bloqueo
+      var bloqueante = turnosHoy.find(function(s){
+        return s.estado === 'Pendiente' || s.estado === 'En corrección';
       });
       if(bloqueante){
         const alertArea = document.getElementById('turno-alert-area');
@@ -1426,6 +1431,32 @@ async function _doSaveTurno(){
         }
         toast('Ya hay turno pendiente hoy','err');
         return;
+      }
+      // Regla 2-4: evaluar turnos validados del día
+      var validadosHoy = turnosHoy.filter(function(s){
+        return s.estado === 'Validado';
+      });
+      if(validadosHoy.length >= 2){
+        const alertArea = document.getElementById('turno-alert-area');
+        if(alertArea){
+          alertArea.innerHTML = '<div class="alert a-err">Ya tienes 2 turnos cerrados hoy. No es posible registrar más.</div>';
+        }
+        toast('Máximo 2 turnos por día alcanzado','err');
+        return;
+      }
+      if(validadosHoy.length === 1){
+        var primerTurno = validadosHoy[0];
+        var horasPrimer = parseFloat(primerTurno.horas)||0;
+        if(horasPrimer >= 5){
+          const alertArea = document.getElementById('turno-alert-area');
+          if(alertArea){
+            alertArea.innerHTML = '<div class="alert a-err">Ya tienes un turno cerrado hoy de '
+              + horasPrimer + 'h. Solo se permite un segundo turno si el primero fue inferior a 5 horas.</div>';
+          }
+          toast('Ya hay turno cerrado hoy (≥5h)','err');
+          return;
+        }
+        // horasPrimer < 5 → se permite el segundo turno (continúa)
       }
     } catch(eGuard){
       console.error('Guard turno fallo, continuando', eGuard);
@@ -1654,6 +1685,10 @@ async function _doSaveTurno(){
   invalidateCache('shifts');
   invalidateCache('tareas');
   invalidateCache('incidencias');
+  // ── Limpiar borrador checklist del localStorage y memoria ──
+  // CRÍTICO: sin esto el checklist aparece tachado en el siguiente turno/login.
+  if(typeof clearChkLocalStorage === 'function') clearChkLocalStorage();
+  if(typeof resetChkState === 'function') resetChkState();
   console.log('SYNCROSFERA QA tareas guardadas',tareasCreadas);
   console.log('SYNCROSFERA QA incidencias guardadas',incidenciasCreadas);
 }
