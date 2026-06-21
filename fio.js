@@ -563,6 +563,15 @@ async function openFIODetail(fid){
   if(f.status === FIO_STATUS.VALIDADO && canValidateFIO(currentUser)){
     actions += '<button class="btn btn-secondary" onclick="closeFIO(\''+fid+'\')">🔒 Cerrar FIO (definitivo)</button>';
   }
+  // ── Resolución de disputa: solo admin/adjunto_directivo/fb ────────────
+  // Disputado penaliza por defecto. El admin tiene la última palabra:
+  //   Aceptar disputa → Rechazado (0 pts, no penaliza)
+  //   Rechazar disputa → Cerrado (penaliza)
+  if(f.status === FIO_STATUS.DISPUTADO && canValidateCritical(currentUser)){
+    actions += '<div style="width:100%;padding:8px 10px;background:#fef3c722;border-left:3px solid var(--amber);border-radius:6px;font-size:12px;color:var(--amber);margin-bottom:4px;">⚠ FIO en disputa · Este FIO <strong>sí penaliza</strong> mientras está disputado. Resolución final:</div>'
+      + '<button class="btn btn-success" onclick="resolveDisputeFIO(\''+fid+'\',\'aceptar\')">✅ Aceptar disputa (anular penalización)</button>'
+      + ' <button class="btn btn-danger" onclick="resolveDisputeFIO(\''+fid+'\',\'rechazar\')">✕ Rechazar disputa (mantener penalización)</button>';
+  }
 
   ov.innerHTML = '<div class="modal" style="max-width:560px;">'
     + '<div class="modal-h"><h3>⚖ FIO · '+formatDisplayValue(f.fault_name)+'</h3>'
@@ -693,6 +702,62 @@ async function closeFIO(fid){
 }
 window.closeFIO = closeFIO;
 
+// ── Resolución de disputa (última palabra de Dirección) ───────────────
+// aceptar → anula penalización (Rechazado, applied_points=0)
+// rechazar → confirma penalización (Cerrado, applied_points se mantiene)
+async function resolveDisputeFIO(fid, decision){
+  if(!canValidateCritical(currentUser)){ toast('Solo Dirección/RRHH puede resolver disputas','err'); return; }
+  var all = await getDB('fio');
+  var f = all.find(function(x){ return x.id === fid; });
+  if(!f){ toast('FIO no encontrado','err'); return; }
+  if(f.status !== FIO_STATUS.DISPUTADO){ toast('Solo se pueden resolver FIOs en disputa','err'); return; }
+
+  var comentario = prompt(
+    decision === 'aceptar'
+      ? 'Motivo para ACEPTAR la disputa (se anulará la penalización):'
+      : 'Motivo para RECHAZAR la disputa (la penalización se mantiene):'
+  );
+  if(comentario === null) return;
+  if(!comentario.trim()){ toast('Motivo obligatorio','err'); return; }
+
+  var ts = localTs();
+  var updates;
+  if(decision === 'aceptar'){
+    // Disputa aceptada → Rechazado, puntos a 0 (no penaliza)
+    updates = {
+      status:         FIO_STATUS.RECHAZADO,
+      applied_points: 0,
+      accion_tomada:  (f.accion_tomada ? f.accion_tomada + ' | ' : '')
+                      + 'DISPUTA ACEPTADA por '+currentUser.nombre+': '+comentario.trim(),
+      validated_by:   currentUser.nombre,
+      validated_at:   ts,
+      updated_at:     ts
+    };
+    toast('Disputa aceptada — penalización anulada', 'ok');
+  } else {
+    // Disputa rechazada → Cerrado, puntos se mantienen (penaliza)
+    updates = {
+      status:        FIO_STATUS.CERRADO,
+      accion_tomada: (f.accion_tomada ? f.accion_tomada + ' | ' : '')
+                     + 'DISPUTA RECHAZADA por '+currentUser.nombre+': '+comentario.trim(),
+      validated_by:  currentUser.nombre,
+      validated_at:  ts,
+      updated_at:    ts
+    };
+    toast('Disputa rechazada — penalización confirmada', 'ok');
+  }
+
+  await dbUpdate('fio', fid, updates);
+  invalidateCache('fio');
+  auditLog(
+    'FIO_DISPUTA_'+(decision === 'aceptar' ? 'ACEPTADA' : 'RECHAZADA'),
+    currentUser.nombre+' → '+f.employee_name+' | '+f.fault_name+' | '+comentario.trim().slice(0,80)
+  );
+  closeModal('modal-fio-detail');
+  renderFIOScreen();
+}
+window.resolveDisputeFIO = resolveDisputeFIO;
+
 async function deleteFIO(fid){
   if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
   if(!confirm('¿Eliminar este FIO? La acción se registra en audit_log.')) return;
@@ -818,7 +883,7 @@ async function openMisFIODetail(fid){
     +     (f.validated_by ? '<br>Validado por '+formatDisplayValue(f.validated_by)+' · '+formatDisplayValue(f.validated_at) : '')
     +   '</div>'
     +   (f.accion_tomada ? '<div style="margin-bottom:10px;"><strong>Acción tomada:</strong><br>'+formatDisplayValue(f.accion_tomada)+'</div>' : '')
-    +   (f.status === FIO_STATUS.DISPUTADO ? '<div style="padding:8px;background:#fef3c722;border-left:3px solid var(--amber);border-radius:4px;font-size:12px;color:var(--amber);">⚠ Has disputado este FIO. Está en revisión por Dirección/RRHH.</div>' : '')
+    +   (f.status === FIO_STATUS.DISPUTADO ? '<div style="padding:8px;background:#fef3c722;border-left:3px solid var(--amber);border-radius:4px;font-size:12px;color:var(--amber);">⚠ Has disputado este FIO. Está en revisión por Dirección/RRHH. <strong>Mientras se resuelve, el FIO sí cuenta en tu penalización.</strong> Si la disputa es aceptada, se anulará la penalización.</div>' : '')
     + '</div>'
     + '<div class="modal-f">'
     +   (canDispute ? '<button class="btn btn-warn" onclick="disputeMisFIO(\''+fid+'\')">⚠ Disputar</button>' : '')
