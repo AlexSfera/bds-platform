@@ -243,7 +243,6 @@ async function loadIncentivosEmpleadoRecepcion(){
 
   // 1. Ventas del mes de este empleado
   // ESQUEMA REAL: empleado_id, importe (bruto con IVA), reserva_mews, servicio_detalle
-  // Neto e incentivo se calculan aqui: IVA 10% desayuno/comida_cena, 21% syncrolab
   var ventasRes = await fetch(
     SUPABASE_URL+'/rest/v1/recepcion_ventas?empleado_id=eq.'+encodeURIComponent(empId)
       +'&fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
@@ -252,10 +251,10 @@ async function loadIncentivosEmpleadoRecepcion(){
   );
   var ventas = ventasRes.ok ? await ventasRes.json() : [];
 
-  // 2. FIO del mes
+  // 2. FIO del mes — excluir saldados (liquidados en periodos anteriores)
   var fioRes = await fetch(
     SUPABASE_URL+'/rest/v1/fio?employee_id=eq.'+encodeURIComponent(empId)
-      +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&select=applied_points',
+      +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&saldado=is.false&select=applied_points',
     {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
   );
   var fios = fioRes.ok ? await fioRes.json() : [];
@@ -299,7 +298,28 @@ async function loadIncentivosEmpleadoRecepcion(){
     ? '<span class="badge b-red">−'+Math.round(penPct*100)+'% FIO ('+totalPuntosFio.toFixed(1)+' pts)</span>'
     : '<span class="badge b-green">Sin penalización FIO</span>';
 
+  // 4b. Comprobar si hay liquidación para este mes
+  var liqRes = await fetch(
+    SUPABASE_URL+'/rest/v1/incentivos_liquidaciones?empleado_id=eq.'+encodeURIComponent(empId)+'&mes=eq.'+ym+'&select=*&limit=1',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  );
+  var liqData = liqRes.ok ? await liqRes.json() : [];
+  var liquidacion = liqData.length > 0 ? liqData[0] : null;
+
+  // Sello de liquidación (si existe)
+  var selloBanner = '';
+  if(liquidacion){
+    var liqDate = liquidacion.liquidado_at ? new Date(liquidacion.liquidado_at).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    selloBanner = '<div style="background:var(--green-dim);border:2px solid var(--green);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">'
+      +'<span style="font-size:22px;">✅</span>'
+      +'<div><div style="font-weight:700;color:var(--green);font-size:13px;">LIQUIDADO</div>'
+      +'<div style="font-size:11px;color:var(--text2);">'+liqDate+' · por '+( liquidacion.liquidado_por||'—')+'</div>'
+      +(liquidacion.notas?'<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+liquidacion.notas+'</div>':'')
+      +'</div></div>';
+  }
+
   el.innerHTML = ''
+    +selloBanner
     +'<h3 style="margin:0 0 16px;font-size:15px;color:var(--text2);">'+mesLabel+' · '+currentUser.nombre+'</h3>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;">'
     +_kpiBox('Desayunos','€',totales.desayuno,'var(--amber)')
@@ -323,7 +343,7 @@ async function loadIncentivosEmpleadoRecepcion(){
     +'<td>INCENTIVO FINAL</td>'
     +'<td style="font-family:var(--font-mono);text-align:right;font-size:16px;color:'+(incFinal>0?'var(--green)':'var(--text3)')+';">'+incFinal.toFixed(2)+'€</td>'
     +'</tr></table>'
-    +'<p style="font-size:11px;color:var(--text3);margin-top:10px;">* Pendiente de revisión y aprobación por dirección. IVA: Desayuno/Comida 10%, SYNCROLAB 21%.</p>'
+    +'<p style="font-size:11px;color:var(--text3);margin-top:10px;">* IVA: Desayuno/Comida 10%, SYNCROLAB 21%. Incentivo = 10% sobre neto.</p>'
     +'</div>';
 }
 window.loadIncentivosEmpleadoRecepcion = loadIncentivosEmpleadoRecepcion;
@@ -608,40 +628,69 @@ async function calcularIncentivosGestor(){
     return e.estado==='Activo' && e.area==='Recepción';
   });
 
+  // RECEPCIÓN — esquema real: empleado_id, importe (bruto IVA)
+  function _ivaFactorG(tipo){ return tipo === 'syncrolab' ? 1.21 : 1.10; }
   var recVentasRes = empsRec.length ? await fetch(
     SUPABASE_URL+'/rest/v1/recepcion_ventas'
       +'?fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
-      +'&select=employee_id,incentivo,tipo_venta',
+      +'&select=empleado_id,importe,tipo_venta',
     {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
   ) : null;
   var recVentasData = (recVentasRes && recVentasRes.ok) ? await recVentasRes.json() : [];
 
+  // Liquidaciones del mes para Recepción — FIO saldados no penalizan
   var empIdsRec = empsRec.map(function(e){ return e.id; }).join(',');
   var fioResRec = empIdsRec ? await fetch(
     SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsRec+')'
-      +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&select=employee_id,applied_points',
+      +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&saldado=is.false&select=employee_id,applied_points',
     {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
   ) : null;
   var fioDataRec = (fioResRec && fioResRec.ok) ? await fioResRec.json() : [];
 
+  var liqRecRes = empIdsRec ? await fetch(
+    SUPABASE_URL+'/rest/v1/incentivos_liquidaciones?empleado_id=in.('+empIdsRec+')&mes=eq.'+ym+'&select=empleado_id,incentivo_final,liquidado_at',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+  ) : null;
+  var liqRecData = (liqRecRes && liqRecRes.ok) ? await liqRecRes.json() : [];
+
   var resultadosRec = empsRec.map(function(e){
-    var misVentas  = (recVentasData||[]).filter(function(v){ return v.employee_id===e.id; });
-    var incBruto   = misVentas.reduce(function(s,v){ return s+parseFloat(v.incentivo||0); },0);
+    var misVentas  = (recVentasData||[]).filter(function(v){ return v.empleado_id===e.id; });
+    var incBruto   = misVentas.reduce(function(s,v){
+      var bruto = parseFloat(v.importe||0);
+      return s + (bruto / _ivaFactorG(v.tipo_venta)) * 0.10;
+    },0);
     var misFio     = (fioDataRec||[]).filter(function(f){ return f.employee_id===e.id; });
     var ptosFio    = misFio.reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
     var penPct     = getFioPenalizacion(ptosFio);
     var incFinal   = Math.max(0, incBruto*(1-penPct));
+    var liq        = (liqRecData||[]).find(function(l){ return l.empleado_id===e.id; });
     return { emp:e, dept:'Recepción', ventasMes:incBruto/0.10||0, semanasOk:'—', semanasTotales:'—',
-             bonusBruto:incBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:incFinal };
+             bonusBruto:incBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:incFinal,
+             liquidado: !!liq, liquidado_at: liq?liq.liquidado_at:null };
   });
 
   // ── RENDER UNIFICADO ─────────────────────────────────────────────
   var todos = resultadosSala.concat(resultadosRec);
   var totalBonuses = todos.reduce(function(s,r){ return s+r.bonusFinal; },0);
 
+  var isAdminGest = canActAsAdmin(currentUser);
   var rows = todos.map(function(r){
     var penBadge = r.penPct>0 ? '<span class="badge b-red">−'+Math.round(r.penPct*100)+'%</span>' : '—';
     var deptColor = r.dept==='Recepción' ? 'var(--purple)' : 'var(--amber)';
+    var liqCell = '';
+    if(r.dept==='Recepción'){
+      if(r.liquidado){
+        var liqDateG = r.liquidado_at ? new Date(r.liquidado_at).toLocaleDateString('es-ES') : '—';
+        liqCell = '<span style="color:var(--green);font-size:11px;font-weight:600;">✅ '+liqDateG+'</span>';
+      } else if(isAdminGest && r.bonusFinal > 0){
+        liqCell = '<button class="btn btn-xs" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green);" '
+          +'onclick="incLiquidarMes(\''+r.emp.id+'\',\''+r.emp.nombre+'\',\''+ym+'\','+r.bonusBruto+','+(r.penPct*r.bonusBruto)+','+r.bonusFinal+')">💰 Liquidar</button>';
+      } else {
+        liqCell = '<span style="color:var(--text3);font-size:11px;">Pendiente</span>';
+      }
+    } else {
+      liqCell = '—';
+    }
     return '<tr>'
       +'<td><strong>'+r.emp.nombre+'</strong> <span style="font-size:10px;color:'+deptColor+';">'+r.dept+'</span></td>'
       +'<td style="font-family:var(--font-mono);">'+(typeof r.ventasMes==='number'?r.ventasMes.toLocaleString('es-ES',{minimumFractionDigits:2})+'€':'—')+'</td>'
@@ -649,15 +698,16 @@ async function calcularIncentivosGestor(){
       +'<td style="font-family:var(--font-mono);">'+r.bonusBruto.toFixed(2)+'€</td>'
       +'<td style="text-align:center;">'+r.ptosFio.toFixed(1)+'pts '+penBadge+'</td>'
       +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(r.bonusFinal>0?'var(--green)':'var(--text3)')+';">'+r.bonusFinal.toFixed(2)+'€</td>'
+      +'<td>'+liqCell+'</td>'
       +'</tr>';
   }).join('');
 
   el.innerHTML = '<h3 style="margin:0 0 14px;font-size:15px;">Sala + Recepción · '+mesLabel+'</h3>'
     +'<div class="tbl-wrap"><table>'
-    +'<tr><th>Empleado</th><th>Ventas mes</th><th>Sem. OK</th><th>Incentivo bruto</th><th>FIO</th><th>Incentivo final</th></tr>'
-    +(rows||'<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin empleados activos</td></tr>')
+    +'<tr><th>Empleado</th><th>Ventas mes</th><th>Sem. OK</th><th>Incentivo bruto</th><th>FIO</th><th>Incentivo final</th><th>Liquidación</th></tr>'
+    +(rows||'<tr><td colspan="7" style="color:var(--text3);text-align:center;">Sin empleados activos</td></tr>')
     +'<tr style="border-top:2px solid var(--border);font-weight:700;">'
-    +'<td colspan="5">TOTAL A PAGAR</td>'
+    +'<td colspan="6">TOTAL A PAGAR</td>'
     +'<td style="font-family:var(--font-mono);font-size:15px;color:var(--amber);">'+totalBonuses.toFixed(2)+'€</td>'
     +'</tr></table></div>'
     +'<p style="font-size:11px;color:var(--text3);margin-top:12px;">'
@@ -1099,3 +1149,104 @@ async function incToggleRegla(id, activo) {
   else toast('Error','error');
 }
 window.incToggleRegla = incToggleRegla;
+
+// ═══════════════════════════════════════════════════════════════════════
+// LIQUIDACIÓN MENSUAL RECEPCIÓN
+// Solo admin. Mes completo. Salda FIO del mes (no los borra).
+// ═══════════════════════════════════════════════════════════════════════
+
+async function incLiquidarMes(empId, empNombre, ym, incBruto, penEur, incFinal){
+  if(!canActAsAdmin(currentUser)){
+    toast('Solo administradores pueden liquidar incentivos','warn');
+    return;
+  }
+
+  var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var parts = ym.split('-');
+  var mesLabel = meses[parseInt(parts[1])-1]+' '+parts[0];
+
+  // Modal de confirmación
+  var modal = document.createElement('div');
+  modal.id = 'liq-modal-overlay';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.5);">'
+    +'<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:12px;">LIQUIDAR INCENTIVO</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:16px;">'+empNombre+' · '+mesLabel+'</div>'
+    +'<table style="width:100%;margin-bottom:16px;font-size:13px;">'
+    +'<tr><td style="color:var(--text3);">Incentivo bruto</td><td style="font-family:var(--font-mono);text-align:right;">'+(incBruto||0).toFixed(2)+'€</td></tr>'
+    +'<tr><td style="color:var(--text3);">Penalización FIO</td><td style="font-family:var(--font-mono);text-align:right;color:var(--red);">−'+(penEur||0).toFixed(2)+'€</td></tr>'
+    +'<tr style="border-top:2px solid var(--border);font-weight:700;">'
+    +'<td>INCENTIVO FINAL</td>'
+    +'<td style="font-family:var(--font-mono);text-align:right;font-size:16px;color:var(--green);">'+(incFinal||0).toFixed(2)+'€</td>'
+    +'</tr></table>'
+    +'<div class="fg" style="margin-bottom:16px;">'
+    +'<label style="font-size:11px;">Notas (opcional)</label>'
+    +'<input type="text" id="liq-notas" placeholder="Ej: Pagado por transferencia" style="width:100%;">'
+    +'</div>'
+    +'<div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:6px;padding:10px;margin-bottom:16px;font-size:12px;color:var(--amber);">'
+    +'⚠ Esta acción marcará los FIO del mes como saldados. No se puede deshacer.'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;justify-content:flex-end;">'
+    +'<button class="btn btn-secondary" onclick="document.getElementById(\'liq-modal-overlay\').remove()">Cancelar</button>'
+    +'<button class="btn" style="background:var(--green);color:#fff;" onclick="_confirmarLiquidacion(\''+empId+'\',\''+empNombre+'\',\''+ym+'\','+incBruto+','+penEur+','+incFinal+')">✅ Confirmar liquidación</button>'
+    +'</div>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+window.incLiquidarMes = incLiquidarMes;
+
+async function _confirmarLiquidacion(empId, empNombre, ym, incBruto, penEur, incFinal){
+  var notas = (document.getElementById('liq-notas')||{}).value || '';
+  var overlay = document.getElementById('liq-modal-overlay');
+  if(overlay) overlay.remove();
+
+  // 1. Insertar en incentivos_liquidaciones
+  var liqRow = {
+    id:               genId(),
+    empleado_id:      empId,
+    empleado_nombre:  empNombre,
+    mes:              ym,
+    incentivo_bruto:  parseFloat(incBruto)||0,
+    penalizacion_fio: parseFloat(penEur)||0,
+    incentivo_final:  parseFloat(incFinal)||0,
+    liquidado_por:    currentUser.nombre,
+    liquidado_at:     localTs(),
+    notas:            notas||null
+  };
+  var ok = await dbInsert('incentivos_liquidaciones', liqRow);
+  if(!ok){
+    toast('Error al registrar la liquidación. Inténtalo de nuevo.','err');
+    return;
+  }
+
+  // 2. Marcar FIO del mes como saldados (no se borran)
+  var fioRes = await fetch(
+    SUPABASE_URL+'/rest/v1/fio?employee_id=eq.'+encodeURIComponent(empId)
+      +'&incentive_month=eq.'+ym
+      +'&status=in.(Validado,Cerrado,Disputado)',
+    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'}}
+  );
+  var fios = fioRes.ok ? await fioRes.json() : [];
+  for(var i=0; i<fios.length; i++){
+    await fetch(SUPABASE_URL+'/rest/v1/fio?id=eq.'+fios[i].id, {
+      method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify({ saldado: true })
+    });
+  }
+
+  // 3. Audit + cache + feedback
+  await auditLog('INC_LIQUIDACION',
+    currentUser.nombre+' liquidó incentivo '+empNombre+' · '+ym+' · '+parseFloat(incFinal).toFixed(2)+'€');
+  invalidateCache('incentivos_liquidaciones');
+
+  var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var mesLabel = meses[parseInt(ym.split('-')[1])-1]+' '+ym.split('-')[0];
+  toast('✅ Liquidación registrada — '+empNombre+' · '+mesLabel+' · '+parseFloat(incFinal).toFixed(2)+'€','ok');
+
+  // 4. Refrescar vista
+  await calcularIncentivosGestor();
+}
+window._confirmarLiquidacion = _confirmarLiquidacion;
