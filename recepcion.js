@@ -859,57 +859,57 @@ function _calcRecVenta(importeBruto, tipoVenta) {
 }
 
 async function _saveRecepcionVentas(shiftId) {
+  // ESQUEMA REAL recepcion_ventas:
+  // id, shift_id, fecha, empleado_id, empleado_nombre, tipo_venta,
+  // importe (bruto con IVA), reserva_mews, servicio_detalle,
+  // departamento_relacionado, created_at, comentario
   if(!currentUser || !shiftId){ console.warn('[REC_VENTAS] abortado — currentUser:',!!currentUser,'shiftId:',shiftId); return; }
-  var fecha  = (document.getElementById('t-fecha')||{}).value || today();
-  var turno  = getRecTurnoValue ? (getRecTurnoValue()||'—') : '—';
-  var ts     = localTs();
-  var filas  = [];
+  var fecha = (document.getElementById('t-fecha')||{}).value || today();
+  var ts    = localTs();
+  var filas = [];
 
-  // Desayunos
+  // Desayunos — IVA 10%
   (_recKpiState.desayuno_ventas_data||[]).forEach(function(v){
     if(!v.importe || v.importe <= 0) return;
-    var calc = _calcRecVenta(v.importe, 'desayuno');
     filas.push({
       id: genId(), shift_id: shiftId,
-      employee_id: currentUser.id, nombre: currentUser.nombre,
-      fecha: fecha, turno: turno,
-      tipo_venta: 'desayuno', tipo_servicio: null,
-      importe_bruto: v.importe, iva_pct: calc.iva_pct,
-      importe_neto: calc.importe_neto, incentivo: calc.incentivo,
-      pax: v.pax||0, mews_ref: v.mews||null,
-      created_at: ts
+      empleado_id: currentUser.id, empleado_nombre: currentUser.nombre,
+      fecha: fecha, tipo_venta: 'desayuno',
+      importe: parseFloat(v.importe),
+      reserva_mews: v.mews||null,
+      servicio_detalle: null,
+      departamento_relacionado: 'Recepcion',
+      comentario: v.obs||null, created_at: ts
     });
   });
 
-  // Comida/Cena
+  // Comida/Cena — IVA 10%
   (_recKpiState.cena_ventas_data||[]).forEach(function(v){
     if(!v.importe || v.importe <= 0) return;
-    var calc = _calcRecVenta(v.importe, 'comida_cena');
     filas.push({
       id: genId(), shift_id: shiftId,
-      employee_id: currentUser.id, nombre: currentUser.nombre,
-      fecha: fecha, turno: turno,
-      tipo_venta: 'comida_cena', tipo_servicio: null,
-      importe_bruto: v.importe, iva_pct: calc.iva_pct,
-      importe_neto: calc.importe_neto, incentivo: calc.incentivo,
-      pax: v.pax||0, mews_ref: v.mews||null,
-      created_at: ts
+      empleado_id: currentUser.id, empleado_nombre: currentUser.nombre,
+      fecha: fecha, tipo_venta: 'comida_cena',
+      importe: parseFloat(v.importe),
+      reserva_mews: v.mews||null,
+      servicio_detalle: null,
+      departamento_relacionado: 'Recepcion',
+      comentario: v.obs||null, created_at: ts
     });
   });
 
-  // SYNCROLAB
+  // SYNCROLAB — IVA 21%
   (_recKpiState.syncrolab_ventas_data||[]).forEach(function(v){
     if(!v.importe || v.importe <= 0) return;
-    var calc = _calcRecVenta(v.importe, 'syncrolab');
     filas.push({
       id: genId(), shift_id: shiftId,
-      employee_id: currentUser.id, nombre: currentUser.nombre,
-      fecha: fecha, turno: turno,
-      tipo_venta: 'syncrolab', tipo_servicio: v.tipo||null,
-      importe_bruto: v.importe, iva_pct: calc.iva_pct,
-      importe_neto: calc.importe_neto, incentivo: calc.incentivo,
-      pax: 0, mews_ref: v.mews||null,
-      created_at: ts
+      empleado_id: currentUser.id, empleado_nombre: currentUser.nombre,
+      fecha: fecha, tipo_venta: 'syncrolab',
+      importe: parseFloat(v.importe),
+      reserva_mews: v.mews||null,
+      servicio_detalle: v.tipo||null,
+      departamento_relacionado: 'SYNCROLAB',
+      comentario: v.obs||null, created_at: ts
     });
   });
 
@@ -920,15 +920,15 @@ async function _saveRecepcionVentas(shiftId) {
   for(var i=0; i<filas.length; i++){
     try {
       var r = await dbInsert('recepcion_ventas', filas[i]);
-      if(!r){ console.error('[REC_VENTAS] INSERT devolvio null para fila', filas[i]); errores++; }
+      if(!r){ console.error('[REC_VENTAS] INSERT devolvio null', filas[i]); errores++; }
     } catch(e){
-      console.error('[REC_VENTAS] INSERT excepcion fila', filas[i], e);
+      console.error('[REC_VENTAS] INSERT excepcion', filas[i], e);
       errores++;
     }
   }
-  if(errores > 0) toast('Error guardando '+ errores +' venta(s). Contacta con soporte.','err');
+  if(errores > 0) toast('Error guardando '+errores+' venta(s). Contacta con soporte.','err');
   invalidateCache('recepcion_ventas');
-  await auditLog('REC_VENTAS_SAVE', currentUser.nombre+' registro '+(filas.length-errores)+'/'+filas.length+' venta(s) cross-sell · turno '+turno+' · '+fecha);
+  await auditLog('REC_VENTAS_SAVE', currentUser.nombre+' registro '+(filas.length-errores)+'/'+filas.length+' venta(s) · '+fecha);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
