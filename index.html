@@ -568,22 +568,172 @@ tr:hover td{background:rgba(96,165,250,.06);}
 .dept-kpi-sub{font-size:10px;color:var(--text3);}
 
 
+/* ── PORTAL SCREEN V5 — PREMIUM REDESIGN ── */
 #portal-screen{
   position:fixed;inset:0;z-index:1000;
-  display:flex;flex-direction:column;align-items:center;
-  justify-content:flex-start;
-  overflow-y:auto;
+  overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;
   background:
-    radial-gradient(ellipse at 30% 0%,rgba(46,196,182,.08) 0%,transparent 45%),
-    radial-gradient(ellipse at 70% 100%,rgba(46,196,182,.05) 0%,transparent 45%),
-    #0f2035;
+    radial-gradient(circle at 50% 0%,rgba(49,201,193,.13),transparent 32rem),
+    radial-gradient(circle at 90% 22%,rgba(48,108,166,.12),transparent 27rem),
+    linear-gradient(180deg,#061826 0%,#082034 48%,#071b2b 100%);
+  color:#f3f7fb;
+  font-family:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;
 }
-/* Mobile portal grid: 2 columns */
-@media(max-width:600px){
-  #portal-screen > div > div[style*="grid-template-columns:repeat(4"]{
-    grid-template-columns:repeat(2,1fr) !important;
-  }
+/* Subtle grid overlay */
+#portal-screen::before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.34;
+  background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(circle at top,black,transparent 74%);
+}
+/* Brand stage animation */
+.ps-stage{
+  width:min(760px,86vw);margin:0 auto;
+  display:flex;flex-direction:column;align-items:center;
+  gap:18px;text-align:center;
+  animation:psStageIn .75s ease-out both;
+}
+/* Logo card */
+.ps-logo-card{
+  position:relative;width:min(560px,76vw);min-height:140px;
+  display:grid;place-items:center;border-radius:28px;overflow:hidden;
+}
+.ps-logo-card::before{
+  content:"";position:absolute;inset:8px 36px;
+  background:radial-gradient(circle at 50% 42%,rgba(49,201,193,.20),transparent 58%);
+  filter:blur(14px);
+  animation:psGlowBreath 4.8s ease-in-out infinite;
+}
+.ps-brand-logo{
+  width:min(400px,68vw);height:auto;position:relative;z-index:1;
+  filter:drop-shadow(0 0 22px rgba(49,201,193,.28));
+  opacity:0;transform:translateY(12px) scale(.965);
+  clip-path:inset(0 100% 0 0);
+  animation:psLogoReveal 1.9s cubic-bezier(.2,.8,.2,1) .25s forwards,
+             psLogoSettle .7s ease-out 1.9s forwards;
+}
+.ps-logo-shine{
+  position:absolute;z-index:2;width:130px;height:220px;top:-10px;left:-180px;
+  transform:skewX(-18deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.20),rgba(49,201,193,.32),transparent);
+  filter:blur(1px);
+  animation:psShineSweep 2.1s cubic-bezier(.25,.8,.25,1) .85s both;
+  pointer-events:none;
+}
+.ps-orbit{
+  position:absolute;left:50%;top:50%;
+  width:170px;height:170px;
+  transform:translate(-200px,-80px);
+  z-index:0;opacity:.65;border-radius:999px;
+  border:1px solid rgba(49,201,193,.15);
+  animation:psOrbitPulse 2.4s ease-out .25s both;
+  pointer-events:none;
+}
+.ps-orbit::after{
+  content:"";position:absolute;
+  width:8px;height:8px;border-radius:999px;background:#21eee2;
+  right:20px;top:20px;
+  box-shadow:0 0 20px rgba(33,238,226,.6);
+  animation:psDotTravel 2.2s ease-in-out .4s both;
+}
+/* Kicker, title, subtitle, quote */
+.ps-kicker{letter-spacing:.6em;font-size:11px;color:#31c9c1;opacity:0;animation:psFadeUp .7s ease-out 1.2s forwards;}
+.ps-subtitle{color:#9eacbd;font-size:16px;opacity:0;animation:psFadeUp .7s ease-out 1.5s forwards;}
+.ps-quote{color:rgba(243,247,251,.83);font-size:clamp(14px,1.4vw,17px);font-style:italic;opacity:0;animation:psFadeUp .7s ease-out 1.65s forwards;}
+.ps-quote-strong{font-weight:700;color:#31c9c1;opacity:0;animation:psFadeUp .7s ease-out 1.78s forwards;}
+/* Flip clock zone */
+.ps-time-zone{
+  margin-top:4px;display:flex;align-items:center;justify-content:center;
+  gap:14px;flex-wrap:wrap;
+  opacity:0;animation:psFadeUp .72s ease-out 1.9s forwards;
+}
+.ps-flip-group{
+  display:flex;gap:8px;align-items:center;
+  padding:9px 12px;
+  border:1px solid rgba(49,201,193,.22);
+  border-radius:18px;
+  background:rgba(6,20,31,.52);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 22px rgba(49,201,193,.05);
+}
+.ps-flip-label{color:#607080;font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;margin-right:2px;}
+.ps-flip-card{
+  min-width:52px;height:56px;padding:8px 6px 7px;
+  border-radius:12px;border:1px solid rgba(255,255,255,.06);
+  background:linear-gradient(180deg,rgba(20,48,68,.96) 0 48%,rgba(9,24,37,.98) 49% 100%);
+  color:#f3f7fb;display:grid;place-items:center;
+  font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums;position:relative;overflow:hidden;
+  box-shadow:0 10px 24px rgba(0,0,0,.22);
+}
+.ps-flip-card::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.45);z-index:1;}
+.ps-flip-card.sm{min-width:62px;font-size:17px;}
+.ps-flip-card.yr{min-width:74px;font-size:18px;}
+.ps-flip-card.flip{animation:psFlipTick .42s cubic-bezier(.2,.8,.2,1);}
+.ps-colon{color:#31c9c1;font-weight:900;font-size:24px;opacity:.9;margin:0 -2px;animation:psColonPulse 1s steps(1) infinite;}
+/* Department panel */
+.ps-dept-panel{
+  margin-top:0;padding:26px 28px;
+  border:1px solid rgba(49,201,193,.24);border-radius:22px;
+  background:linear-gradient(180deg,rgba(19,48,68,.74),rgba(9,26,40,.68));
+  box-shadow:0 26px 80px rgba(0,0,0,.32),0 0 38px rgba(49,201,193,.06);
+  backdrop-filter:blur(16px);
+  opacity:0;transform:translateY(18px);
+  animation:psPanelIn .72s ease-out 2.05s forwards;
+}
+.ps-panel-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap;}
+.ps-panel-eyebrow{color:#9eacbd;font-size:14px;margin:0 0 4px;}
+.ps-panel-title{margin:0;font-size:clamp(20px,2vw,28px);font-weight:700;color:#f3f7fb;letter-spacing:-.02em;}
+.ps-status-pill{color:#607080;font-size:12px;border:1px solid rgba(255,255,255,.06);background:rgba(5,15,25,.36);padding:7px 14px;border-radius:999px;white-space:nowrap;}
+/* New dept card grid */
+.ps-dept-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;}
+.ps-dept-card{
+  position:relative;min-height:108px;
+  border:1px solid rgba(49,201,193,.28);
+  background:radial-gradient(circle at top left,rgba(49,201,193,.12),transparent 46%),rgba(6,18,29,.86);
+  border-radius:16px;padding:16px;color:#f3f7fb;text-align:left;
+  cursor:pointer;overflow:hidden;
+  box-shadow:0 12px 28px rgba(0,0,0,.17);
+  transition:transform .18s ease,border-color .18s ease,background .18s ease;
+  display:flex;flex-direction:column;justify-content:space-between;
+  border:none;outline:none;
+}
+.ps-dept-card::after{content:"";position:absolute;inset:auto 14px 10px 14px;height:2px;border-radius:99px;background:linear-gradient(90deg,var(--dc,#31c9c1),transparent);opacity:.55;}
+.ps-dept-card:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(0,0,0,.25);}
+.ps-dept-card.soon{opacity:.45;cursor:not-allowed;pointer-events:none;border-color:rgba(255,255,255,.08) !important;background:rgba(15,32,53,.6) !important;}
+.ps-dept-card.soon::after{background:linear-gradient(90deg,#ffb020,transparent);}
+.ps-dc-icon{font-size:26px;line-height:1;margin-bottom:8px;}
+.ps-dc-name{font-size:15px;font-weight:700;margin-bottom:3px;}
+.ps-dc-meta{color:#9eacbd;font-size:12px;}
+.ps-micro-info{margin-top:14px;color:#607080;font-size:12px;display:flex;justify-content:flex-end;gap:14px;flex-wrap:wrap;align-items:center;}
+.ps-micro-info strong{color:#31c9c1;}
+/* Keyframes */
+@keyframes psStageIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+@keyframes psLogoReveal{0%{opacity:0;transform:translateY(16px) scale(.965);clip-path:inset(0 100% 0 0);}35%{opacity:1;}100%{opacity:1;transform:translateY(0) scale(1);clip-path:inset(0 0 0 0);}}
+@keyframes psLogoSettle{0%{filter:drop-shadow(0 0 30px rgba(49,201,193,.52));}100%{filter:drop-shadow(0 0 20px rgba(49,201,193,.24));}}
+@keyframes psShineSweep{0%{left:-180px;opacity:0;}16%{opacity:1;}100%{left:calc(100% + 170px);opacity:0;}}
+@keyframes psGlowBreath{0%,100%{opacity:.5;transform:scale(.94);}50%{opacity:1;transform:scale(1.05);}}
+@keyframes psOrbitPulse{0%{opacity:0;transform:translate(-200px,-80px) scale(.6);}54%{opacity:.58;}100%{opacity:0;transform:translate(-200px,-80px) scale(1.45);}}
+@keyframes psDotTravel{from{transform:rotate(-40deg) translateX(0);opacity:0;}25%{opacity:1;}to{transform:rotate(210deg) translateX(34px);opacity:0;}}
+@keyframes psFadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+@keyframes psPanelIn{to{opacity:1;transform:translateY(0);}}
+@keyframes psFlipTick{0%{transform:rotateX(0);filter:brightness(1);}48%{transform:rotateX(-82deg);filter:brightness(.86);}52%{transform:rotateX(82deg);filter:brightness(1.16);}100%{transform:rotateX(0);filter:brightness(1);}}
+@keyframes psColonPulse{50%{opacity:.28;}}
+/* Responsive portal */
+@media(max-width:960px){.ps-dept-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:640px){
+  .ps-dept-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .ps-flip-group{width:100%;justify-content:center;padding:8px;}
+  .ps-flip-card{min-width:44px;height:50px;font-size:19px;}
+  .ps-flip-card.sm{min-width:54px;font-size:16px;}
+  .ps-flip-card.yr{min-width:66px;font-size:16px;}
+  .ps-dept-panel{padding:16px;}
+  .ps-panel-head{flex-direction:column;align-items:flex-start;}
+}
+@media(prefers-reduced-motion:reduce){
+  .ps-brand-logo,.ps-logo-shine,.ps-orbit,.ps-kicker,.ps-subtitle,.ps-quote,.ps-quote-strong,.ps-time-zone,.ps-dept-panel,.ps-stage{animation-duration:.001ms !important;animation-iteration-count:1 !important;}
+  .ps-flip-card.flip{animation:none !important;}
+  .ps-colon{animation:none !important;}
 }
 #portal-pin-modal{position:fixed;inset:0;z-index:1100;background:rgba(0,0,10,.6);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:20px;}
 .pdept-card{background:#152a44;border:1px solid #2a4365;border-radius:12px;padding:18px 14px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:7px;touch-action:manipulation;color:#f1f5f9;}
@@ -610,9 +760,9 @@ tr:hover td{background:rgba(96,165,250,.06);}
 </style>
 </head>
 <body>
-<div id="portal-screen" style="position:fixed;inset:0;z-index:1000;overflow-y:auto;background:#0B1F33;display:flex;flex-direction:column;">
+<div id="portal-screen">
 
-  <!-- PIN MODAL -->
+  <!-- PIN MODAL — sin cambios de lógica -->
   <div id="portal-pin-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,20,.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
     <div style="background:#0f2a3d;border:1px solid rgba(46,196,182,.4);border-radius:16px;padding:28px 24px;width:100%;max-width:340px;text-align:center;">
       <div id="pdept-lbl" style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.25em;color:#2ec4b6;text-transform:uppercase;margin-bottom:8px;"></div>
@@ -632,194 +782,146 @@ tr:hover td{background:rgba(96,165,250,.06);}
   </div>
 
   <!-- MAIN PORTAL CONTENT -->
-  <main style="flex:1;padding:32px 24px;max-width:1100px;margin:0 auto;width:100%;">
+  <main style="padding:36px 24px 48px;max-width:1100px;margin:0 auto;width:100%;position:relative;z-index:1;">
 
-    <!-- Header -->
-    <header style="text-align:center;margin-bottom:40px;">
-      <p style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.45em;color:#2ec4b6;text-transform:uppercase;margin-bottom:14px;">Health · Sport · Hotel</p>
-      <h1 style="font-family:'JetBrains Mono',monospace;font-size:clamp(28px,5vw,48px);font-weight:700;letter-spacing:.22em;color:#2ec4b6;margin:0 0 12px;">SYNCROSFERA</h1>
-      <div style="width:64px;height:2px;background:#2ec4b6;margin:0 auto 20px;"></div>
-      <h2 style="font-size:22px;font-weight:600;color:#fff;margin:0 0 8px;">Portal Operativo</h2>
-      <p style="font-size:14px;color:#94a3b8;margin:0 0 14px;">Gestión diaria del equipo</p>
-      <div style="max-width:640px;margin:0 auto 8px;text-align:center;">
-        <p style="font-family:'Inter',sans-serif;font-style:italic;font-size:15px;color:#cbd5e1;line-height:1.55;margin:0;">"Cada día es una oportunidad de ser mejor versión de ti."</p>
-        <p style="font-family:'Inter',sans-serif;font-size:15px;color:#2ec4b6;font-weight:600;line-height:1.55;margin:6px 0 0;">En equipo alcanzamos la excelencia.</p>
-      </div>
-      <p id="portal-clock" style="font-size:12px;color:#64748b;margin-top:10px;"></p>
-    </header>
+    <!-- Hero: Logo + clock -->
+    <section style="display:grid;place-items:center;text-align:center;padding-bottom:36px;" aria-label="Pantalla inicial SYNCROSFERA">
+      <div class="ps-stage">
 
-    <!-- Status bar -->
-    <section style="margin-bottom:32px;border-radius:16px;border:1px solid rgba(46,196,182,.25);background:rgba(255,255,255,.04);padding:20px 24px;box-shadow:0 4px 24px rgba(0,100,80,.15);">
-      <div style="display:flex;flex-direction:column;gap:16px;">
-        <div>
-          <p style="font-size:13px;color:#94a3b8;margin:0 0 4px;">Bienvenido</p>
-          <h3 style="font-size:18px;font-weight:600;color:#fff;margin:0;">Selecciona tu departamento</h3>
+        <!-- Logo card con animación -->
+        <div class="ps-logo-card" aria-label="SYNCROSFERA · Health Sport Hotel">
+          <span class="ps-orbit" aria-hidden="true"></span>
+          <img class="ps-brand-logo"
+            src="data:image/png;base64,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"
+            alt="SYNCROSFERA · Health &amp; Performance Academy" />
+          <span class="ps-logo-shine" aria-hidden="true"></span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
-          <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#2ec4b6;margin:0 0 4px;">5</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0;">Activos</p>
+
+        <p class="ps-kicker">HEALTH · SPORT · HOTEL</p>
+        <p class="ps-subtitle">Portal Operativo · Gestión diaria del equipo</p>
+        <p class="ps-quote">"Cada día es una oportunidad de ser mejor versión de ti."</p>
+        <p class="ps-quote-strong">En equipo alcanzamos la excelencia.</p>
+
+        <!-- Flip clock -->
+        <div class="ps-time-zone" aria-label="Fecha y hora actual">
+          <div class="ps-flip-group" aria-label="Calendario">
+            <span class="ps-flip-label">Fecha</span>
+            <span id="ps-day"   class="ps-flip-card">--</span>
+            <span id="ps-month" class="ps-flip-card sm">---</span>
+            <span id="ps-year"  class="ps-flip-card yr">----</span>
           </div>
-          <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#f59e0b;margin:0 0 4px;">5</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0;">Próximamente</p>
-          </div>
-          <div style="background:rgba(0,0,0,.4);border-radius:12px;padding:12px;">
-            <p style="font-size:20px;font-weight:700;color:#fff;margin:0 0 4px;">v4.0</p>
-            <p style="font-size:11px;color:#94a3b8;margin:0;">Versión</p>
+          <div class="ps-flip-group" aria-label="Reloj">
+            <span class="ps-flip-label">Hora</span>
+            <span id="ps-hour"   class="ps-flip-card">--</span>
+            <span class="ps-colon">:</span>
+            <span id="ps-minute" class="ps-flip-card">--</span>
+            <span class="ps-colon">:</span>
+            <span id="ps-second" class="ps-flip-card">--</span>
           </div>
         </div>
-      </div>
+
+      </div><!-- /.ps-stage -->
     </section>
 
-    <!-- Department grid -->
-    <section id="portal-dept-grid" class="portal-dept-grid" style="gap:14px;">
-
-      <!-- COCINA -->
-      <button onclick="pSel('cocina','Cocina','#f59e0b')" style="text-align:left;border-radius:14px;border:2px solid #f59e0b;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(245,158,11,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🍳</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
-        </div>
+    <!-- Department panel -->
+    <section class="ps-dept-panel" id="portal-dept-grid" aria-label="Selección de departamento">
+      <div class="ps-panel-head">
         <div>
-          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Cocina</h3>
-          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Turnos · Mermas · Tareas</p>
-          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#f59e0b;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
-          </div>
+          <p class="ps-panel-eyebrow">Bienvenido</p>
+          <h2 class="ps-panel-title">Selecciona tu departamento</h2>
         </div>
-      </button>
-
-      <!-- SALA -->
-      <button onclick="pSel('sala','Sala','#3b82f6')" style="text-align:left;border-radius:14px;border:2px solid #3b82f6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(59,130,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🍽</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Sala</h3>
-          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Caja · Incidencias · Servicio</p>
-          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#3b82f6;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
-          </div>
-        </div>
-      </button>
-
-      <!-- RECEPCIÓN HOTEL -->
-      <button onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')" style="text-align:left;border-radius:14px;border:2px solid #8b5cf6;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(139,92,246,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🏨</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Recepción Hotel</h3>
-          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Check-in · Check-out · Caja MEWS</p>
-          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#8b5cf6;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
-          </div>
-        </div>
-      </button>
-
-      <!-- RECEPCIÓN SYNCROLAB -->
-      <button onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')" style="text-align:left;border-radius:14px;border:2px solid #06b6d4;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(6,182,212,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🔬</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Recepción SYNCROLAB</h3>
-          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Reservas · Clientes</p>
-          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#06b6d4;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
-          </div>
-        </div>
-      </button>
-
-      <!-- ENTRENADORES — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">💪</div>
-          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Entrenadores</h3>
-          <p style="font-size:12px;color:#475569;margin:0;">Sesiones · Seguimiento</p>
-        </div>
+        <span class="ps-status-pill">Portal Operativo · v4.0</span>
       </div>
 
-      <!-- FISIOTERAPEUTAS — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🩺</div>
-          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
+      <div class="ps-dept-grid">
+        <!-- COCINA -->
+        <button class="ps-dept-card" style="--dc:#f59e0b;border:1px solid rgba(245,158,11,.4);" onclick="pSel('cocina','Cocina','#f59e0b')">
+          <div class="ps-dc-icon">🍳</div>
+          <div><div class="ps-dc-name">Cocina</div><div class="ps-dc-meta">Turnos · Mermas · Tareas</div></div>
+        </button>
+        <!-- SALA -->
+        <button class="ps-dept-card" style="--dc:#3b82f6;border:1px solid rgba(59,130,246,.4);" onclick="pSel('sala','Sala','#3b82f6')">
+          <div class="ps-dc-icon">🍽️</div>
+          <div><div class="ps-dc-name">Sala</div><div class="ps-dc-meta">Caja · Incidencias · Servicio</div></div>
+        </button>
+        <!-- RECEPCIÓN HOTEL -->
+        <button class="ps-dept-card" style="--dc:#8b5cf6;border:1px solid rgba(139,92,246,.4);" onclick="pSel('recepcion','Recepción Hotel','#8b5cf6')">
+          <div class="ps-dc-icon">🏨</div>
+          <div><div class="ps-dc-name">Recepción Hotel</div><div class="ps-dc-meta">Check-in · Check-out · MEWS</div></div>
+        </button>
+        <!-- RECEPCIÓN SYNCROLAB -->
+        <button class="ps-dept-card" style="--dc:#06b6d4;border:1px solid rgba(6,182,212,.4);" onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')">
+          <div class="ps-dc-icon">🔬</div>
+          <div><div class="ps-dc-name">SYNCROLAB</div><div class="ps-dc-meta">Reservas · Clientes</div></div>
+        </button>
+        <!-- HOUSEKEEPING -->
+        <button class="ps-dept-card" style="--dc:#f97316;border:1px solid rgba(249,115,22,.4);" onclick="pSel('housekeeping','Housekeeping','#f97316')">
+          <div class="ps-dc-icon">🧹</div>
+          <div><div class="ps-dc-name">Housekeeping</div><div class="ps-dc-meta">Limpieza · Habitaciones</div></div>
+        </button>
+        <!-- DIRECCIÓN / RRHH -->
+        <button class="ps-dept-card" style="--dc:#a855f7;border:1px solid rgba(168,85,247,.4);" onclick="pSel('administracion','Dirección / RRHH','#a855f7')">
+          <div class="ps-dc-icon">👔</div>
+          <div><div class="ps-dc-name">Dirección / RRHH</div><div class="ps-dc-meta">Administración · Recursos</div></div>
+        </button>
+        <!-- ENTRENADORES — Próximamente -->
+        <div class="ps-dept-card soon" aria-disabled="true">
+          <div class="ps-dc-icon">💪</div>
+          <div><div class="ps-dc-name">Entrenadores</div><div class="ps-dc-meta">Próximamente</div></div>
         </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Fisioterapeutas</h3>
-          <p style="font-size:12px;color:#475569;margin:0;">Tratamientos · Pacientes</p>
+        <!-- FISIOTERAPEUTAS — Próximamente -->
+        <div class="ps-dept-card soon" aria-disabled="true">
+          <div class="ps-dc-icon">🩺</div>
+          <div><div class="ps-dc-name">Fisioterapeutas</div><div class="ps-dc-meta">Próximamente</div></div>
         </div>
+        <!-- MANTENIMIENTO — Próximamente -->
+        <div class="ps-dept-card soon" aria-disabled="true">
+          <div class="ps-dc-icon">🔧</div>
+          <div><div class="ps-dc-name">Mantenimiento</div><div class="ps-dc-meta">Próximamente</div></div>
+        </div>
+      </div><!-- /.ps-dept-grid -->
+
+      <div class="ps-micro-info">
+        <span><strong>6</strong> activos</span>
+        <span><strong>3</strong> próximamente</span>
+        <span>v4.0</span>
       </div>
+    </section><!-- /.ps-dept-panel -->
 
-      <!-- HOUSEKEEPING -->
-      <button onclick="pSel('housekeeping','Housekeeping','#f97316')" style="text-align:left;border-radius:14px;border:2px solid #f97316;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(249,115,22,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🧹</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Housekeeping</h3>
-          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Limpieza · Habitaciones · Zonas</p>
-          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#f97316;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
-          </div>
-        </div>
-      </button>
-
-      <!-- MANTENIMIENTO — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">🔧</div>
-          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Mantenimiento</h3>
-          <p style="font-size:12px;color:#475569;margin:0;">Incidencias · Tareas técnicas</p>
-        </div>
-      </div>
-
-      <!-- ECONOMATO — Próximamente -->
-      <div style="border-radius:14px;border:2px solid #1e3a5f;background:rgba(15,32,53,.6);padding:20px;height:180px;opacity:.5;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(255,255,255,.04);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">📦</div>
-          <span style="background:rgba(0,0,0,.3);color:#475569;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Próximamente</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#64748b;margin:0 0 4px;">Economato</h3>
-          <p style="font-size:12px;color:#475569;margin:0;">Stock · Compras · Control</p>
-        </div>
-      </div>
-
-      <!-- DIRECCIÓN / RRHH -->
-      <button onclick="pSel('administracion','Dirección / RRHH','#a855f7')" style="text-align:left;border-radius:14px;border:2px solid #a855f7;background:#102B3A;padding:20px;height:180px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" onmouseover="this.style.background='#123447';this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#102B3A';this.style.transform='none'">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div style="width:52px;height:52px;background:rgba(168,85,247,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;">👔</div>
-          <span style="background:rgba(52,211,153,.12);color:#34d399;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;">Activo</span>
-        </div>
-        <div>
-          <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px;">Dirección / RRHH</h3>
-          <p style="font-size:12px;color:#94a3b8;margin:0 0 10px;">Administración · Recursos Humanos</p>
-          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#a855f7;">
-            <span style="width:7px;height:7px;border-radius:50%;background:#34d399;display:inline-block;animation:pulse 2s infinite;flex-shrink:0;"></span>Entrar al módulo
-          </div>
-        </div>
-      </button>
-    </section>
-
-    <!-- Footer -->
-    <footer style="margin-top:48px;text-align:center;font-size:12px;color:#334155;">
-      SYNCROSFERA · Health Sport Hotel · v4.0
-    </footer>
   </main>
-</div>
+
+  <!-- Flip clock script — solo en portal, sin tocar lógica de app -->
+  <script>
+  (function(){
+    var _psIds = ['ps-day','ps-month','ps-year','ps-hour','ps-minute','ps-second'];
+    var _psMths = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    var _psLast = {};
+    _psIds.forEach(function(id){ _psLast[id] = null; });
+    function _psPad(n){ return String(n).padStart(2,'0'); }
+    function _psFlip(id, val){
+      var el = document.getElementById(id);
+      if(!el || _psLast[id] === val) return;
+      el.textContent = val;
+      el.classList.remove('flip');
+      void el.offsetWidth;
+      el.classList.add('flip');
+      _psLast[id] = val;
+    }
+    function _psTick(){
+      var now = new Date();
+      _psFlip('ps-day',   _psPad(now.getDate()));
+      _psFlip('ps-month', _psMths[now.getMonth()]);
+      _psFlip('ps-year',  String(now.getFullYear()));
+      _psFlip('ps-hour',  _psPad(now.getHours()));
+      _psFlip('ps-minute',_psPad(now.getMinutes()));
+      _psFlip('ps-second',_psPad(now.getSeconds()));
+    }
+    _psTick();
+    setInterval(_psTick, 1000);
+  })();
+  </script>
+
+</div><!-- /#portal-screen -->
 
 <div id="app">
 
