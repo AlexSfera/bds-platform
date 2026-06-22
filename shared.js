@@ -2402,6 +2402,9 @@ async function renderValidacion(){
   });
   el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
   if(typeof renderTurnosKpis==='function') renderTurnosKpis(shifts);
+  // Sync tab visibility after every render (dept filter may have changed)
+  if(typeof _updateMermaTabVisibility==='function') _updateMermaTabVisibility();
+  if(typeof _updateNotasTabVisibility==='function') _updateNotasTabVisibility();
   // Si tab OPERATIVO está visible, refrescarlo también con el mismo filtro de dept
   var _opDiv = document.getElementById('val-content-operativo');
   if(_opDiv && _opDiv.style.display !== 'none' && typeof renderFollowUpExtras === 'function'){
