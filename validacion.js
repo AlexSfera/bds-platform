@@ -663,7 +663,9 @@ async function renderValCajaList() {
 
   try {
     var data = await dbGetAll('sala_cash_closures');
-    var periodo = (document.getElementById('val-caja-periodo')||{}).value||'hoy';
+    var _totalRaw = data.length;
+    var _lastFecha = _totalRaw > 0 ? (data.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');})[0].fecha || '—') : '—';
+    var periodo = (document.getElementById('val-caja-periodo')||{}).value||'semana';
     var t = today();
     data = data.filter(function(c){
       if(periodo==='hoy') return c.fecha===t;
@@ -673,7 +675,9 @@ async function renderValCajaList() {
     });
     data.sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
     if(!data.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo</div></div>';
+      el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo</div>'
+        +'<div style="margin-top:8px;font-size:11px;color:var(--text3);font-family:var(--font-mono);">'
+        +'Total en tabla: '+_totalRaw+' · Último registro: '+_lastFecha+' · Semana desde: '+startOfWeek()+'</div></div>';
       return;
     }
     var rows = data.map(function(c){
