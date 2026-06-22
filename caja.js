@@ -283,19 +283,31 @@ function openCajaForm(existingId) {
    'caja-ef-real','caja-ef-posmews','caja-fondo-fin','caja-retiro'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value = '';
   });
-  // BUG-29 SALA: fondo inicial = fondo_final del último cierre, readonly en HTML
+  // FIX-FONDO-CIERRE: fondo_ini = último TRASPASO de hoy; si no hay → último CIERRE día anterior
   var fondoIniEl = document.getElementById('caja-fondo-ini');
   if(fondoIniEl) fondoIniEl.value = '';
   if(!existingId){
     invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
-      var sorted = rows
-        .filter(function(r){ return r.fondo_real_sala != null || r.fondo_final != null; })
+      var t = today();
+      // 1. Último traspaso del mismo día
+      var traspasoHoy = rows
+        .filter(function(r){
+          return r.tipo === 'traspaso' && r.fecha === t
+            && (r.fondo_real_sala != null || r.fondo_final != null);
+        })
+        .sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+      // 2. Último cierre de día anterior (fallback)
+      var cierreAnterior = rows
+        .filter(function(r){
+          return r.tipo === 'cierre' && (r.fecha||'') < t
+            && (r.fondo_real_sala != null || r.fondo_final != null);
+        })
         .sort(function(a,b){
-          return (b.fecha || '').localeCompare(a.fecha || '') ||
-                 (b.created_at || '').localeCompare(a.created_at || '');
+          return (b.fecha||'').localeCompare(a.fecha||'') ||
+                 (b.created_at||'').localeCompare(a.created_at||'');
         });
-      var ultimo = sorted[0];
+      var ultimo = traspasoHoy[0] || cierreAnterior[0];
       if(fondoIniEl && ultimo){
         fondoIniEl.value = parseFloat(ultimo.fondo_real_sala || ultimo.fondo_final || 0).toFixed(2);
         calcCajaDifs();
@@ -1258,12 +1270,19 @@ function openSalaTraspasoModal(existingId) {
     if(label) label.textContent = _salaTipoServ || '—';
     invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
-      var sorted = rows
-        .filter(function(r){ return r.fondo_real_sala != null || r.fondo_final != null; })
+      var t = today();
+      // FIX-FONDO-TRASPASO: fondo_recibido = fondo_final del último CIERRE del día anterior
+      // No tomar traspasos anteriores ni registros del mismo día
+      var cierreAnterior = rows
+        .filter(function(r){
+          return r.tipo === 'cierre' && (r.fecha||'') < t
+            && (r.fondo_real_sala != null || r.fondo_final != null);
+        })
         .sort(function(a,b){
-          return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||'');
+          return (b.fecha||'').localeCompare(a.fecha||'') ||
+                 (b.created_at||'').localeCompare(a.created_at||'');
         });
-      var ultimo = sorted[0];
+      var ultimo = cierreAnterior[0];
       if(fondoEl && ultimo){
         fondoEl.value = parseFloat(ultimo.fondo_real_sala || ultimo.fondo_final || 0).toFixed(2);
         calcSalaTraspaso();
