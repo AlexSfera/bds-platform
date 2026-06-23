@@ -617,7 +617,12 @@ async function renderCajaList() {
       if(filter==='mes') return c.fecha >= startOfMonth();
       return true;
     });
-    data.sort(function(a,b){ return b.fecha.localeCompare(a.fecha) || (b.created_at||'').localeCompare(a.created_at||''); });
+    data.sort(function(a,b){
+      var fa = a.fecha||'', fb = b.fecha||'';
+      if(fb !== fa) return fb.localeCompare(fa);
+      var ta = a.created_at||a.updated_at||'', tb = b.created_at||b.updated_at||'';
+      return tb.localeCompare(ta);
+    });
     if(!data.length){
       el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo seleccionado</div></div>';
       return;
@@ -631,7 +636,7 @@ async function renderCajaList() {
         : '<span class="badge" style="background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid #3b82f6;">💰 Cierre</span>';
       var verFn = esTraspaso ? 'openSalaTraspasoModal' : 'openCajaForm';
       return '<tr>'
-        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
+        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?(function(ts){try{return new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});}catch(e){return ts.slice(11,16);}})(c.created_at):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
         +'<td>'+tipoBadge+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
@@ -874,7 +879,7 @@ async function renderValCajaList() {
       var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2)+'€' : '—';
       var ajColor = c.total_ajustes > 0 ? 'var(--amber)' : 'var(--text3)';
       return '<tr>'
-        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
+        +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?(function(ts){try{return new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});}catch(e){return ts.slice(11,16);}})(c.created_at):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
         +'<td style="font-family:var(--font-mono)">'+(c.efectivo_real||0).toFixed(2)+'€</td>'
@@ -929,7 +934,7 @@ async function openCajaSummary(cajaId, showValidar) {
   }
 
   var html = '<div style="padding:4px 0">'
-    + row('Fecha / Hora cierre', fmtDate(c.fecha) + (c.created_at ? ' · ' + c.created_at.slice(11,16) : ''))
+    + row('Fecha / Hora cierre', fmtDate(c.fecha) + (c.created_at ? ' · ' + (function(ts){try{return new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});}catch(e){return ts.slice(11,16);}})(c.created_at) : ''))
     + row('Responsable', c.responsable_nombre, false)
     + row('Turno', displayServicio(c.servicios||''), false)
     + row('Estado', c.estado, false)
