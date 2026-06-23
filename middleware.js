@@ -5,7 +5,8 @@ const ALLOWED_IPS = [
   '77.208.169.57',  // Teléfono 1
   '77.208.160.208', // Teléfono 2
   '45.153.97.234',  // Casa
-  '90.167.42.33',   // [POR DEFINIR]
+  '90.167.42.33',    // [POR DEFINIR]
+  '89.131.180.187',  // [POR DEFINIR]
 ];
 
 export default function middleware(req) {
