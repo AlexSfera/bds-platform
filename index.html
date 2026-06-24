@@ -2039,12 +2039,22 @@ tr:hover td{background:rgba(96,165,250,.06);}
       <input type="text" id="rec-tras-fondo-recibido" value="0.00" readonly style="color:#111827;background:#ffffff;opacity:.6;cursor:not-allowed;">
     </div>
     <div class="fg" style="margin-bottom:8px;">
-      <label>Ventas en efectivo según MEWS (€) <span class="req">*</span></label>
+      <label>Ventas en efectivo según MEWS de TU TURNO (€) <span class="req">*</span></label>
       <input type="text" inputmode="decimal" id="rec-tras-ventas-mews" placeholder="0.00" oninput="calcRecTraspaso()" style="color:#111827;background:#ffffff;">
     </div>
     <div class="fg" style="margin-bottom:8px;">
-      <label>Cash real contado (€) <span class="req">*</span></label>
+      <label>Cash real contado — total efectivo en caja (€) <span class="req">*</span></label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-family:var(--font-mono);">Cuenta TODO el efectivo que tienes (fondo recibido + ventas cobradas)</div>
       <input type="text" inputmode="decimal" id="rec-tras-cash-real" placeholder="0.00" oninput="calcRecTraspaso()" style="color:#111827;background:#ffffff;">
+    </div>
+    <!-- BLOQUE CONTROL CASH -->
+    <div id="rec-tras-ctrl-block" style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:12px;display:none;">
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:8px;">CONTROL DE EFECTIVO</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px;">
+        <div><span style="color:var(--text3);">Efectivo esperado en caja</span><br><span id="rec-tras-ctrl-esperado" style="font-family:var(--font-mono);font-size:15px;font-weight:700;">—</span></div>
+        <div><span style="color:var(--text3);">Cash real contado</span><br><span id="rec-tras-ctrl-real" style="font-family:var(--font-mono);font-size:15px;font-weight:700;">—</span></div>
+      </div>
+      <div id="rec-tras-ctrl-result" style="font-family:var(--font-mono);font-size:13px;font-weight:700;padding:8px 10px;border-radius:6px;text-align:center;">—</div>
     </div>
 
     <div class="fg" style="margin-bottom:8px;">

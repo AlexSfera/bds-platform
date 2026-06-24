@@ -1434,12 +1434,52 @@ function setRecTrasCF(val, btn) {
 
 function calcRecTraspaso() {
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
-  var fondoRec = gv('rec-tras-fondo-recibido');
-  var ventas   = gv('rec-tras-ventas-mews');
-  var cf       = _recTrasCF === 'si' ? gv('rec-tras-cf-importe') : 0;
+  var fondoRec  = gv('rec-tras-fondo-recibido');
+  var ventas    = gv('rec-tras-ventas-mews');
+  var cf        = _recTrasCF === 'si' ? gv('rec-tras-cf-importe') : 0;
+  var cashReal  = gv('rec-tras-cash-real');
 
-  // Fondo esperado = Fondo recibido + Ventas efectivo MEWS − Retiro caja fuerte
-  var esperado = fondoRec + ventas - cf;
+  // Efectivo esperado en caja = Fondo recibido + Ventas efectivo MEWS (sin retiro aún)
+  var cashEsperado = fondoRec + ventas;
+
+  // ── BLOQUE CONTROL CASH ──────────────────────────────────────────────
+  var ctrlBlock   = document.getElementById('rec-tras-ctrl-block');
+  var ctrlEspEl   = document.getElementById('rec-tras-ctrl-esperado');
+  var ctrlRealEl  = document.getElementById('rec-tras-ctrl-real');
+  var ctrlResEl   = document.getElementById('rec-tras-ctrl-result');
+  var cashRealRaw = (document.getElementById('rec-tras-cash-real')||{value:''}).value;
+
+  if(ctrlBlock && cashRealRaw !== '' && !isNaN(parseFloat(cashRealRaw)) && (ventas > 0 || fondoRec > 0)){
+    ctrlBlock.style.display = 'block';
+    var difCtrl   = cashReal - cashEsperado;
+    var cuadCtrl  = Math.abs(difCtrl) < 0.01;
+    if(ctrlEspEl){
+      ctrlEspEl.textContent = cashEsperado.toFixed(2) + ' €';
+      ctrlEspEl.style.color = 'var(--text)';
+    }
+    if(ctrlRealEl){
+      ctrlRealEl.textContent = cashReal.toFixed(2) + ' €';
+      ctrlRealEl.style.color = cuadCtrl ? 'var(--green)' : 'var(--red)';
+    }
+    if(ctrlResEl){
+      if(cuadCtrl){
+        ctrlResEl.textContent = '✓ Efectivo cuadrado — OK';
+        ctrlResEl.style.background = 'rgba(52,211,153,.15)';
+        ctrlResEl.style.color = 'var(--green)';
+        ctrlResEl.style.border = '1px solid var(--green)';
+      } else {
+        ctrlResEl.textContent = '⚠ Diferencia: ' + (difCtrl >= 0 ? '+' : '') + difCtrl.toFixed(2) + ' € — revisa el conteo';
+        ctrlResEl.style.background = 'rgba(248,113,113,.15)';
+        ctrlResEl.style.color = 'var(--red)';
+        ctrlResEl.style.border = '1px solid var(--red)';
+      }
+    }
+  } else if(ctrlBlock){
+    ctrlBlock.style.display = 'none';
+  }
+
+  // Fondo esperado a traspasar = Fondo recibido + Ventas efectivo MEWS − Retiro caja fuerte
+  var esperado = cashEsperado - cf;
   var espEl = document.getElementById('rec-tras-fondo-esperado');
   if(espEl){
     espEl.textContent = esperado.toFixed(2) + ' €';
