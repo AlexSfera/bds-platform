@@ -522,7 +522,7 @@ function getScreens(rol){
     if(isCocina) miDia.push(ITEMS.merma);              // Cocina: Merma en MI DÍA
     miDia.push(ITEMS.checklist);
     // Caja: empleado Recepción / jefe SYNCROLAB / cualquiera de Rec.SYNCROLAB
-    if(isRecepcion && !isJefe) miDia.push(ITEMS.cajaRec);
+    if(isRecepcion) miDia.push(ITEMS.cajaRec);
     if(isRecSyncrolab) miDia.push(ITEMS.cajaLab);
     else if(isSyncrolabArea && isJefe) miDia.push(ITEMS.cajaLab);
   }

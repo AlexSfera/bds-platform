@@ -368,6 +368,14 @@ function openRecCajaModal(existingId) {
 
   // Reset todos los campos
   // Reset campos editables — fondo se carga del cierre anterior
+  window._recCajaImagen = null;
+  var _imgPrev = document.getElementById('rec-caja-img-preview');
+  var _imgInp  = document.getElementById('rec-caja-imagen');
+  var _notaInp = document.getElementById('rec-caja-nota');
+  if(_imgPrev) _imgPrev.style.display = 'none';
+  if(_imgInp)  _imgInp.value = '';
+  if(_notaInp) _notaInp.value = '';
+
   ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
    'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
    'rec-fondo-traspaso','rec-fondo-real',
@@ -488,24 +496,74 @@ function closeRecCajaModal() {
   if(m) m.style.display = 'none';
 }
 
+// ── Imagen adjunta cierre caja ──────────────────────────────────────────
+window._recCajaImagen = null;
+
+function previewRecCajaImagen(input) {
+  var file = input.files && input.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    // Comprimir a max 800px y calidad 0.7 para reducir tamaño
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var MAX = 800;
+      var ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+      canvas.width  = Math.round(img.width  * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      var b64 = canvas.toDataURL('image/jpeg', 0.72);
+      window._recCajaImagen = b64;
+      var thumb = document.getElementById('rec-caja-img-thumb');
+      var prev  = document.getElementById('rec-caja-img-preview');
+      if(thumb) thumb.src = b64;
+      if(prev)  prev.style.display = 'block';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearRecCajaImagen() {
+  window._recCajaImagen = null;
+  var inp  = document.getElementById('rec-caja-imagen');
+  var prev = document.getElementById('rec-caja-img-preview');
+  if(inp)  inp.value = '';
+  if(prev) prev.style.display = 'none';
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // CAJA RECEPCIÓN — Guardar (BUG-16 FIX: tabla y campos correctos)
 // ═══════════════════════════════════════════════════════════════════════
 async function submitRecCaja() {
   var errs = [];
 
-  // ── Fix Jun 2026: Horas trabajadas son obligatorias antes de cerrar caja ──
-  // (Antes se podía cerrar Caja sin declarar horas en el formulario de turno)
+  // ── Guard horas: solo bloquea si el turno NO fue guardado en esta sesión ──
+  // Bug: si el empleado navega entre pantallas tras guardar turno, el DOM queda
+  // vacío pero _lastSavedShiftId confirma que el turno ya pasó por _doSaveTurno().
   var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
-  if(!_horasTrab || _horasTrab <= 0){
-    var _msg = '⚠ Horas trabajadas obligatorias. Vuelve al formulario de turno y declara las horas antes de cerrar caja.';
-    var _errEl = document.getElementById('rec-caja-err');
-    if(_errEl){ _errEl.textContent = _msg; _errEl.style.display='block'; }
-    toast(_msg, 'err');
-    // Reenfocar el campo en el form base
-    var _ti = document.getElementById('t-horas');
-    if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
-    return;
+  var _turnoYaGuardado = !!window._lastSavedShiftId;
+  if(!_turnoYaGuardado && (!_horasTrab || _horasTrab <= 0)){
+    // Fallback: buscar en BD si hay turno pendiente de hoy (flujo sidebar directo)
+    var _turnosHoyCheck = [];
+    try { _turnosHoyCheck = await getDB('shifts'); } catch(e_hg){ _turnosHoyCheck = []; }
+    var _turnoHoyBD = (_turnosHoyCheck||[]).find(function(s){
+      return s.employee_id === currentUser.id
+        && (s.fecha||'').slice(0,10) === today()
+        && (s.estado === 'Pendiente' || s.estado === 'En corrección');
+    });
+    if(_turnoHoyBD){
+      window._lastSavedShiftId = _turnoHoyBD.id;
+    } else {
+      var _msg = '⚠ Horas trabajadas obligatorias. Declara las horas en el formulario de turno antes de cerrar caja.';
+      var _errEl = document.getElementById('rec-caja-err');
+      if(_errEl){ _errEl.textContent = _msg; _errEl.style.display='block'; }
+      toast(_msg, 'err');
+      var _ti = document.getElementById('t-horas');
+      if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+      return;
+    }
   }
 
   function gv(id){ return parseFloat(document.getElementById(id) ? document.getElementById(id).value : ''); }
@@ -635,19 +693,35 @@ async function submitRecCaja() {
     eur_pension_desayuno:    eurPensionDesayuno,
     eur_pension_comidacena:  eurPensionComidaCena,
     cargo_alexander:         cargoAlexander,
+    // Nota e imagen adjunta (opcionales)
+    notas_cierre:            (document.getElementById('rec-caja-nota')||{value:''}).value.trim() || null,
+    imagen_adjunta:          window._recCajaImagen || null,
     // Timestamps
     updated_at:                ts
   };
 
   if(!_recCajaEditId) record.created_at = ts;
 
+  // Guardado con retry: si la tabla no tiene columnas opcionales (notas/imagen),
+  // reintentar sin ellas para no bloquear el cierre.
+  async function _doInsertOrUpdate(rec) {
+    if(_recCajaEditId) return dbUpdate(REC_TABLE, _recCajaEditId, rec);
+    return dbInsert(REC_TABLE, rec);
+  }
+
   try {
+    var result = await _doInsertOrUpdate(record);
+    if(!result && (record.notas_cierre || record.imagen_adjunta)){
+      // Retry sin columnas opcionales que pueden no existir en el esquema
+      var recLean = Object.assign({}, record);
+      delete recLean.notas_cierre;
+      delete recLean.imagen_adjunta;
+      result = await _doInsertOrUpdate(recLean);
+    }
     if(_recCajaEditId){
-      await dbUpdate(REC_TABLE, _recCajaEditId, record);
       await auditLog('REC_CAJA_EDIT', currentUser.nombre+' editó caja recepción '+fecha+' turno '+turno);
       toast('Caja recepción actualizada', 'ok');
     } else {
-      await dbInsert(REC_TABLE, record);
       await auditLog('REC_CAJA_SAVE', currentUser.nombre+' cerró caja recepción '+fecha+' turno '+turno);
       toast('Caja recepción guardada', 'ok');
       if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
