@@ -471,6 +471,7 @@ function getScreens(rol){
     hkRevision:  {id:'hk-revision', label:'🔍 Revisión HK'},
     fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
     incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
+    miRendimiento:{id:'mi-rendimiento', label:'📈 Mi Rendimiento'},
     informes:    {id:'informes',    label:'📊 Informes'},
     checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'},
     nota:        {id:'notas-mod',   label:'💬 Nota'}
@@ -541,7 +542,7 @@ function getScreens(rol){
     if(isMant) miDpto.push(ITEMS.mantmod);
     miDpto.push(ITEMS.fichaje);
     miDpto.push(ITEMS.misfio);
-    if(!noIncMiDpto) miDpto.push(ITEMS.incentivos);
+    if(!noIncMiDpto) miDpto.push(ITEMS.miRendimiento);
     // HK Gobernanta: extras de planificación
     if(isHK && isJefe){
       miDpto.push(ITEMS.hkPlan);
@@ -813,6 +814,7 @@ async function showScreen(id){
   if(id==='hk-dash'     && typeof renderHKDashboard==='function')      renderHKDashboard();
   if(id==='fichaje'     && typeof renderFichaje==='function')          { _fichajeFilterPeriodo=''; renderFichaje(); }
   if(id==='incentivos'  && typeof renderIncentivos==='function')        renderIncentivos();
+  if(id==='mi-rendimiento' && typeof renderMiRendimiento==='function')  renderMiRendimiento();
   if(id==='informes'    && typeof renderInformes==='function')           renderInformes();
   updateDots();
 }
