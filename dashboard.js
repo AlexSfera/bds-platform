@@ -201,6 +201,7 @@ async function renderDashboard() {
   var allTareas   = await getDB('tareas');
   var allGestiones = await getDB('gestiones');
   var allAjustes  = []; try { allAjustes = await getDB('ajustes'); } catch(e){}
+  var allEmployees = []; try { allEmployees = await getDB('employees'); } catch(e){}
 
   var shiftMap = {};
   allShifts.forEach(function(s) { if (s.id) shiftMap[s.id] = s; });
@@ -265,7 +266,7 @@ async function renderDashboard() {
   // Renderizar secciones
   _renderKpiCards(shifts, mermas, incis, tareas, gestiones, deptCfg);
   _renderAjustesKpi(ajustes);
-  _renderActividadEmpleado(shifts, allShifts);
+  await _renderActividadEmpleado(shifts, allShifts, allEmployees);
   _renderAlertas(shifts, mermas, incis, tareas);
   _renderIncidencias(incis, shiftMap);
   _renderGestiones(gestiones, shiftMap);
@@ -432,18 +433,34 @@ function _renderKpiCards(shifts, mermas, incis, tareas, gestiones, deptCfg) {
 }
 
 // ── ACTIVIDAD POR EMPLEADO ────────────────────────────────────
-function _renderActividadEmpleado(shifts, allShifts) {
+// ── CONSTANTES DE EFICIENCIA ──────────────────────────────────
+// Pesos: 70% labor cost + 30% productividad relativa al equipo
+// Semáforo labor cost: ≤18% verde · 18-22% ámbar · >22% rojo
+var _EFF_LABOR_WEIGHT = 0.70;
+var _EFF_PROD_WEIGHT  = 0.30;
+var _EFF_LABOR_GREEN  = 18;   // % umbral verde
+var _EFF_LABOR_AMBER  = 22;   // % umbral ámbar (>22 = rojo)
+var _EFF_MIN_DIAS     = 14;   // días mínimos de datos para puntuar
+
+async function _renderActividadEmpleado(shifts, allShifts, allEmployees) {
   var el = document.getElementById('dash-emp-table');
   if (!el) return;
 
+  // ── 1. Acumular actividad por nombre ────────────────────────
   var eMap = {};
   shifts.forEach(function(s) {
     var key = s.nombre;
-    if (!eMap[key]) eMap[key] = { nombre: s.nombre, puesto: s.puesto || '—', turnos: 0, horas: 0, incis: 0, fio: 0, tareas: 0 };
+    if (!eMap[key]) eMap[key] = {
+      nombre: s.nombre, puesto: s.puesto || '—',
+      turnos: 0, horas: 0, incis: 0, fio: 0,
+      primeraFecha: s.fecha, ultimaFecha: s.fecha
+    };
     eMap[key].turnos++;
     eMap[key].horas += parseFloat(s.horas) || 0;
     if (s.incidencia_declarada === 'si') eMap[key].incis++;
     if (_isFio(s)) eMap[key].fio++;
+    if (s.fecha < eMap[key].primeraFecha) eMap[key].primeraFecha = s.fecha;
+    if (s.fecha > eMap[key].ultimaFecha)  eMap[key].ultimaFecha  = s.fecha;
   });
 
   var rows = Object.values(eMap).sort(function(a, b) { return b.horas - a.horas; });
@@ -453,18 +470,209 @@ function _renderActividadEmpleado(shifts, allShifts) {
     return;
   }
 
-  el.innerHTML = '<table>'
-    + '<tr><th>Empleado</th><th>Turnos</th><th>Horas</th><th>Incid.</th><th>FIO</th></tr>'
-    + rows.map(function(e) {
-      return '<tr>'
-        + '<td><div style="font-weight:600">' + e.nombre + '</div><div style="font-size:11px;color:var(--text3)">' + e.puesto + '</div></td>'
-        + '<td style="font-family:var(--font-mono);text-align:center">' + e.turnos + '</td>'
-        + '<td style="font-family:var(--font-mono);text-align:center">' + e.horas.toFixed(1) + 'h</td>'
-        + '<td style="text-align:center">' + (e.incis > 0 ? '<span class="badge b-red">' + e.incis + '</span>' : '—') + '</td>'
-        + '<td style="text-align:center">' + (e.fio > 0 ? '<span class="badge b-red">' + e.fio + '</span>' : '—') + '</td>'
-        + '</tr>';
-    }).join('')
-    + '</table>';
+  // ── 2. Cruzar con employees para coste/hora ──────────────────
+  var empMaster = {};
+  (allEmployees || []).forEach(function(e) {
+    empMaster[e.nombre] = e;
+  });
+
+  // ── 3. Ventas semanales Sala (solo si el dept activo es Sala/FnB) ─
+  var ventasPorNombre = {};
+  var deptNecesitaVentas = (_dashCurrentDept === 'Sala' || _dashCurrentDept === 'FnB');
+  if (deptNecesitaVentas) {
+    try {
+      // Calculamos el periodo del selector
+      var periodo = (document.getElementById('dash-periodo') || {}).value || 'semana';
+      var desde = periodo === 'hoy' ? today() : periodo === 'semana' ? startOfWeek() : startOfMonth();
+      var ventasRes = await fetch(
+        SUPABASE_URL + '/rest/v1/employee_sales_weekly'
+          + '?fecha_inicio_semana=gte.' + desde
+          + '&select=employee_id,ventas,fecha_inicio_semana',
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }
+      );
+      if (ventasRes.ok) {
+        var ventasArr = await ventasRes.json();
+        // Acumular ventas por employee_id, luego cruzar con nombre
+        var ventasPorId = {};
+        (ventasArr || []).forEach(function(v) {
+          ventasPorId[v.employee_id] = (ventasPorId[v.employee_id] || 0) + parseFloat(v.ventas || 0);
+        });
+        // Cruzar id → nombre vía employees
+        (allEmployees || []).forEach(function(e) {
+          if (ventasPorId[e.id] != null) ventasPorNombre[e.nombre] = ventasPorId[e.id];
+        });
+      }
+    } catch(e) { /* ventas no disponibles — solo labor cost */ }
+  }
+
+  // ── 4. Calcular media de producción €/turno del equipo ──────
+  var prodValores = rows.map(function(r) {
+    var v = ventasPorNombre[r.nombre] || 0;
+    return r.turnos > 0 ? v / r.turnos : 0;
+  });
+  var mediaEquipo = prodValores.length
+    ? prodValores.reduce(function(s, v) { return s + v; }, 0) / prodValores.length
+    : 0;
+
+  // ── 5. Leer último informe publicado (eval. manual) ─────────
+  var evalManual = {};
+  if (typeof infGetUltimoPublicado === 'function') {
+    try {
+      var informe = await infGetUltimoPublicado(_dashCurrentDept);
+      if (informe && informe.contenido_json && informe.contenido_json.evaluacion_empleados) {
+        // El campo es texto libre — buscamos el nombre de cada empleado
+        var evalTexto = informe.contenido_json.evaluacion_empleados || '';
+        rows.forEach(function(r) {
+          var primerApellido = r.nombre.split(' ')[0];
+          if (evalTexto.toLowerCase().indexOf(primerApellido.toLowerCase()) >= 0) {
+            evalManual[r.nombre] = true;
+          }
+        });
+      }
+    } catch(e) {}
+  }
+
+  // ── 6. Calcular puntuación de eficiencia por empleado ───────
+  function calcEficiencia(row) {
+    var emp = empMaster[row.nombre];
+    var costeHora = emp ? parseFloat(emp.coste || 0) : 0;
+    var ventas    = ventasPorNombre[row.nombre] || 0;
+
+    // Requisito mínimo: 14 días de periodo cubierto
+    var diasPeriodo = row.primeraFecha && row.ultimaFecha
+      ? Math.round((new Date(row.ultimaFecha) - new Date(row.primeraFecha)) / 86400000) + 1
+      : 0;
+    if (diasPeriodo < _EFF_MIN_DIAS && !deptNecesitaVentas) {
+      // Para depts sin ventas, si tenemos coste podemos puntuar igual
+      if (!costeHora) return null;
+    }
+
+    // Labor cost % = (horas × coste/hora) / ventas × 100
+    var costeTotal = row.horas * costeHora;
+    var laborPct   = (ventas > 0 && costeHora > 0) ? (costeTotal / ventas * 100) : null;
+
+    // Factor labor (70%): escala lineal 0-100
+    var factorLabor = null;
+    if (laborPct !== null) {
+      if (laborPct <= _EFF_LABOR_GREEN)       factorLabor = 100;
+      else if (laborPct >= 30)               factorLabor = 0;
+      else factorLabor = Math.max(0, 100 - (laborPct - _EFF_LABOR_GREEN) / (30 - _EFF_LABOR_GREEN) * 100);
+    }
+
+    // Factor producción (30%): €/turno vs media equipo (cap 100)
+    var prodTurno   = row.turnos > 0 ? ventas / row.turnos : 0;
+    var factorProd  = mediaEquipo > 0
+      ? Math.min(100, prodTurno / mediaEquipo * 100)
+      : null;
+
+    // Puntuación final
+    var score = null;
+    if (factorLabor !== null && factorProd !== null) {
+      score = factorLabor * _EFF_LABOR_WEIGHT + factorProd * _EFF_PROD_WEIGHT;
+    } else if (factorLabor !== null) {
+      score = factorLabor; // solo labor cost si no hay ventas
+    }
+
+    return {
+      score     : score,
+      laborPct  : laborPct,
+      costeTotal: costeTotal,
+      ventas    : ventas,
+      costeHora : costeHora,
+      sinCoste  : costeHora <= 0
+    };
+  }
+
+  // ── 7. Semáforo labor cost ───────────────────────────────────
+  function semaforoColor(laborPct) {
+    if (laborPct === null) return 'var(--text3)';
+    if (laborPct <= _EFF_LABOR_GREEN) return 'var(--green)';
+    if (laborPct <= _EFF_LABOR_AMBER) return 'var(--amber)';
+    return 'var(--red)';
+  }
+  function semaforoDot(laborPct) {
+    var col = semaforoColor(laborPct);
+    return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+col+';margin-right:5px;vertical-align:middle;" title="Labor cost: '+(laborPct!==null?laborPct.toFixed(1)+'%':'sin datos')+'"></span>';
+  }
+
+  // ── 8. Render tabla ─────────────────────────────────────────
+  var tieneVentas = Object.keys(ventasPorNombre).length > 0;
+  var tieneCoste  = (allEmployees||[]).some(function(e){ return parseFloat(e.coste||0) > 0; });
+  var mostrarEff  = tieneCoste; // mostramos columnas si al menos un empleado tiene coste
+
+  var thead = '<tr style="background:var(--bg2);border-bottom:2px solid var(--border2);">'
+    + '<th style="text-align:left;padding:9px 12px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Empleado</th>'
+    + '<th style="text-align:center;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Turnos</th>'
+    + '<th style="text-align:center;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Horas</th>'
+    + (tieneVentas ? '<th style="text-align:right;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Ventas €</th>' : '')
+    + (mostrarEff  ? '<th style="text-align:right;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Coste €</th>'  : '')
+    + (mostrarEff && tieneVentas ? '<th style="text-align:center;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Labor %</th>' : '')
+    + '<th style="text-align:center;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Incid.</th>'
+    + '<th style="text-align:center;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">FIO</th>'
+    + (mostrarEff ? '<th style="text-align:center;padding:9px 8px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Score</th>' : '')
+    + '</tr>';
+
+  var tbody = rows.map(function(row) {
+    var eff = mostrarEff ? calcEficiencia(row) : null;
+    var laborPct    = eff ? eff.laborPct : null;
+    var costeTotal  = eff ? eff.costeTotal : 0;
+    var ventas      = eff ? eff.ventas : (ventasPorNombre[row.nombre] || 0);
+    var score       = eff ? eff.score : null;
+    var sinCoste    = eff ? eff.sinCoste : true;
+    var tieneEval   = evalManual[row.nombre] || false;
+
+    // Score badge
+    var scoreBadge = '—';
+    if (score !== null) {
+      var scoreColor = score >= 75 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)';
+      scoreBadge = '<span style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:'+scoreColor+';">'+Math.round(score)+'</span>';
+    } else if (sinCoste) {
+      scoreBadge = '<span style="font-size:10px;color:var(--text3);" title="Sin coste/hora configurado">N/D</span>';
+    }
+
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      + '<td style="padding:9px 12px;">'
+      +   '<div style="font-weight:600;font-size:13px;">'
+      +     (laborPct !== null ? semaforoDot(laborPct) : '')
+      +     row.nombre
+      +     (tieneEval ? ' <span title="Evaluación manual del jefe en informe" style="font-size:10px;color:var(--accent);cursor:help;">📝</span>' : '')
+      +   '</div>'
+      +   '<div style="font-size:11px;color:var(--text3);">'+row.puesto+'</div>'
+      + '</td>'
+      + '<td style="font-family:var(--font-mono);text-align:center;padding:9px 8px;font-size:12px;">'+row.turnos+'</td>'
+      + '<td style="font-family:var(--font-mono);text-align:center;padding:9px 8px;font-size:12px;">'+row.horas.toFixed(1)+'h</td>'
+      + (tieneVentas ? '<td style="font-family:var(--font-mono);text-align:right;padding:9px 8px;font-size:12px;color:var(--text2);">'+(ventas > 0 ? ventas.toLocaleString('es-ES',{minimumFractionDigits:2})+'€' : '—')+'</td>' : '')
+      + (mostrarEff  ? '<td style="font-family:var(--font-mono);text-align:right;padding:9px 8px;font-size:12px;color:var(--text3);">'+(costeTotal > 0 ? costeTotal.toLocaleString('es-ES',{minimumFractionDigits:2})+'€' : sinCoste ? '<span style="font-size:10px;">sin coste</span>' : '—')+'</td>' : '')
+      + (mostrarEff && tieneVentas ? '<td style="text-align:center;padding:9px 8px;">'
+          +(laborPct !== null
+            ? '<span style="font-family:var(--font-mono);font-size:12px;font-weight:600;color:'+semaforoColor(laborPct)+';">'+laborPct.toFixed(1)+'%</span>'
+            : '<span style="font-size:10px;color:var(--text3);">—</span>')
+          +'</td>' : '')
+      + '<td style="text-align:center;padding:9px 8px;">'+(row.incis > 0 ? '<span class="badge b-red">'+row.incis+'</span>' : '—')+'</td>'
+      + '<td style="text-align:center;padding:9px 8px;">'+(row.fio > 0 ? '<span class="badge b-red">'+row.fio+'</span>' : '—')+'</td>'
+      + (mostrarEff ? '<td style="text-align:center;padding:9px 8px;">'+scoreBadge+'</td>' : '')
+      + '</tr>';
+  }).join('');
+
+  // Nota metodológica
+  var nota = mostrarEff
+    ? '<div style="margin-top:10px;padding:8px 12px;background:var(--bg2);border-radius:5px;border-left:2px solid var(--border2);font-size:10px;color:var(--text3);line-height:1.6;">'
+      + '📐 Score = labor cost 70% + productividad vs. equipo 30% · '
+      + 'Semáforo: <span style="color:var(--green);">●</span> ≤'+_EFF_LABOR_GREEN+'% '
+      + '<span style="color:var(--amber);">●</span> '+_EFF_LABOR_GREEN+'–'+_EFF_LABOR_AMBER+'% '
+      + '<span style="color:var(--red);">●</span> >'+_EFF_LABOR_AMBER+'% labor cost · '
+      + '📝 = evaluación manual del jefe en informe'
+      + '</div>'
+    : '';
+
+  el.innerHTML = '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;">Eficiencia de empleados</div>'
+    + '<div style="overflow-x:auto;">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+    + '<thead>' + thead + '</thead>'
+    + '<tbody>' + tbody + '</tbody>'
+    + '</table>'
+    + '</div>'
+    + nota;
 }
 
 // ── ALERTAS ACTIVAS ───────────────────────────────────────────
