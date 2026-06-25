@@ -291,15 +291,59 @@ async function renderDashboard() {
 
 // ── SELECTOR DE DEPARTAMENTO ──────────────────────────────────
 function _buildDeptSelector(depts, el) {
-  if (el._built && el.options.length > 1) return;
+  // Mantener <select> como portador de estado — solo ocultarlo
+  el.style.display = 'none';
   el._built = true;
+  // Reconstruir opciones del select para que .value funcione
   el.innerHTML = '';
   depts.forEach(function(d) {
     var opt = document.createElement('option');
     opt.value = d.id;
-    opt.textContent = (d.consolidado ? '🏪 ' : d.icono + ' ') + d.label + (d.activo ? '' : ' — Próximamente');
+    opt.textContent = d.id;
     el.appendChild(opt);
   });
+
+  // Asegurar que el wrapper sea visible (shared.js lo oculta para roles no admin/fb,
+  // pero los chips son el selector para todos los roles con >1 dept accesible)
+  var wrapper = el.parentNode;
+  if (wrapper) wrapper.style.display = depts.length > 1 ? 'block' : 'none';
+
+  var chipsId = 'dash-dept-chips';
+  var existing = document.getElementById(chipsId);
+  if (existing) existing.parentNode.removeChild(existing);
+
+  var chips = document.createElement('div');
+  chips.id = chipsId;
+  chips.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;';
+
+  depts.forEach(function(d) {
+    var isActive = d.id === _dashCurrentDept;
+    var color = d.color || 'var(--accent)';
+    var btn = document.createElement('button');
+    btn.dataset.dept = d.id;
+    btn.title = d.activo ? d.label : d.label + ' — Próximamente';
+    btn.style.cssText = [
+      'display:flex;align-items:center;gap:5px;',
+      'padding:6px 13px;border-radius:20px;border:1px solid;',
+      'font-size:12px;font-weight:600;cursor:pointer;',
+      'white-space:nowrap;transition:all .15s;font-family:var(--font-ui);',
+      isActive
+        ? 'background:' + color + '1a;border-color:' + color + ';color:' + color + ';'
+        : 'background:var(--bg3);border-color:var(--border);color:var(--text3);',
+      d.activo ? '' : 'opacity:.45;cursor:not-allowed;'
+    ].join('');
+    btn.innerHTML = (d.consolidado ? '🏪' : d.icono) + ' ' + d.label;
+    if (d.activo) {
+      btn.onclick = function() { _onChipClick(d.id); };
+    }
+    chips.appendChild(btn);
+  });
+
+  // Insertar chips antes del select oculto
+  wrapper.insertBefore(chips, el);
+  // Quitar label genérica del wrapper si existe (la mostramos implícitamente en los chips)
+  var lbl = wrapper.querySelector('label');
+  if (lbl) lbl.style.display = 'none';
 }
 
 // ── KPI CARDS PRINCIPALES ─────────────────────────────────────
@@ -806,6 +850,18 @@ function _populateDashEmpDropdown(allShifts, deptId) {
 }
 
 // ── HELPER: CAMBIO DE DEPT DESDE SELECTOR ────────────────────
+function _onChipClick(deptId) {
+  // Actualizar select oculto (portador de estado que lee renderDashboard)
+  var el = document.getElementById('dash-dept');
+  if (el) {
+    el.value = deptId;
+    el._built = false; // forzar rebuild de chips en el siguiente render
+  }
+  _dashCurrentDept = deptId;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  renderDashboard();
+}
+
 function onDashDeptChange() {
   var el = document.getElementById('dash-dept');
   if (el) {
