@@ -3946,18 +3946,34 @@ async function renderGestionesScreen(){
       var st = g.estado || 'Abierta';
       var fecha = g.created_at ? new Date(g.created_at) : null;
       var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
-      return '<div class="task-card">'
-        + '<div class="task-meta">'
-        +   '<span class="dept-badge">'+formatDisplayValue(g.departamento||g.area)+'</span>'
-        +   '<span class="task-origin">tipo: '+formatDisplayValue(g.tipo_gestion)+'</span>'
-        +   bGestionEstadoClick(st, g.id)
-        + '</div>'
-        + '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
-        + '<div class="task-footer">'
-        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
-        +     '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
+      var prio = (g.prioridad||'media').toLowerCase();
+      var prioCfg = {alta:{txt:'ALTA',c:'#dc2626',bg:'rgba(220,38,38,.15)'},media:{txt:'MEDIA',c:'#f59e0b',bg:'rgba(245,158,11,.15)'},baja:{txt:'BAJA',c:'#10b981',bg:'rgba(16,185,129,.15)'}}[prio] || {txt:formatDisplayValue(g.prioridad||'—'),c:'var(--text3)',bg:'var(--bg2)'};
+      var sideRows = ''
+        + '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:.1em;margin-bottom:2px;">PRIORIDAD</div>'
+        + '<span style="display:inline-block;font-size:11px;font-weight:700;color:'+prioCfg.c+';background:'+prioCfg.bg+';border:1px solid '+prioCfg.c+';border-radius:6px;padding:2px 10px;">'+prioCfg.txt+'</span>';
+      if(g.habitacion){
+        sideRows += '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:.1em;margin:10px 0 2px;">HABITACIÓN</div>'
+          + '<div style="font-size:14px;font-weight:700;color:var(--text);">🛏 '+formatDisplayValue(g.habitacion)+'</div>';
+      }
+      if(g.num_reserva){
+        sideRows += '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:.1em;margin:10px 0 2px;">Nº RESERVA</div>'
+          + '<div style="font-size:13px;font-family:var(--font-mono);color:var(--text2);">'+formatDisplayValue(g.num_reserva)+'</div>';
+      }
+      return '<div class="task-card" style="display:flex;gap:16px;align-items:flex-start;">'
+        + '<div style="flex:1;min-width:0;">'
+        +   '<div class="task-meta">'
+        +     '<span class="dept-badge">'+formatDisplayValue(g.departamento||g.area)+'</span>'
+        +     '<span class="task-origin">tipo: '+formatDisplayValue(g.tipo_gestion)+'</span>'
+        +     bGestionEstadoClick(st, g.id)
+        +   '</div>'
+        +   '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
+        +   '<div class="task-footer">'
+        +     '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
+        +       '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
+        +     '</div>'
         +   '</div>'
         + '</div>'
+        + '<div style="flex:0 0 130px;text-align:right;border-left:1px solid var(--border);padding-left:14px;">'+sideRows+'</div>'
         + '</div>';
     }).join('');
   }
