@@ -136,6 +136,14 @@
       <textarea id="caja-comentario" rows="2" placeholder="Observaciones adicionales..."></textarea>
     </div>
 
+    <!-- FOTOS ADJUNTAS (varias) -->
+    <div class="fg" style="margin-bottom:12px;">
+      <label>Fotos adjuntas (tickets, TPV, incidencias…) — varias permitidas</label>
+      <input type="file" id="caja-fotos-input" accept="image/*" capture="environment" multiple onchange="handleCajaFotosInput(this,'caja-fotos','sala')" style="color:var(--text);font-size:13px;padding:6px 0;">
+      <div id="caja-fotos-status" style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;"></div>
+      <div id="caja-fotos-thumbs" style="margin-top:6px;"></div>
+    </div>
+
     <!-- B7: FONDO FINAL -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
       <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">7 · FONDO FINAL Y TRASPASO</div>
@@ -287,6 +295,7 @@ function openCajaForm(existingId) {
   var fondoIniEl = document.getElementById('caja-fondo-ini');
   if(fondoIniEl) fondoIniEl.value = '';
   if(!existingId){
+    if(typeof resetCajaFotos === 'function') resetCajaFotos('caja-fotos', []);
     invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
       var t = today();
@@ -318,6 +327,10 @@ function openCajaForm(existingId) {
     dbGetAll('sala_cash_closures').then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
       if(!row) return;
+      if(typeof resetCajaFotos === 'function'){
+        var _ex = Array.isArray(row.imagenes_adjuntas) ? row.imagenes_adjuntas.map(function(u){ return {url:u, name:'foto'}; }) : [];
+        resetCajaFotos('caja-fotos', _ex);
+      }
       if(fondoIniEl && row.fondo_inicial != null) fondoIniEl.value = parseFloat(row.fondo_inicial).toFixed(2);
       calcCajaDifs();
       // Bloquear si el usuario no puede editar este cierre
@@ -558,6 +571,7 @@ async function saveCajaForm() {
     total_medios_pago: mediosPago,
     total_ajustes: ajustes,
     comentario: comentario,
+    imagenes_adjuntas: (typeof getCajaFotosUrls==='function' ? getCajaFotosUrls('caja-fotos') : []),
     estado: (_editingCajaId && (window._cajaPrevEstado==='A revisar' || window._cajaPrevEstado==='En corrección')) ? 'corregido' : 'Pendiente validación',
     created_at: localTs(),
     updated_at: localTs()

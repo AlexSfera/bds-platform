@@ -375,6 +375,8 @@ function openRecCajaModal(existingId) {
   if(_imgPrev) _imgPrev.style.display = 'none';
   if(_imgInp)  _imgInp.value = '';
   if(_notaInp) _notaInp.value = '';
+  // Multi-foto: resetear estado (las existentes se cargan al recuperar el registro en edición)
+  if(typeof resetCajaFotos === 'function') resetCajaFotos('rec-caja-fotos', []);
 
   ['rec-cash-mews','rec-tarjeta-mews','rec-stripe-mews','rec-trans-mews',
    'rec-cash-real','rec-tpv-real','rec-stripe-real','rec-trans-real',
@@ -696,6 +698,7 @@ async function submitRecCaja() {
     // Nota e imagen adjunta (opcionales)
     notas_cierre:            (document.getElementById('rec-caja-nota')||{value:''}).value.trim() || null,
     imagen_adjunta:          window._recCajaImagen || null,
+    imagenes_adjuntas:       (typeof getCajaFotosUrls==='function' ? getCajaFotosUrls('rec-caja-fotos') : []),
     // Timestamps
     updated_at:                ts
   };
@@ -711,11 +714,12 @@ async function submitRecCaja() {
 
   try {
     var result = await _doInsertOrUpdate(record);
-    if(!result && (record.notas_cierre || record.imagen_adjunta)){
+    if(!result && (record.notas_cierre || record.imagen_adjunta || (record.imagenes_adjuntas && record.imagenes_adjuntas.length))){
       // Retry sin columnas opcionales que pueden no existir en el esquema
       var recLean = Object.assign({}, record);
       delete recLean.notas_cierre;
       delete recLean.imagen_adjunta;
+      delete recLean.imagenes_adjuntas;
       result = await _doInsertOrUpdate(recLean);
     }
     if(_recCajaEditId){

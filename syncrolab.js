@@ -432,6 +432,7 @@ function openLabCierreModal(existingId){
   var errEl=document.getElementById('lab-c-err'); if(errEl) errEl.textContent='';
   var label=document.getElementById('lab-c-turno-label'); if(label) label.textContent=_labTipoTurno||'—';
   _labCharges = []; renderLabCharges('lab-c-charges');
+  if(typeof resetCajaFotos === 'function') resetCajaFotos('lab-c-fotos', []);
 
   if(!existingId){
     invalidateCache(LAB_TABLE);
@@ -459,6 +460,10 @@ function openLabCierreModal(existingId){
         });
       });
       set('lab-c-dif-exp', row.explicacion_diferencia);
+      if(typeof resetCajaFotos === 'function'){
+        var _ex = Array.isArray(row.imagenes_adjuntas) ? row.imagenes_adjuntas.map(function(u){ return {url:u, name:'foto'}; }) : [];
+        resetCajaFotos('lab-c-fotos', _ex);
+      }
       calcLabCierre();
       // Cargar cargos MEWS vinculados
       dbGetAll(LAB_CHARGES_TABLE).then(function(charges){
@@ -542,6 +547,7 @@ async function submitLabCierre(){
     fecha:today(), turno:turno, tipo:'cierre',
     responsable_id:currentUser.id, responsable_nombre:currentUser.nombre,
     explicacion_diferencia:exp||null,
+    imagenes_adjuntas:(typeof getCajaFotosUrls==='function' ? getCajaFotosUrls('lab-c-fotos') : []),
     estado:(_labCierreEditId && _labPrevEstado==='correccion') ? 'corregido' : 'pendiente_validacion', updated_at:ts
   });
   if(!_labCierreEditId) rec.created_at=ts;
@@ -659,6 +665,12 @@ async function submitLabCierre(){
     <div style="text-align:right;font-size:15px;font-family:var(--font-mono);margin-bottom:8px;border-top:1px solid var(--border);padding-top:10px;">Diferencia total SYNCROLAB: <span id="lab-c-dif-total-syncrolab" style="font-weight:700;color:var(--text3);">0.00 €</span></div>
     <div id="lab-c-dif-block" style="display:none;"><div class="fg" style="margin-bottom:8px;"><label>Explicación de la diferencia <span class="req">*</span></label><textarea id="lab-c-dif-exp" rows="2" style="color:#111827;background:#fff;"></textarea></div></div>
     <div id="lab-c-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
+    <div class="fg" style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Fotos adjuntas (tickets, TPV, incidencias…) — varias permitidas</label>
+      <input type="file" id="lab-c-fotos-input" accept="image/*" capture="environment" multiple onchange="handleCajaFotosInput(this,'lab-c-fotos','syncrolab')" style="color:var(--text);font-size:13px;padding:6px 0;">
+      <div id="lab-c-fotos-status" style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;"></div>
+      <div id="lab-c-fotos-thumbs" style="margin-top:6px;"></div>
+    </div>
     <div style="display:flex;gap:8px;"><button onclick="closeLabCierreModal()" style="flex:1;padding:12px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-weight:600;cursor:pointer;">Cancelar</button><button onclick="submitLabCierre()" style="flex:2;padding:12px;background:#a855f7;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">💾 Guardar cierre</button></div>
   </div>
 </div>`;
