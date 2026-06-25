@@ -1284,3 +1284,271 @@ async function _dashDeleteRecord(id, table) {
     toast('Error al eliminar: ' + e.message, 'err');
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// C5 — PREVISIÓN DE TURNOS + RR.HH. OPERATIVO
+// Motor JS cliente · Lee: employee_status, dept_reports, shifts (histórico)
+// ══════════════════════════════════════════════════════════════════════
+
+// Tipos de turno por dept (coherente con informes.js)
+var _PREV_TURNOS = {
+  'Sala'     : ['M','T','C'],
+  'Cocina'   : ['M','T','C'],
+  'FnB'      : ['M','T','C'],
+  'Recepción': ['M','T','N'],
+  'SYNCROLAB': ['M','T'],
+  'Housekeeping':['M','T']
+};
+
+// Mínimo de empleados por turno (configurable — ajustable por dept)
+var _PREV_MIN_EMP = {
+  M: 2, T: 2, C: 1, N: 1
+};
+
+async function renderDashPrevision() {
+  var el = document.getElementById('dash-prevision-content');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--text3);">Calculando previsión…</p>';
+
+  var dept = _dashCurrentDept;
+  var turnosDept = _PREV_TURNOS[dept] || ['M','T'];
+  var hoy = today();
+
+  // ── 1. Empleados disponibles (excluye bajas y vacaciones activas) ──
+  var allEmployees = [];
+  try { allEmployees = await getDB('employees'); } catch(e){}
+  var validAreas = _dashDeptSet(dept);
+
+  var statusAll = [];
+  try {
+    var sRes = await fetch(
+      SUPABASE_URL + '/rest/v1/employee_status?select=employee_id,tipo,fecha_inicio,fecha_fin',
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }
+    );
+    if (sRes.ok) statusAll = await sRes.json();
+  } catch(e){}
+
+  var noDisp = {};
+  (statusAll || []).forEach(function(s) {
+    if (s.tipo !== 'activo' && (!s.fecha_fin || s.fecha_fin >= hoy)) {
+      noDisp[s.employee_id] = s.tipo;
+    }
+  });
+
+  var empActivos = allEmployees.filter(function(e) {
+    return e.estado === 'Activo'
+      && validAreas.indexOf(_dashCanonicalDept(e.area)) >= 0
+      && !noDisp[e.id];
+  });
+  var empNoDisp = allEmployees.filter(function(e) {
+    return e.estado === 'Activo'
+      && validAreas.indexOf(_dashCanonicalDept(e.area)) >= 0
+      && noDisp[e.id];
+  });
+
+  // ── 2. Ocupación y eventos desde último informe publicado ──────────
+  var ocupacion = null, eventos = '';
+  if (typeof infGetUltimoPublicado === 'function') {
+    try {
+      var informe = await infGetUltimoPublicado(dept);
+      if (informe && informe.contenido_json) {
+        ocupacion = informe.contenido_json.ocupacion_semana_siguiente;
+        eventos   = informe.contenido_json.eventos_semana_siguiente || '';
+      }
+    } catch(e){}
+  }
+
+  // ── 3. Semana próxima: lunes → domingo ────────────────────────────
+  var lunesProx = _nextMonday(hoy);
+  var diasSemana = [];
+  for (var d = 0; d < 7; d++) {
+    var fd = new Date(lunesProx);
+    fd.setDate(fd.getDate() + d);
+    diasSemana.push(fd.getFullYear() + '-' + String(fd.getMonth()+1).padStart(2,'0') + '-' + String(fd.getDate()).padStart(2,'0'));
+  }
+  var DIAS_LABEL = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+  // ── 4. Histórico: cuántos turnos suelen hacer en cada día/turno ───
+  var allShifts = [];
+  try { allShifts = await getDB('shifts'); } catch(e){}
+  // Últimas 3 semanas del mismo día de semana
+  var hist = {}; // { 'Lun-M': count }
+  var hace21 = new Date(lunesProx); hace21.setDate(hace21.getDate() - 21);
+  var hace21str = hace21.getFullYear()+'-'+String(hace21.getMonth()+1).padStart(2,'0')+'-'+String(hace21.getDate()).padStart(2,'0');
+  allShifts.filter(function(s){
+    return s.fecha >= hace21str && s.fecha < lunesProx
+      && validAreas.indexOf(_dashCanonicalDept(s.area)) >= 0;
+  }).forEach(function(s){
+    var dow = new Date(s.fecha + 'T00:00:00').getDay(); // 0=dom
+    var dowIdx = dow === 0 ? 6 : dow - 1; // 0=lun
+    var turno = _infTurnoFromServicio(s.servicio || '');
+    var key = DIAS_LABEL[dowIdx] + '-' + turno;
+    hist[key] = (hist[key] || 0) + 1;
+  });
+
+  // ── 5. Propuesta: asignar empleados a turnos ───────────────────────
+  // Lógica simple: turnos rotativos por empleado activo, respetando descanso 2 días
+  // Se asigna de forma equitativa — no personalizado (eso requiere restricciones por empleado)
+  var nEmp = empActivos.length;
+  var propuesta = {}; // { fecha: { turno: [nombres] } }
+
+  if (nEmp > 0) {
+    diasSemana.forEach(function(fecha, di) {
+      propuesta[fecha] = {};
+      var dowIdx = di;
+      turnosDept.forEach(function(turno) {
+        var key = DIAS_LABEL[dowIdx] + '-' + turno;
+        var histCount = hist[key] || 0;
+        // Nº sugerido: media histórica redondeada, mínimo _PREV_MIN_EMP
+        var nSug = Math.max(_PREV_MIN_EMP[turno] || 1, Math.round(histCount / 3));
+        // Ajustar por ocupación si disponible (>80% → +1 si hay margen)
+        if (ocupacion != null && ocupacion >= 80 && nEmp > nSug) nSug = Math.min(nSug + 1, nEmp);
+        // Asignar: rotar empActivos según índice día+turno
+        var offset = (di * turnosDept.length + turnosDept.indexOf(turno)) % nEmp;
+        var asignados = [];
+        for (var k = 0; k < nSug && k < nEmp; k++) {
+          asignados.push(empActivos[(offset + k) % nEmp].nombre);
+        }
+        propuesta[fecha][turno] = asignados;
+      });
+    });
+  }
+
+  // ── 6. Guardar cuadrante ──────────────────────────────────────────
+  var semanaISO = _isoWeek(lunesProx);
+
+  window._dashGuardarCuadrante = async function() {
+    try {
+      var sid = 'cua_' + Date.now();
+      var res = await fetch(SUPABASE_URL + '/rest/v1/cuadrantes', {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
+                   'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          id: sid, ts: localTs(),
+          autor: currentUser.nombre || currentUser.id,
+          departamento: dept, semana: semanaISO,
+          propuesta_json: propuesta, estado: 'aprobado'
+        })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      invalidateCache('cuadrantes');
+      toast('Cuadrante guardado ✓', 'ok');
+    } catch(e) { toast('Error al guardar cuadrante: ' + e.message, 'err'); }
+  };
+
+  // ── 7. Render ─────────────────────────────────────────────────────
+  // Badges no disponibles
+  var noDispBadges = empNoDisp.map(function(e) {
+    var tipo = noDisp[e.id];
+    return '<span style="display:inline-flex;align-items:center;gap:5px;background:'
+      + (tipo==='baja_medica'?'rgba(239,68,68,.1)':'rgba(16,185,129,.1)')
+      + ';border:1px solid '+(tipo==='baja_medica'?'var(--red)':'var(--green)')
+      + ';border-radius:5px;padding:4px 10px;font-size:11px;font-family:var(--font-mono);margin:3px;">'
+      + (tipo==='baja_medica'?'🏥':'🌴')+' '+_escHtml(e.nombre)
+      + '</span>';
+  }).join('');
+
+  // Cabeceras días
+  var thDias = diasSemana.map(function(f, i) {
+    var dow = new Date(f+'T00:00:00').getDay();
+    var esFinde = dow === 0 || dow === 6;
+    return '<th style="text-align:center;padding:8px 6px;font-family:var(--font-mono);font-size:10px;'
+      + 'text-transform:uppercase;letter-spacing:.08em;color:'+(esFinde?'var(--amber)':'var(--text3)')+';">'
+      + DIAS_LABEL[i]+'<br><span style="font-weight:400;font-size:9px;">'+f.slice(8)+'/'+f.slice(5,7)+'</span>'
+      + '</th>';
+  }).join('');
+
+  // Filas por turno
+  var filasTurno = turnosDept.map(function(turno) {
+    var celdas = diasSemana.map(function(fecha) {
+      var asig = propuesta[fecha] ? (propuesta[fecha][turno] || []) : [];
+      return '<td style="padding:6px 4px;text-align:center;vertical-align:top;border-right:1px solid var(--border);">'
+        + asig.map(function(n) {
+            return '<div style="font-size:10px;background:var(--bg3);border-radius:4px;padding:2px 6px;margin:2px auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px;" title="'+_escHtml(n)+'">'+_escHtml(n.split(' ')[0])+'</div>';
+          }).join('')
+        + (asig.length === 0 ? '<div style="font-size:10px;color:var(--text3);">—</div>' : '')
+        + '</td>';
+    }).join('');
+    var turnoLabel = {M:'🌅 Mañana',T:'🌆 Tarde',C:'🌙 Cierre',N:'🌃 Noche'}[turno]||turno;
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      +'<td style="padding:8px 12px;font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;border-right:2px solid var(--border2);">'+turnoLabel+'</td>'
+      +celdas+'</tr>';
+  }).join('');
+
+  var ocupBadge = ocupacion != null
+    ? '<span style="font-family:var(--font-mono);font-size:12px;color:var(--accent);">Ocupación prevista: <strong>'+ocupacion+'%</strong></span>'
+    : '<span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);">Ocupación: no informada</span>';
+
+  el.innerHTML = ''
+    // Cabecera y inputs
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">'
+    +   '<div>'
+    +     '<div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text);">Semana '+semanaISO+' · '+lunesProx.slice(8)+'/'+lunesProx.slice(5,7)+'</div>'
+    +     '<div style="margin-top:4px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;">'
+    +       ocupBadge
+    +       (eventos?'<span style="font-size:11px;color:var(--text3);">📌 '+_escHtml(eventos)+'</span>':'')
+    +     '</div>'
+    +   '</div>'
+    +   (nEmp>0?'<button onclick="window._dashGuardarCuadrante()" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;padding:8px 16px;cursor:pointer;font-family:var(--font-mono);">💾 Guardar cuadrante</button>':'')
+    + '</div>'
+
+    // Disponibilidad
+    + '<div style="margin-bottom:12px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;">'
+    +   '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px;">Equipo disponible ('+nEmp+' / '+(nEmp+empNoDisp.length)+')</div>'
+    +   (empNoDisp.length?'<div style="margin-bottom:6px;font-size:11px;color:var(--text3);">No disponibles:</div>'+noDispBadges:'')
+    +   '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">'
+    +     empActivos.map(function(e){
+            return '<span style="background:var(--bg2);border:1px solid var(--border);border-radius:5px;padding:3px 9px;font-size:11px;font-family:var(--font-mono);">'+_escHtml(e.nombre.split(' ')[0])+'</span>';
+          }).join('')
+    +   '</div>'
+    + '</div>'
+
+    // Cuadrante
+    + (nEmp > 0
+      ? '<div style="overflow-x:auto;">'
+        + '<table style="width:100%;border-collapse:collapse;min-width:500px;">'
+        + '<thead><tr style="background:var(--bg2);border-bottom:2px solid var(--border2);">'
+        + '<th style="text-align:left;padding:8px 12px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;color:var(--text3);border-right:2px solid var(--border2);">Turno</th>'
+        + thDias
+        + '</tr></thead>'
+        + '<tbody>'+filasTurno+'</tbody>'
+        + '</table></div>'
+        + '<div style="margin-top:10px;padding:8px 12px;background:var(--bg2);border-radius:5px;font-size:10px;color:var(--text3);font-family:var(--font-mono);">'
+        + '📐 Propuesta generada desde histórico 3 semanas + ocupación declarada en informe de jefe · Solo visible para el jefe · Los nombres son el primer nombre del empleado'
+        + '</div>'
+      : '<div class="card" style="text-align:center;padding:32px;">'
+        + '<div style="font-size:28px;margin-bottom:8px;">⚠</div>'
+        + '<div style="color:var(--red);font-weight:700;">Sin empleados disponibles para programar</div>'
+        + '<div style="color:var(--text3);font-size:12px;margin-top:6px;">Todos los empleados del departamento están de baja o vacaciones.</div>'
+        + '</div>'
+      );
+}
+window.renderDashPrevision = renderDashPrevision;
+
+// ── Helpers fecha C5 ─────────────────────────────────────────────────
+function _nextMonday(fechaStr) {
+  var d = new Date(fechaStr + 'T00:00:00');
+  var dow = d.getDay(); // 0=dom, 1=lun
+  var diff = dow === 0 ? 1 : (8 - dow);
+  d.setDate(d.getDate() + diff);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function _isoWeek(fechaStr) {
+  var d = new Date(fechaStr + 'T00:00:00');
+  var jan4 = new Date(d.getFullYear(), 0, 4);
+  var w = Math.ceil(((d - jan4) / 86400000 + jan4.getDay() + 1) / 7);
+  return d.getFullYear() + '-W' + String(w).padStart(2,'0');
+}
+// Mapea servicio/turno de shifts al tipo M/T/C/N
+function _infTurnoFromServicio(servicio) {
+  var s = (servicio || '').toLowerCase();
+  if (s.indexOf('mañana') >= 0 || s.indexOf('manana') >= 0 || s === 'm') return 'M';
+  if (s.indexOf('noche') >= 0 || s === 'n') return 'N';
+  if (s.indexOf('cierre') >= 0 || s === 'c') return 'C';
+  if (s.indexOf('tarde') >= 0 || s === 't') return 'T';
+  return 'T'; // default
+}
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}

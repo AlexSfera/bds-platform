@@ -1507,6 +1507,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <button class="dash-tab" role="tab" data-tab="fio" onclick="_activateDashTab('fio')">FIO</button>
         <button class="dash-tab" role="tab" data-tab="tareas" onclick="_activateDashTab('tareas')">Tareas</button>
         <button class="dash-tab" role="tab" data-tab="costes" onclick="_activateDashTab('costes')">Costes</button>
+        <button class="dash-tab" role="tab" data-tab="prevision" onclick="_activateDashTab('prevision');renderDashPrevision()">Previsión</button>
       </div>
 
       <!-- Panel: Turnos -->
@@ -1600,6 +1601,14 @@ tr:hover td{background:rgba(96,165,250,.06);}
             </div>
           </div>
           <div id="dash-cost-table"><div class="empty"><div class="empty-text">Selecciona un periodo</div></div></div>
+        </div>
+      </div>
+
+      <!-- Panel: Previsión de turnos + RR.HH. operativo -->
+      <div class="dash-panel" id="tab-panel-prevision" role="tabpanel">
+        <div class="card" style="border-top:2px solid var(--accent);">
+          <div class="card-title" style="color:var(--accent);margin-bottom:16px;">📅 PREVISIÓN DE TURNOS — SEMANA SIGUIENTE</div>
+          <div id="dash-prevision-content"><p style="color:var(--text3);">Selecciona esta pestaña para generar la previsión.</p></div>
         </div>
       </div>
     </div>
