@@ -471,6 +471,7 @@ function getScreens(rol){
     hkRevision:  {id:'hk-revision', label:'🔍 Revisión HK'},
     fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
     incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
+    informes:    {id:'informes',    label:'📊 Informes'},
     checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'},
     nota:        {id:'notas-mod',   label:'💬 Nota'}
   };
@@ -485,7 +486,7 @@ function getScreens(rol){
       ITEMS.validacion, ITEMS.dashHK,
       {sep:true,label:'MANAGER BAR',dropdown:true},
       ITEMS.fichaje, ITEMS.dashboard,
-      ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.incentivos
+      ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.incentivos, ITEMS.informes
     ];
   }
 
@@ -522,7 +523,7 @@ function getScreens(rol){
     if(isCocina) miDia.push(ITEMS.merma);              // Cocina: Merma en MI DÍA
     miDia.push(ITEMS.checklist);
     // Caja: empleado Recepción / jefe SYNCROLAB / cualquiera de Rec.SYNCROLAB
-    if(isRecepcion) miDia.push(ITEMS.cajaRec);
+    if(isRecepcion && !isJefe) miDia.push(ITEMS.cajaRec);
     if(isRecSyncrolab) miDia.push(ITEMS.cajaLab);
     else if(isSyncrolabArea && isJefe) miDia.push(ITEMS.cajaLab);
   }
@@ -556,6 +557,7 @@ function getScreens(rol){
     gestion.push(ITEMS.dashboard);
     gestion.push(ITEMS.fio);
     if(!noIncGestion) gestion.push(ITEMS.incentivos);
+    gestion.push(ITEMS.informes);
   }
 
   // ── Ensamblar ────────────────────────────────────────────────────
@@ -811,6 +813,7 @@ async function showScreen(id){
   if(id==='hk-dash'     && typeof renderHKDashboard==='function')      renderHKDashboard();
   if(id==='fichaje'     && typeof renderFichaje==='function')          { _fichajeFilterPeriodo=''; renderFichaje(); }
   if(id==='incentivos'  && typeof renderIncentivos==='function')        renderIncentivos();
+  if(id==='informes'    && typeof renderInformes==='function')           renderInformes();
   updateDots();
 }
 async function updateDots(){
