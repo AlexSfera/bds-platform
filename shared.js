@@ -210,165 +210,6 @@ function localTs(){
     +'T'+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())
     +sign+pad(tz/60)+':'+pad(tz%60);
 }
-// ═══════════════════════════════════════════════════════════════════════
-// SUPABASE STORAGE — Fotos de cierre de caja (bucket público 'cierres-caja')
-// Reutilizado por Sala (caja.js), Recepción (recepcion.js) y SYNCROLAB (syncrolab.js).
-// Requiere: bucket 'cierres-caja' PÚBLICO + policy INSERT para rol anon.
-// Patrón: comprime a JPEG max 1000px / q0.72, sube, devuelve URL pública.
-// ═══════════════════════════════════════════════════════════════════════
-var CAJA_FOTOS_BUCKET = 'cierres-caja';
-
-// Estado en memoria por modal: { 'caja-fotos': [{url,name}], ... }
-window._cajaFotosState = window._cajaFotosState || {};
-
-// Comprime un File a dataURL JPEG (reutiliza patrón canvas de recepción)
-function _compressImageFile(file, maxPx, quality){
-  return new Promise(function(resolve, reject){
-    var reader = new FileReader();
-    reader.onload = function(e){
-      var img = new Image();
-      img.onload = function(){
-        var MAX = maxPx || 1000;
-        var ratio = Math.min(MAX / img.width, MAX / img.height, 1);
-        var canvas = document.createElement('canvas');
-        canvas.width  = Math.round(img.width  * ratio);
-        canvas.height = Math.round(img.height * ratio);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality || 0.72));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// dataURL → Blob (para subir binario a Storage)
-function _dataUrlToBlob(dataUrl){
-  var parts = dataUrl.split(',');
-  var mime = (parts[0].match(/:(.*?);/)||[])[1] || 'image/jpeg';
-  var bin = atob(parts[1]);
-  var len = bin.length;
-  var arr = new Uint8Array(len);
-  for(var i=0;i<len;i++){ arr[i] = bin.charCodeAt(i); }
-  return new Blob([arr], {type:mime});
-}
-
-// Sube un Blob al bucket. Devuelve la URL pública o lanza error.
-async function uploadCajaFoto(blob, dept){
-  var safeDept = (dept||'caja').toLowerCase().replace(/[^a-z0-9]/g,'');
-  var path = safeDept + '/' + today() + '/' + genId() + '.jpg';
-  var url = SUPABASE_URL + '/storage/v1/object/' + CAJA_FOTOS_BUCKET + '/' + path;
-  var res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'image/jpeg',
-      'x-upsert': 'true'
-    },
-    body: blob
-  });
-  if(!res.ok){ throw new Error('Storage HTTP '+res.status+' '+(await res.text())); }
-  // URL pública (bucket público)
-  return SUPABASE_URL + '/storage/v1/object/public/' + CAJA_FOTOS_BUCKET + '/' + path;
-}
-
-// Handler del <input type=file multiple>: comprime, sube y guarda en estado.
-// stateKey identifica el modal (ej. 'caja-fotos'). dept para la ruta en bucket.
-async function handleCajaFotosInput(input, stateKey, dept){
-  var files = input.files;
-  if(!files || !files.length) return;
-  var thumbsEl = document.getElementById(stateKey+'-thumbs');
-  var statusEl = document.getElementById(stateKey+'-status');
-  window._cajaFotosState[stateKey] = window._cajaFotosState[stateKey] || [];
-  var arr = window._cajaFotosState[stateKey];
-  for(var i=0;i<files.length;i++){
-    var f = files[i];
-    if(!f.type || f.type.indexOf('image/') !== 0) continue;
-    if(statusEl) statusEl.textContent = 'Subiendo '+(i+1)+'/'+files.length+'…';
-    try {
-      var dataUrl = await _compressImageFile(f, 1000, 0.72);
-      var blob = _dataUrlToBlob(dataUrl);
-      var publicUrl = await uploadCajaFoto(blob, dept);
-      arr.push({url: publicUrl, name: f.name || 'foto.jpg'});
-    } catch(err){
-      if(statusEl) statusEl.textContent = 'Error al subir: '+err.message;
-      if(typeof toast==='function') toast('Error subiendo foto: '+err.message,'err');
-      input.value = '';
-      renderCajaFotosThumbs(stateKey);
-      return;
-    }
-  }
-  if(statusEl) statusEl.textContent = arr.length+' foto(s) adjuntada(s)';
-  input.value = '';
-  renderCajaFotosThumbs(stateKey);
-}
-
-// Pinta las miniaturas con botón de quitar
-function renderCajaFotosThumbs(stateKey){
-  var thumbsEl = document.getElementById(stateKey+'-thumbs');
-  if(!thumbsEl) return;
-  var arr = window._cajaFotosState[stateKey] || [];
-  if(!arr.length){ thumbsEl.innerHTML = ''; return; }
-  thumbsEl.innerHTML = arr.map(function(f, idx){
-    return '<div style="position:relative;display:inline-block;margin:4px;">'
-      + '<a href="'+f.url+'" target="_blank" rel="noopener">'
-      + '<img src="'+f.url+'" alt="foto" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--border);"></a>'
-      + '<button type="button" onclick="removeCajaFoto(\''+stateKey+'\','+idx+')" '
-      + 'style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;font-weight:700;cursor:pointer;line-height:1;">✕</button>'
-      + '</div>';
-  }).join('');
-}
-
-function removeCajaFoto(stateKey, idx){
-  var arr = window._cajaFotosState[stateKey] || [];
-  arr.splice(idx, 1);
-  renderCajaFotosThumbs(stateKey);
-}
-
-// Resetea el estado de un modal y limpia las miniaturas. existing = array previo (edición).
-function resetCajaFotos(stateKey, existing){
-  window._cajaFotosState[stateKey] = Array.isArray(existing) ? existing.slice() : [];
-  renderCajaFotosThumbs(stateKey);
-  var statusEl = document.getElementById(stateKey+'-status');
-  if(statusEl) statusEl.textContent = '';
-}
-
-// Devuelve el array de URLs listo para guardar en jsonb imagenes_adjuntas
-function getCajaFotosUrls(stateKey){
-  return (window._cajaFotosState[stateKey] || []).map(function(f){ return f.url; });
-}
-
-// HTML del bloque uploader (reutilizable en cualquier modal de caja)
-function cajaFotosUploaderHTML(stateKey, dept){
-  return '<div class="fg" style="margin-bottom:12px;">'
-    + '<label>Fotos adjuntas (tickets, TPV, incidencias…) — varias permitidas</label>'
-    + '<input type="file" id="'+stateKey+'-input" accept="image/*" capture="environment" multiple '
-    + 'onchange="handleCajaFotosInput(this,\''+stateKey+'\',\''+dept+'\')" '
-    + 'style="color:var(--text);font-size:13px;padding:6px 0;">'
-    + '<div id="'+stateKey+'-status" style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;"></div>'
-    + '<div id="'+stateKey+'-thumbs" style="margin-top:6px;"></div>'
-    + '</div>';
-}
-
-// Pobla un <select> de habitaciones desde housekeeping_rooms (activas)
-async function populateHabitacionSelector(selectId, selectedVal){
-  var sel = document.getElementById(selectId);
-  if(!sel) return;
-  var rooms = [];
-  try { rooms = await getDB('housekeeping_rooms'); } catch(e){}
-  rooms = (rooms||[]).filter(function(r){ return r.activa !== false; });
-  rooms.sort(function(a,b){ return String(a.numero||'').localeCompare(String(b.numero||''), undefined, {numeric:true}); });
-  var html = '<option value="">— Sin habitación —</option>';
-  rooms.forEach(function(r){
-    var val = String(r.numero||'');
-    html += '<option value="'+val+'"'+(String(selectedVal||'')===val?' selected':'')+'>'+val+(r.tipo?' ('+r.tipo+')':'')+'</option>';
-  });
-  sel.innerHTML = html;
-}
-
 function fmtDate(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTs(ts){
   if(!ts) return '—';
@@ -646,7 +487,7 @@ function getScreens(rol){
       ITEMS.validacion, ITEMS.dashHK,
       {sep:true,label:'MANAGER BAR',dropdown:true},
       ITEMS.fichaje, ITEMS.dashboard,
-      ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.incentivos, ITEMS.informes
+      ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.informes
     ];
   }
 
@@ -691,7 +532,7 @@ function getScreens(rol){
   miDia.push(ITEMS.gestiones);
   miDia.push(ITEMS.tareas);
   miDia.push(ITEMS.incidencias);
-  if(isRecepcion) miDia.push(ITEMS.hypoxic);           // Hypoxic solo Recepción
+  if(isRecepcion || isMant) miDia.push(ITEMS.hypoxic); // Hypoxic: Recepción + Mantenimiento (admin lo tiene en su bloque)
   miDia.push(ITEMS.nota);                              // Nota/Sugerencia: todos los empleados
 
   // ── MI DEPARTAMENTO ──────────────────────────────────────────────
@@ -716,7 +557,6 @@ function getScreens(rol){
   if(isJefe){
     gestion.push(ITEMS.dashboard);
     gestion.push(ITEMS.fio);
-    if(!noIncGestion) gestion.push(ITEMS.incentivos);
     gestion.push(ITEMS.informes);
   }
 
@@ -1021,7 +861,6 @@ function setT(name,val){
   if(name==='gestion'){
     const blk=document.getElementById('block-gestion');
     if(blk) val==='si'?blk.classList.add('visible'):blk.classList.remove('visible');
-    if(val==='si' && typeof populateHabitacionSelector==='function') populateHabitacionSelector('g-habitacion','');
   }
   if(name==='incidencia'){
     const blk=document.getElementById('block-incidencia');
@@ -1389,7 +1228,7 @@ function clearTurnoForm(){
   editingShiftId=null;
   const modeEl=document.getElementById('turno-form-mode'); if(modeEl) modeEl.textContent='NUEVO';
   const saveBtn=document.getElementById('btn-save-turno'); if(saveBtn) saveBtn.textContent='💾 Guardar Turno';
-  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','g-prioridad','g-habitacion','g-num-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
+  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
     const el=document.getElementById(id); if(!el) return;
     if(el.tagName==='SELECT') el.value=''; else el.value=el.type==='date'?today():'';
   });
@@ -1714,10 +1553,6 @@ async function _doSaveTurno(){
         tipo_gestion: gTipo || 'Otro',
         descripcion:  gDesc,
         accion_tomada: '',
-        prioridad:    (document.getElementById('g-prioridad')||{}).value || 'media',
-        habitacion:   ((document.getElementById('g-habitacion')||{}).value || '').trim() || null,
-        num_reserva:  ((document.getElementById('g-num-reserva')||{}).value || '').trim() || null,
-        leido_por:    [],
         estado:       INCIDENT_STATES.ABIERTA,
         informado_responsable: 'no',
         created_at:   ts
@@ -3577,42 +3412,10 @@ function _itemEnsureOverlay(){
   return ov;
 }
 
-// Filas extra (prioridad, habitación, nº reserva, leído por) para gestiones
-function _gestionExtraRows(rec){
-  var prioMap = {alta:'🔴 Alta', media:'🟡 Media', baja:'🟢 Baja'};
-  var prio = prioMap[(rec.prioridad||'').toLowerCase()] || formatDisplayValue(rec.prioridad||'—');
-  var out = '<div><b>Prioridad:</b><br>'+prio+'</div>';
-  if(rec.habitacion) out += '<div><b>Habitación:</b><br>'+formatDisplayValue(rec.habitacion)+'</div>';
-  if(rec.num_reserva) out += '<div><b>Nº reserva:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+formatDisplayValue(rec.num_reserva)+'</span></div>';
-  var leido = Array.isArray(rec.leido_por) ? rec.leido_por : [];
-  if(leido.length){
-    var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
-    out += '<div style="grid-column:1 / -1;"><b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+formatDisplayValue(nombres)+'</span></div>';
-  }
-  return out;
-}
-
-// Añade al usuario actual al array leido_por si no estaba ya (PATCH jsonb)
-async function registrarLecturaGestion(rec){
-  if(!rec || !currentUser) return;
-  var leido = Array.isArray(rec.leido_por) ? rec.leido_por.slice() : [];
-  var ya = leido.some(function(l){ return l && l.id === currentUser.id; });
-  if(ya) return;
-  leido.push({id: currentUser.id, nombre: currentUser.nombre, ts: localTs()});
-  var res = await fetch(
-    SUPABASE_URL + '/rest/v1/gestiones?id=eq.' + encodeURIComponent(rec.id),
-    { method:'PATCH',
-      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body: JSON.stringify({leido_por: leido})
-    }
-  );
-  if(res.ok){ rec.leido_por = leido; invalidateCache('gestiones'); }
-}
-window.registrarLecturaGestion = registrarLecturaGestion;
-
 async function openItemModal(type, id){
   var ov = _itemEnsureOverlay();
   var table = (type==='gestion') ? 'gestiones' : 'incidencias';
+  // Forzar lectura fresca
   invalidateCache(table);
   invalidateCache('item_comentarios');
   var list = await getDB(table);
@@ -3629,9 +3432,6 @@ async function openItemModal(type, id){
   });
 
   _itemModalCtx = {type:type, id:id, record:rec, historico:historico};
-
-  // Registrar lectura de gestión (leido_por jsonb array) — no bloquea el render
-  if(type==='gestion'){ try { await registrarLecturaGestion(rec); } catch(e){} }
 
   var isAdminU = isAdmin(currentUser);
   var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
@@ -3658,7 +3458,6 @@ async function openItemModal(type, id){
     + '<div><b>Departamento:</b><br>'+formatDisplayValue(dpto)+'</div>'
     + '<div><b>Creado por:</b><br>'+formatDisplayValue(creador)+'</div>'
     + '<div><b>Fecha:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+fechaCre+'</span></div>'
-    + (type==='gestion' ? _gestionExtraRows(rec) : '')
     + '</div>'
     + '<div style="margin-bottom:10px;"><b style="font-size:12px;">Descripción</b>'
     + '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">'+formatDisplayValue(descripcion)+'</div></div>';
@@ -3946,34 +3745,18 @@ async function renderGestionesScreen(){
       var st = g.estado || 'Abierta';
       var fecha = g.created_at ? new Date(g.created_at) : null;
       var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
-      var prio = (g.prioridad||'media').toLowerCase();
-      var prioCfg = {alta:{txt:'ALTA',c:'#dc2626',bg:'rgba(220,38,38,.15)'},media:{txt:'MEDIA',c:'#f59e0b',bg:'rgba(245,158,11,.15)'},baja:{txt:'BAJA',c:'#10b981',bg:'rgba(16,185,129,.15)'}}[prio] || {txt:formatDisplayValue(g.prioridad||'—'),c:'var(--text3)',bg:'var(--bg2)'};
-      var sideRows = ''
-        + '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:.1em;margin-bottom:2px;">PRIORIDAD</div>'
-        + '<span style="display:inline-block;font-size:11px;font-weight:700;color:'+prioCfg.c+';background:'+prioCfg.bg+';border:1px solid '+prioCfg.c+';border-radius:6px;padding:2px 10px;">'+prioCfg.txt+'</span>';
-      if(g.habitacion){
-        sideRows += '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:.1em;margin:10px 0 2px;">HABITACIÓN</div>'
-          + '<div style="font-size:14px;font-weight:700;color:var(--text);">🛏 '+formatDisplayValue(g.habitacion)+'</div>';
-      }
-      if(g.num_reserva){
-        sideRows += '<div style="font-size:9px;font-family:var(--font-mono);color:var(--text3);letter-spacing:.1em;margin:10px 0 2px;">Nº RESERVA</div>'
-          + '<div style="font-size:13px;font-family:var(--font-mono);color:var(--text2);">'+formatDisplayValue(g.num_reserva)+'</div>';
-      }
-      return '<div class="task-card" style="display:flex;gap:16px;align-items:flex-start;">'
-        + '<div style="flex:1;min-width:0;">'
-        +   '<div class="task-meta">'
-        +     '<span class="dept-badge">'+formatDisplayValue(g.departamento||g.area)+'</span>'
-        +     '<span class="task-origin">tipo: '+formatDisplayValue(g.tipo_gestion)+'</span>'
-        +     bGestionEstadoClick(st, g.id)
-        +   '</div>'
-        +   '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
-        +   '<div class="task-footer">'
-        +     '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
-        +       '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
-        +     '</div>'
+      return '<div class="task-card">'
+        + '<div class="task-meta">'
+        +   '<span class="dept-badge">'+formatDisplayValue(g.departamento||g.area)+'</span>'
+        +   '<span class="task-origin">tipo: '+formatDisplayValue(g.tipo_gestion)+'</span>'
+        +   bGestionEstadoClick(st, g.id)
+        + '</div>'
+        + '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
+        + '<div class="task-footer">'
+        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
+        +     '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
         +   '</div>'
         + '</div>'
-        + '<div style="flex:0 0 130px;text-align:right;border-left:1px solid var(--border);padding-left:14px;">'+sideRows+'</div>'
         + '</div>';
     }).join('');
   }
@@ -3999,11 +3782,6 @@ function openNewGestionStandalone(){
       + '<button class="modal-x" onclick="closeModal(\'modal-new-gestion\')">✕</button></div>'
       + '<div class="modal-b">'
       + '<div class="fg"><label>Tipo</label><select id="ng-tipo"></select></div>'
-      + '<div class="fg"><label>Prioridad</label><select id="ng-prioridad">'
-      +   '<option value="alta">Alta</option><option value="media" selected>Media</option><option value="baja">Baja</option>'
-      + '</select></div>'
-      + '<div class="fg"><label>Habitación (si el problema es de una habitación)</label><select id="ng-habitacion"><option value="">— Sin habitación —</option></select></div>'
-      + '<div class="fg"><label>Nº de reserva (opcional)</label><input type="text" id="ng-num-reserva" placeholder="Ej. 123456"></div>'
       + '<div class="fg"><label>Descripción</label><textarea id="ng-desc" rows="3" placeholder="Detalle de la gestión..."></textarea></div>'
       + '</div>'
       + '<div class="modal-f">'
@@ -4025,9 +3803,6 @@ function openNewGestionStandalone(){
     });
   }
   ov.querySelector('#ng-desc').value = '';
-  var _ngPrio = ov.querySelector('#ng-prioridad'); if(_ngPrio) _ngPrio.value = 'media';
-  var _ngRes = ov.querySelector('#ng-num-reserva'); if(_ngRes) _ngRes.value = '';
-  if(typeof populateHabitacionSelector === 'function') populateHabitacionSelector('ng-habitacion', '');
   ov.classList.add('open');
 }
 window.openNewGestionStandalone = openNewGestionStandalone;
@@ -4046,10 +3821,6 @@ async function saveNewGestionStandalone(){
     tipo_gestion: tipo || 'Otro',
     descripcion: desc,
     accion_tomada: '',
-    prioridad: (document.getElementById('ng-prioridad')||{}).value || 'media',
-    habitacion: ((document.getElementById('ng-habitacion')||{}).value || '').trim() || null,
-    num_reserva: ((document.getElementById('ng-num-reserva')||{}).value || '').trim() || null,
-    leido_por: [],
     estado: 'Abierta',
     informado_responsable: 'no',
     created_at: localTs()

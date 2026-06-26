@@ -27,22 +27,30 @@
     <input type="hidden" id="caja-responsable">
     <div style="display:none" id="caja-servicios-check"><input type="checkbox" value="Servicio" checked></div>
 
-    <!-- B1: FONDO INICIAL -->
+    <!-- B1: EFECTIVO (orden: fondo inicial → cash posmews → traspaso previo → efectivo real) -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
-      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">1 · FONDO INICIAL</div>
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">1 · EFECTIVO</div>
       <div class="grid2">
         <div class="fg"><label>Fecha <span class="req">*</span></label><input type="date" id="caja-fecha"></div>
-        <div class="fg"><label>Fondo recibido del turno anterior (€)</label>
+        <div class="fg"><label>Fondo inicial — recibido del turno anterior (€)</label>
           <input type="text" inputmode="decimal" id="caja-fondo-ini" placeholder="0.00" readonly style="opacity:0.65;cursor:not-allowed;"></div>
+        <div class="fg"><label>Cash POSMEWS (€) <span style="color:var(--text3);font-weight:400">— acumulado del día</span></label>
+          <input type="text" inputmode="decimal" id="caja-ef-posmews" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+        <div class="fg"><label>Cash POSMEWS traspaso anterior (€)</label>
+          <input type="text" inputmode="decimal" id="caja-ef-posmews-prev" placeholder="0.00" readonly style="opacity:0.65;cursor:not-allowed;"></div>
+        <div class="fg"><label>Efectivo real contado (€) <span class="req">*</span></label>
+          <input type="text" inputmode="decimal" id="caja-ef-real" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
+      </div>
+      <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:6px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">Δ EFECTIVO = Fondo inicial + Cash POSMEWS − Traspaso anterior − Efectivo real</span>
+        <span id="caja-dif-ef" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</span>
       </div>
     </div>
 
-    <!-- B2: VALORES POSMEWS -->
+    <!-- B2: VALORES POSMEWS (tarjeta/stripe) -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
       <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">2 · VALORES SISTEMA POSMEWS</div>
       <div class="grid2">
-        <div class="fg"><label>Cash POSMEWS (€)</label>
-          <input type="text" inputmode="decimal" id="caja-ef-posmews" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
         <div class="fg"><label>Tarjeta POSMEWS (€)</label>
           <input type="text" inputmode="decimal" id="caja-tar-posmews" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
         <div class="fg"><label>Stripe POSMEWS (€)</label>
@@ -80,8 +88,6 @@
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
       <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">4 · VALORES REALES FÍSICOS</div>
       <div class="grid2">
-        <div class="fg"><label>Cash real contado (€)</label>
-          <input type="text" inputmode="decimal" id="caja-ef-real" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
         <div class="fg"><label>TPV físico (€)</label>
           <input type="text" inputmode="decimal" id="caja-tar-tpv" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
         <div class="fg"><label>Stripe plataforma (€)</label>
@@ -96,8 +102,7 @@
     <!-- B5: DIFERENCIAS CALCULADAS -->
     <div style="background:var(--bg2);border:2px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">
       <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">5 · DIFERENCIAS CALCULADAS — Calculado automáticamente</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
-        <div><div style="font-size:11px;color:var(--text3);">Δ Cash</div><div id="caja-dif-ef" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:center;margin-bottom:10px;">
         <div><div style="font-size:11px;color:var(--text3);">Δ TPV (neto propinas)</div><div id="caja-dif-tar" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
         <div><div style="font-size:11px;color:var(--text3);">Δ Stripe</div><div id="caja-dif-str" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--green);">+0.00 €</div></div>
       </div>
@@ -136,28 +141,16 @@
       <textarea id="caja-comentario" rows="2" placeholder="Observaciones adicionales..."></textarea>
     </div>
 
-    <!-- FOTOS ADJUNTAS (varias) -->
-    <div class="fg" style="margin-bottom:12px;">
-      <label>Fotos adjuntas (tickets, TPV, incidencias…) — varias permitidas</label>
-      <input type="file" id="caja-fotos-input" accept="image/*" capture="environment" multiple onchange="handleCajaFotosInput(this,'caja-fotos','sala')" style="color:var(--text);font-size:13px;padding:6px 0;">
-      <div id="caja-fotos-status" style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;"></div>
-      <div id="caja-fotos-thumbs" style="margin-top:6px;"></div>
-    </div>
-
-    <!-- B7: FONDO FINAL -->
+    <!-- B7: RETIRO Y FONDO FINAL A TRASPASAR -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
-      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">7 · FONDO FINAL Y TRASPASO</div>
+      <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">7 · RETIRO Y FONDO FINAL A TRASPASAR</div>
       <div class="grid2">
         <div class="fg"><label>Retiro efectivo caja fuerte (€)</label>
           <input type="text" inputmode="decimal" id="caja-retiro" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-        <div class="fg"><label>Fondo esperado a traspasar (€)</label>
+        <div class="fg"><label>Fondo final a traspasar (€) <span style="color:var(--text3);font-weight:400">— calculado</span></label>
           <div id="caja-fondo-esperado" style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--green);padding:8px 0;">0.00 €</div></div>
-        <div class="fg"><label>Fondo real a traspasar (€) <span class="req">*</span></label>
-          <input type="text" inputmode="decimal" id="caja-fondo-real" placeholder="0.00" oninput="fixLeadingZeros(this);calcCajaDifs()"></div>
-        <div style="display:flex;align-items:flex-end;padding-bottom:4px;">
-          <div id="caja-fondo-dif" style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text3);">—</div>
-        </div>
       </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3);font-family:var(--font-mono)">Fondo final = Efectivo real contado − Retiro caja fuerte</div>
     </div>
 
     <!-- TOTALES -->
@@ -295,7 +288,6 @@ function openCajaForm(existingId) {
   var fondoIniEl = document.getElementById('caja-fondo-ini');
   if(fondoIniEl) fondoIniEl.value = '';
   if(!existingId){
-    if(typeof resetCajaFotos === 'function') resetCajaFotos('caja-fotos', []);
     invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
       var t = today();
@@ -319,19 +311,20 @@ function openCajaForm(existingId) {
       var ultimo = traspasoHoy[0] || cierreAnterior[0];
       if(fondoIniEl && ultimo){
         fondoIniEl.value = parseFloat(ultimo.fondo_real_sala || ultimo.fondo_final || 0).toFixed(2);
-        calcCajaDifs();
       }
+      // Cash POSMEWS ya traspasado hoy (para aislar ventas de la tarde)
+      var prevEl = document.getElementById('caja-ef-posmews-prev');
+      if(prevEl) prevEl.value = parseFloat((traspasoHoy[0] && traspasoHoy[0].efectivo_posmews) || 0).toFixed(2);
+      calcCajaDifs();
     });
   } else {
       window._cajaPrevEstado = row ? (row.estado || null) : null;
     dbGetAll('sala_cash_closures').then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
       if(!row) return;
-      if(typeof resetCajaFotos === 'function'){
-        var _ex = Array.isArray(row.imagenes_adjuntas) ? row.imagenes_adjuntas.map(function(u){ return {url:u, name:'foto'}; }) : [];
-        resetCajaFotos('caja-fotos', _ex);
-      }
       if(fondoIniEl && row.fondo_inicial != null) fondoIniEl.value = parseFloat(row.fondo_inicial).toFixed(2);
+      var prevEl2 = document.getElementById('caja-ef-posmews-prev');
+      if(prevEl2) prevEl2.value = parseFloat(row.cash_posmews_traspaso_previo || 0).toFixed(2);
       calcCajaDifs();
       // Bloquear si el usuario no puede editar este cierre
       var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb';
@@ -383,26 +376,19 @@ function calcCajaDifs() {
   }
 
   // EFECTIVO
-  // diferencia_efectivo = efectivo_real_contado - (fondo_inicial + cash_posmews)
+  // Δ EFECTIVO = (fondo_inicial + cash_posmews - cash_posmews_traspaso_previo) - efectivo_real_contado
   var efReal   = getV('caja-ef-real');
   var efPosmews= getV('caja-ef-posmews');
+  var efPosmewsPrev = getV('caja-ef-posmews-prev');
   var fondoIni = getV('caja-fondo-ini');
-  var fondoFin = getV('caja-fondo-fin');
   var retiro   = getV('caja-retiro');
-  var efEsperado = fondoIni + efPosmews;
-  var difEf = efReal - efEsperado;
-  // Control retiro: efectivo_real debe = fondo_final + retiro
-  var difRetiro = efReal - fondoFin - retiro;
+  var efEsperado = fondoIni + efPosmews - efPosmewsPrev;
+  var difEf = efEsperado - efReal;
 
   var efEspEl = document.getElementById('caja-ef-esperado');
   if(efEspEl) efEspEl.textContent = efEsperado.toFixed(2) + ' €';
   setEl('caja-dif-ef', difEf);
   setEl('dif-ef-disp', difEf);
-  var retiroEl = document.getElementById('caja-dif-retiro');
-  if(retiroEl){
-    retiroEl.textContent = Math.abs(difRetiro) < 0.01 ? '✓ OK retiro' : 'Δ retiro: '+fmt(difRetiro);
-    retiroEl.style.color = Math.abs(difRetiro) < 0.01 ? 'var(--green)' : 'var(--red)';
-  }
 
   // TARJETA: diferencia = (TPV - Propinas_TPV) - POSMEWS
   var tarPosmews = getV('caja-tar-posmews');
@@ -432,21 +418,12 @@ function calcCajaDifs() {
   var reqEl = document.getElementById('caja-comentario-req');
   if(reqEl) reqEl.style.display = Math.abs(difTotal) > 0.01 ? 'inline' : 'none';
 
-  // FONDO ESPERADO = Cash real - Retiro
+  // FONDO FINAL A TRASPASAR = Efectivo real contado - Retiro caja fuerte
   var fondoRealV = getV('caja-ef-real');
   var retiroV    = getV('caja-retiro');
   var fondoEspV  = fondoRealV - retiroV;
   var fondoEspEl = document.getElementById('caja-fondo-esperado');
   if(fondoEspEl) fondoEspEl.textContent = fondoEspV.toFixed(2) + ' €';
-
-  // FONDO DIF = Fondo real - Fondo esperado
-  var fondoRealInput = getV('caja-fondo-real');
-  var fondoDif = fondoRealInput - fondoEspV;
-  var fondoDifEl = document.getElementById('caja-fondo-dif');
-  if(fondoDifEl){
-    fondoDifEl.textContent = (Math.abs(fondoDif)<0.01 ? '✓ OK' : (fondoDif>=0?'+':'')+fondoDif.toFixed(2)+' €');
-    fondoDifEl.style.color = Math.abs(fondoDif)<0.01 ? 'var(--green)' : Math.abs(fondoDif)>5 ? 'var(--red)' : 'var(--amber)';
-  }
 
   // TOTAL BRUTO
   var totalBruto = getV('caja-ef-posmews') + getV('caja-tar-posmews') + getV('caja-str-posmews')
@@ -516,18 +493,19 @@ async function saveCajaForm() {
   function getCV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
   var efReal    = getCV('caja-ef-real');
   var efPosmews = getCV('caja-ef-posmews');
+  var efPosmewsPrev = getCV('caja-ef-posmews-prev');
   var fondoIni  = getCV('caja-fondo-ini');
-  var fondoFin  = getCV('caja-fondo-fin');
   var retiro    = getCV('caja-retiro');
   var tarPosmews= getCV('caja-tar-posmews');
   var tarTpv    = getCV('caja-tar-tpv');
   var propinasTpv = getCV('caja-propinas-tpv');
   var strPosmews= getCV('caja-str-posmews');
   var strReal   = getCV('caja-str-real');
-  var difEf  = efReal - (fondoIni + efPosmews);
+  var difEf  = (fondoIni + efPosmews - efPosmewsPrev) - efReal;
   var difTar = (tarTpv - propinasTpv) - tarPosmews;
   var difStr = strReal - strPosmews;
   var difOperativa = difEf + difTar + difStr;
+  var fondoFinalTraspasar = efReal - retiro;
   var mediosPago = efReal + tarTpv + strReal;
   var bruto = parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0;
   var ajustes=(parseFloat((document.getElementById('caja-desc-imp')||{}).value)||0)
@@ -544,9 +522,10 @@ async function saveCajaForm() {
     // Payment fields
     efectivo_real: efReal,
     efectivo_posmews: efPosmews,
+    cash_posmews_traspaso_previo: efPosmewsPrev,
     fondo_inicial: fondoIni,
-    fondo_final: getCV('caja-fondo-real'),
-    fondo_real_sala: getCV('caja-fondo-real'),
+    fondo_final: fondoFinalTraspasar,
+    fondo_real_sala: fondoFinalTraspasar,
     retiro_caja_fuerte: retiro,
     diferencia_efectivo: difEf,
     tarjeta_posmews: tarPosmews,
@@ -571,7 +550,6 @@ async function saveCajaForm() {
     total_medios_pago: mediosPago,
     total_ajustes: ajustes,
     comentario: comentario,
-    imagenes_adjuntas: (typeof getCajaFotosUrls==='function' ? getCajaFotosUrls('caja-fotos') : []),
     estado: (_editingCajaId && (window._cajaPrevEstado==='A revisar' || window._cajaPrevEstado==='En corrección')) ? 'corregido' : 'Pendiente validación',
     created_at: localTs(),
     updated_at: localTs()
@@ -935,7 +913,7 @@ async function openCajaSummary(cajaId, showValidar) {
 
   var difOp = c.diferencia_operativa_sala || 0;
   var difColor = Math.abs(difOp)<0.01 ? 'var(--green)' : Math.abs(difOp)>5 ? 'var(--red)' : 'var(--amber)';
-  var difEf = c.diferencia_efectivo||0;
+  var difEf = (c.fondo_inicial||0) + (c.efectivo_posmews||0) - (c.cash_posmews_traspaso_previo||0) - (c.efectivo_real||0);
   var difTar = c.diferencia_tarjeta||0;
   var difStr = c.diferencia_stripe||0;
 
@@ -953,12 +931,13 @@ async function openCajaSummary(cajaId, showValidar) {
     + row('Turno', displayServicio(c.servicios||''), false)
     + row('Estado', c.estado, false)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">EFECTIVO</div>'
-    + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2)+'€', true)
     + row('Fondo inicial', (c.fondo_inicial||0).toFixed(2)+'€', true)
     + row('Cash POSMEWS', (c.efectivo_posmews||0).toFixed(2)+'€', true)
-    + row('Fondo final', (c.fondo_final||0).toFixed(2)+'€', true)
-    + row('Retiro caja fuerte', (c.retiro_caja_fuerte||0).toFixed(2)+'€', true)
+    + row('Cash POSMEWS traspaso anterior', (c.cash_posmews_traspaso_previo||0).toFixed(2)+'€', true)
+    + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2)+'€', true)
     + row('Δ Efectivo', (difEf>=0?'+':'')+difEf.toFixed(2)+'€', true, Math.abs(difEf)<0.01?'var(--green)':'var(--red)')
+    + row('Retiro caja fuerte', (c.retiro_caja_fuerte||0).toFixed(2)+'€', true)
+    + row('Fondo final a traspasar', ((c.efectivo_real||0)-(c.retiro_caja_fuerte||0)).toFixed(2)+'€', true)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TARJETA Y STRIPE</div>'
     + row('Tarjeta POSMEWS', (c.tarjeta_posmews||0).toFixed(2)+'€', true)
     + row('Tarjeta TPV físico', (c.tarjeta_tpv||0).toFixed(2)+'€', true)

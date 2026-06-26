@@ -288,6 +288,8 @@ async function renderDashboard() {
 
   // Restaurar pestaña activa tras el render
   _activateDashTab(_dashCurrentTab);
+  // Ocultar tab Merma si el dept no es Cocina/Friegue/FnB (redirige a Turnos si estaba activo)
+  _toggleMermaTab();
 }
 
 // ── SELECTOR DE DEPARTAMENTO ──────────────────────────────────
@@ -946,6 +948,19 @@ async function _renderKpiRecepcion(shifts) {
 }
 
 // ── MERMA DETALLE ─────────────────────────────────────────────
+// Merma solo aplica a Cocina / Friegue / FnB (regla de dominio).
+// Oculta el botón del tab Merma en el resto de departamentos.
+function _toggleMermaTab() {
+  var DEPTS_CON_MERMA = ['Cocina', 'Friegue', 'FnB'];
+  var aplica = DEPTS_CON_MERMA.indexOf(_dashCurrentDept) !== -1;
+  var btn = document.querySelector('.dash-tab[data-tab="merma"]');
+  if (btn) btn.style.display = aplica ? '' : 'none';
+  // Si el tab Merma estaba activo y ya no aplica, volver a Turnos
+  if (!aplica && _dashCurrentTab === 'merma') {
+    _activateDashTab('turnos');
+  }
+}
+
 function _renderMerma(mermas) {
   var kpiEl = document.getElementById('kpi-merma');
   var el = document.getElementById('dash-merma-table');

@@ -148,6 +148,7 @@ async function renderInformes(){
     +'<div class="card" style="margin-bottom:0;padding:14px 18px;">'
     +  '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
     +    mainTabBtn('produccion','📈 Producción')
+    +    mainTabBtn('incentivos','💰 Incentivos')
     +    mainTabBtn('informe-jefe','📋 Informe de Jefe')
     +    mainTabBtn('rrhh','👥 RR.HH.')
     +  '</div>'
@@ -156,10 +157,21 @@ async function renderInformes(){
 
   var tc=document.getElementById('inf-main-content');
   if(_infTab==='produccion')    await _renderProduccion(tc);
+  else if(_infTab==='incentivos') await _renderIncentivosTab(tc);
   else if(_infTab==='rrhh')     await _renderRRHH(tc);
   else                          await _renderInformeJefe(tc);
 }
 window.renderInformes=renderInformes;
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB: INCENTIVOS — reutiliza el módulo incentivos.js sin reescribir.
+// Pinta el contenedor #incentivos-content que renderIncentivos() espera.
+// ══════════════════════════════════════════════════════════════════════
+async function _renderIncentivosTab(el){
+  el.innerHTML='<div id="incentivos-content"></div>';
+  if(typeof renderIncentivos==='function') await renderIncentivos();
+  else el.innerHTML='<div class="card"><p style="color:var(--text3);padding:20px 0;">💰 Módulo de incentivos no cargado.</p></div>';
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // TAB: PRODUCCIÓN (CSV POSMEWS + match fuzzy)
