@@ -673,7 +673,7 @@ async function renderValCajaList() {
       if(periodo==='mes') return c.fecha>=startOfMonth();
       return true;
     });
-    data.sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
+    data.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||''); });
     if(!data.length){
       el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo</div>'
         +'<div style="margin-top:8px;font-size:11px;color:var(--text3);font-family:var(--font-mono);">'
@@ -685,7 +685,7 @@ async function renderValCajaList() {
       var _esTras = c.tipo === 'traspaso';
       var _tipoBadge = _esTras
         ? ' <span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;font-size:9px;">🔁 Traspaso</span>'
-        : '';
+        : ' <span class="badge" style="background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid #3b82f6;font-size:9px;">💰 Cierre</span>';
       servs = servs + _tipoBadge;
       var difOp = c.diferencia_operativa_sala||0;
       var difColor = Math.abs(difOp)<0.01?'var(--green)':Math.abs(difOp)>5?'var(--red)':'var(--amber)';
