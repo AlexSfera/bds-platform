@@ -861,6 +861,9 @@ function setT(name,val){
   if(name==='gestion'){
     const blk=document.getElementById('block-gestion');
     if(blk) val==='si'?blk.classList.add('visible'):blk.classList.remove('visible');
+    if(val==='si' && typeof poblarSelectorHabitacion==='function'){
+      poblarSelectorHabitacion(document.getElementById('g-habitacion'), '');
+    }
   }
   if(name==='incidencia'){
     const blk=document.getElementById('block-incidencia');
@@ -1228,7 +1231,7 @@ function clearTurnoForm(){
   editingShiftId=null;
   const modeEl=document.getElementById('turno-form-mode'); if(modeEl) modeEl.textContent='NUEVO';
   const saveBtn=document.getElementById('btn-save-turno'); if(saveBtn) saveBtn.textContent='💾 Guardar Turno';
-  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
+  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
     const el=document.getElementById(id); if(!el) return;
     if(el.tagName==='SELECT') el.value=''; else el.value=el.type==='date'?today():'';
   });
@@ -1540,6 +1543,9 @@ async function _doSaveTurno(){
     const gDescEl = document.getElementById('g-desc');
     const gDesc   = gDescEl ? gDescEl.value.trim() : '';
     const gTipo   = gTipoEl ? gTipoEl.value : '';
+    const gPrio   = (document.getElementById('g-prioridad')||{}).value || 'media';
+    const gHab    = ((document.getElementById('g-habitacion')||{}).value || '').trim();
+    const gRes    = ((document.getElementById('g-reserva')||{}).value || '').trim();
     if(gDesc){
       const gRecord = {
         id:           genId(),
@@ -1552,6 +1558,10 @@ async function _doSaveTurno(){
         servicio,
         tipo_gestion: gTipo || 'Otro',
         descripcion:  gDesc,
+        prioridad:    gPrio,
+        habitacion:   gHab || null,
+        num_reserva:  gRes || null,
+        leido_por:    [],
         accion_tomada: '',
         estado:       INCIDENT_STATES.ABIERTA,
         informado_responsable: 'no',
@@ -3412,6 +3422,58 @@ function _itemEnsureOverlay(){
   return ov;
 }
 
+// ── Filas extra de gestión (prioridad, habitación, nº reserva, leído por) ──
+function _gestionExtraRows(rec){
+  var prioMap = {alta:'🔴 Alta', media:'🟡 Media', baja:'🟢 Baja'};
+  var prio = prioMap[(rec.prioridad||'').toLowerCase()] || formatDisplayValue(rec.prioridad||'media');
+  var out = '<div><b>Prioridad:</b><br>'+prio+'</div>';
+  if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏 '+formatDisplayValue(rec.habitacion)+'</div>';
+  if(rec.num_reserva) out += '<div><b>Nº reserva:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+formatDisplayValue(rec.num_reserva)+'</span></div>';
+  var leido = Array.isArray(rec.leido_por) ? rec.leido_por : [];
+  if(leido.length){
+    var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
+    out += '<div style="grid-column:1 / -1;"><b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+formatDisplayValue(nombres)+'</span></div>';
+  }
+  return out;
+}
+
+// Añade al usuario actual al array leido_por si no estaba ya (PATCH jsonb)
+async function registrarLecturaGestion(rec){
+  if(!rec || !currentUser) return;
+  var leido = Array.isArray(rec.leido_por) ? rec.leido_por.slice() : [];
+  var ya = leido.some(function(l){ return l && l.id === currentUser.id; });
+  if(ya) return;
+  leido.push({id: currentUser.id, nombre: currentUser.nombre, ts: localTs()});
+  try {
+    var res = await fetch(
+      SUPABASE_URL + '/rest/v1/gestiones?id=eq.' + encodeURIComponent(rec.id),
+      { method:'PATCH',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body: JSON.stringify({leido_por: leido})
+      }
+    );
+    if(res.ok){ rec.leido_por = leido; invalidateCache('gestiones'); }
+  } catch(e){ /* nunca bloquear el modal por un fallo de registro */ }
+}
+window.registrarLecturaGestion = registrarLecturaGestion;
+
+// ── Poblar un <select> con habitaciones activas desde housekeeping_rooms ──
+async function poblarSelectorHabitacion(selectEl, valorActual){
+  if(!selectEl) return;
+  selectEl.innerHTML = '<option value="">— Sin habitación —</option>';
+  var rooms = [];
+  try { rooms = await getDB('housekeeping_rooms'); } catch(e){}
+  rooms = (rooms||[]).filter(function(r){ return r.activa !== false; })
+    .sort(function(a,b){ return (parseInt(a.numero,10)||0) - (parseInt(b.numero,10)||0); });
+  rooms.forEach(function(r){
+    var o = document.createElement('option');
+    o.value = r.numero; o.textContent = r.numero;
+    if(String(valorActual||'')===String(r.numero)) o.selected = true;
+    selectEl.appendChild(o);
+  });
+}
+window.poblarSelectorHabitacion = poblarSelectorHabitacion;
+
 async function openItemModal(type, id){
   var ov = _itemEnsureOverlay();
   var table = (type==='gestion') ? 'gestiones' : 'incidencias';
@@ -3458,6 +3520,7 @@ async function openItemModal(type, id){
     + '<div><b>Departamento:</b><br>'+formatDisplayValue(dpto)+'</div>'
     + '<div><b>Creado por:</b><br>'+formatDisplayValue(creador)+'</div>'
     + '<div><b>Fecha:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+fechaCre+'</span></div>'
+    + (type==='gestion' ? _gestionExtraRows(rec) : '')
     + '</div>'
     + '<div style="margin-bottom:10px;"><b style="font-size:12px;">Descripción</b>'
     + '<div style="background:var(--bg2);padding:8px;border-radius:6px;font-size:12px;margin-top:4px;">'+formatDisplayValue(descripcion)+'</div></div>';
@@ -3537,6 +3600,9 @@ async function openItemModal(type, id){
   foot.innerHTML = btns.join(' ');
 
   ov.classList.add('open');
+
+  // Registrar lectura (solo gestiones; idempotente; nunca bloquea el render)
+  if(type==='gestion'){ registrarLecturaGestion(rec); }
 }
 window.openItemModal = openItemModal;
 
@@ -3745,18 +3811,26 @@ async function renderGestionesScreen(){
       var st = g.estado || 'Abierta';
       var fecha = g.created_at ? new Date(g.created_at) : null;
       var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
-      return '<div class="task-card">'
-        + '<div class="task-meta">'
-        +   '<span class="dept-badge">'+formatDisplayValue(g.departamento||g.area)+'</span>'
-        +   '<span class="task-origin">tipo: '+formatDisplayValue(g.tipo_gestion)+'</span>'
-        +   bGestionEstadoClick(st, g.id)
-        + '</div>'
-        + '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
-        + '<div class="task-footer">'
-        +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
-        +     '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
+      var prioMap = {alta:{t:'🔴 ALTA',c:'var(--red)'}, media:{t:'🟡 MEDIA',c:'var(--amber,#f59e0b)'}, baja:{t:'🟢 BAJA',c:'var(--green)'}};
+      var p = prioMap[(g.prioridad||'media').toLowerCase()] || prioMap.media;
+      var colRight = '<div style="font-size:11px;font-weight:700;color:'+p.c+';">'+p.t+'</div>';
+      if(g.habitacion)  colRight += '<div style="font-size:11px;color:var(--text2);margin-top:4px;">🛏 '+formatDisplayValue(g.habitacion)+'</div>';
+      if(g.num_reserva) colRight += '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:4px;">#'+formatDisplayValue(g.num_reserva)+'</div>';
+      return '<div class="task-card" style="display:flex;gap:10px;align-items:stretch;">'
+        + '<div style="flex:1;min-width:0;">'
+        +   '<div class="task-meta">'
+        +     '<span class="dept-badge">'+formatDisplayValue(g.departamento||g.area)+'</span>'
+        +     '<span class="task-origin">tipo: '+formatDisplayValue(g.tipo_gestion)+'</span>'
+        +     bGestionEstadoClick(st, g.id)
+        +   '</div>'
+        +   '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
+        +   '<div class="task-footer">'
+        +     '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
+        +       '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
+        +     '</div>'
         +   '</div>'
         + '</div>'
+        + '<div style="border-left:1px solid var(--border,#2a2a2a);padding-left:10px;min-width:80px;text-align:left;">'+colRight+'</div>'
         + '</div>';
     }).join('');
   }
@@ -3782,6 +3856,9 @@ function openNewGestionStandalone(){
       + '<button class="modal-x" onclick="closeModal(\'modal-new-gestion\')">✕</button></div>'
       + '<div class="modal-b">'
       + '<div class="fg"><label>Tipo</label><select id="ng-tipo"></select></div>'
+      + '<div class="fg"><label>Prioridad</label><select id="ng-prioridad"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>'
+      + '<div class="fg"><label>Habitación</label><select id="ng-habitacion"><option value="">— Sin habitación —</option></select></div>'
+      + '<div class="fg"><label>Nº reserva (opcional)</label><input id="ng-reserva" type="text" placeholder="Ej. 123456"></div>'
       + '<div class="fg"><label>Descripción</label><textarea id="ng-desc" rows="3" placeholder="Detalle de la gestión..."></textarea></div>'
       + '</div>'
       + '<div class="modal-f">'
@@ -3803,6 +3880,9 @@ function openNewGestionStandalone(){
     });
   }
   ov.querySelector('#ng-desc').value = '';
+  var pr = ov.querySelector('#ng-prioridad'); if(pr) pr.value = 'media';
+  var rs = ov.querySelector('#ng-reserva'); if(rs) rs.value = '';
+  poblarSelectorHabitacion(ov.querySelector('#ng-habitacion'), '');
   ov.classList.add('open');
 }
 window.openNewGestionStandalone = openNewGestionStandalone;
@@ -3811,6 +3891,9 @@ async function saveNewGestionStandalone(){
   var tipo = (document.getElementById('ng-tipo')||{}).value || '';
   var desc = ((document.getElementById('ng-desc')||{}).value || '').trim();
   if(!desc){ toast('Descripción obligatoria','err'); return; }
+  var prio = (document.getElementById('ng-prioridad')||{}).value || 'media';
+  var hab  = ((document.getElementById('ng-habitacion')||{}).value || '').trim();
+  var res  = ((document.getElementById('ng-reserva')||{}).value || '').trim();
   var rec = {
     id: genId(),
     employee_id: currentUser.id,
@@ -3820,6 +3903,10 @@ async function saveNewGestionStandalone(){
     fecha: today(),
     tipo_gestion: tipo || 'Otro',
     descripcion: desc,
+    prioridad: prio,
+    habitacion: hab || null,
+    num_reserva: res || null,
+    leido_por: [],
     accion_tomada: '',
     estado: 'Abierta',
     informado_responsable: 'no',
