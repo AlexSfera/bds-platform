@@ -1195,6 +1195,7 @@ var _pGridObserver = new MutationObserver(function(mutations){
 
 var _pD='',_pP='',_pGoBusy=false;
 var _pLabel = '', _pColor = '#2ec4b6';
+var _pEmpId = '';
 
 function _pClk(){
   var d=new Date();
@@ -1220,7 +1221,7 @@ var _pDeptAreas = {
 
 // ── PANTALLA EQUIPO DEPARTAMENTO (pre-PIN) ──────────────────────
 async function pSel(dept, label, color){
-  _pD = dept; _pP = ''; _pGoBusy = false; _pColor = color || '#2ec4b6'; _pLabel = label || dept;
+  _pD = dept; _pP = ''; _pGoBusy = false; _pColor = color || '#2ec4b6'; _pLabel = label || dept; _pEmpId = '';
 
   // Construir pantalla de equipo
   var main = document.querySelector('#portal-screen > main');
@@ -1274,7 +1275,7 @@ async function pSel(dept, label, color){
   }
   // Cada tarjeta es clickable → abre el PIN directamente
   function empCard(e){
-    return '<div onclick="_pOpenPin()" style="display:flex;align-items:center;gap:14px;background:#0f2035;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 16px;min-width:160px;cursor:pointer;transition:all .15s;" onmouseover="this.style.background=\'#162840\';this.style.borderColor=\''+color+'88\'" onmouseout="this.style.background=\'#0f2035\';this.style.borderColor=\'rgba(255,255,255,.12)\'">'
+    return '<div onclick="_pOpenPin(\''+e.id+'\')" style="display:flex;align-items:center;gap:14px;background:#0f2035;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 16px;min-width:160px;cursor:pointer;transition:all .15s;" onmouseover="this.style.background=\'#162840\';this.style.borderColor=\''+color+'88\'" onmouseout="this.style.background=\'#0f2035\';this.style.borderColor=\'rgba(255,255,255,.12)\'">'
       +'<div style="width:40px;height:40px;border-radius:50%;background:'+color+'33;border:2px solid '+color+'66;display:flex;align-items:center;justify-content:center;font-family:\'JetBrains Mono\',monospace;font-size:13px;font-weight:700;color:'+color+';flex-shrink:0;">'+empInitials(e.nombre)+'</div>'
       +'<div><div style="font-size:14px;font-weight:600;color:#f1f5f9;">'+e.nombre+'</div>'
       +'<div style="font-size:12px;color:#94a3b8;">'+e.puesto+'</div></div>'
@@ -1312,7 +1313,9 @@ async function pSel(dept, label, color){
   }
 }
 
-function _pOpenPin(){
+function _pOpenPin(empId){
+  _pEmpId = empId || '';
+  _pP = ''; _pGoBusy = false;
   var box = document.getElementById('p-pin-box');
   var lbl = document.getElementById('pdept-lbl');
   var err = document.getElementById('p-err');
@@ -1327,7 +1330,7 @@ function pBack(){
   if(teamDiv) teamDiv.remove();
   var main = document.querySelector('#portal-screen > main');
   if(main) main.querySelectorAll('section').forEach(function(s){ s.style.display = ''; });
-  _pD = ''; _pP = '';
+  _pD = ''; _pP = ''; _pEmpId = '';
 }
 
 function pK(d){
@@ -1345,7 +1348,7 @@ function pBk(){
 }
 
 function pClose(){
-  _pP=''; _pGoBusy=false;
+  _pP=''; _pGoBusy=false; _pEmpId='';
   document.getElementById('portal-pin-modal').style.display='none';
 }
 
@@ -1359,7 +1362,11 @@ async function pGo(){
   var RP={'300415':'admin','0101':'chef','1010':'fb'};
   var emps=await getDB('employees');
   var u=null;
-  if(RP[pin]){
+  if(_pEmpId){
+    // Perfil seleccionado: SOLO el PIN de ese empleado es válido
+    var target=emps.find(function(e){return e.id===_pEmpId&&e.estado==='Activo';});
+    if(target && target.pin===pin) u=target;
+  } else if(RP[pin]){
     var r=RP[pin];
     u=emps.find(function(e){return e.rol===r&&e.estado==='Activo';});
     if(!u){
@@ -1388,6 +1395,7 @@ async function pGo(){
     return;
   }
   document.getElementById('portal-pin-modal').style.display='none';
+  _pEmpId='';
   _pLaunch(u);
 }
 
