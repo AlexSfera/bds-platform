@@ -277,8 +277,9 @@ function openCajaForm(existingId) {
   }
   var lastShiftLink = document.getElementById('caja-shift-link');
   if(lastShiftLink) lastShiftLink.value = window._lastSavedShiftId || '';
-  ['caja-efectivo','caja-tarjeta','caja-room','caja-alexander',
-   'caja-pension-d','caja-pension-m','caja-pension-c','caja-propinas',
+  ['caja-efectivo','caja-tarjeta','caja-room','caja-syncrolab','caja-alexander',
+   'caja-pension-desayuno-pax','caja-pension-comidacena-pax',
+   'caja-eur-pension-desayuno','caja-eur-pension-comidacena','caja-propinas',
    'caja-desc-imp','caja-desc-num','caja-anul-imp','caja-anul-num',
    'caja-inv-imp','caja-inv-num','caja-diferencia','caja-comentario',
    'caja-ef-real','caja-ef-posmews','caja-fondo-fin','caja-retiro'].forEach(function(id){
@@ -318,13 +319,22 @@ function openCajaForm(existingId) {
       calcCajaDifs();
     });
   } else {
-      window._cajaPrevEstado = row ? (row.estado || null) : null;
     dbGetAll('sala_cash_closures').then(function(rows){
       var row = rows.find(function(r){ return r.id === existingId; });
       if(!row) return;
+      window._cajaPrevEstado = row.estado || null;
       if(fondoIniEl && row.fondo_inicial != null) fondoIniEl.value = parseFloat(row.fondo_inicial).toFixed(2);
       var prevEl2 = document.getElementById('caja-ef-posmews-prev');
       if(prevEl2) prevEl2.value = parseFloat(row.cash_posmews_traspaso_previo || 0).toFixed(2);
+      // Precarga de cargos y conceptos internos
+      function setV(id,v){ var e=document.getElementById(id); if(e&&v!=null) e.value=v; }
+      setV('caja-room', row.room_charge);
+      setV('caja-syncrolab', row.syncrolab_charge);
+      setV('caja-alexander', row.cargo_alexander);
+      setV('caja-pension-desayuno-pax', row.pension_desayuno_pax);
+      setV('caja-pension-comidacena-pax', row.pension_comidacena_pax);
+      setV('caja-eur-pension-desayuno', row.eur_pension_desayuno);
+      setV('caja-eur-pension-comidacena', row.eur_pension_comidacena);
       calcCajaDifs();
       // Bloquear si el usuario no puede editar este cierre
       var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb';
@@ -425,16 +435,26 @@ function calcCajaDifs() {
   var fondoEspEl = document.getElementById('caja-fondo-esperado');
   if(fondoEspEl) fondoEspEl.textContent = fondoEspV.toFixed(2) + ' €';
 
-  // TOTAL BRUTO
+  // TOTAL BRUTO (display informativo: suma de todos los conceptos facturados,
+  // incluidos cargos internos teóricos). NO se usa para la Δ de verificación.
   var totalBruto = getV('caja-ef-posmews') + getV('caja-tar-posmews') + getV('caja-str-posmews')
                  + getV('caja-room') + getV('caja-syncrolab') + getV('caja-alexander')
                  + getV('caja-eur-pension-desayuno') + getV('caja-eur-pension-comidacena');
   var brutoEl = document.getElementById('caja-total-bruto-display');
   if(brutoEl) brutoEl.textContent = totalBruto.toFixed(2) + ' €';
 
-  // VERIFICACION CON REALES
-  var totalReal = getV('caja-ef-real') + (getV('caja-tar-tpv') - getV('caja-propinas-tpv')) + getV('caja-str-real');
-  var difVerif  = totalBruto - totalReal;
+  // VERIFICACION CON REALES — FIX-DELTA-VERIF (Jun 2026)
+  // Δ = Venta total (sistema) − Venta real (cobrada físicamente)
+  //   · Venta total = Cash POSMEWS + Tarjeta POSMEWS + Stripe POSMEWS
+  //                 + cargos internos (Room + SYNCROLAB + Alexander + € pensiones)
+  //   · Venta real  = (Efectivo real − Fondo inicial) + (TPV físico − Propinas TPV) + Stripe real
+  // El efectivo se neto del fondo inicial para aislar la venta del turno del dinero
+  // que ya estaba en caja (eso causaba el descuadre fantasma anterior).
+  var ventaTotal = totalBruto;  // ya incluye POSMEWS + cargos internos + € pensiones
+  var ventaRealFisica = (getV('caja-ef-real') - getV('caja-fondo-ini'))
+                      + (getV('caja-tar-tpv') - getV('caja-propinas-tpv'))
+                      + getV('caja-str-real');
+  var difVerif  = ventaTotal - ventaRealFisica;
   var verifEl   = document.getElementById('caja-total-verif');
   if(verifEl){
     verifEl.textContent = Math.abs(difVerif)<0.01 ? '✓ Cuadrado' : ('Δ '+(difVerif>=0?'+':'')+difVerif.toFixed(2)+'€');
@@ -540,10 +560,12 @@ async function saveCajaForm() {
     diferencia_caja: difOperativa,
     // PMS fields
     room_charge: getCV('caja-room'),
+    syncrolab_charge: getCV('caja-syncrolab'),
     cargo_alexander: getCV('caja-alexander'),
-    pension_desayuno: getCV('caja-pension-d'),
-    media_pension: getCV('caja-pension-m'),
-    pension_completa: getCV('caja-pension-c'),
+    pension_desayuno_pax: getCV('caja-pension-desayuno-pax'),
+    pension_comidacena_pax: getCV('caja-pension-comidacena-pax'),
+    eur_pension_desayuno: getCV('caja-eur-pension-desayuno'),
+    eur_pension_comidacena: getCV('caja-eur-pension-comidacena'),
     // Totals (manual entry)
     subtotal_neto: parseFloat((document.getElementById('caja-total-neto-manual')||{}).value)||0,
     total_bruto: parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0,
@@ -577,13 +599,9 @@ async function saveCajaForm() {
       return;
     }
     invalidateCache('sala_cash_closures');
-    // BUG-TURNO-SALA-CIERRE (Jun 2026): el flujo de cierre completo Sala
-    // (chkConfirm → openSalaCajaChoice → startSalaCierre → openCajaForm → saveCajaForm)
-    // NO pasaba por _doSaveTurno(), a diferencia de traspaso (submitSalaTraspaso),
-    // skip (skipSalaCajaOp), SYNCROLAB (submitLabCierre) y Recepción (submitRecKpi).
-    // Resultado: quien cerraba caja Sala no generaba fila en shifts → horas sin
-    // declarar → coste de personal infravalorado en Dashboard.
-    // Solo en alta nueva: editar/corregir un cierre no debe crear otro turno.
+    // BUG-TURNO-SALA-CIERRE (Jun 2026): el cierre completo Sala no pasaba por
+    // _doSaveTurno() → no generaba fila en shifts → coste de personal infravalorado.
+    // Solo en alta nueva; editar/corregir no debe duplicar turno.
     if(!_editingCajaId){
       try { await _doSaveTurno(); }
       catch(eTurno){ console.error('[CAJA] _doSaveTurno tras cierre Sala falló', eTurno); }
@@ -964,10 +982,38 @@ async function openCajaSummary(cajaId, showValidar) {
     + row('Stripe POSMEWS', (c.stripe_posmews||0).toFixed(2)+'€', true)
     + row('Stripe real', (c.stripe_real||0).toFixed(2)+'€', true)
     + row('Δ Stripe', (difStr>=0?'+':'')+difStr.toFixed(2)+'€', true, Math.abs(difStr)<0.01?'var(--green)':'var(--red)')
+    + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">CARGOS Y CONCEPTOS INTERNOS</div>'
+    + row('Room Charge', (c.room_charge||0).toFixed(2)+'€', true)
+    + row('SYNCROLAB Charge clientes', (c.syncrolab_charge||0).toFixed(2)+'€', true)
+    + row('Cargo Alexander', (c.cargo_alexander||0).toFixed(2)+'€', true)
+    + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">PENSIONES (informativo)</div>'
+    + row('Pensiones desayunos (pax)', (parseInt(c.pension_desayuno_pax)||0)+'p', true)
+    + row('Pensiones comida+cena (pax)', (parseInt(c.pension_comidacena_pax)||0)+'p', true)
+    + row('€ Pensiones desayunos', (c.eur_pension_desayuno||0).toFixed(2)+'€', true)
+    + row('€ Pensiones comidas+cenas', (c.eur_pension_comidacena||0).toFixed(2)+'€', true)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TOTALES</div>'
     + row('Total neto sin IVA', (c.subtotal_neto||0).toFixed(2)+'€', true)
     + row('Total bruto con IVA', (c.total_bruto||0).toFixed(2)+'€', true)
-    + row('Pensiones', ((parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0))+'p', true)
+    + (function(){
+        // Verificación con reales: Venta total (sistema) − Venta real física
+        var ventaTotal = (c.efectivo_posmews||0) + (c.tarjeta_posmews||0) + (c.stripe_posmews||0)
+                       + (c.room_charge||0) + (c.syncrolab_charge||0) + (c.cargo_alexander||0)
+                       + (c.eur_pension_desayuno||0) + (c.eur_pension_comidacena||0);
+        var ventaReal  = ((c.efectivo_real||0) - (c.fondo_inicial||0))
+                       + ((c.tarjeta_tpv||0) - (c.propinas_tpv||0))
+                       + (c.stripe_real||0);
+        var dv = ventaTotal - ventaReal;
+        var dvCol = Math.abs(dv)<0.01?'var(--green)':Math.abs(dv)>5?'var(--red)':'var(--amber)';
+        return '<div style="margin:12px 0 6px;padding:10px;border-radius:6px;background:var(--bg2);border:1px solid '+dvCol+'">'
+          + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+dvCol+';letter-spacing:.1em;margin-bottom:4px">VERIFICACIÓN CON REALES</div>'
+          + '<div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:'+dvCol+'">'+(Math.abs(dv)<0.01?'✓ Cuadrado':((dv>=0?'+':'')+dv.toFixed(2)+'€'))+'</div>'
+          + '<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">'
+          + 'Venta total (sistema): <b>'+ventaTotal.toFixed(2)+'€</b> − Venta real (física): <b>'+ventaReal.toFixed(2)+'€</b><br>'
+          + '<span style="color:var(--text3)">Venta total = POSMEWS (efectivo+tarjeta+Stripe) + cargos internos (Room+SYNCROLAB+Alexander+€ pensiones). '
+          + 'Venta real = (Efectivo real − Fondo inicial) + (TPV físico − Propinas) + Stripe real. '
+          + 'Compara lo que el sistema dice que se vendió contra lo realmente cobrado. 0 = cuadra; Δ alta = revisar antes de validar.</span>'
+          + '</div></div>';
+      })()
     + (function(){
         var calcDifTar2 = (c.tarjeta_tpv||0) - (c.propinas_tpv||0) - (c.tarjeta_posmews||0);
         var calcDifEf = (c.diferencia_efectivo||0);
@@ -1399,7 +1445,9 @@ async function submitSalaTraspaso() {
     // resto a 0 (no aplica en traspaso)
     tarjeta_posmews: 0, tarjeta_tpv: 0, propinas_tpv: 0, propinas: 0, diferencia_tarjeta: 0,
     stripe_posmews: 0, stripe_real: 0, diferencia_stripe: 0,
-    room_charge: 0, cargo_alexander: 0, pension_desayuno: 0, media_pension: 0, pension_completa: 0,
+    room_charge: 0, syncrolab_charge: 0, cargo_alexander: 0,
+    pension_desayuno_pax: 0, pension_comidacena_pax: 0,
+    eur_pension_desayuno: 0, eur_pension_comidacena: 0,
     subtotal_neto: 0, total_bruto: 0, total_medios_pago: cashReal, total_ajustes: 0,
     comentario: exp || null,
     estado: 'Pendiente validación',
