@@ -577,6 +577,17 @@ async function saveCajaForm() {
       return;
     }
     invalidateCache('sala_cash_closures');
+    // BUG-TURNO-SALA-CIERRE (Jun 2026): el flujo de cierre completo Sala
+    // (chkConfirm → openSalaCajaChoice → startSalaCierre → openCajaForm → saveCajaForm)
+    // NO pasaba por _doSaveTurno(), a diferencia de traspaso (submitSalaTraspaso),
+    // skip (skipSalaCajaOp), SYNCROLAB (submitLabCierre) y Recepción (submitRecKpi).
+    // Resultado: quien cerraba caja Sala no generaba fila en shifts → horas sin
+    // declarar → coste de personal infravalorado en Dashboard.
+    // Solo en alta nueva: editar/corregir un cierre no debe crear otro turno.
+    if(!_editingCajaId){
+      try { await _doSaveTurno(); }
+      catch(eTurno){ console.error('[CAJA] _doSaveTurno tras cierre Sala falló', eTurno); }
+    }
     closeModal('modal-caja');
     toast('Cierre de caja guardado ✓','ok');
     await renderCajaList();
