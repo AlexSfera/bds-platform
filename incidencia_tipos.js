@@ -231,15 +231,19 @@ var GESTION_TIPOS = {
   ],
 
   'Recepción': [
-    'Check-in / llegada pendiente',
-    'Check-out / salida pendiente',
-    'Cobro / factura pendiente',
-    'Reserva MEWS pendiente de revisar',
-    'Comunicación con cliente pendiente',
-    'Habitación / housekeeping pendiente',
-    'Solicitud especial de cliente',
-    'Gestión con otro departamento',
-    'Grupo / evento pendiente',
+    'Reserva / grupo / evento',
+    'Cliente — petición o solicitud especial',
+    'Cambio / prolongación / late check-out',
+    'Cobro / factura / depósito pendiente',
+    'Objeto perdido / pertenencia de cliente',
+    'Paquetería / envío',
+    'Pulsera / acceso / SPA',
+    'Cuenta corporativa / acuerdo B2B',
+    'Lead / comercial / transfer',
+    'Transporte / servicio al cliente',
+    'Procedimiento / recordatorio operativo (SOP)',
+    'Documentación / parte viajeros / MEWS',
+    'Coordinación con otro departamento',
     'Otro'
   ],
 
