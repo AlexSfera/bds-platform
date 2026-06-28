@@ -464,7 +464,7 @@ function getScreens(rol){
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
     cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
     cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
-    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento'},
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento', pending:true},
     hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
     hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
     hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
@@ -804,7 +804,6 @@ async function showScreen(id){
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
   if(id==='notas-mod'){ renderNotasMod(); }
-  if(id==='mant-mod'    && typeof renderMantenimientoMod==='function')  renderMantenimientoMod();
   // ── Housekeeping ──
   if(id==='ruta-mod'    && typeof renderHKMiRuta==='function')         renderHKMiRuta();
   if(id==='hk-plan'     && typeof renderHKPlanificacion==='function')  renderHKPlanificacion();
@@ -3428,22 +3427,23 @@ function _gestionExtraRows(rec){
   var prioMap = {alta:'🔴 Alta', media:'🟡 Media', baja:'🟢 Baja'};
   var prio = prioMap[(rec.prioridad||'').toLowerCase()] || formatDisplayValue(rec.prioridad||'media');
   var out = '<div><b>Prioridad:</b><br>'+prio+'</div>';
-  if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏 '+formatDisplayValue(rec.habitacion)+'</div>';
+  if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏️ '+formatDisplayValue(rec.habitacion)+'</div>';
   if(rec.num_reserva) out += '<div><b>Nº reserva:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+formatDisplayValue(rec.num_reserva)+'</span></div>';
+  // Siempre renderiza leído por con id para actualización post-PATCH
   var leido = Array.isArray(rec.leido_por) ? rec.leido_por : [];
-  if(leido.length){
-    var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
-    out += '<div style="grid-column:1 / -1;"><b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+formatDisplayValue(nombres)+'</span></div>';
-  }
+  var leidoTxt = leido.length
+    ? leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ')
+    : '<span style="color:var(--text3);font-style:italic;">Nadie aún</span>';
+  out += '<div style="grid-column:1 / -1;" id="mi-leido-row"><b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+leidoTxt+'</span></div>';
   return out;
 }
 
-// Añade al usuario actual al array leido_por si no estaba ya (PATCH jsonb)
+// Añade al usuario al array leido_por (PATCH jsonb) y actualiza el DOM inmediatamente
 async function registrarLecturaGestion(rec){
   if(!rec || !currentUser) return;
   var leido = Array.isArray(rec.leido_por) ? rec.leido_por.slice() : [];
   var ya = leido.some(function(l){ return l && l.id === currentUser.id; });
-  if(ya) return;
+  if(ya){ _actualizarLeidoRow(leido); return; }
   leido.push({id: currentUser.id, nombre: currentUser.nombre, ts: localTs()});
   try {
     var res = await fetch(
@@ -3453,8 +3453,14 @@ async function registrarLecturaGestion(rec){
         body: JSON.stringify({leido_por: leido})
       }
     );
-    if(res.ok){ rec.leido_por = leido; invalidateCache('gestiones'); }
-  } catch(e){ /* nunca bloquear el modal por un fallo de registro */ }
+    if(res.ok){ rec.leido_por = leido; invalidateCache('gestiones'); _actualizarLeidoRow(leido); }
+  } catch(e){ /* nunca bloquear el modal */ }
+}
+function _actualizarLeidoRow(leido){
+  var el = document.getElementById('mi-leido-row');
+  if(!el) return;
+  var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
+  el.innerHTML = '<b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+formatDisplayValue(nombres)+'</span>';
 }
 window.registrarLecturaGestion = registrarLecturaGestion;
 
