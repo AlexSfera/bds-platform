@@ -819,7 +819,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <h2 class="ps-dept-title">Selecciona tu departamento</h2>
         </div>
         <div class="ps-micro-status">
-          <strong>6</strong> activos · <strong style="color:#ffb020">3</strong> próximamente · v4.0
+          <strong>7</strong> activos · <strong style="color:#ffb020">2</strong> próximamente · v4.0
         </div>
       </div>
 
@@ -842,10 +842,10 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <div class="ps-dc-meta">Check-in · Check-out · MEWS</div>
           <span class="ps-dc-status">Activo</span>
         </button>
-        <!-- SYNCROLAB -->
+        <!-- SYNCROLAB (etiqueta visible; id interno 'rec-syncrolab'/'Recepción SYNCROLAB' INTACTO para n8n/permisos) -->
         <button class="ps-dept-card" onclick="pSel('rec-syncrolab','Recepción SYNCROLAB','#06b6d4')">
-          <div class="ps-dc-name">SYNCROLAB</div>
-          <div class="ps-dc-meta">Reservas · Clientes</div>
+          <div class="ps-dc-name">SyncroLab</div>
+          <div class="ps-dc-meta">Atención al Cliente</div>
           <span class="ps-dc-status">Activo</span>
         </button>
         <!-- HOUSEKEEPING -->
@@ -866,11 +866,11 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <div class="ps-dc-meta">Sesiones · Seguimiento</div>
           <span class="ps-dc-status">Próximamente</span>
         </div>
-        <div class="ps-dept-card soon" aria-disabled="true">
+        <button class="ps-dept-card" onclick="pSel('mantenimiento','Mantenimiento','#ef4444')">
           <div class="ps-dc-name">Mantenimiento</div>
-          <div class="ps-dc-meta">Reparaciones · SLA</div>
-          <span class="ps-dc-status">Próximamente</span>
-        </div>
+          <div class="ps-dc-meta">Reparaciones · Tareas</div>
+          <span class="ps-dc-status">Activo</span>
+        </button>
         <div class="ps-dept-card soon" aria-disabled="true">
           <div class="ps-dc-name">Fisioterapeutas</div>
           <div class="ps-dc-meta">Tratamientos · Pacientes</div>
