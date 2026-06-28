@@ -243,7 +243,7 @@ var GESTION_TIPOS = {
     'Transporte / servicio al cliente',
     'Procedimiento / recordatorio operativo (SOP)',
     'Documentación / parte viajeros / MEWS',
-    'Coordinación con otro departamento',
+    'Seguridad / alerta operativa',
     'Otro'
   ],
 

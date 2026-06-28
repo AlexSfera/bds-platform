@@ -19,6 +19,10 @@ function _chkLsKey(){
   var srv = '';
   try {
     if(currentUser.area === 'Recepción' && typeof getRecTurnoValue === 'function') srv = getRecTurnoValue() || '';
+    else if(currentUser.area === 'Entrenadores'){
+      var re = document.querySelector('input[name="turno-entr"]:checked');
+      srv = re ? re.value : '';
+    }
     else if(/syncrolab/i.test(currentUser.area||'')){
       var r = document.querySelector('input[name="servicio-lab"]:checked');
       srv = r ? r.value : '';
@@ -177,6 +181,68 @@ var CHK_LAB_TARDE_ITEMS = [
   'Fichar salida en Bitrix'
 ];
 
+// ── DATOS CHECKLIST ENTRENADORES · MAÑANA (apertura) ──
+var CHK_ENTR_MANANA_SECTIONS = [
+  {title:'FICHAJE Y ENCENDIDO',count:4},
+  {title:'PLANIFICACIÓN DEL DÍA',count:3},
+  {title:'INSTALACIONES Y SEGURIDAD',count:5}
+];
+var CHK_ENTR_MANANA_ITEMS = [
+  'Fichar entrada en área de fichaje',
+  'Encender ordenador y música del gimnasio',
+  'Encender TV y revisar que proyecta imágenes actualizadas',
+  'Quitar candados de salidas de emergencia',
+  'Si es lunes: confirmar objetivo y semana (TÉCNICA / FUERZA / AGILIDAD) (si aplica)',
+  'Revisar clases diarias',
+  'Organizar y preparar zonas para las clases',
+  'Puertas de CYCLING y QUEENAX cerradas',
+  'Robot fuera de la piscina (si no, retirarlo y ubicarlo en su sitio)',
+  'Revisar alineación de tumbonas (mismo respaldo y orientación)',
+  'Ordenar sala fitness si procede (materiales, papel, alcohol)',
+  'Bañera de hielo cerrada'
+];
+
+// ── DATOS CHECKLIST ENTRENADORES · TARDE (cierre) ──
+var CHK_ENTR_TARDE_SECTIONS = [
+  {title:'ORDEN Y APAGADO',count:3},
+  {title:'INSTALACIONES Y SEGURIDAD',count:5},
+  {title:'SPA Y ESTACIONAL',count:3},
+  {title:'CIERRE',count:1}
+];
+var CHK_ENTR_TARDE_ITEMS = [
+  'Ordenar zona fitness (materiales en su sitio, pizarra limpia)',
+  'Apagar música y TV',
+  'Guardar ordenador, tablet y mando de TV bajo llave',
+  'Revisar y ordenar salas CYCLING y QUEENAX (proyector y audio apagados)',
+  'Poner candados en salidas de emergencia',
+  'Poner robot en la piscina (lunes a viernes) (si aplica)',
+  'Bañera de hielo cerrada',
+  'Verano con cúpula abierta: revisar alineación de tumbonas (si aplica)',
+  'Manta térmica en piscina del SPA (invierno) (si aplica)',
+  'Retirar dispensadores de limonada del SPA y llevarlos a cocina',
+  'Revisar que todo queda apagado y cerrado',
+  'Fichar salida en área de fichaje'
+];
+
+// ── DATOS CHECKLIST ENTRENADORES · SÁBADO (apertura + cierre parcial) ──
+var CHK_ENTR_SABADO_SECTIONS = [
+  {title:'APERTURA',count:6},
+  {title:'CIERRE PARCIAL',count:5}
+];
+var CHK_ENTR_SABADO_ITEMS = [
+  'Fichar entrada en área de fichaje',
+  'Encender ordenador, música y TV del gimnasio',
+  'Quitar candados de salidas de emergencia',
+  'Revisar clases diarias',
+  'Puertas de CYCLING y QUEENAX cerradas',
+  'Organizar y preparar zonas para las clases',
+  'Ordenar zona fitness (materiales en su sitio, pizarra limpia)',
+  'Revisar y ordenar salas CYCLING y QUEENAX (proyector y audio apagados)',
+  'Bañera de hielo cerrada',
+  'Verano con cúpula abierta: revisar alineación de tumbonas (si aplica)',
+  'Fichar salida en área de fichaje'
+];
+
 // ── FUNCIONES ──
 function chkToggle(idx){
   _chkState[idx]=!_chkState[idx];
@@ -253,8 +319,14 @@ function chkOpen(pendingData){
   var recTurno=isRec?getRecTurnoValue():'';
   var isLabRec=(currentUser&&/syncrolab/i.test(currentUser.area||''));
   var labTurno=isLabRec?(function(){var r=document.querySelector('input[name="servicio-lab"]:checked');return r?r.value:'';})():'';
+  var isEntr=(currentUser&&currentUser.area==='Entrenadores');
+  var entrTurno=isEntr?(function(){var r=document.querySelector('input[name="turno-entr"]:checked');return r?r.value:'Mañana';})():'';
   var sections,items;
-  if(isRec){
+  if(isEntr){
+    if(entrTurno==='Tarde'){sections=CHK_ENTR_TARDE_SECTIONS;items=CHK_ENTR_TARDE_ITEMS;}
+    else if(entrTurno==='Sábado'){sections=CHK_ENTR_SABADO_SECTIONS;items=CHK_ENTR_SABADO_ITEMS;}
+    else{sections=CHK_ENTR_MANANA_SECTIONS;items=CHK_ENTR_MANANA_ITEMS;}
+  } else if(isRec){
     if(recTurno==='Tarde'){sections=CHK_REC_TARDE_SECTIONS;items=CHK_REC_TARDE_ITEMS;}
     else if(recTurno==='Noche'){sections=CHK_REC_NOCHE_SECTIONS;items=CHK_REC_NOCHE_ITEMS;}
     else{sections=CHK_REC_MANANA_SECTIONS;items=CHK_REC_MANANA_ITEMS;}

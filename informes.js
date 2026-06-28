@@ -59,13 +59,14 @@ function _infDeptosDelJefe(u){
 
 function _infTabsVisibles(u){
   if(!u) return [];
-  if(typeof canActAsAdmin==='function' && canActAsAdmin(u)) return ['sala','cocina','recepcion','syncrolab'];
+  if(typeof canActAsAdmin==='function' && canActAsAdmin(u)) return ['sala','cocina','recepcion','syncrolab','entrenadores'];
   var area=(u.area||'').toLowerCase(), rol=(u.rol||'').toLowerCase();
-  if(area==='sala'||area==='jefe de sala'||rol==='fb') return ['sala','cocina','recepcion','syncrolab'];
+  if(area==='sala'||area==='jefe de sala'||rol==='fb') return ['sala','cocina','recepcion','syncrolab','entrenadores'];
   if(area==='cocina'||rol==='chef')          return ['cocina'];
   if(area==='recepción'||rol==='jefe_recepcion') return ['recepcion'];
-  if(area==='syncrolab')                     return ['syncrolab'];
-  return ['sala','cocina','recepcion','syncrolab'];
+  if(rol==='coord_entrenadores'||area==='entrenadores') return ['entrenadores'];
+  if(area==='syncrolab')                     return ['syncrolab','entrenadores'];
+  return ['sala','cocina','recepcion','syncrolab','entrenadores'];
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -179,7 +180,7 @@ async function _renderIncentivosTab(el){
 async function _renderProduccion(el){
   var tabs=_infTabsVisibles(currentUser);
   if(tabs.indexOf(_infSubTab)<0) _infSubTab=tabs[0];
-  var subDefs=[{id:'sala',label:'🍽 Sala'},{id:'cocina',label:'🍳 Cocina'},{id:'recepcion',label:'🏨 Recepción'},{id:'syncrolab',label:'🔬 SYNCROLAB'}];
+  var subDefs=[{id:'sala',label:'🍽 Sala'},{id:'cocina',label:'🍳 Cocina'},{id:'recepcion',label:'🏨 Recepción'},{id:'syncrolab',label:'🔬 SYNCROLAB'},{id:'entrenadores',label:'🏋 Entrenadores'}];
   var subBtns=subDefs.filter(function(t){return tabs.indexOf(t.id)>=0;}).map(function(t){
     var active=t.id===_infSubTab;
     return '<button onclick="window._infSubTab=\''+t.id+'\';_renderProduccion(document.getElementById(\'inf-main-content\'))" style="'
@@ -195,6 +196,7 @@ async function _renderProduccion(el){
     +'<div id="inf-tab-content" style="margin-top:16px;"></div>';
   var tc=document.getElementById('inf-tab-content');
   if(_infSubTab==='sala') await _renderInformesSala(tc);
+  else if(_infSubTab==='entrenadores') await _renderInformesEntrenadores(tc);
   else _renderInformesProximamente(tc,_infSubTab);
 }
 
@@ -970,6 +972,364 @@ window.infGetDisponibles=async function(departamento){
       return e.estado==='Activo'&&!noDisp.has(e.id)&&(valAreas.indexOf(e.area)>=0||e.area===departamento);
     });
   } catch(e){ return []; }
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB ENTRENADORES · Producción + Incentivos desde export VirtuGym (CSV)
+// Fuente DEFINITIVA del incentivo (la sube el jefe). El autorreporte del
+// entrenador (entrenadores_kpi) NO se usa aquí — vive solo en su perfil.
+//
+// FLUJO JEFE: VirtuGym exporta .xls → abrir en Excel → Guardar como CSV →
+// arrastrar aquí. El parser detecta separador (, o ;) y fecha DD-MM-YYYY.
+//
+// FACTORES (memorándum sep-2024 + reglas CEO):
+//   PT individual (J=1) ...................... x1
+//   PT DUO (Entren. personal con J=2) ........ x1.5   (regla CEO, no en memo)
+//   PT 30 min ................................ x0.5
+//   Clase Piscina PT 50min ................... x1   (PT normal)
+//   Valoración funcional (Welcome Fit) ....... x0.5
+//   Visbody Test ............................. x0.5
+//   Bañera de hielo .......................... x0.5  (regla CEO, no en memo)
+//   Clase dirigida efectiva (J>=4) ........... x1
+//   Clase dirigida no efectiva (J<=3) ........ x0
+//   Carril Piscina / instructor vacío ........ descartar (reserva sin instr.)
+//   PT con J=0 ............................... descartar (no-show)
+// UMBRAL: 85 sesiones efectivas/mes (desde jul-2025). Extra x10 €.
+// PLANES ONLINE: entrada manual del jefe. x6 € cada uno.
+// ══════════════════════════════════════════════════════════════════════
+
+var _infEntrData = null;        // resultado del último parseo
+var _infEntrPlanes = {};        // { nombreCanonico: nºplanes } entrada manual
+var INF_ENTR_UMBRAL = 85;
+var INF_ENTR_EUR_SESION = 10;
+var INF_ENTR_EUR_PLAN = 6;
+
+// Clasifica una actividad (col F) + créditos (col J) → tipo KPI + factor.
+// Devuelve null si la fila debe descartarse.
+function _infEntrClasificar(actividad, credits){
+  var a = String(actividad||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  var j = parseInt(credits, 10); if(isNaN(j)) j = 0;
+
+  // Descartes: carril piscina (reserva de calle) y nutrición/areas externas sin instructor
+  if(/carril+\s*piscina|carrill\s*piscina/.test(a)) return null;
+
+  // Bañera de hielo
+  if(/banera\s*de\s*hielo/.test(a)) return {kpi:'banera_hielo', factor:0.5, efectiva:true};
+
+  // Visbody
+  if(/visbody/.test(a)) return {kpi:'visbody', factor:0.5, efectiva:true};
+
+  // Valoración funcional / Welcome Fit
+  if(/valoracion\s*funcional|welcome\s*fit/.test(a)) return {kpi:'val_funcional', factor:0.5, efectiva:true};
+
+  // PT 30 min en piscina
+  if(/piscina\s*pt.*30|pt\s*30/.test(a)) return {kpi:'pt_30', factor:0.5, efectiva:true};
+
+  // PT 50 min en piscina → PT normal x1
+  if(/piscina\s*pt.*50|pt\s*50/.test(a)) {
+    if(j <= 0) return null;            // no-show
+    return {kpi:'pt', factor:1, efectiva:true};
+  }
+
+  // Entrenamiento personal → J decide individual / DUO / no-show
+  if(/entrenamiento\s*personal/.test(a)) {
+    if(j <= 0) return null;            // no-show, no cuenta
+    if(j === 2) return {kpi:'pt_duo', factor:1.5, efectiva:true};
+    return {kpi:'pt', factor:1, efectiva:true};   // j=1 (y cualquier otro >0)
+  }
+
+  // Resto = clase dirigida (adultos/agua/etc.) → efectiva si J>=4
+  if(j >= 4) return {kpi:'dir_efectiva', factor:1, efectiva:true};
+  return {kpi:'dir_no_efectiva', factor:0, efectiva:false};
+}
+
+// Detecta separador (coma o ;) leyendo la cabecera
+function _infDetectSep(headerLine){
+  var nComa = (headerLine.match(/,/g)||[]).length;
+  var nPyc  = (headerLine.match(/;/g)||[]).length;
+  return nPyc > nComa ? ';' : ',';
+}
+
+function _csvSplitLineSep(line, sep){
+  var cols=[],cur='',inQ=false;
+  for(var i=0;i<line.length;i++){
+    var c=line[i];
+    if(c==='"'){ if(inQ&&line[i+1]==='"'){cur+='"';i++;} else inQ=!inQ; }
+    else if(c===sep&&!inQ){ cols.push(cur);cur=''; }
+    else { cur+=c; }
+  }
+  cols.push(cur);
+  return cols;
+}
+
+// Normaliza fecha DD-MM-YYYY (o DD/MM/YYYY) → YYYY-MM
+function _infEntrYM(fechaRaw){
+  var s=String(fechaRaw||'').trim();
+  var m=s.match(/^(\d{2})[-\/](\d{2})[-\/](\d{4})/);
+  if(m) return m[3]+'-'+m[2];
+  var m2=s.match(/^(\d{4})[-\/](\d{2})/);   // por si viene ya YYYY-MM-DD
+  if(m2) return m2[1]+'-'+m2[2];
+  return '';
+}
+
+// Parser principal del CSV de VirtuGym
+function _infParseEntrenadores(text, employees){
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  var lines=text.split(/\r?\n/);
+  if(lines.length<2) throw new Error('CSV vacío');
+  var sep=_infDetectSep(lines[0]);
+  var header=_csvSplitLineSep(lines[0],sep).map(function(h){return h.trim();});
+  var iIdx=function(name){ return header.findIndex(function(h){ return h===name; }); };
+  var cFecha=iIdx('Fecha'),cAct=iIdx('Actividad'),cInstr=iIdx('Instructor #1'),
+      cCred=iIdx('Credits Deducted');
+  if(cFecha<0||cAct<0||cInstr<0||cCred<0)
+    throw new Error('Columnas no reconocidas. Necesarias: Fecha, Actividad, Instructor #1, Credits Deducted. ¿Exportaste de VirtuGym y guardaste como CSV?');
+
+  var matchCache={};
+  function resolveNombre(raw){
+    if(matchCache[raw]===undefined) matchCache[raw]=_infMatchNombre(raw, employees||[]);
+    return matchCache[raw];
+  }
+  function empId(nombre){
+    var e=(employees||[]).find(function(x){return x.nombre===nombre;});
+    return e?e.id:null;
+  }
+
+  var porInstr={}, mesesSet={}, descartadas=0, sinInstr=0, matchLog=[];
+  var KPI_KEYS=['dir_efectiva','dir_no_efectiva','pt','pt_duo','pt_30','val_funcional','visbody','banera_hielo'];
+
+  for(var i=1;i<lines.length;i++){
+    var line=lines[i];
+    if(!line || !line.trim()) continue;
+    var cols=_csvSplitLineSep(line,sep);
+    if(cols.length<=Math.max(cFecha,cAct,cInstr,cCred)) continue;
+    var instrRaw=(cols[cInstr]||'').trim().replace(/\s+/g,' ');
+    if(!instrRaw){ sinInstr++; continue; }            // reserva sin instructor
+    var cls=_infEntrClasificar(cols[cAct], cols[cCred]);
+    if(!cls){ descartadas++; continue; }
+    var ym=_infEntrYM(cols[cFecha]);
+    if(!ym){ descartadas++; continue; }
+    mesesSet[ym]=true;
+
+    var instr=resolveNombre(instrRaw);
+    if(instr!==instrRaw && matchLog.indexOf(instrRaw+' → '+instr)<0) matchLog.push(instrRaw+' → '+instr);
+
+    if(!porInstr[instr]){
+      porInstr[instr]={nombre:instr, employee_id:empId(instr), csvNombre:instrRaw, kpi:{}, efectivasPond:0, meses:{}};
+      KPI_KEYS.forEach(function(k){ porInstr[instr].kpi[k]=0; });
+    }
+    var rec=porInstr[instr];
+    rec.kpi[cls.kpi]+=1;
+    rec.efectivasPond += cls.factor;
+    rec.meses[ym]=(rec.meses[ym]||0)+1;
+  }
+
+  var meses=Object.keys(mesesSet).sort();
+  var instructores=Object.keys(porInstr).sort(function(a,b){
+    return porInstr[b].efectivasPond-porInstr[a].efectivasPond;
+  });
+  return {instructores, porInstr, meses, descartadas, sinInstr, matchLog,
+          ymPrincipal: meses.length?meses[meses.length-1]:''};
+}
+
+async function _renderInformesEntrenadores(el){
+  el.innerHTML='<div class="card">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">'
+    +  '<div>'
+    +    '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);">🏋 Importar producción Entrenadores</div>'
+    +    '<div style="font-size:11px;color:var(--text3);margin-top:3px;">Export VirtuGym → guardar como <strong>CSV</strong> → arrastrar aquí</div>'
+    +  '</div>'
+    +  '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">'
+    +    'Umbral: <strong style="color:var(--amber);">'+INF_ENTR_UMBRAL+'</strong> ses./mes'
+    +    ' &nbsp;·&nbsp; Sesión extra: <strong style="color:var(--amber);">'+INF_ENTR_EUR_SESION+'€</strong>'
+    +    ' &nbsp;·&nbsp; Plan online: <strong style="color:var(--amber);">'+INF_ENTR_EUR_PLAN+'€</strong>'
+    +  '</div>'
+    +'</div>'
+    +'<div id="inf-entr-dropzone" onclick="document.getElementById(\'inf-entr-input\').click()" '
+    +  'ondragover="event.preventDefault();this.style.borderColor=\'var(--amber)\'" '
+    +  'ondragleave="this.style.borderColor=\'var(--border2)\'" '
+    +  'ondrop="window._infEntrHandleDrop(event)" '
+    +  'style="border:2px dashed var(--border2);border-radius:10px;padding:36px 24px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px;">'
+    +  '<div style="font-size:28px;margin-bottom:10px;">📂</div>'
+    +  '<div style="font-family:var(--font-mono);font-size:13px;color:var(--text2);font-weight:600;">Arrastra el CSV aquí o haz clic para seleccionar</div>'
+    +  '<div style="font-size:11px;color:var(--text3);margin-top:6px;">VirtuGym · Informe de actividades · Rango mensual</div>'
+    +'</div>'
+    +'<input type="file" id="inf-entr-input" accept=".csv" style="display:none" onchange="window._infEntrLoadCSV(this.files[0])">'
+    +'<div id="inf-entr-result"></div>'
+    +'</div>';
+  if(_infEntrData) _renderEntrTabla(_infEntrData);
+}
+
+window._infEntrHandleDrop=function(ev){
+  ev.preventDefault();
+  var dz=document.getElementById('inf-entr-dropzone');
+  if(dz) dz.style.borderColor='var(--border2)';
+  var file=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0];
+  if(file) window._infEntrLoadCSV(file);
+};
+
+window._infEntrLoadCSV=function(file){
+  if(!file||!file.name.match(/\.csv$/i)){
+    toast('Selecciona un .csv. Si tienes .xls, ábrelo en Excel y Guardar como CSV.','err'); return;
+  }
+  var rdr=new FileReader();
+  rdr.onload=async function(e){
+    try {
+      var employees=await _infGetEmployees();
+      var parsed=_infParseEntrenadores(e.target.result, employees);
+      parsed.fuente=file.name;
+      _infEntrData=parsed;
+      _infEntrPlanes={};   // reset planes manuales en cada carga nueva
+      _renderEntrTabla(parsed);
+    } catch(err){ toast('Error al procesar el CSV: '+err.message,'err'); }
+  };
+  rdr.readAsText(file,'utf-8');
+};
+
+function _eNum(n){ return (Math.round(n*100)/100).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+
+// Recalcula incentivo de un instructor con sus planes manuales actuales
+function _infEntrCalc(rec){
+  var efect=Math.round(rec.efectivasPond*100)/100;
+  var extra=Math.max(0, efect-INF_ENTR_UMBRAL);
+  var incSes=Math.round(extra*INF_ENTR_EUR_SESION*100)/100;
+  var planes=parseInt(_infEntrPlanes[rec.nombre]||0,10)||0;
+  var incPlan=planes*INF_ENTR_EUR_PLAN;
+  return {efect, extra, incSes, planes, incPlan, bruto:Math.round((incSes+incPlan)*100)/100};
+}
+
+window._infEntrSetPlanes=function(nombreB64, val){
+  var nombre=decodeURIComponent(atob(nombreB64));
+  _infEntrPlanes[nombre]=parseInt(val,10)||0;
+  // recalcular solo las celdas de esa fila + total
+  if(_infEntrData) _renderEntrTabla(_infEntrData);
+};
+
+function _renderEntrTabla(data){
+  var el=document.getElementById('inf-entr-result');
+  if(!el) return;
+  var instructores=data.instructores, porInstr=data.porInstr;
+  if(!instructores.length){
+    el.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px;">Sin sesiones válidas en el archivo (solo carril piscina / reservas sin instructor).</div>';
+    return;
+  }
+  var ym=data.ymPrincipal;
+  var mesLabel=ym?(function(){var p=ym.split('-');var ms=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];return ms[parseInt(p[1])-1]+' '+p[0];})():'—';
+
+  var rows=instructores.map(function(n){
+    var rec=porInstr[n];
+    var c=_infEntrCalc(rec);
+    var nb64=btoa(encodeURIComponent(rec.nombre));
+    var noMatch=!rec.employee_id;
+    var k=rec.kpi;
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      +'<td style="padding:8px 6px;font-weight:600;color:var(--text);">'+_escHtml(rec.nombre)
+        +(noMatch?' <span title="No casó con BD" style="color:var(--amber);font-size:10px;">⚠ sin match</span>':'')+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+k.dir_efectiva+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;color:var(--text3);">'+k.dir_no_efectiva+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+k.pt+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+k.pt_duo+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+k.pt_30+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+k.val_funcional+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+k.visbody+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+k.banera_hielo+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;font-weight:700;color:var(--text);">'+_eNum(c.efect)+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;color:'+(c.extra>0?'var(--green)':'var(--text3)')+';font-weight:600;">'+_eNum(c.extra)+'</td>'
+      +'<td style="text-align:center;padding:6px 4px;">'
+        +'<input type="number" min="0" step="1" value="'+c.planes+'" '
+        +'oninput="window._infEntrSetPlanes(\''+nb64+'\',this.value)" '
+        +'style="width:54px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text);font-family:var(--font-mono);"></td>'
+      +'<td style="text-align:right;padding:8px 6px;font-weight:700;color:var(--amber);font-family:var(--font-mono);">'+_eNum(c.bruto)+'€</td>'
+      +'</tr>';
+  }).join('');
+
+  // Totales
+  var totBruto=instructores.reduce(function(s,n){ return s+_infEntrCalc(porInstr[n]).bruto; },0);
+
+  el.innerHTML=''
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:4px 0 12px;">'
+    +  '<div style="font-family:var(--font-mono);font-size:13px;color:var(--text2);font-weight:600;">📅 '+mesLabel+'</div>'
+    +  '<div style="font-size:11px;color:var(--text3);">'
+    +     instructores.length+' entrenadores · '+data.sinInstr+' filas sin instructor · '+data.descartadas+' descartadas'
+    +  '</div>'
+    +'</div>'
+    +(data.matchLog&&data.matchLog.length?'<div style="font-size:11px;color:var(--text3);background:var(--bg2);border-radius:6px;padding:8px 10px;margin-bottom:12px;">🔗 Nombres corregidos por aproximación: '+data.matchLog.map(_escHtml).join(' · ')+'</div>':'')
+    +'<div style="overflow-x:auto;">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:880px;">'
+    +'<thead><tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em;">'
+    +  '<th style="text-align:left;padding:8px 6px;">Entrenador</th>'
+    +  '<th style="padding:8px 4px;" title="Clases dirigidas efectivas (≥4 pers)">Dir.✓</th>'
+    +  '<th style="padding:8px 4px;" title="Clases dirigidas no efectivas (≤3 pers)">Dir.✗</th>'
+    +  '<th style="padding:8px 4px;" title="Entrenamiento personal">PT</th>'
+    +  '<th style="padding:8px 4px;" title="PT DUO (×1,5)">DUO</th>'
+    +  '<th style="padding:8px 4px;" title="PT 30 min (×0,5)">PT30</th>'
+    +  '<th style="padding:8px 4px;" title="Valoración funcional / Welcome Fit (×0,5)">Val.</th>'
+    +  '<th style="padding:8px 4px;" title="Visbody (×0,5)">Visb.</th>'
+    +  '<th style="padding:8px 4px;" title="Bañera de hielo (×0,5)">Hielo</th>'
+    +  '<th style="padding:8px 4px;" title="Sesiones efectivas ponderadas">Efect.</th>'
+    +  '<th style="padding:8px 4px;" title="Sesiones por encima del umbral">Extra</th>'
+    +  '<th style="padding:8px 4px;" title="Planes online vendidos (manual)">Planes</th>'
+    +  '<th style="text-align:right;padding:8px 6px;">Bruto</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'<tfoot><tr style="border-top:2px solid var(--border2);font-weight:700;">'
+    +  '<td colspan="12" style="text-align:right;padding:10px 6px;color:var(--text2);">TOTAL INCENTIVO BRUTO</td>'
+    +  '<td style="text-align:right;padding:10px 6px;color:var(--amber);font-family:var(--font-mono);">'+_eNum(totBruto)+'€</td>'
+    +'</tr></tfoot>'
+    +'</table></div>'
+    +'<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
+    +  '<button onclick="window._infEntrGuardar()" style="padding:10px 20px;border-radius:6px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-weight:700;font-family:var(--font-mono);font-size:12px;">💾 Guardar mes como base de incentivos</button>'
+    +  '<span style="font-size:11px;color:var(--text3);">Rellena los planes online antes de guardar. Esto fija la base definitiva del mes.</span>'
+    +'</div>';
+}
+
+// Guarda el mes en entrenadores_incentivos_mes (upsert por nombre+ym)
+window._infEntrGuardar=async function(){
+  if(!_infEntrData||!_infEntrData.instructores.length){ toast('Nada que guardar','err'); return; }
+  var ym=_infEntrData.ymPrincipal;
+  if(!ym){ toast('No se pudo determinar el mes del archivo','err'); return; }
+  if(!confirm('¿Guardar '+_infEntrData.instructores.length+' entrenadores como base de incentivos de '+ym+'?\nSe sobrescribe cualquier cálculo previo de ese mes.')) return;
+
+  try {
+    // Borrar registros previos del mes (reescritura limpia)
+    await sbRequest('DELETE','entrenadores_incentivos_mes',null,'ym=eq.'+encodeURIComponent(ym));
+
+    var rows=_infEntrData.instructores.map(function(n){
+      var rec=_infEntrData.porInstr[n];
+      var c=_infEntrCalc(rec);
+      var k=rec.kpi;
+      return {
+        id: genId(),
+        employee_id: rec.employee_id,
+        employee_nombre: rec.nombre,
+        ym: ym,
+        n_dir_efectivas: k.dir_efectiva,
+        n_dir_no_efect:  k.dir_no_efectiva,
+        n_pt:            k.pt,
+        n_pt_duo:        k.pt_duo,
+        n_pt_30:         k.pt_30,
+        n_val_funcional: k.val_funcional,
+        n_visbody:       k.visbody,
+        n_banera_hielo:  k.banera_hielo,
+        sesiones_efectivas: c.efect,
+        umbral: INF_ENTR_UMBRAL,
+        sesiones_extra: c.extra,
+        incentivo_sesiones: c.incSes,
+        planes_online: c.planes,
+        incentivo_planes: c.incPlan,
+        incentivo_bruto: c.bruto,
+        subido_por: (currentUser&&currentUser.nombre)||'',
+        fuente_archivo: _infEntrData.fuente||'',
+        created_at: localTs()
+      };
+    });
+
+    var res=await dbInsert('entrenadores_incentivos_mes', rows);
+    if(res===null){ toast('Error al guardar (revisa consola). ¿Existe la tabla?','err'); return; }
+    invalidateCache('entrenadores_incentivos_mes');
+    await auditLog('ENTR_INCENTIVOS_SAVE', (currentUser&&currentUser.nombre)+' guardó incentivos Entrenadores '+ym+' ('+rows.length+' entrenadores) desde '+(_infEntrData.fuente||'CSV'));
+    toast('Base de incentivos guardada para '+ym,'ok');
+  } catch(e){ toast('Error: '+e.message,'err'); }
 };
 
 function _escHtml(s){
