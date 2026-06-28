@@ -464,7 +464,7 @@ function getScreens(rol){
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
     cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
     cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
-    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento', pending:true},
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento'},
     hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
     hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
     hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
@@ -804,6 +804,7 @@ async function showScreen(id){
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
   if(id==='notas-mod'){ renderNotasMod(); }
+  if(id==='mant-mod'    && typeof renderMantenimientoMod==='function')  renderMantenimientoMod();
   // ── Housekeeping ──
   if(id==='ruta-mod'    && typeof renderHKMiRuta==='function')         renderHKMiRuta();
   if(id==='hk-plan'     && typeof renderHKPlanificacion==='function')  renderHKPlanificacion();
