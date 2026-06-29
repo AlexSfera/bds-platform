@@ -1466,41 +1466,36 @@ async function _doSaveTurno(){
   } else {
     // GUARD: lógica de turnos por día (BUG-TURNO-03 + regla 2 turnos/día)
     // Reglas:
-    //   1) Si hay turno Pendiente o En corrección → bloqueado (jefe debe validar primero).
+    //   1) Turno Pendiente/En corrección → NO bloquea (Jun 2026, decisión CEO):
+    //      se permite registrar; solo se avisa de cuántos quedan sin validar.
     //   2) Si ya hay 1 turno Validado con horas < 5 → se permite un segundo turno.
     //   3) Si ya hay 1 turno Validado con horas >= 5 → no se permite otro en el mismo día.
-    //   4) Si ya hay 2 turnos Validados → bloqueado siempre.
+    //   4) Si ya hay 2 turnos Validados → bloqueado siempre (tope 2/día).
+    var _avisoPendientes = 0;
     try {
       var allShifts = await getDB('shifts');
       var turnosHoy = (allShifts||[]).filter(function(s){
         return s.employee_id === currentUser.id
           && (s.fecha||'').slice(0,10) === (fecha||'').slice(0,10);
       });
-      // Regla 1: turno pendiente activo → bloqueo
-      var bloqueante = turnosHoy.find(function(s){
+      // Regla 1: turnos pendientes → solo informativo, NO bloquea
+      _avisoPendientes = turnosHoy.filter(function(s){
         return s.estado === 'Pendiente' || s.estado === 'En corrección';
-      });
-      if(bloqueante){
+      }).length;
+      // Regla 2-4: el TOPE de 2 turnos/día cuenta TODOS los turnos del día
+      // (pendientes + validados), no solo validados, para que no se acumulen
+      // registros sin fin mientras el jefe no valida.
+      if(turnosHoy.length >= 2){
         const alertArea = document.getElementById('turno-alert-area');
         if(alertArea){
-          alertArea.innerHTML = '<div class="alert a-err">Ya tienes un turno PENDIENTE de hoy ('+formatDisplayValue(bloqueante.servicio)+'). '
-            + 'Espera a que tu jefe lo valide o pídele que lo rechace antes de crear otro.</div>';
-        }
-        toast('Ya hay turno pendiente hoy','err');
-        return;
-      }
-      // Regla 2-4: evaluar turnos validados del día
-      var validadosHoy = turnosHoy.filter(function(s){
-        return s.estado === 'Validado';
-      });
-      if(validadosHoy.length >= 2){
-        const alertArea = document.getElementById('turno-alert-area');
-        if(alertArea){
-          alertArea.innerHTML = '<div class="alert a-err">Ya tienes 2 turnos cerrados hoy. No es posible registrar más.</div>';
+          alertArea.innerHTML = '<div class="alert a-err">Ya tienes 2 turnos registrados hoy. No es posible registrar más.</div>';
         }
         toast('Máximo 2 turnos por día alcanzado','err');
         return;
       }
+      var validadosHoy = turnosHoy.filter(function(s){
+        return s.estado === 'Validado';
+      });
       if(validadosHoy.length === 1){
         var primerTurno = validadosHoy[0];
         var horasPrimer = parseFloat(primerTurno.horas)||0;
@@ -1529,6 +1524,13 @@ async function _doSaveTurno(){
     invalidateCache('shifts');
     auditLog('SAVE_SHIFT', currentUser.nombre+' — '+fecha+' — '+servicio);
     toast('Turno guardado','ok');
+    if(_avisoPendientes > 0){
+      var _aaPend = document.getElementById('turno-alert-area');
+      if(_aaPend){
+        _aaPend.innerHTML = '<div class="alert a-warn">ℹ Tienes '+_avisoPendientes+' turno(s) de hoy sin validar por tu jefe. '
+          + 'Puedes seguir registrando; tu jefe los validará después.</div>';
+      }
+    }
     window._lastSavedShiftId = shiftId; // for cierre caja link
     console.log('SYNCROSFERA QA shift guardado id',shiftId);
   }

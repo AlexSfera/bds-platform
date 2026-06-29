@@ -1386,7 +1386,8 @@ function _ensureEntrKpiModal(){
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;';
   var campos = _ENTR_KPI_CAMPOS.map(function(c){
     return '<div class="fg"><label>'+c.lbl+'</label>'
-      + '<input type="text" inputmode="numeric" id="entrkpi-'+c.k+'" placeholder="0" '
+      + '<input type="number" inputmode="numeric" min="0" step="1" id="entrkpi-'+c.k+'" placeholder="0" '
+      + 'oninput="this.value=this.value.replace(/[^0-9]/g,\'\')" '
       + 'style="color:#111827;background:#ffffff;"></div>';
   }).join('');
   ov.innerHTML = '<div class="modal-box" style="max-width:560px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:24px;">'
