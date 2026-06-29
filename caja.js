@@ -686,6 +686,11 @@ function getServicioValue() {
     var admChecked = document.querySelector('input[name="servicio-adm"]:checked');
     return admChecked ? admChecked.value : '';
   }
+  // Mantenimiento: return turno (Mañana/Tarde/Extra) desde radio
+  if(currentUser && currentUser.area === 'Mantenimiento'){
+    var mntChecked = document.querySelector('input[name="servicio-mant"]:checked');
+    return mntChecked ? mntChecked.value : '';
+  }
   // SYNCROLAB: return turno (Mañana/Tarde) desde radio servicio-lab
   if(currentUser && /syncrolab|syncro lab|entrenador|fisio|cl\u00ednica|clinica/i.test((currentUser.area||'')+' '+(currentUser.puesto||''))){
     var labChecked = document.querySelector('input[name="servicio-lab"]:checked');
