@@ -819,7 +819,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <h2 class="ps-dept-title">Selecciona tu departamento</h2>
         </div>
         <div class="ps-micro-status">
-          <strong>7</strong> activos · <strong style="color:#ffb020">2</strong> próximamente · v4.0
+          <strong>8</strong> activos · <strong style="color:#ffb020">2</strong> próximamente · v4.0
         </div>
       </div>
 
@@ -860,12 +860,12 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <div class="ps-dc-meta">Administración · Recursos</div>
           <span class="ps-dc-status">Activo</span>
         </button>
-        <!-- PRÓXIMAMENTE -->
-        <div class="ps-dept-card soon" aria-disabled="true">
+        <!-- ENTRENADORES -->
+        <button class="ps-dept-card" onclick="pSel('entrenadores','Entrenadores','#22c55e')">
           <div class="ps-dc-name">Entrenadores</div>
           <div class="ps-dc-meta">Sesiones · Seguimiento</div>
-          <span class="ps-dc-status">Próximamente</span>
-        </div>
+          <span class="ps-dc-status">Activo</span>
+        </button>
         <button class="ps-dept-card" onclick="pSel('mantenimiento','Mantenimiento','#ef4444')">
           <div class="ps-dc-name">Mantenimiento</div>
           <div class="ps-dc-meta">Reparaciones · Tareas</div>
@@ -1201,11 +1201,6 @@ tr:hover td{background:rgba(96,165,250,.06);}
               <div id="t-servicio-adm" style="display:none;flex-wrap:wrap;gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Mañana" style="width:16px;height:16px;accent-color:#a855f7;"> 🌅 Mañana</label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Tarde" style="width:16px;height:16px;accent-color:#a855f7;"> 🌆 Tarde</label>
-              </div>
-              <div id="t-servicio-mant" style="display:none;flex-wrap:wrap;gap:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;">
-                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;"><input type="radio" name="servicio-mant" value="Mañana" style="width:16px;height:16px;accent-color:#ef4444;"> 🌅 Mañana</label>
-                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;"><input type="radio" name="servicio-mant" value="Tarde" style="width:16px;height:16px;accent-color:#ef4444;"> 🌆 Tarde</label>
-                <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;"><input type="radio" name="servicio-mant" value="Extra" style="width:16px;height:16px;accent-color:#ef4444;"> ⚡ Extra</label>
               </div>
             </div></div>
           <div class="fg"><label>Horas trabajadas <span class="req">*</span></label><input type="number" id="t-horas" min="0.5" max="16" step="0.5" placeholder="8"></div>
@@ -1626,10 +1621,10 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
     <!-- ══ MAESTRO ══ -->
     <div class="screen" id="screen-maestro">
-      <div class="page-header"><div class="page-title">👥 Maestro Cocina</div><div class="page-sub">Solo Administrador</div></div>
+      <div class="page-header"><div class="page-title" id="maestro-title">👥 Maestro</div><div class="page-sub" id="maestro-sub">Gestión de empleados</div></div>
       <div class="btn-row" style="margin-bottom:14px;">
         <button class="btn btn-primary" onclick="openEmpModal()">+ Nuevo Empleado</button>
-        <button class="btn btn-secondary" onclick="exportCSV('employees')">⬇ CSV</button>
+        <button class="btn btn-secondary" id="maestro-csv-btn" onclick="exportCSV('employees')">⬇ CSV</button>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
         <input type="search" id="maestro-search" placeholder="Buscar por nombre, área, puesto, rol..." autocomplete="off" oninput="filterMaestro()" style="flex:1;min-width:200px;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;">
@@ -2346,6 +2341,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="modal-title" id="me-title">Empleado</div>
     <div class="grid2" style="gap:12px;">
       <div class="fg sp2"><label>Nombre <span class="req">*</span></label><input type="text" id="emp-nombre"></div>
+      <div class="fg sp2"><label>Correo electrónico <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— opcional · si se añade, se envía invitación automáticamente</span></label><input type="email" id="emp-email" autocomplete="off" placeholder="nombre@ejemplo.com"></div>
       <!-- Área: oculta — se deriva automáticamente del puesto vía _syncAreaFromPuesto() -->
       <select id="emp-area" style="display:none;" aria-hidden="true">
         <option>Sala</option><option>Cocina</option><option>Recepción</option>
@@ -2404,7 +2400,24 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <option>Responsable</option>
   </optgroup>
 </select></div>
-      <div class="fg" id="emp-pin-row"><label>PIN (4-6 dígitos) <span class="req">*</span></label><input type="text" id="emp-pin" maxlength="6" autocomplete="new-password"></div>
+      <!-- Sección acceso: modo creación (PIN nuevo) o modo edición (estado PIN) -->
+      <div class="fg sp2" id="emp-pin-row">
+        <!-- En creación -->
+        <div id="emp-pin-create">
+          <label>PIN de acceso (4-6 dígitos) <span class="req">*</span></label>
+          <input type="password" id="emp-pin" maxlength="6" autocomplete="new-password" placeholder="····">
+          <span style="font-size:11px;color:var(--text3);display:block;margin-top:4px;">El empleado recibirá un correo indicando que su acceso ha sido configurado.</span>
+        </div>
+        <!-- En edición -->
+        <div id="emp-pin-status" style="display:none;">
+          <label>Acceso al sistema</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+            <span id="emp-pin-badge" class="badge b-green">PIN configurado</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="emp-pin-reset-btn" onclick="openResetPinModal()" style="font-size:11px;">🔑 Restablecer PIN</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="emp-reinvite-btn" onclick="reenviarInvitacion()" style="font-size:11px;display:none;">📧 Reenviar invitación</button>
+          </div>
+        </div>
+      </div>
       <div class="fg"><label>Coste €/hora</label><input type="number" id="emp-coste" step="0.01" min="0"></div>
       <div class="fg"><label>Estado</label><select id="emp-estado"><option>Activo</option><option>Baja</option><option>Vacaciones</option></select></div>
       <div class="fg"><label>Responsable de turno</label><select id="emp-resp"><option value="1">Sí</option><option value="0">No</option></select></div>
@@ -2420,6 +2433,32 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-empleado')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveEmpleado()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL RESET PIN ══ -->
+<div class="modal-overlay" id="modal-reset-pin">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">🔑 Restablecer PIN</div>
+    <p id="reset-pin-emp-nombre" style="color:var(--text2);font-size:13px;margin:0 0 12px;"></p>
+    <div class="fg" style="margin-bottom:12px;">
+      <label>Nuevo PIN (4-6 dígitos) <span class="req">*</span></label>
+      <input type="password" id="reset-pin-value" maxlength="6" autocomplete="new-password" placeholder="····" style="letter-spacing:4px;font-size:18px;text-align:center;">
+    </div>
+    <div class="fg" style="margin-bottom:16px;">
+      <label>Confirmar PIN</label>
+      <input type="password" id="reset-pin-confirm" maxlength="6" autocomplete="new-password" placeholder="····" style="letter-spacing:4px;font-size:18px;text-align:center;">
+    </div>
+    <div id="reset-pin-email-row" style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--text2);display:none;">
+      <strong>📧 Notificación:</strong> Se enviará un correo a <span id="reset-pin-email-addr" style="color:var(--accent1);"></span> informando del cambio de PIN.
+    </div>
+    <div id="reset-pin-noemail-row" style="background:#7f1d1d22;border:1px solid #991b1b;border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:#fca5a5;display:none;">
+      ⚠️ Este empleado no tiene correo registrado. El nuevo PIN deberá comunicarse de forma presencial y segura.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-reset-pin')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarResetPin()">💾 Guardar nuevo PIN</button>
     </div>
   </div>
 </div>
