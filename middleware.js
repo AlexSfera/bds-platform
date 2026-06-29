@@ -1,4 +1,4 @@
-export const config = { matcher: '/((?!_next/static|_next/image|favicon.ico|api/).*)' };
+export const config = { matcher: '/((?!_next/static|_next/image|favicon.ico).*)' };
 
 const ALLOWED_IPS = [
   '81.0.50.118',    // SYNCROSFERA — red recinto
@@ -7,6 +7,8 @@ const ALLOWED_IPS = [
   '45.153.97.234',  // Casa
   '90.167.42.33',    // [POR DEFINIR]
   '89.131.180.187',  // [POR DEFINIR]
+  '37.29.174.46',    // [POR DEFINIR]
+  '45.153.97.24',    // [POR DEFINIR]
 ];
 
 export default function middleware(req) {
