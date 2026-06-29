@@ -62,7 +62,7 @@ function resetChkState(){
   _chkSavedState = [];
   _chkPendingData = null;
 }
-function openChkMidDay(){ chkOpen(null); }
+function openChkMidDay(){ _chkPendingData = null; chkOpen(null); }
 
 // ── DATOS CHECKLIST COCINA ──
 var CHK_COCINA_ITEMS = ['Camaras y cuarto frio revisados','Temperaturas de camaras y congeladores OK','Producto sin fecha / en mal estado retirado','Buffet gestionado correctamente','Vitrina gestionada correctamente (montaje + retirada)','No quedan comandas pendientes','Fuegos, horno, plancha, freidoras apagados','Gas cerrado','Extractor / campana apagados','Fogones limpios sin grasa','Bancadas limpias','Paredes sin grasa visible','Faltas de stock anotadas'];
@@ -278,6 +278,15 @@ async function chkConfirm(){
   _chkSavedState=_chkState.slice();
   var m=document.getElementById('modal-checklist');
   if(m) m.classList.remove('open');
+  // GUARD GLOBAL: si el checklist se abrió a mitad de día (botón Checklist →
+  // openChkMidDay → chkOpen(null)), confirmar solo guarda el estado, NO cierra
+  // turno. El cierre de turno entra con chkOpen({}) (objeto), que sí dispara
+  // caja/KPI/save abajo. Aplica a TODOS los departamentos.
+  if(_chkPendingData == null){
+    _chkSaveLs();
+    if(typeof toast === 'function') toast('Checklist guardado','ok');
+    return;
+  }
   var isSala=currentUser&&currentUser.area==='Sala';
   var isRec=currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción');
   var isEntr=(typeof _esEntrenador==='function')&&_esEntrenador(currentUser);
