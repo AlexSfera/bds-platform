@@ -510,6 +510,7 @@ async function _mrEntrMis(){
   }
   var pares = _MR_ENTR_KPI_KEYS.map(function(k){ return {lbl:_MR_ENTR_KPI_LBL[k], v:sum[k]}; });
   var total = _MR_ENTR_KPI_KEYS.reduce(function(a,k){ return a+sum[k]; },0);
+  var comparador = await _mrEntrComparador(sum);
   return '<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">'
       + 'Suma de lo que registraste en tus '+nTurnos+' turno(s) de este mes. Es autocontrol: el incentivo lo calcula el jefe con VirtuGym.</div>'
     + '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;">'
@@ -519,6 +520,55 @@ async function _mrEntrMis(){
     +     '<div style="font-size:28px;font-weight:700;color:var(--text);">'+total+'</div>'
     +     '<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+nTurnos+' turnos</div>'
     +   '</div>'
+    + '</div>'
+    + comparador;
+}
+
+// COMPARADOR mensual: autorreporte (sum) vs oficial VirtuGym (entrenadores_incentivos_mes)
+// Cruza por KPI y marca las desviaciones. Solo del propio usuario.
+async function _mrEntrComparador(sum){
+  var filas;
+  try { filas = await getDB('entrenadores_incentivos_mes'); }
+  catch(e){ return ''; }
+  var mia = (filas||[]).find(function(r){
+    return r.ym === _mrEntrMonth &&
+      (r.employee_id === currentUser.id || r.employee_nombre === currentUser.nombre);
+  });
+  if(!mia){
+    return '<div style="margin-top:16px;padding:12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text3);">'
+      + 'ℹ El contraste con VirtuGym aparecerá cuando tu jefe publique el informe oficial del mes.</div>';
+  }
+  var colMap = {dir_efectiva:'n_dir_efectivas',dir_no_efectiva:'n_dir_no_efect',pt:'n_pt',pt_duo:'n_pt_duo',
+                pt_30:'n_pt_30',val_funcional:'n_val_funcional',visbody:'n_visbody',banera_hielo:'n_banera_hielo'};
+  var nDesv = 0;
+  var rows = _MR_ENTR_KPI_KEYS.map(function(k){
+    var mio = sum[k]||0;
+    var ofi = parseInt(mia[colMap[k]],10)||0;
+    var d = mio - ofi;
+    var hayDesv = (d !== 0);
+    if(hayDesv) nDesv++;
+    var dTxt = d === 0 ? '0' : (d>0?'+'+d:''+d);
+    var dCol = d === 0 ? 'var(--text3)' : 'var(--red)';
+    return '<tr style="border-bottom:1px solid var(--border);'+(hayDesv?'background:rgba(239,68,68,.05);':'')+'">'
+      + '<td style="padding:6px 8px;color:var(--text2);">'+_MR_ENTR_KPI_LBL[k]+'</td>'
+      + '<td style="text-align:center;padding:6px 8px;font-family:var(--font-mono);">'+mio+'</td>'
+      + '<td style="text-align:center;padding:6px 8px;font-family:var(--font-mono);">'+ofi+'</td>'
+      + '<td style="text-align:center;padding:6px 8px;font-family:var(--font-mono);font-weight:700;color:'+dCol+';">'+dTxt+'</td>'
+      + '</tr>';
+  }).join('');
+  var resumen = nDesv === 0
+    ? '<span class="badge b-green">✓ Tu registro coincide con VirtuGym</span>'
+    : '<span class="badge b-yellow">⚠ '+nDesv+' KPI con diferencia</span>';
+  return '<div style="margin-top:20px;">'
+    + '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">🔍 Tu registro vs VirtuGym — '+resumen+'</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Comparación del total del mes. Las diferencias no afectan tu incentivo (se calcula con VirtuGym), pero te ayudan a registrar mejor.</div>'
+    + '<div style="overflow-x:auto;"><table style="width:100%;max-width:480px;border-collapse:collapse;font-size:12px;">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;">'
+    +   '<th style="text-align:left;padding:6px 8px;">KPI</th>'
+    +   '<th style="text-align:center;padding:6px 8px;">Tú</th>'
+    +   '<th style="text-align:center;padding:6px 8px;">VirtuGym</th>'
+    +   '<th style="text-align:center;padding:6px 8px;">Δ</th>'
+    + '</tr></thead><tbody>'+rows+'</tbody></table></div>'
     + '</div>';
 }
 
@@ -540,13 +590,10 @@ async function _mrEntrJefe(){
                 pt_30:'n_pt_30',val_funcional:'n_val_funcional',visbody:'n_visbody',banera_hielo:'n_banera_hielo'})[k];
     return {lbl:_MR_ENTR_KPI_LBL[k], v:parseInt(mia[col],10)||0};
   });
-  var efect = parseFloat(mia.sesiones_efectivas)||0;
-  var umbral = parseFloat(mia.umbral)||85;
-  var extra = parseFloat(mia.sesiones_extra)||0;
+  var metodo = mia.metodo_calculo || 'umbral';
   var bruto = parseFloat(mia.incentivo_bruto)||0;
   var planes = parseInt(mia.planes_online,10)||0;
   var liquidado = (mia.liquidado === true);
-  var pct = Math.min(100, Math.round((efect/umbral)*100));
   var estadoBadge = liquidado
     ? '<span class="badge b-green">✓ Liquidado</span>'
     : '<span class="badge b-yellow">Pendiente de liquidar</span>';
@@ -560,20 +607,46 @@ async function _mrEntrJefe(){
       + _fotos.map(function(u,i){ return '<a href="'+u+'" target="_blank" rel="noopener" style="color:var(--accent);">📎 '+(i+1)+'</a>'; }).join(' ')
       + '</div>';
   }
-  return '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Cifras oficiales de VirtuGym usadas para tu incentivo. '+estadoBadge+'</div>'+liqInfo
+
+  // Tarjeta de cálculo según método
+  var tarjetaCalc;
+  if(metodo === 'precio_hora'){
+    var horas = parseFloat(mia.horas_efectivas)||0;
+    var ph = parseFloat(mia.precio_hora)||0;
+    var bn = parseFloat(mia.base_neto)||0;
+    var incHoras = parseFloat(mia.incentivo_horas)|| (horas*ph);
+    tarjetaCalc = '<div style="background:var(--bg2);border-radius:8px;padding:14px 16px;margin-bottom:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;">HORAS EFECTIVAS · PRECIO POR HORA</div>'
+      + '<div style="font-size:24px;font-weight:700;color:var(--text);">'+_mrEntrNum(horas)+' h <span style="font-size:13px;color:var(--text3);font-weight:400;">× '+_mrEntrNum(ph)+'€</span></div>'
+      + '<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.7;">'
+      +   'Horas × tarifa: <b>'+_mrEntrNum(incHoras)+'€</b><br>'
+      +   'Base neto mensual: <b style="color:var(--red);">− '+_mrEntrNum(bn)+'€</b>'
+      +   (planes>0?'<br>Planes online: <b>'+planes+'</b>':'')
+      + '</div></div>';
+  } else {
+    var efect = parseFloat(mia.sesiones_efectivas)||0;
+    var umbral = parseFloat(mia.umbral)||85;
+    var extra = parseFloat(mia.sesiones_extra)||0;
+    var pct = Math.min(100, Math.round((efect/umbral)*100));
+    tarjetaCalc = '<div style="background:var(--bg2);border-radius:8px;padding:14px 16px;margin-bottom:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;">SESIONES EFECTIVAS</div>'
+      + '<div style="font-size:24px;font-weight:700;color:var(--text);">'+_mrEntrNum(efect)+' <span style="font-size:13px;color:var(--text3);font-weight:400;">/ '+umbral+' umbral</span></div>'
+      + '<div style="height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden;">'
+      +   '<div style="height:100%;width:'+pct+'%;background:'+(efect>=umbral?'var(--green)':'var(--amber)')+';"></div></div>'
+      + '<div style="font-size:11px;color:var(--text3);margin-top:6px;">Sesiones extra: <b style="color:'+(extra>0?'var(--green)':'var(--text3)')+';">'+_mrEntrNum(extra)+'</b> · Planes online: <b>'+planes+'</b></div>'
+      + '</div>';
+  }
+  var metLabel = metodo==='precio_hora'
+    ? '<span class="badge b-blue">Precio por hora</span>'
+    : '<span class="badge b-gray">Por umbral</span>';
+  return '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Cifras oficiales de VirtuGym usadas para tu incentivo. '+metLabel+' '+estadoBadge+'</div>'+liqInfo
     + '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-top:8px;">'
     +   '<div style="flex:1;min-width:300px;">'+_mrEntrBarras(pares)+'</div>'
     +   '<div style="min-width:200px;">'
-    +     '<div style="background:var(--bg2);border-radius:8px;padding:14px 16px;margin-bottom:10px;">'
-    +       '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;">SESIONES EFECTIVAS</div>'
-    +       '<div style="font-size:24px;font-weight:700;color:var(--text);">'+_mrEntrNum(efect)+' <span style="font-size:13px;color:var(--text3);font-weight:400;">/ '+umbral+' umbral</span></div>'
-    +       '<div style="height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden;">'
-    +         '<div style="height:100%;width:'+pct+'%;background:'+(efect>=umbral?'var(--green)':'var(--amber)')+';"></div></div>'
-    +       '<div style="font-size:11px;color:var(--text3);margin-top:6px;">Sesiones extra: <b style="color:'+(extra>0?'var(--green)':'var(--text3)')+';">'+_mrEntrNum(extra)+'</b> · Planes online: <b>'+planes+'</b></div>'
-    +     '</div>'
+    +     tarjetaCalc
     +     '<div style="background:var(--bg2);border-radius:8px;padding:14px 16px;">'
     +       '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;">INCENTIVO BRUTO</div>'
-    +       '<div style="font-size:28px;font-weight:700;color:var(--amber);font-family:var(--font-mono);">'+_mrEntrNum(bruto)+'€</div>'
+    +       '<div style="font-size:28px;font-weight:700;color:'+(bruto<0?'var(--red)':'var(--amber)')+';font-family:var(--font-mono);">'+_mrEntrNum(bruto)+'€</div>'
     +     '</div>'
     +   '</div>'
     + '</div>';
@@ -592,6 +665,22 @@ async function _mrEntrEquipo(){
   delMes.sort(function(a,b){ return (parseFloat(b.incentivo_bruto)||0)-(parseFloat(a.incentivo_bruto)||0); });
   var totBruto = delMes.reduce(function(s,r){ return s+(parseFloat(r.incentivo_bruto)||0); },0);
   var nLiq = delMes.filter(function(r){ return r.liquidado===true; }).length;
+  // Precalcular autorreporte del mes por empleado (suma de shifts.kpi_entrenador)
+  var range = getMonthDateRange(_mrEntrMonth);
+  var shifts = [];
+  try { shifts = await getDB('shifts'); } catch(e){ shifts = []; }
+  var autoPorEmp = {};  // employee_id → {kpiKey: total}
+  (shifts||[]).forEach(function(s){
+    var f = (s.fecha||'').slice(0,10);
+    if(f < range.inicio || f > range.fin || !s.kpi_entrenador) return;
+    var kpi=null;
+    try { kpi = (typeof s.kpi_entrenador === 'string') ? JSON.parse(s.kpi_entrenador) : s.kpi_entrenador; } catch(e){ kpi=null; }
+    if(!kpi) return;
+    if(!autoPorEmp[s.employee_id]){ autoPorEmp[s.employee_id]={}; _MR_ENTR_KPI_KEYS.forEach(function(k){ autoPorEmp[s.employee_id][k]=0; }); }
+    _MR_ENTR_KPI_KEYS.forEach(function(k){ autoPorEmp[s.employee_id][k] += parseInt(kpi[k],10)||0; });
+  });
+  var colMap = {dir_efectiva:'n_dir_efectivas',dir_no_efectiva:'n_dir_no_efect',pt:'n_pt',pt_duo:'n_pt_duo',
+                pt_30:'n_pt_30',val_funcional:'n_val_funcional',visbody:'n_visbody',banera_hielo:'n_banera_hielo'};
   var rows = delMes.map(function(r){
     var efect = parseFloat(r.sesiones_efectivas)||0;
     var umbral = parseFloat(r.umbral)||85;
@@ -600,25 +689,43 @@ async function _mrEntrEquipo(){
     var liq = (r.liquidado===true)
       ? '<span class="badge b-green">✓ Liquidado</span>'
       : '<span class="badge b-yellow">Pendiente</span>';
+    // Autocontrol: comparar autorreporte vs oficial por KPI
+    var auto = autoPorEmp[r.employee_id];
+    var autoCell;
+    if(!auto){
+      autoCell = '<span class="badge b-gray" title="El entrenador no registró turnos con KPI este mes">Sin reporte</span>';
+    } else {
+      var nDesv = 0;
+      _MR_ENTR_KPI_KEYS.forEach(function(k){
+        var mio = auto[k]||0;
+        var ofi = parseInt(r[colMap[k]],10)||0;
+        if(mio !== ofi) nDesv++;
+      });
+      autoCell = nDesv === 0
+        ? '<span class="badge b-green" title="Coincide con VirtuGym">✓ OK</span>'
+        : '<span class="badge b-yellow" title="'+nDesv+' KPI no coinciden con VirtuGym">⚠ '+nDesv+'</span>';
+    }
     return '<tr style="border-bottom:1px solid var(--border);">'
       + '<td style="padding:8px 6px;font-weight:600;color:var(--text);">'+formatDisplayValue(r.employee_nombre)+'</td>'
       + '<td style="text-align:center;padding:8px 4px;font-weight:700;color:'+(efect>=umbral?'var(--green)':'var(--text2)')+';">'+_mrEntrNum(efect)+'</td>'
       + '<td style="text-align:center;padding:8px 4px;color:var(--text3);">'+umbral+'</td>'
       + '<td style="text-align:center;padding:8px 4px;color:'+(extra>0?'var(--green)':'var(--text3)')+';font-weight:600;">'+_mrEntrNum(extra)+'</td>'
       + '<td style="text-align:center;padding:8px 4px;color:var(--text3);">'+(parseInt(r.planes_online,10)||0)+'</td>'
-      + '<td style="text-align:right;padding:8px 6px;font-weight:700;color:var(--amber);font-family:var(--font-mono);">'+_mrEntrNum(bruto)+'€</td>'
+      + '<td style="text-align:center;padding:8px 4px;">'+autoCell+'</td>'
+      + '<td style="text-align:right;padding:8px 6px;font-weight:700;color:'+(bruto<0?'var(--red)':'var(--amber)')+';font-family:var(--font-mono);">'+_mrEntrNum(bruto)+'€</td>'
       + '<td style="text-align:center;padding:8px 4px;">'+liq+'</td>'
       + '</tr>';
   }).join('');
   return '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">'
       + delMes.length+' entrenadores · '+nLiq+'/'+delMes.length+' liquidados · Total bruto del mes: <b style="color:var(--amber);">'+_mrEntrNum(totBruto)+'€</b></div>'
-    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px;">'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px;">'
     + '<thead><tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em;">'
     +   '<th style="text-align:left;padding:8px 6px;">Entrenador</th>'
     +   '<th style="text-align:center;padding:8px 4px;">Efectivas</th>'
     +   '<th style="text-align:center;padding:8px 4px;">Umbral</th>'
     +   '<th style="text-align:center;padding:8px 4px;">Extra</th>'
     +   '<th style="text-align:center;padding:8px 4px;">Planes</th>'
+    +   '<th style="text-align:center;padding:8px 4px;" title="Autorreporte del entrenador vs VirtuGym">Autocontrol</th>'
     +   '<th style="text-align:right;padding:8px 6px;">Bruto</th>'
     +   '<th style="text-align:center;padding:8px 4px;">Estado</th>'
     + '</tr></thead><tbody>'+rows+'</tbody></table></div>';

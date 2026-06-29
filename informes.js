@@ -1004,6 +1004,19 @@ var INF_ENTR_UMBRAL = 85;
 var INF_ENTR_EUR_SESION = 10;
 var INF_ENTR_EUR_PLAN = 6;
 
+// Config de incentivos por entrenador (método). Default: umbral.
+// Métodos: 'umbral' | 'precio_hora'
+var INF_ENTR_METODO_DEFAULT = 'umbral';
+// Horas efectivas por tipo de actividad (solo método precio/hora):
+var _INF_HORAS_PH = {
+  pt: 1, pt_duo: 1.5, pt_30: 0.5,
+  dir_efectiva: 1, dir_no_efectiva: 1,
+  val_funcional: 0.5, visbody: 0.5, banera_hielo: 0.5
+};
+// Config manual por entrenador editada en la pantalla (clave = nombre canónico):
+// { metodo, umbral, precio_hora, base_neto }
+var _infEntrConfig = {};
+
 // Clasifica una actividad (col F) + créditos (col J) → tipo KPI + factor.
 // Devuelve null si la fila debe descartarse.
 function _infEntrClasificar(actividad, credits){
@@ -1115,12 +1128,15 @@ function _infParseEntrenadores(text, employees){
     if(instr!==instrRaw && matchLog.indexOf(instrRaw+' → '+instr)<0) matchLog.push(instrRaw+' → '+instr);
 
     if(!porInstr[instr]){
-      porInstr[instr]={nombre:instr, employee_id:empId(instr), csvNombre:instrRaw, kpi:{}, efectivasPond:0, meses:{}};
+      porInstr[instr]={nombre:instr, employee_id:empId(instr), csvNombre:instrRaw, kpi:{}, efectivasPond:0, horasPH:0, meses:{}};
       KPI_KEYS.forEach(function(k){ porInstr[instr].kpi[k]=0; });
     }
     var rec=porInstr[instr];
     rec.kpi[cls.kpi]+=1;
     rec.efectivasPond += cls.factor;
+    // Horas efectivas para método PRECIO/HORA (tabla por tipo, no por créditos):
+    // PT 1h · PT dúo 1.5h · PT30 0.5h · clase (efect/no efect) 1h · val/visbody/bañera 0.5h
+    rec.horasPH += (_INF_HORAS_PH[cls.kpi] || 0);
     rec.meses[ym]=(rec.meses[ym]||0)+1;
   }
 
@@ -1188,14 +1204,53 @@ window._infEntrLoadCSV=function(file){
 
 function _eNum(n){ return (Math.round(n*100)/100).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:2}); }
 
-// Recalcula incentivo de un instructor con sus planes manuales actuales
+// Devuelve la config del entrenador (método/umbral/precio/base) priorizando
+// lo editado en pantalla; si no, lo guardado en su ficha (employees); si no, default.
+function _infEntrGetConfig(rec){
+  var manual = _infEntrConfig[rec.nombre] || {};
+  var emp = (typeof _infEntrEmpById === 'function') ? _infEntrEmpById(rec.employee_id) : null;
+  emp = emp || {};
+  var metodo = manual.metodo || emp.inc_metodo || INF_ENTR_METODO_DEFAULT;
+  return {
+    metodo: metodo,
+    umbral:      _numOr(manual.umbral,      _numOr(emp.inc_umbral, INF_ENTR_UMBRAL)),
+    precio_hora: _numOr(manual.precio_hora, _numOr(emp.inc_precio_hora, 0)),
+    base_neto:   _numOr(manual.base_neto,   _numOr(emp.inc_base_neto, 0))
+  };
+}
+function _numOr(v, def){ var n=parseFloat(v); return isNaN(n)?def:n; }
+function _infEntrEmpById(id){
+  if(!id || typeof _infEmployeesCache==='undefined' || !_infEmployeesCache) return null;
+  return _infEmployeesCache.find(function(e){ return e.id === id; }) || null;
+}
+
+// Recalcula incentivo de un instructor según su método configurado.
 function _infEntrCalc(rec){
-  var efect=Math.round(rec.efectivasPond*100)/100;
-  var extra=Math.max(0, efect-INF_ENTR_UMBRAL);
-  var incSes=Math.round(extra*INF_ENTR_EUR_SESION*100)/100;
+  var cfg = _infEntrGetConfig(rec);
   var planes=parseInt(_infEntrPlanes[rec.nombre]||0,10)||0;
   var incPlan=planes*INF_ENTR_EUR_PLAN;
-  return {efect, extra, incSes, planes, incPlan, bruto:Math.round((incSes+incPlan)*100)/100};
+
+  if(cfg.metodo === 'precio_hora'){
+    var horas = Math.round((rec.horasPH||0)*100)/100;
+    var incHoras = Math.round(horas*cfg.precio_hora*100)/100;
+    var bruto = Math.round((incHoras - cfg.base_neto + incPlan)*100)/100; // puede ser negativo
+    return {
+      metodo:'precio_hora', horas:horas, precio_hora:cfg.precio_hora, base_neto:cfg.base_neto,
+      incHoras:incHoras, planes:planes, incPlan:incPlan, bruto:bruto,
+      // campos de umbral en 0 para compatibilidad de columnas
+      efect:0, umbral:0, extra:0, incSes:0
+    };
+  }
+  // Método UMBRAL (por defecto)
+  var efect=Math.round(rec.efectivasPond*100)/100;
+  var extra=Math.max(0, efect-cfg.umbral);
+  var incSes=Math.round(extra*INF_ENTR_EUR_SESION*100)/100;
+  return {
+    metodo:'umbral', efect:efect, umbral:cfg.umbral, extra:extra, incSes:incSes,
+    planes:planes, incPlan:incPlan, bruto:Math.round((incSes+incPlan)*100)/100,
+    // campos precio/hora en 0
+    horas:0, precio_hora:0, base_neto:0, incHoras:0
+  };
 }
 
 window._infEntrSetPlanes=function(nombreB64, val){
@@ -1222,6 +1277,14 @@ function _renderEntrTabla(data){
     var nb64=btoa(encodeURIComponent(rec.nombre));
     var noMatch=!rec.employee_id;
     var k=rec.kpi;
+    var esPH=(c.metodo==='precio_hora');
+    var metBadge = esPH
+      ? '<span class="badge b-blue" title="Precio por hora">€/h</span>'
+      : '<span class="badge b-gray" title="Por umbral">Umbral</span>';
+    // Columna "Base de cálculo": en umbral muestra efectivas/umbral; en €/h muestra horas×precio−base
+    var baseCalc = esPH
+      ? _eNum(c.horas)+'h × '+_eNum(c.precio_hora)+'€ − '+_eNum(c.base_neto)+'€'
+      : _eNum(c.efect)+' / '+_eNum(c.umbral)+' · extra '+_eNum(c.extra);
     return '<tr style="border-bottom:1px solid var(--border);">'
       +'<td style="padding:8px 6px;font-weight:600;color:var(--text);">'+_escHtml(rec.nombre)
         +(noMatch?' <span title="No casó con BD" style="color:var(--amber);font-size:10px;">⚠ sin match</span>':'')+'</td>'
@@ -1233,13 +1296,13 @@ function _renderEntrTabla(data){
       +'<td style="text-align:center;padding:8px 4px;">'+k.val_funcional+'</td>'
       +'<td style="text-align:center;padding:8px 4px;">'+k.visbody+'</td>'
       +'<td style="text-align:center;padding:8px 4px;">'+k.banera_hielo+'</td>'
-      +'<td style="text-align:center;padding:8px 4px;font-weight:700;color:var(--text);">'+_eNum(c.efect)+'</td>'
-      +'<td style="text-align:center;padding:8px 4px;color:'+(c.extra>0?'var(--green)':'var(--text3)')+';font-weight:600;">'+_eNum(c.extra)+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;">'+metBadge+'</td>'
+      +'<td style="text-align:center;padding:8px 4px;font-size:11px;color:var(--text2);font-family:var(--font-mono);">'+baseCalc+'</td>'
       +'<td style="text-align:center;padding:6px 4px;">'
         +'<input type="number" min="0" step="1" value="'+c.planes+'" '
         +'oninput="window._infEntrSetPlanes(\''+nb64+'\',this.value)" '
         +'style="width:54px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text);font-family:var(--font-mono);"></td>'
-      +'<td style="text-align:right;padding:8px 6px;font-weight:700;color:var(--amber);font-family:var(--font-mono);">'+_eNum(c.bruto)+'€</td>'
+      +'<td style="text-align:right;padding:8px 6px;font-weight:700;color:'+(c.bruto<0?'var(--red)':'var(--amber)')+';font-family:var(--font-mono);">'+_eNum(c.bruto)+'€</td>'
       +'</tr>';
   }).join('');
 
@@ -1266,8 +1329,8 @@ function _renderEntrTabla(data){
     +  '<th style="padding:8px 4px;" title="Valoración funcional / Welcome Fit (×0,5)">Val.</th>'
     +  '<th style="padding:8px 4px;" title="Visbody (×0,5)">Visb.</th>'
     +  '<th style="padding:8px 4px;" title="Bañera de hielo (×0,5)">Hielo</th>'
-    +  '<th style="padding:8px 4px;" title="Sesiones efectivas ponderadas">Efect.</th>'
-    +  '<th style="padding:8px 4px;" title="Sesiones por encima del umbral">Extra</th>'
+    +  '<th style="padding:8px 4px;" title="Método de cálculo del incentivo">Método</th>'
+    +  '<th style="padding:8px 4px;" title="Base del cálculo según método">Cálculo</th>'
     +  '<th style="padding:8px 4px;" title="Planes online vendidos (manual)">Planes</th>'
     +  '<th style="text-align:right;padding:8px 6px;">Bruto</th>'
     +'</tr></thead>'
@@ -1279,6 +1342,7 @@ function _renderEntrTabla(data){
     +'</table></div>'
     +'<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
     +  '<button onclick="window._infEntrGuardar()" style="padding:10px 20px;border-radius:6px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-weight:700;font-family:var(--font-mono);font-size:12px;">💾 Guardar mes como base de incentivos</button>'
+    +  '<button onclick="window._infEntrConfigOpen()" style="padding:10px 20px;border-radius:6px;border:1px solid var(--border2);cursor:pointer;background:transparent;color:var(--text2);font-weight:700;font-family:var(--font-mono);font-size:12px;">⚙ Configurar métodos</button>'
     +  ( (typeof canActAsAdmin==='function' && canActAsAdmin(currentUser))
         ? '<button onclick="window._infEntrLiquidarMes()" style="padding:10px 20px;border-radius:6px;border:1px solid var(--green);cursor:pointer;background:transparent;color:var(--green);font-weight:700;font-family:var(--font-mono);font-size:12px;">✓ Marcar mes como liquidado</button>'
         : '' )
@@ -1393,12 +1457,17 @@ window._infEntrGuardar=async function(){
         n_visbody:       k.visbody,
         n_banera_hielo:  k.banera_hielo,
         sesiones_efectivas: c.efect,
-        umbral: INF_ENTR_UMBRAL,
+        umbral: c.metodo==='umbral' ? c.umbral : null,
         sesiones_extra: c.extra,
         incentivo_sesiones: c.incSes,
         planes_online: c.planes,
         incentivo_planes: c.incPlan,
         incentivo_bruto: c.bruto,
+        metodo_calculo: c.metodo,
+        horas_efectivas: c.horas,
+        precio_hora: c.precio_hora,
+        base_neto: c.base_neto,
+        incentivo_horas: c.incHoras,
         liquidado:     _liq ? true : false,
         liquidado_ts:  _liq ? _liq.liquidado_ts : null,
         liquidado_por: _liq ? _liq.liquidado_por : null,
@@ -1419,3 +1488,129 @@ window._infEntrGuardar=async function(){
 function _escHtml(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN DE MÉTODOS DE INCENTIVO POR ENTRENADOR
+// Botón "⚙ Configurar métodos" en la tab Entrenadores. Una fila por entrenador
+// del CSV cargado. Guarda en su ficha (employees) y recalcula al instante.
+// ═══════════════════════════════════════════════════════════════════════
+window._infEntrConfigOpen = function(){
+  if(!_infEntrData || !_infEntrData.instructores.length){
+    toast('Carga primero un archivo para ver los entrenadores','err'); return;
+  }
+  _ensureInfEntrConfigModal();
+  _renderInfEntrConfigRows();
+  document.getElementById('modal-inf-entr-cfg').style.display='flex';
+};
+
+function _ensureInfEntrConfigModal(){
+  if(document.getElementById('modal-inf-entr-cfg')) return;
+  var ov=document.createElement('div');
+  ov.id='modal-inf-entr-cfg';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;';
+  ov.innerHTML='<div class="modal-box" style="max-width:760px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:24px;">'
+    + '<div style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">⚙ Cómo se calcula el incentivo de cada entrenador</div>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:16px;line-height:1.6;">'
+    +   '<b>Por umbral:</b> cobra por cada sesión por encima de su objetivo mensual.<br>'
+    +   '<b>Por precio por hora:</b> cobra sus horas efectivas × tarifa, menos una base neto mensual. '
+    +   'Lo que pongas aquí se guarda en la ficha del entrenador y se usa en cada cálculo a partir de ahora.</div>'
+    + '<div id="inf-entr-cfg-rows"></div>'
+    + '<div id="inf-entr-cfg-err" style="color:var(--red);font-size:12px;min-height:16px;margin-top:8px;"></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">'
+    +   '<button class="btn btn-secondary" onclick="document.getElementById(\'modal-inf-entr-cfg\').style.display=\'none\'">Cerrar</button>'
+    +   '<button class="btn btn-primary" onclick="window._infEntrConfigGuardar()">💾 Guardar configuración</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){ if(e.target===ov) ov.style.display='none'; });
+}
+
+function _renderInfEntrConfigRows(){
+  var cont=document.getElementById('inf-entr-cfg-rows');
+  if(!cont) return;
+  var html='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px;">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em;">'
+    +   '<th style="text-align:left;padding:8px 6px;">Entrenador</th>'
+    +   '<th style="text-align:left;padding:8px 6px;">Método</th>'
+    +   '<th style="text-align:center;padding:8px 6px;">Objetivo (umbral)</th>'
+    +   '<th style="text-align:center;padding:8px 6px;">€/hora</th>'
+    +   '<th style="text-align:center;padding:8px 6px;">Base neto €/mes</th>'
+    + '</tr></thead><tbody>';
+  _infEntrData.instructores.forEach(function(n){
+    var rec=_infEntrData.porInstr[n];
+    var cfg=_infEntrGetConfig(rec);
+    var b64=btoa(encodeURIComponent(n));
+    var esPH=(cfg.metodo==='precio_hora');
+    html+='<tr style="border-bottom:1px solid var(--border);">'
+      + '<td style="padding:8px 6px;font-weight:600;color:var(--text);">'+_escHtml(rec.nombre)
+        + (rec.employee_id?'':' <span style="color:var(--amber);font-size:10px;" title="Sin match en BD: la config no se podrá guardar en su ficha">⚠ sin ficha</span>')+'</td>'
+      + '<td style="padding:8px 6px;">'
+      +   '<select id="cfg-met-'+b64+'" onchange="_infEntrCfgToggle(\''+b64+'\')" style="font-size:12px;">'
+      +     '<option value="umbral"'+(esPH?'':' selected')+'>Por umbral</option>'
+      +     '<option value="precio_hora"'+(esPH?' selected':'')+'>Por precio/hora</option>'
+      +   '</select></td>'
+      + '<td style="text-align:center;padding:8px 6px;"><input type="number" min="0" step="1" id="cfg-umb-'+b64+'" value="'+(cfg.umbral||'')+'" '
+      +     (esPH?'disabled':'')+' style="width:70px;text-align:center;color:#111827;background:'+(esPH?'#e5e7eb':'#fff')+';"></td>'
+      + '<td style="text-align:center;padding:8px 6px;"><input type="number" min="0" step="0.5" id="cfg-ph-'+b64+'" value="'+(cfg.precio_hora||'')+'" '
+      +     (esPH?'':'disabled')+' style="width:70px;text-align:center;color:#111827;background:'+(esPH?'#fff':'#e5e7eb')+';"></td>'
+      + '<td style="text-align:center;padding:8px 6px;"><input type="number" min="0" step="1" id="cfg-bn-'+b64+'" value="'+(cfg.base_neto||'')+'" '
+      +     (esPH?'':'disabled')+' style="width:80px;text-align:center;color:#111827;background:'+(esPH?'#fff':'#e5e7eb')+';"></td>'
+      + '</tr>';
+  });
+  html+='</tbody></table></div>';
+  cont.innerHTML=html;
+}
+
+window._infEntrCfgToggle=function(b64){
+  var met=document.getElementById('cfg-met-'+b64).value;
+  var esPH=(met==='precio_hora');
+  var umb=document.getElementById('cfg-umb-'+b64);
+  var ph=document.getElementById('cfg-ph-'+b64);
+  var bn=document.getElementById('cfg-bn-'+b64);
+  umb.disabled=esPH; umb.style.background=esPH?'#e5e7eb':'#fff';
+  ph.disabled=!esPH; ph.style.background=esPH?'#fff':'#e5e7eb';
+  bn.disabled=!esPH; bn.style.background=esPH?'#fff':'#e5e7eb';
+};
+
+window._infEntrConfigGuardar=async function(){
+  var errEl=document.getElementById('inf-entr-cfg-err');
+  errEl.textContent='';
+  var aGuardar=[];
+  for(var i=0;i<_infEntrData.instructores.length;i++){
+    var n=_infEntrData.instructores[i];
+    var rec=_infEntrData.porInstr[n];
+    var b64=btoa(encodeURIComponent(n));
+    var met=document.getElementById('cfg-met-'+b64).value;
+    var umb=parseFloat(document.getElementById('cfg-umb-'+b64).value);
+    var ph=parseFloat(document.getElementById('cfg-ph-'+b64).value);
+    var bn=parseFloat(document.getElementById('cfg-bn-'+b64).value);
+    // Validaciones por método
+    if(met==='precio_hora'){
+      if(isNaN(ph)||ph<=0){ errEl.textContent='«'+rec.nombre+'»: el precio por hora es obligatorio en método precio/hora.'; return; }
+      if(isNaN(bn)){ errEl.textContent='«'+rec.nombre+'»: la base neto es obligatoria en método precio/hora.'; return; }
+    } else {
+      if(isNaN(umb)||umb<=0){ errEl.textContent='«'+rec.nombre+'»: el objetivo (umbral) es obligatorio en método umbral.'; return; }
+    }
+    // Config en memoria (recálculo inmediato)
+    _infEntrConfig[n]={metodo:met, umbral:isNaN(umb)?null:umb, precio_hora:isNaN(ph)?null:ph, base_neto:isNaN(bn)?null:bn};
+    // Para persistir en ficha employees (solo si hay match)
+    if(rec.employee_id){
+      aGuardar.push({id:rec.employee_id, inc_metodo:met,
+        inc_umbral:isNaN(umb)?null:umb, inc_precio_hora:isNaN(ph)?null:ph, inc_base_neto:isNaN(bn)?null:bn});
+    }
+  }
+  // PATCH ficha de cada entrenador con match
+  try {
+    for(var j=0;j<aGuardar.length;j++){
+      var g=aGuardar[j];
+      await sbRequest('PATCH','employees',
+        {inc_metodo:g.inc_metodo, inc_umbral:g.inc_umbral, inc_precio_hora:g.inc_precio_hora, inc_base_neto:g.inc_base_neto},
+        'id=eq.'+encodeURIComponent(g.id));
+    }
+    invalidateCache('employees');
+    _infEmployeesCache=await getDB('employees'); // refrescar para recálculo
+    await auditLog('ENTR_INC_CONFIG', (currentUser&&currentUser.nombre)+' configuró métodos de incentivo de '+aGuardar.length+' entrenadores');
+    document.getElementById('modal-inf-entr-cfg').style.display='none';
+    if(_infEntrData) _renderEntrTabla(_infEntrData); // recalcular tabla con nuevos métodos
+    toast('Configuración guardada','ok');
+  } catch(e){ errEl.textContent='Error al guardar: '+e.message; }
+};

@@ -2366,6 +2366,18 @@ async function renderValidacion(){
       shifts = shifts.filter(function(s){ return normalizeDeptName(s.area) === _nDept; });
     }
   }
+  // Fix permisos Jun 2026: el coordinador de Entrenadores (no admin) solo debe
+  // ver los turnos de SU equipo (entrenadores), no todos los de SYNCROLAB
+  // (que incluiría Recepción SYNCROLAB y Fisioterapeutas). Se filtra por puesto.
+  if(currentUser && currentUser.rol === 'coord_entrenadores' && !(typeof isAdmin==='function' && isAdmin(currentUser))){
+    var _puestosEntr = (typeof _PUESTOS_ENTRENADOR !== 'undefined') ? _PUESTOS_ENTRENADOR : ['Entrenador(a)','Coordinador(a) de Entrenadores'];
+    shifts = shifts.filter(function(s){
+      // turnos cuya área NO es SYNCROLAB pasan tal cual (no aplica); los de
+      // SYNCROLAB solo si el puesto del turno es de entrenador
+      if(!/syncrolab|syncro lab/i.test(s.area||'')) return true;
+      return _puestosEntr.indexOf(s.puesto||'') !== -1;
+    });
+  }
   if(serv) shifts=shifts.filter(function(s){
     if(!s.servicio) return false;
     if(s.area==='Recepción') return s.servicio===serv;
