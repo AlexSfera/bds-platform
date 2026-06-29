@@ -1287,31 +1287,69 @@ function _renderEntrTabla(data){
 }
 
 // Marca como liquidado el mes guardado en BD (todas las filas de ese ym).
-// Opera sobre lo PERSISTIDO, no sobre el CSV en memoria.
+// Opera sobre lo PERSISTIDO, no sobre el CSV en memoria. Solo Administrador.
+// Permite adjuntar foto/comprobante (opcional).
 window._infEntrLiquidarMes=async function(){
   if(!canActAsAdmin(currentUser)){
     toast('Solo un Administrador puede liquidar','err'); return;
   }
   var ym = _infEntrData && _infEntrData.ymPrincipal;
   if(!ym){ toast('Carga el archivo del mes primero','err'); return; }
+  var filas;
+  try { filas = await getDB('entrenadores_incentivos_mes'); }
+  catch(e){ toast('No se pudo leer el mes','err'); return; }
+  var delMes = (filas||[]).filter(function(r){ return r.ym === ym; });
+  if(!delMes.length){ toast('Ese mes no está guardado todavía. Pulsa Guardar primero.','err'); return; }
+  if(delMes.every(function(r){ return r.liquidado === true; })){ toast('El mes '+ym+' ya estaba liquidado','ok'); return; }
+  _ensureEntrLiqModal();
+  document.getElementById('entr-liq-ym').textContent = ym;
+  document.getElementById('entr-liq-count').textContent = delMes.length;
+  var err = document.getElementById('entr-liq-err'); if(err) err.textContent='';
+  if(typeof resetCajaFotos === 'function') resetCajaFotos('entr-liq-fotos', []);
+  document.getElementById('modal-entr-liq').style.display='flex';
+};
+
+function _ensureEntrLiqModal(){
+  if(document.getElementById('modal-entr-liq')) return;
+  var ov = document.createElement('div');
+  ov.id = 'modal-entr-liq';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;';
+  ov.innerHTML = '<div class="modal-box" style="max-width:480px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:32px;">'
+    + '<div style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">✓ Liquidar incentivos · <span id="entr-liq-ym"></span></div>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Marcas <b id="entr-liq-count"></b> entrenadores como pagados. Cada uno lo verá en su Mi Rendimiento.</div>'
+    + '<div class="fg" style="margin-bottom:12px;">'
+    +   '<label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Comprobante (opcional) — justificante de pago, captura, etc.</label>'
+    +   '<input type="file" id="entr-liq-fotos-input" accept="image/*" capture="environment" multiple onchange="handleCajaFotosInput(this,\'entr-liq-fotos\',\'syncrolab\')" style="color:var(--text);font-size:13px;padding:6px 0;">'
+    +   '<div id="entr-liq-fotos-status" style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;"></div>'
+    +   '<div id="entr-liq-fotos-thumbs" style="margin-top:6px;"></div>'
+    + '</div>'
+    + '<div id="entr-liq-err" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px;"></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +   '<button class="btn btn-secondary" onclick="document.getElementById(\'modal-entr-liq\').style.display=\'none\'">Cancelar</button>'
+    +   '<button class="btn btn-primary" onclick="window._infEntrLiquidarConfirm()" style="background:var(--green);">✓ Confirmar liquidación</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.style.display='none'; });
+}
+
+window._infEntrLiquidarConfirm=async function(){
+  if(!canActAsAdmin(currentUser)){ toast('Solo un Administrador puede liquidar','err'); return; }
+  var ym = _infEntrData && _infEntrData.ymPrincipal;
+  if(!ym){ return; }
+  var errEl = document.getElementById('entr-liq-err');
   try {
-    var filas = await getDB('entrenadores_incentivos_mes');
-    var delMes = (filas||[]).filter(function(r){ return r.ym === ym; });
-    if(!delMes.length){
-      toast('Ese mes no está guardado todavía. Pulsa Guardar primero.','err'); return;
-    }
-    var yaLiq = delMes.every(function(r){ return r.liquidado === true; });
-    if(yaLiq){ toast('El mes '+ym+' ya estaba liquidado','ok'); return; }
-    if(!confirm('¿Marcar el mes '+ym+' como LIQUIDADO?\n'+delMes.length+' entrenadores. Cada uno lo verá en su Mi Rendimiento.')) return;
+    var fotos = (typeof getCajaFotosUrls === 'function') ? (getCajaFotosUrls('entr-liq-fotos')||[]) : [];
     var ts = localTs();
     var por = (currentUser&&currentUser.nombre)||'';
-    await sbRequest('PATCH','entrenadores_incentivos_mes',
-      {liquidado:true, liquidado_ts:ts, liquidado_por:por},
+    var res = await sbRequest('PATCH','entrenadores_incentivos_mes',
+      {liquidado:true, liquidado_ts:ts, liquidado_por:por, liquidado_fotos:fotos},
       'ym=eq.'+encodeURIComponent(ym));
+    if(res===null){ if(errEl) errEl.textContent='Error al guardar. Revisa la consola.'; return; }
     invalidateCache('entrenadores_incentivos_mes');
-    await auditLog('ENTR_INCENTIVOS_LIQUIDADO', por+' liquidó incentivos Entrenadores '+ym+' ('+delMes.length+' entrenadores)');
+    await auditLog('ENTR_INCENTIVOS_LIQUIDADO', por+' liquidó incentivos Entrenadores '+ym+' ('+fotos.length+' foto/s)');
+    document.getElementById('modal-entr-liq').style.display='none';
     toast('Mes '+ym+' marcado como liquidado','ok');
-  } catch(e){ toast('Error al liquidar: '+e.message,'err'); }
+  } catch(e){ if(errEl) errEl.textContent='Error: '+e.message; }
 };
 
 // Guarda el mes en entrenadores_incentivos_mes (upsert por nombre+ym)
