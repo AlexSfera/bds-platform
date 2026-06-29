@@ -1104,3 +1104,184 @@ async function _confirmarLiquidacion(empId, empNombre, ym, incBruto, penEur, inc
   await calcularIncentivosGestor();
 }
 window._confirmarLiquidacion = _confirmarLiquidacion;
+
+// ═══════════════════════════════════════════════════════════════════════
+// MI RENDIMIENTO — router. Entrenadores: 2 informes (autorreporte + jefe).
+// Resto de empleados: comportamiento actual (renderIncentivos en su screen).
+// ═══════════════════════════════════════════════════════════════════════
+var _miRendTab = 'mis';   // 'mis' | 'jefe'
+var _miRendMonth = '';
+
+async function renderMiRendimiento(){
+  var el = document.getElementById('mi-rendimiento-content');
+  if(!el) return;
+  // Solo entrenadores tienen los 2 informes. Resto: incentivos estándar.
+  if(!(typeof _esEntrenador === 'function' && _esEntrenador(currentUser))){
+    el.innerHTML = '<div id="incentivos-content"></div>';
+    if(typeof renderIncentivos === 'function') await renderIncentivos();
+    return;
+  }
+  var monthOpts = getMonthOptions(6);
+  if(!_miRendMonth) _miRendMonth = monthOpts[0].value;
+  var selOpts = monthOpts.map(function(o){
+    return '<option value="'+o.value+'"'+(o.value===_miRendMonth?' selected':'')+'>'+o.label+'</option>';
+  }).join('');
+  function tab(id,lbl){
+    var on = (_miRendTab===id);
+    return '<button onclick="_miRendSetTab(\''+id+'\')" style="padding:8px 16px;border:none;cursor:pointer;'
+      + 'border-radius:6px 6px 0 0;font-family:var(--font-mono);font-size:12px;font-weight:700;'
+      + (on?'background:var(--bg);color:var(--text);border-bottom:2px solid var(--accent);'
+           :'background:transparent;color:var(--text3);')+'">'+lbl+'</button>';
+  }
+  el.innerHTML = '<div class="card">'
+    + '<div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">'
+    +   '<div class="fg" style="min-width:200px;"><label>Mes</label>'
+    +     '<select id="mirend-month" onchange="_miRendSetMonth(this.value)">'+selOpts+'</select></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;">'
+    +   tab('mis','📋 Mis informes') + tab('jefe','📊 Informe del jefe')
+    + '</div>'
+    + '<div id="mirend-body"><p style="color:var(--text3);">Cargando…</p></div>'
+    + '</div>';
+  await _miRendLoadBody();
+}
+window.renderMiRendimiento = renderMiRendimiento;
+
+function _miRendSetTab(t){ _miRendTab = t; renderMiRendimiento(); }
+function _miRendSetMonth(v){ _miRendMonth = v; _miRendLoadBody(); }
+window._miRendSetTab = _miRendSetTab;
+window._miRendSetMonth = _miRendSetMonth;
+
+var _MIREND_KPI_LBL = {
+  dir_efectiva:'Clases efectivas', dir_no_efectiva:'Clases NO efectivas',
+  pt:'PT individual', pt_duo:'PT DÚO', pt_30:'PT 30 min',
+  val_funcional:'Val. funcional', visbody:'Visbody', banera_hielo:'Bañera hielo'
+};
+var _MIREND_KPI_KEYS = ['dir_efectiva','dir_no_efectiva','pt','pt_duo','pt_30','val_funcional','visbody','banera_hielo'];
+
+// Barras SVG horizontales simples (sin librería externa)
+function _miRendBarras(pares){
+  var max = 0;
+  pares.forEach(function(p){ if(p.v > max) max = p.v; });
+  if(max <= 0) max = 1;
+  var rowH = 26, w = 320, labelW = 130, barMax = w - labelW - 40;
+  var svgH = pares.length * rowH + 8;
+  var rows = pares.map(function(p,i){
+    var y = i*rowH + 4;
+    var bw = Math.round((p.v/max)*barMax);
+    if(p.v > 0 && bw < 2) bw = 2;
+    return '<g>'
+      + '<text x="0" y="'+(y+13)+'" font-family="var(--font-mono)" font-size="11" fill="var(--text2)">'+p.lbl+'</text>'
+      + '<rect x="'+labelW+'" y="'+(y+3)+'" width="'+bw+'" height="14" rx="3" fill="var(--accent)"></rect>'
+      + '<text x="'+(labelW+bw+6)+'" y="'+(y+14)+'" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="var(--text)">'+p.v+'</text>'
+      + '</g>';
+  }).join('');
+  return '<svg viewBox="0 0 '+w+' '+svgH+'" width="100%" style="max-width:'+w+'px;">'+rows+'</svg>';
+}
+
+// ── INFORME 1: autorreporte del entrenador (shifts.kpi_entrenador) ──
+async function _miRendMis(){
+  var range = getMonthDateRange(_miRendMonth);
+  var shifts = await getDB('shifts');
+  var mios = (shifts||[]).filter(function(s){
+    if(s.employee_id !== currentUser.id) return false;
+    var f = (s.fecha||'').slice(0,10);
+    return f >= range.inicio && f <= range.fin && s.kpi_entrenador;
+  });
+  var sum = {}; _MIREND_KPI_KEYS.forEach(function(k){ sum[k]=0; });
+  var nTurnos = 0;
+  mios.forEach(function(s){
+    var kpi = null;
+    try { kpi = (typeof s.kpi_entrenador === 'string') ? JSON.parse(s.kpi_entrenador) : s.kpi_entrenador; } catch(e){ kpi=null; }
+    if(!kpi) return;
+    nTurnos++;
+    _MIREND_KPI_KEYS.forEach(function(k){ sum[k] += parseInt(kpi[k],10)||0; });
+  });
+  if(nTurnos === 0){
+    return '<div style="color:var(--text3);padding:20px 0;">No has registrado actividad este mes. '
+      + 'Tus cifras aparecerán aquí según vayas cerrando turnos.</div>';
+  }
+  var pares = _MIREND_KPI_KEYS.map(function(k){ return {lbl:_MIREND_KPI_LBL[k], v:sum[k]}; });
+  var total = _MIREND_KPI_KEYS.reduce(function(a,k){ return a+sum[k]; },0);
+  return '<div style="font-size:12px;color:var(--text3);margin-bottom:6px;">'
+      + 'Suma de lo que registraste en tus '+nTurnos+' turno(s) de este mes. Es autocontrol: el incentivo lo calcula el jefe con VirtuGym.</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;">'
+    +   '<div style="flex:1;min-width:300px;">'+_miRendBarras(pares)+'</div>'
+    +   '<div style="min-width:140px;background:var(--bg2);border-radius:8px;padding:12px 16px;">'
+    +     '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;">TOTAL ACTIVIDADES</div>'
+    +     '<div style="font-size:28px;font-weight:700;color:var(--text);">'+total+'</div>'
+    +     '<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+nTurnos+' turnos</div>'
+    +   '</div>'
+    + '</div>';
+}
+
+// ── INFORME 2: oficial del jefe (entrenadores_incentivos_mes) ──
+async function _miRendJefe(){
+  var filas;
+  try { filas = await getDB('entrenadores_incentivos_mes'); }
+  catch(e){ return '<div style="color:var(--text3);padding:20px 0;">No se pudo cargar el informe del mes.</div>'; }
+  var mia = (filas||[]).find(function(r){
+    return r.ym === _miRendMonth &&
+      (r.employee_id === currentUser.id || r.employee_nombre === currentUser.nombre);
+  });
+  if(!mia){
+    return '<div style="color:var(--text3);padding:20px 0;">Tu jefe aún no ha publicado el informe oficial de este mes. '
+      + 'Se genera al subir el archivo de VirtuGym.</div>';
+  }
+  var pares = _MIREND_KPI_KEYS.map(function(k){
+    var col = ({dir_efectiva:'n_dir_efectivas',dir_no_efectiva:'n_dir_no_efect',pt:'n_pt',pt_duo:'n_pt_duo',
+                pt_30:'n_pt_30',val_funcional:'n_val_funcional',visbody:'n_visbody',banera_hielo:'n_banera_hielo'})[k];
+    return {lbl:_MIREND_KPI_LBL[k], v:parseInt(mia[col],10)||0};
+  });
+  var efect = parseFloat(mia.sesiones_efectivas)||0;
+  var umbral = parseFloat(mia.umbral)||85;
+  var extra = parseFloat(mia.sesiones_extra)||0;
+  var bruto = parseFloat(mia.incentivo_bruto)||0;
+  var planes = parseInt(mia.planes_online,10)||0;
+  var liquidado = (mia.liquidado === true);
+  var pct = Math.min(100, Math.round((efect/umbral)*100));
+  var estadoBadge = liquidado
+    ? '<span class="badge b-green">✓ Liquidado</span>'
+    : '<span class="badge b-yellow">Pendiente de liquidar</span>';
+  var liqInfo = liquidado && mia.liquidado_ts
+    ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Liquidado el '+fmtDate((mia.liquidado_ts||'').slice(0,10))+(mia.liquidado_por?' por '+formatDisplayValue(mia.liquidado_por):'')+'</div>'
+    : '';
+  // Comprobante(s) de liquidación, si el admin adjuntó alguno
+  var _fotos = [];
+  try { _fotos = Array.isArray(mia.liquidado_fotos) ? mia.liquidado_fotos : (mia.liquidado_fotos ? JSON.parse(mia.liquidado_fotos) : []); } catch(e){ _fotos = []; }
+  if(liquidado && _fotos.length){
+    liqInfo += '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Comprobante: '
+      + _fotos.map(function(u,i){ return '<a href="'+u+'" target="_blank" rel="noopener" style="color:var(--accent);">📎 '+(i+1)+'</a>'; }).join(' ')
+      + '</div>';
+  }
+  return '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Cifras oficiales de VirtuGym usadas para tu incentivo. '+estadoBadge+'</div>'+liqInfo
+    + '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;margin-top:8px;">'
+    +   '<div style="flex:1;min-width:300px;">'+_miRendBarras(pares)+'</div>'
+    +   '<div style="min-width:200px;">'
+    +     '<div style="background:var(--bg2);border-radius:8px;padding:14px 16px;margin-bottom:10px;">'
+    +       '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;">SESIONES EFECTIVAS</div>'
+    +       '<div style="font-size:24px;font-weight:700;color:var(--text);">'+_eNumMR(efect)+' <span style="font-size:13px;color:var(--text3);font-weight:400;">/ '+umbral+' umbral</span></div>'
+    +       '<div style="height:6px;background:var(--border);border-radius:3px;margin-top:8px;overflow:hidden;">'
+    +         '<div style="height:100%;width:'+pct+'%;background:'+(efect>=umbral?'var(--green)':'var(--amber)')+';"></div></div>'
+    +       '<div style="font-size:11px;color:var(--text3);margin-top:6px;">Sesiones extra: <b style="color:'+(extra>0?'var(--green)':'var(--text3)')+';">'+_eNumMR(extra)+'</b> · Planes online: <b>'+planes+'</b></div>'
+    +     '</div>'
+    +     '<div style="background:var(--bg2);border-radius:8px;padding:14px 16px;">'
+    +       '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:.08em;">INCENTIVO BRUTO</div>'
+    +       '<div style="font-size:28px;font-weight:700;color:var(--amber);font-family:var(--font-mono);">'+_eNumMR(bruto)+'€</div>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>';
+}
+
+function _eNumMR(n){ return (Math.round(n*100)/100).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+
+async function _miRendLoadBody(){
+  var body = document.getElementById('mirend-body');
+  if(!body) return;
+  body.innerHTML = '<p style="color:var(--text3);">Cargando…</p>';
+  var html = (_miRendTab === 'jefe') ? await _miRendJefe() : await _miRendMis();
+  body = document.getElementById('mirend-body');
+  if(body) body.innerHTML = html;
+}
+window._miRendLoadBody = _miRendLoadBody;
+

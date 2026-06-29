@@ -1279,9 +1279,40 @@ function _renderEntrTabla(data){
     +'</table></div>'
     +'<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'
     +  '<button onclick="window._infEntrGuardar()" style="padding:10px 20px;border-radius:6px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-weight:700;font-family:var(--font-mono);font-size:12px;">💾 Guardar mes como base de incentivos</button>'
-    +  '<span style="font-size:11px;color:var(--text3);">Rellena los planes online antes de guardar. Esto fija la base definitiva del mes.</span>'
+    +  ( (typeof canActAsAdmin==='function' && canActAsAdmin(currentUser))
+        ? '<button onclick="window._infEntrLiquidarMes()" style="padding:10px 20px;border-radius:6px;border:1px solid var(--green);cursor:pointer;background:transparent;color:var(--green);font-weight:700;font-family:var(--font-mono);font-size:12px;">✓ Marcar mes como liquidado</button>'
+        : '' )
+    +  '<span style="font-size:11px;color:var(--text3);">Guarda primero. Liquidar (solo Administrador) marca el mes como pagado.</span>'
     +'</div>';
 }
+
+// Marca como liquidado el mes guardado en BD (todas las filas de ese ym).
+// Opera sobre lo PERSISTIDO, no sobre el CSV en memoria.
+window._infEntrLiquidarMes=async function(){
+  if(!canActAsAdmin(currentUser)){
+    toast('Solo un Administrador puede liquidar','err'); return;
+  }
+  var ym = _infEntrData && _infEntrData.ymPrincipal;
+  if(!ym){ toast('Carga el archivo del mes primero','err'); return; }
+  try {
+    var filas = await getDB('entrenadores_incentivos_mes');
+    var delMes = (filas||[]).filter(function(r){ return r.ym === ym; });
+    if(!delMes.length){
+      toast('Ese mes no está guardado todavía. Pulsa Guardar primero.','err'); return;
+    }
+    var yaLiq = delMes.every(function(r){ return r.liquidado === true; });
+    if(yaLiq){ toast('El mes '+ym+' ya estaba liquidado','ok'); return; }
+    if(!confirm('¿Marcar el mes '+ym+' como LIQUIDADO?\n'+delMes.length+' entrenadores. Cada uno lo verá en su Mi Rendimiento.')) return;
+    var ts = localTs();
+    var por = (currentUser&&currentUser.nombre)||'';
+    await sbRequest('PATCH','entrenadores_incentivos_mes',
+      {liquidado:true, liquidado_ts:ts, liquidado_por:por},
+      'ym=eq.'+encodeURIComponent(ym));
+    invalidateCache('entrenadores_incentivos_mes');
+    await auditLog('ENTR_INCENTIVOS_LIQUIDADO', por+' liquidó incentivos Entrenadores '+ym+' ('+delMes.length+' entrenadores)');
+    toast('Mes '+ym+' marcado como liquidado','ok');
+  } catch(e){ toast('Error al liquidar: '+e.message,'err'); }
+};
 
 // Guarda el mes en entrenadores_incentivos_mes (upsert por nombre+ym)
 window._infEntrGuardar=async function(){
@@ -1291,6 +1322,17 @@ window._infEntrGuardar=async function(){
   if(!confirm('¿Guardar '+_infEntrData.instructores.length+' entrenadores como base de incentivos de '+ym+'?\nSe sobrescribe cualquier cálculo previo de ese mes.')) return;
 
   try {
+    // Preservar estado de liquidación si el mes ya estaba liquidado (re-subida)
+    var _prevLiq = {};
+    try {
+      var _prev = await getDB('entrenadores_incentivos_mes');
+      (_prev||[]).forEach(function(r){
+        if(r.ym === ym && r.liquidado === true){
+          var key = r.employee_id || r.employee_nombre;
+          _prevLiq[key] = {liquidado:true, liquidado_ts:r.liquidado_ts||null, liquidado_por:r.liquidado_por||null};
+        }
+      });
+    } catch(ePrev){ /* tabla sin columna liquidado aún → ignorar */ }
     // Borrar registros previos del mes (reescritura limpia)
     await sbRequest('DELETE','entrenadores_incentivos_mes',null,'ym=eq.'+encodeURIComponent(ym));
 
@@ -1298,6 +1340,7 @@ window._infEntrGuardar=async function(){
       var rec=_infEntrData.porInstr[n];
       var c=_infEntrCalc(rec);
       var k=rec.kpi;
+      var _liq = _prevLiq[rec.employee_id] || _prevLiq[rec.nombre] || null;
       return {
         id: genId(),
         employee_id: rec.employee_id,
@@ -1318,6 +1361,9 @@ window._infEntrGuardar=async function(){
         planes_online: c.planes,
         incentivo_planes: c.incPlan,
         incentivo_bruto: c.bruto,
+        liquidado:     _liq ? true : false,
+        liquidado_ts:  _liq ? _liq.liquidado_ts : null,
+        liquidado_por: _liq ? _liq.liquidado_por : null,
         subido_por: (currentUser&&currentUser.nombre)||'',
         fuente_archivo: _infEntrData.fuente||'',
         created_at: localTs()
