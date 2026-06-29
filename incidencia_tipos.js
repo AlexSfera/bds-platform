@@ -265,6 +265,8 @@ var GESTION_TIPOS = {
   ],
 
   'Entrenadores': [
+    'Atender cliente (indicar nombre)',
+    'Arreglar área (indicar zona)',
     'Sesión pendiente de planificar',
     'Seguimiento cliente pendiente',
     'Evaluación pendiente',
@@ -331,6 +333,10 @@ var GESTION_TIPOS = {
 GESTION_TIPOS['FnB']                = GESTION_TIPOS['Cocina'];
 GESTION_TIPOS['RecepcionSyncrolab'] = GESTION_TIPOS['Recepción SYNCROLAB'];
 
+// ── ÁREAS FÍSICAS ENTRENADORES (check de "Arreglar área") ──────
+var ENTRENADORES_AREAS = ['Césped','Queenax','Área máquinas','Área peso','Hypoxia','Ludoteca','Piscina','Vestuario','Spa','Parque'];
+window.ENTRENADORES_AREAS = ENTRENADORES_AREAS;
+
 // ── FUNCIONES ─────────────────────────────────────────────────
 
 function getInciTipos(dept) {
@@ -391,11 +397,13 @@ function populateDashGestionFilter(dept) {
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function() {
     if (typeof currentUser !== 'undefined' && currentUser && currentUser.area) {
-      populateInciTipoSelector('i-tipo-incidencia', currentUser.area);
-      populateGestionTipoSelector('g-tipo', currentUser.area);
-      populateInciTipoSelector('it-tipo', currentUser.area);
-      populateDashInciFilter(currentUser.area);
-      populateDashGestionFilter(currentUser.area);
+      // Entrenadores/Fisio comparten area='SYNCROLAB'; resolver dept real por puesto
+      var _dept = (typeof _deptCatalogo === 'function') ? _deptCatalogo(currentUser) : currentUser.area;
+      populateInciTipoSelector('i-tipo-incidencia', _dept);
+      populateGestionTipoSelector('g-tipo', _dept);
+      populateInciTipoSelector('it-tipo', _dept);
+      populateDashInciFilter(_dept);
+      populateDashGestionFilter(_dept);
     }
   }, 800);
 });

@@ -19,7 +19,7 @@ function _chkLsKey(){
   var srv = '';
   try {
     if(currentUser.area === 'Recepción' && typeof getRecTurnoValue === 'function') srv = getRecTurnoValue() || '';
-    else if(currentUser.area === 'Entrenadores'){
+    else if(typeof _esEntrenador === 'function' && _esEntrenador(currentUser)){
       var re = document.querySelector('input[name="turno-entr"]:checked');
       srv = re ? re.value : '';
     }
@@ -280,8 +280,13 @@ async function chkConfirm(){
   if(m) m.classList.remove('open');
   var isSala=currentUser&&currentUser.area==='Sala';
   var isRec=currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción');
+  var isEntr=(typeof _esEntrenador==='function')&&_esEntrenador(currentUser);
   var isLab=currentUser&&/syncrolab|syncro lab|entrenador|fisio|cl\u00ednica|clinica/i.test((currentUser.area||'')+' '+(currentUser.puesto||''));
-  if(isLab){
+  if(isEntr){
+    // Entrenadores: sin caja. Capturan KPI de turno (autocontrol).
+    if(typeof openEntrKpiModal === 'function') openEntrKpiModal();
+    else await _doSaveTurno();
+  } else if(isLab){
     if(typeof openLabCajaChoice === 'function') openLabCajaChoice();
     else await _doSaveTurno();
   } else if(isSala&&currentUser._activeDept!=='Recepción'){
@@ -319,7 +324,7 @@ function chkOpen(pendingData){
   var recTurno=isRec?getRecTurnoValue():'';
   var isLabRec=(currentUser&&/syncrolab/i.test(currentUser.area||''));
   var labTurno=isLabRec?(function(){var r=document.querySelector('input[name="servicio-lab"]:checked');return r?r.value:'';})():'';
-  var isEntr=(currentUser&&currentUser.area==='Entrenadores');
+  var isEntr=(typeof _esEntrenador==='function')&&_esEntrenador(currentUser);
   var entrTurno=isEntr?(function(){var r=document.querySelector('input[name="turno-entr"]:checked');return r?r.value:'Mañana';})():'';
   var sections,items;
   if(isEntr){

@@ -168,6 +168,45 @@ const AREA_GROUPS = {
   'Administración':  ['Administración']
 };
 
+// ── SUBROLES SYNCROLAB ────────────────────────────────────────────────
+// Entrenadores y Fisioterapeutas comparten area='SYNCROLAB'. La distinción
+// real está en `puesto`. Estos helpers globales resuelven el subrol por
+// puesto para que menú, checklist, instrucciones y catálogos (incidencias/
+// gestiones) usen la configuración correcta — NO la genérica de SYNCROLAB
+// (que es la de Recepción SYNCROLAB con caja).
+var _PUESTOS_ENTRENADOR = ['Entrenador(a)', 'Coordinador(a) de Entrenadores'];
+var _PUESTOS_FISIO      = ['Fisioterapeuta', 'Coordinador(a) de Fisioterapeutas'];
+
+function _esEntrenador(u){
+  u = u || (typeof currentUser !== 'undefined' ? currentUser : null);
+  if(!u) return false;
+  if(u.rol === 'coord_entrenadores') return true;
+  return _PUESTOS_ENTRENADOR.indexOf(u.puesto || '') !== -1;
+}
+function _esFisio(u){
+  u = u || (typeof currentUser !== 'undefined' ? currentUser : null);
+  if(!u) return false;
+  if(u.rol === 'coord_fisioterapeutas') return true;
+  return _PUESTOS_FISIO.indexOf(u.puesto || '') !== -1;
+}
+// Departamento efectivo para catálogos (incidencia_tipos / gestion_tipos /
+// instrucciones / checklist). Devuelve 'Entrenadores' / 'Fisioterapeutas' /
+// 'Recepción SYNCROLAB' aunque el area en BD sea 'SYNCROLAB'.
+function _deptCatalogo(u){
+  u = u || (typeof currentUser !== 'undefined' ? currentUser : null);
+  if(!u) return '';
+  var area = u.area || '';
+  if(/syncrolab|syncro lab/i.test(area)){
+    if(_esEntrenador(u)) return 'Entrenadores';
+    if(_esFisio(u))      return 'Fisioterapeutas';
+    return 'Recepción SYNCROLAB';
+  }
+  return area;
+}
+window._esEntrenador = _esEntrenador;
+window._esFisio      = _esFisio;
+window._deptCatalogo = _deptCatalogo;
+
 // ═══════════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 let currentUser = null;
@@ -526,10 +565,14 @@ function getScreens(rol){
     miDia.push(ITEMS.turno);
     if(isCocina) miDia.push(ITEMS.merma);              // Cocina: Merma en MI DÍA
     miDia.push(ITEMS.checklist);
+    // Entrenadores: subrol de SYNCROLAB SIN caja (no gestionan cajas físicas)
+    var _esEntr = (typeof _esEntrenador === 'function') && _esEntrenador(currentUser);
     // Caja: empleado Recepción / jefe SYNCROLAB / cualquiera de Rec.SYNCROLAB
     if(isRecepcion && !isJefe) miDia.push(ITEMS.cajaRec);
-    if(isRecSyncrolab) miDia.push(ITEMS.cajaLab);
-    else if(isSyncrolabArea && isJefe) miDia.push(ITEMS.cajaLab);
+    if(!_esEntr){
+      if(isRecSyncrolab) miDia.push(ITEMS.cajaLab);
+      else if(isSyncrolabArea && isJefe) miDia.push(ITEMS.cajaLab);
+    }
   }
 
   miDia.push(ITEMS.gestiones);
@@ -1362,6 +1405,7 @@ async function _doSaveTurno(){
     incidencia_declarada: toggleState.incidencia||'no',
     observacion: obs,
     checklist_items: JSON.stringify(_chkSavedState),
+    kpi_entrenador: (typeof window._entrKpiState !== 'undefined' && window._entrKpiState) ? JSON.stringify(window._entrKpiState) : null,
     ajustes_sala: JSON.stringify(_ajustesLines||[]),
     // Sala fields
     descuentos_si: salaData.descuentos_si||false,
@@ -1398,6 +1442,7 @@ async function _doSaveTurno(){
       incidencia_declarada: toggleState.incidencia||'no',
       observacion: obs,
       checklist_items: JSON.stringify(_chkSavedState),
+      kpi_entrenador: (typeof window._entrKpiState !== 'undefined' && window._entrKpiState) ? JSON.stringify(window._entrKpiState) : undefined,
       estado: 'Pendiente',
       validado_por: null, validado_ts: null,
       comentario_validador: null,
@@ -4212,7 +4257,7 @@ function openNewGestionStandalone(){
   // Poblar selector de tipos según dpto
   var sel = ov.querySelector('#ng-tipo');
   sel.innerHTML = '<option value="">— Seleccionar —</option>';
-  var dept = currentUser && currentUser.area || '';
+  var dept = (typeof _deptCatalogo === 'function') ? _deptCatalogo(currentUser) : (currentUser && currentUser.area || '');
   if(typeof populateGestionTipoSelector === 'function'){
     populateGestionTipoSelector('ng-tipo', dept);
   } else {
@@ -4840,7 +4885,7 @@ function openNewIncidenciaStandalone(){
   }
   var sel = ov.querySelector('#ni-tipo');
   sel.innerHTML = '<option value="">— Seleccionar —</option>';
-  var dept = currentUser && currentUser.area || '';
+  var dept = (typeof _deptCatalogo === 'function') ? _deptCatalogo(currentUser) : (currentUser && currentUser.area || '');
   if(typeof populateInciTipoSelector === 'function'){
     populateInciTipoSelector('ni-tipo', dept);
   } else {

@@ -379,7 +379,8 @@ async function renderInfoScreen(){
   // Defensa: cerrar cualquier modal huérfano que pudiera estar visible
   var _orphan = document.getElementById('dash-detail-overlay');
   if(_orphan){ _orphan.style.display = 'none'; }
-  var area = currentUser.area || 'Empleado';
+  // Entrenadores/Fisio comparten area='SYNCROLAB'; usar dept real para título e instrucciones
+  var area = (typeof _deptCatalogo === 'function') ? (_deptCatalogo(currentUser) || currentUser.area || 'Empleado') : (currentUser.area || 'Empleado');
   var headerEl = document.getElementById('info-screen-header');
   var bodyEl   = document.getElementById('info-screen-body');
   if(headerEl){
@@ -1075,6 +1076,81 @@ function buildInfoContent(area){
   }
 
   // ════════════════════════════════════════════════════════════════════
+  // ─── ENTRENADORES (subrol SYNCROLAB · sin caja · con KPI) ────────────
+  // ════════════════════════════════════════════════════════════════════
+  if(area === 'Entrenadores'){
+    return ''
+    + _infoCard('🏋 ¿Para qué rellenas tu turno?',
+        'SYNCRO HUB registra lo que pasa en tu turno: tu actividad del día (clases, entrenamientos, valoraciones), las gestiones que dejas pendientes y cualquier incidencia con un cliente.<br><br>'
+      + '<b>La seguridad del cliente es lo primero.</b> Cualquier lesión, mareo o malestar se registra en el momento — no al final del turno.<br><br>'
+      + '<b>Tú no gestionas caja.</b> Tu turno se cierra con el cuestionario de KPI, no con un cierre de caja.',
+        '#10b981')
+
+    + _infoCard('📝 Paso 1 — Rellena tu turno',
+        '<b>'+_req('Fecha')+'</b><br>El día del turno.<br><br>'
+
+      + '<b>'+_req('Turno')+'</b><br>'
+      + 'Mañana · Tarde · Sábado. Solo uno.<br><br>'
+
+      + '<b>'+_req('Horas trabajadas')+'</b><br>'
+      + 'Las horas reales del día, no las del contrato.<br><br>'
+
+      + '<b>'+_req('Responsable de turno')+'</b><br>'
+      + 'El nombre de quien estuvo al mando.<br><br>'
+
+      + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
+      + 'Algo de Entrenadores que queda para el siguiente turno o para un compañero.<br>'
+      + '<i>Ejemplos: "Atender cliente — Juan Pérez vuelve mañana para 2ª valoración" · "Arreglar área — Queenax con anclaje suelto"</i><br>'
+      + '<i>⚠ Si necesita Mantenimiento o Recepción → TAREA, no gestión.</i><br><br>'
+
+      + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
+      + 'Cualquier problema que requiere decisión del coordinador: lesión, mareo, mala respuesta de un cliente, conflicto, fallo grave de material.<br>'
+      + '<b style="color:#ef4444;">Si hay malestar físico: para la sesión + abre incidencia + avisa al coordinador. Él la cierra.</b>',
+        '#10b981')
+
+    + _infoCard('📊 Paso 2 — Cuestionario de actividad (KPI)',
+        'Al cerrar el turno, registras tu actividad del día. Son cifras del turno, '+_req('todas obligatorias')+' (pon 0 si no hubo).<br><br>'
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#10b981;letter-spacing:.1em;margin-bottom:6px;">ACTIVIDAD DEL TURNO</div>'
+      + '• Clases dirigidas efectivas<br>'
+      + '• Clases dirigidas NO efectivas<br>'
+      + '• Entrenamientos personales (PT)<br>'
+      + '• Entrenamientos personales DUO<br>'
+      + '• Entrenamientos personales 30 min<br>'
+      + '• Valoraciones funcionales<br>'
+      + '• Valoraciones Visbody<br>'
+      + '• Bañeras de hielo'
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-top:10px;padding:10px;background:#ecfdf5;border-left:3px solid #10b981;border-radius:4px;line-height:1.6;">'
+      + '<b>ℹ Esto es autocontrol.</b> Tu incentivo se calcula con los datos oficiales de VirtuGym. '
+      + 'Si lo que registras aquí no coincide con VirtuGym, verás los días con diferencia en <b>Mi Rendimiento</b> para corregirlo.'
+      + '</div>',
+        '#10b981')
+
+    + _infoCard('🫁 Hypoxic Room — Solo si hay problema',
+        '<b>No registres el uso normal de las cámaras.</b> Solo cuando algo falla.<br><br>'
+      + 'Habitaciones: 104–109 · 202–209<br><br>'
+      + '<b>Cuándo crear una incidencia:</b><br>'
+      + '• Hipoxia bajo set point · CO₂ alto · Puerta abierta repetidamente · Sensor sin datos<br>'
+      + '• El cliente avisa de cualquier sensación anormal<br><br>'
+      + 'Estados: '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
+      + 'Al cerrar: describe exactamente '+_req('qué hiciste')+'.',
+        '#06b6d4')
+
+    + bloqueDiferencias
+
+    + _infoCard('✅ Checklist antes de guardar',
+        '☐ Turno, fecha y horas correctos<br>'
+      + '☐ Gestión marcada si queda algo pendiente<br>'
+      + '☐ Incidencia marcada si hubo algo con un cliente<br>'
+      + '☐ KPI de actividad rellenado (0 si no hubo)<br>'
+      + '☐ Incidencia Hypoxic creada si hubo problema técnico en cámara<br>'
+      + '☐ Si falta material o hay que arreglar un área → gestión o tarea según corresponda',
+        '#10b981')
+    + jefe;
+  }
+
+  // ════════════════════════════════════════════════════════════════════
   // ─── SYNCROLAB ──────────────────────────────────────────────────────
   // ════════════════════════════════════════════════════════════════════
   if(/syncrolab/i.test(area)){
@@ -1286,6 +1362,88 @@ function buildInfoContent(area){
     + jefe;
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════
+// KPI ENTRENADORES — cuestionario de actividad al cerrar turno (autocontrol)
+// Sustituye al cierre de caja. Guarda en shifts.kpi_entrenador (JSON).
+// Claves alineadas con el motor de incentivos (informes.js KPI_KEYS).
+// ═══════════════════════════════════════════════════════════════════════
+var _ENTR_KPI_CAMPOS = [
+  {k:'dir_efectiva',    lbl:'Clases dirigidas efectivas'},
+  {k:'dir_no_efectiva', lbl:'Clases dirigidas NO efectivas'},
+  {k:'pt',              lbl:'Entrenamientos personales (PT)'},
+  {k:'pt_duo',          lbl:'Entrenamientos personales DUO'},
+  {k:'pt_30',           lbl:'Entrenamientos personales 30 min'},
+  {k:'val_funcional',   lbl:'Valoraciones funcionales'},
+  {k:'visbody',         lbl:'Valoraciones Visbody'},
+  {k:'banera_hielo',    lbl:'Bañeras de hielo'}
+];
+
+function _ensureEntrKpiModal(){
+  if(document.getElementById('modal-entr-kpi')) return;
+  var ov = document.createElement('div');
+  ov.id = 'modal-entr-kpi';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;';
+  var campos = _ENTR_KPI_CAMPOS.map(function(c){
+    return '<div class="fg"><label>'+c.lbl+'</label>'
+      + '<input type="text" inputmode="numeric" id="entrkpi-'+c.k+'" placeholder="0" '
+      + 'style="color:#111827;background:#ffffff;"></div>';
+  }).join('');
+  ov.innerHTML = '<div class="modal-box" style="max-width:560px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:24px;">'
+    + '<div style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">🏋 Actividad del turno · KPI</div>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Registra tu actividad del día. Pon 0 si no hubo. Estas cifras son de autocontrol; el incentivo se calcula con VirtuGym.</div>'
+    + '<div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+campos+'</div>'
+    + '<div id="entrkpi-err" style="color:var(--red);font-size:12px;margin-top:12px;min-height:14px;"></div>'
+    + '<div class="modal-f" style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">'
+    + '<button class="btn btn-secondary" onclick="closeEntrKpiModal()">Cancelar</button>'
+    + '<button class="btn btn-primary" onclick="submitEntrKpi()">💾 Guardar turno</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) closeEntrKpiModal(); });
+}
+
+function openEntrKpiModal(){
+  _ensureEntrKpiModal();
+  _ENTR_KPI_CAMPOS.forEach(function(c){
+    var el = document.getElementById('entrkpi-'+c.k); if(el) el.value='';
+  });
+  var err = document.getElementById('entrkpi-err'); if(err) err.textContent='';
+  var m = document.getElementById('modal-entr-kpi'); if(m) m.style.display='flex';
+}
+function closeEntrKpiModal(){
+  var m = document.getElementById('modal-entr-kpi'); if(m) m.style.display='none';
+}
+
+function submitEntrKpi(){
+  var errEl = document.getElementById('entrkpi-err');
+  // Horas obligatorias (mismo guard que _doSaveTurno, mensaje claro aquí)
+  var horas = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+  if(!horas || horas <= 0){
+    if(errEl) errEl.textContent = 'Horas trabajadas obligatorias — decláralas en el formulario de turno.';
+    return;
+  }
+  var kpi = {};
+  for(var i=0;i<_ENTR_KPI_CAMPOS.length;i++){
+    var c = _ENTR_KPI_CAMPOS[i];
+    var raw = (document.getElementById('entrkpi-'+c.k)||{}).value;
+    var n = parseInt(raw, 10);
+    if(isNaN(n) || n < 0) n = 0;
+    kpi[c.k] = n;
+  }
+  window._entrKpiState = kpi;
+  if(errEl) errEl.textContent='';
+  closeEntrKpiModal();
+  _doSaveTurno().then(function(){
+    window._entrKpiState = null; // limpiar tras guardar
+  }).catch(function(e){
+    // si falla el guardado, conservar el estado para reintento
+    if(errEl) errEl.textContent = 'No se pudo guardar el turno. Reintenta.';
+  });
+}
+
+window.openEntrKpiModal  = openEntrKpiModal;
+window.closeEntrKpiModal = closeEntrKpiModal;
+window.submitEntrKpi     = submitEntrKpi;
 
 // Exponer globalmente
 window.renderInfoScreen = renderInfoScreen;
