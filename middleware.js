@@ -7,6 +7,7 @@ const ALLOWED_IPS = [
   '45.153.97.234',  // Casa
   '90.167.42.33',    // [POR DEFINIR]
   '89.131.180.187',  // [POR DEFINIR]
+  '37.29.174.46',    // [POR DEFINIR]
 ];
 
 export default function middleware(req) {

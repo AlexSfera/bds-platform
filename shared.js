@@ -3,6 +3,9 @@
 // ═══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://tsfhrpdpbkciofvejrao.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3GWGNkIs6byRG1F1BIxlkg_qhiRUgBt';
+// Webhook n8n para enviar el correo de invitación a un nuevo empleado.
+// [POR DEFINIR] — pega aquí la Production URL del webhook n8n. Vacío = no se envía.
+const N8N_INVITE_WEBHOOK = '';
 
 // HTTP helper for Supabase REST API
 async function sbRequest(method, table, body=null, params='') {
@@ -464,7 +467,7 @@ function getScreens(rol){
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
     cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
     cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
-    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento', pending:true},
+    mantmod:     {id:'mant-mod',    label:'🔧 Mantenimiento'},
     hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
     hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
     hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
@@ -556,6 +559,7 @@ function getScreens(rol){
   var gestion = [];
   if(isJefe){
     gestion.push(ITEMS.dashboard);
+    gestion.push(ITEMS.maestro);   // jefe/coordinador: gestiona empleados de SU departamento
     gestion.push(ITEMS.fio);
     gestion.push(ITEMS.informes);
   }
@@ -804,6 +808,7 @@ async function showScreen(id){
   if(id==='merma-mod'){ renderMermaMod(); }
   if(id==='ajustes-mod'){ renderAjustesMod(); }
   if(id==='notas-mod'){ renderNotasMod(); }
+  if(id==='mant-mod'    && typeof renderMantenimientoMod==='function')  renderMantenimientoMod();
   // ── Housekeeping ──
   if(id==='ruta-mod'    && typeof renderHKMiRuta==='function')         renderHKMiRuta();
   if(id==='hk-plan'     && typeof renderHKPlanificacion==='function')  renderHKPlanificacion();
@@ -3088,23 +3093,60 @@ async function renderMaestro(){
   var estadoFilt = (document.getElementById('maestro-estado-filter')||{value:'Activo'}).value;
   // Si el select aún no existe en DOM (primera carga), defecto = Activo
   if(estadoFilt === undefined) estadoFilt = 'Activo';
-  var allEmps = (await getDB('employees')).filter(function(e){ return e.id !== 'E13'; });
+
+  // ── Ámbito de departamento ──────────────────────────────────────────
+  // Admin / adjunto_directivo: ven todos. Jefe / coordinador / fb: solo su(s) depto(s).
+  var seeAll  = canActAsAdmin(currentUser);
+  var myDepts = seeAll ? ['*'] : getSupervisorDepartments(currentUser);
+  function inMyScope(e){
+    if(seeAll) return true;
+    var ea = normalizeDeptName(e.area);
+    return myDepts.some(function(d){ return normalizeDeptName(d) === ea; });
+  }
+  // Cabecera + botón CSV dinámicos según rol
+  var ttlEl = document.getElementById('maestro-title');
+  var subEl = document.getElementById('maestro-sub');
+  if(ttlEl) ttlEl.textContent = '👥 Maestro';
+  if(subEl) subEl.textContent = seeAll
+    ? 'Gestión de empleados — todos los departamentos'
+    : ('Tu departamento: ' + (myDepts.filter(function(d){return d!=='*';}).join(' / ') || '—'));
+  var csvBtn = document.getElementById('maestro-csv-btn');
+  if(csvBtn) csvBtn.style.display = isAdmin(currentUser) ? '' : 'none';
+
+  var allEmps = (await getDB('employees'))
+    .filter(function(e){ return e.id !== 'E13'; })
+    .filter(inMyScope);
   var employees = estadoFilt === '' ? allEmps : allEmps.filter(function(e){ return e.estado === estadoFilt; });
 
-  // Permisos: adjunto_directivo NO puede modificar/eliminar/ver-PIN de fila con rol=admin
+  // Permisos de fila:
+  //  - adjunto_directivo NO toca fila con rol=admin
+  //  - admin/adjunto: todo · fb: todo salvo admin
+  //  - jefe/coordinador (supervisor): solo empleados (rol=empleado) de SU ámbito
   function canEditRow(e){
     if(isAdjuntoDirectivo(currentUser) && e.rol === 'admin') return false;
-    return canActAsAdmin(currentUser) || (currentUser.rol === 'fb' && e.rol !== 'admin');
+    if(canActAsAdmin(currentUser)) return true;
+    if(currentUser.rol === 'fb') return e.rol !== 'admin';
+    if(isSupervisor(currentUser)) return e.rol === 'empleado' && inMyScope(e);
+    return false;
   }
   function pinCell(e){
-    if(isAdjuntoDirectivo(currentUser)) return '<span style="color:var(--text3)">●●●●</span>';
+    // PIN visible SOLO para admin. Jefes y adjunto_directivo nunca lo ven.
     if(isAdmin(currentUser)) return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">'+e.pin+'</span>';
     return '<span style="color:var(--text3)">●●●●</span>';
   }
   function accionesCell(e){
     if(!canEditRow(e)) return '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>';
-    var canToggle = canActAsAdmin(currentUser) || (currentUser.rol === 'fb' && e.rol !== 'admin');
+    var canToggle = canEditRow(e);  // quien puede editar puede dar baja/activar
     var html = '<button class="btn btn-secondary btn-sm" onclick="openEmpModal(\''+e.id+'\')">Editar</button> ';
+    // Botón Restablecer PIN: admin siempre; jefe/supervisor solo para empleados de su ámbito
+    var canResetPin = isAdmin(currentUser) || (isSupervisor(currentUser) && e.rol === 'empleado' && inMyScope(e)) || (currentUser.rol === 'fb' && e.rol !== 'admin');
+    if(canResetPin){
+      html += '<button class="btn btn-secondary btn-sm" onclick="openResetPinModalDirect(\''+e.id+'\',\''+e.nombre.replace(/'/g,"\\'")+'\',\''+(e.email||'')+'\')" title="Restablecer PIN" style="font-size:11px;">🔑 PIN</button> ';
+    }
+    // Botón Reenviar invitación: solo si tiene email
+    if(e.email && (isAdmin(currentUser) || canActAsAdmin(currentUser) || (isSupervisor(currentUser) && inMyScope(e)))){
+      html += '<button class="btn btn-secondary btn-sm" onclick="reenviarInvitacionDirect(\''+e.id+'\',\''+e.nombre.replace(/'/g,"\\'")+'\',\''+e.email+'\')" title="Reenviar invitación" style="font-size:11px;">📧</button> ';
+    }
     if(canToggle){
       if(e.estado === 'Activo'){
         html += '<button class="btn btn-danger btn-sm" onclick="toggleEmp(\''+e.id+'\',\'Baja\')">Baja</button>';
@@ -3121,8 +3163,11 @@ async function renderMaestro(){
   }
 
   var rows = employees.length === 0
-    ? '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px;">Sin empleados con este filtro</td></tr>'
+    ? '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:20px;">Sin empleados con este filtro</td></tr>'
     : employees.map(function(e){
+        var emailCell = e.email
+          ? '<span style="font-size:10px;color:var(--text3);">'+e.email+'</span>'
+          : '<span style="font-size:10px;color:#f59e0b;">⚠ sin correo</span>';
         return '<tr>'
           +'<td><strong>'+e.nombre+'</strong></td>'
           +'<td>'+deptBadge(e.area)+'</td>'
@@ -3133,58 +3178,231 @@ async function renderMaestro(){
           +'<td style="font-family:var(--font-mono);font-size:10px">'+e.rol+'</td>'
           +'<td style="font-family:var(--font-mono)">'+(parseFloat(e.coste)>0?parseFloat(e.coste).toFixed(2)+'€':'—')+'</td>'
           +'<td>'+pinCell(e)+'</td>'
+          +'<td>'+emailCell+'</td>'
           +'<td style="white-space:nowrap">'+accionesCell(e)+'</td>'
           +'</tr>';
       }).join('');
 
-  document.getElementById('maestro-table').innerHTML = '<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Acciones</th></tr>'+rows+'</table>';
+  document.getElementById('maestro-table').innerHTML = '<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Correo</th><th>Acciones</th></tr>'+rows+'</table>';
 }
 async function openEmpModal(empId){
   _editEmpId=empId||null;
-  var isAdjAdm = isAdjuntoDirectivo(currentUser);
+  var isEdit = !!empId;
+  var createDiv = document.getElementById('emp-pin-create');
+  var statusDiv = document.getElementById('emp-pin-status');
   if(empId){
     const e=(await getDB('employees')).find(x=>x.id===empId); if(!e) return;
     document.getElementById('me-title').textContent='Editar: '+e.nombre;
     document.getElementById('emp-nombre').value=e.nombre;
+    var emEl=document.getElementById('emp-email'); if(emEl) emEl.value=e.email||'';
     document.getElementById('emp-area').value=e.area;
     document.getElementById('emp-puesto').value=e.puesto;
-    // adjunto_directivo: PIN vacío — debe introducir nuevo PIN para guardar
-    document.getElementById('emp-pin').value = isAdjAdm ? '' : (e.pin||'');
+    var pinIn = document.getElementById('emp-pin'); if(pinIn) pinIn.value='';
     document.getElementById('emp-coste').value=(e.coste&&parseFloat(e.coste)>0)?parseFloat(e.coste):'';
     document.getElementById('emp-estado').value=e.estado;
     document.getElementById('emp-resp').value=(e.responsable==1||e.responsable===true||e.responsable==='1'||e.responsable==='true')?'1':'0';
     document.getElementById('emp-val').value=(e.validador==1||e.validador===true||e.validador==='1'||e.validador==='true')?'1':'0';
     document.getElementById('emp-rol').value=e.rol;
     document.getElementById('emp-obs').value=e.obs||'';
+    if(createDiv) createDiv.style.display='none';
+    if(statusDiv) statusDiv.style.display='';
+    var badge=document.getElementById('emp-pin-badge');
+    if(badge){
+      badge.className='badge '+(e.pin?'b-green':'b-yellow');
+      badge.textContent=e.pin?'PIN configurado':'PIN pendiente';
+    }
+    var canReset = isAdmin(currentUser) ||
+      (isSupervisor(currentUser) && e.rol==='empleado') ||
+      (currentUser.rol==='fb' && e.rol!=='admin');
+    var resetBtn=document.getElementById('emp-pin-reset-btn');
+    if(resetBtn) resetBtn.style.display = canReset ? '' : 'none';
+    var reinvBtn=document.getElementById('emp-reinvite-btn');
+    if(reinvBtn){
+      reinvBtn.style.display = e.email ? '' : 'none';
+      reinvBtn.onclick = function(){ reenviarInvitacionDirect(empId, e.nombre, e.email); };
+    }
+    window._resetPinEmpId   = empId;
+    window._resetPinEmpName = e.nombre;
+    window._resetPinEmpEmail= e.email||'';
   } else {
     document.getElementById('me-title').textContent='Nuevo Empleado';
-    ['emp-nombre','emp-pin','emp-coste','emp-obs'].forEach(id=>document.getElementById(id).value='');
-    ['emp-puesto','emp-estado'].forEach(id=>{ const el=document.getElementById(id); if(el) el.selectedIndex=0; });
+    ['emp-nombre','emp-email','emp-pin','emp-coste','emp-obs'].forEach(function(id){var el=document.getElementById(id); if(el) el.value='';});
+    ['emp-puesto','emp-estado'].forEach(function(id){ var el=document.getElementById(id); if(el) el.selectedIndex=0; });
     document.getElementById('emp-area').value='';
     document.getElementById('emp-resp').value='0';
     document.getElementById('emp-val').value='0';
     document.getElementById('emp-rol').value='empleado';
+    if(createDiv) createDiv.style.display='';
+    if(statusDiv) statusDiv.style.display='none';
+    window._resetPinEmpId=null; window._resetPinEmpName=''; window._resetPinEmpEmail='';
   }
-  // Sincronizar área desde puesto
   _syncAreaFromPuesto();
-  // PIN label dinámico para adjunto_directivo
-  var pinRow=document.getElementById('emp-pin-row');
-  if(pinRow){
-    var pinLabel=pinRow.querySelector('label');
-    if(pinLabel) pinLabel.innerHTML = isAdjAdm
-      ? 'PIN nuevo (4-6 dígitos) <span class="req">*</span> <span style="font-size:11px;color:var(--text3);">— introduce un PIN nuevo para guardar</span>'
-      : 'PIN (4-6 dígitos) <span class="req">*</span>';
-  }
   document.getElementById('modal-empleado').classList.add('open');
+}
+
+async function enviarInvitacionEmpleado(emp){
+  // emp: {nombre, email, pin, esReenvio?}
+  if(!emp || !emp.email) return;
+  var esReenvio = !!emp.esReenvio;
+  if(!N8N_INVITE_WEBHOOK){
+    var msg = esReenvio ? 'Invitación NO reenviada: configura el webhook n8n' : 'Empleado creado. Invitación pendiente: configura el webhook n8n';
+    toast(msg,'err');
+    await auditLog('INVITE_EMP_PENDING','Invitación NO enviada (webhook sin configurar) — '+emp.nombre+' <'+emp.email+'>');
+    return;
+  }
+  try{
+    var res = await fetch(N8N_INVITE_WEBHOOK, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tipo: esReenvio ? 'reenvio_invitacion' : 'nueva_invitacion',
+        nombre: emp.nombre,
+        email: emp.email,
+        pin: emp.pin,
+        url: 'https://syncro-shift.vercel.app',
+        enviado_por: (currentUser&&currentUser.nombre)||'?',
+        ts: localTs()
+      })
+    });
+    if(!res.ok){
+      toast('Falló el envío de la invitación ('+res.status+')','err');
+      await auditLog('INVITE_EMP_FAIL',emp.nombre+' <'+emp.email+'> status '+res.status);
+      return;
+    }
+    toast((esReenvio?'Invitación reenviada':'Invitación enviada')+' a '+emp.email,'ok');
+    await auditLog('INVITE_EMP',(esReenvio?'Reinvitación':'Invitación')+' enviada a '+emp.nombre+' <'+emp.email+'>');
+  }catch(err){
+    toast('Error de red al enviar la invitación','err');
+    await auditLog('INVITE_EMP_ERR',emp.nombre+' <'+emp.email+'> '+((err&&err.message)||err));
+  }
+}
+
+// ── Abrir modal de reset PIN desde tabla (botón 🔑 PIN) ─────────────────
+function openResetPinModalDirect(empId, empNombre, empEmail){
+  window._resetPinEmpId   = empId;
+  window._resetPinEmpName = empNombre;
+  window._resetPinEmpEmail= empEmail||'';
+  openResetPinModal();
+}
+function openResetPinModal(){
+  var empId    = window._resetPinEmpId;
+  var empName  = window._resetPinEmpName;
+  var empEmail = window._resetPinEmpEmail;
+  if(!empId){ toast('Sin empleado seleccionado','err'); return; }
+  if(!isAdmin(currentUser) && !isSupervisor(currentUser) && currentUser.rol!=='fb'){
+    toast('Sin permisos para restablecer PIN','err'); return;
+  }
+  document.getElementById('reset-pin-emp-nombre').textContent = 'Empleado: '+empName;
+  document.getElementById('reset-pin-value').value='';
+  document.getElementById('reset-pin-confirm').value='';
+  var emailRow   = document.getElementById('reset-pin-email-row');
+  var noEmailRow = document.getElementById('reset-pin-noemail-row');
+  var emailAddr  = document.getElementById('reset-pin-email-addr');
+  if(empEmail){
+    if(emailAddr)  emailAddr.textContent=empEmail;
+    if(emailRow)   emailRow.style.display='';
+    if(noEmailRow) noEmailRow.style.display='none';
+  } else {
+    if(emailRow)   emailRow.style.display='none';
+    if(noEmailRow) noEmailRow.style.display='';
+  }
+  document.getElementById('modal-reset-pin').classList.add('open');
+}
+async function confirmarResetPin(){
+  var empId    = window._resetPinEmpId;
+  var empName  = window._resetPinEmpName||'?';
+  var empEmail = window._resetPinEmpEmail||'';
+  var newPin   = (document.getElementById('reset-pin-value').value||'').trim();
+  var confPin  = (document.getElementById('reset-pin-confirm').value||'').trim();
+  if(!newPin || newPin.length<4){ toast('PIN mínimo 4 dígitos','err'); return; }
+  if(newPin !== confPin){ toast('Los PIN no coinciden','err'); return; }
+  var employees = await getDB('employees');
+  if(employees.find(function(e){ return e.pin===newPin && e.id!==empId; })){
+    toast('PIN ya en uso por otro empleado','err'); return;
+  }
+  var patchPayload = {
+    pin: newPin,
+    pin_updated_at: localTs(),
+    pin_updated_by: (currentUser&&currentUser.nombre)||'?'
+  };
+  var patchRes = await fetch(
+    SUPABASE_URL+'/rest/v1/employees?id=eq.'+encodeURIComponent(empId),
+    { method:'PATCH',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
+               'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify(patchPayload) }
+  );
+  if(!patchRes.ok){
+    var errTxt=await patchRes.text();
+    toast('Error al guardar el nuevo PIN','err');
+    console.error('[RESET PIN ERROR]',patchRes.status,errTxt);
+    return;
+  }
+  invalidateCache('employees');
+  await auditLog('RESET_PIN',((currentUser&&currentUser.nombre)||'?')+' restablecio PIN de '+empName+' (id:'+empId+')');
+  closeModal('modal-reset-pin');
+  if(empEmail){ await enviarNotificacionCambioPin({nombre:empName,email:empEmail,pin:newPin}); }
+  else { toast('PIN actualizado. Sin correo registrado — comunica el nuevo PIN presencialmente','err'); }
+  toast('PIN de '+empName+' actualizado correctamente','ok');
+  await renderMaestro();
+}
+async function enviarNotificacionCambioPin(emp){
+  if(!emp.email) return;
+  if(!N8N_INVITE_WEBHOOK){
+    await auditLog('NOTIFY_PIN_PENDING','Notificación cambio PIN NO enviada (webhook sin configurar) — '+emp.nombre);
+    return;
+  }
+  try{
+    var res = await fetch(N8N_INVITE_WEBHOOK, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        tipo: 'pin_cambiado',
+        nombre: emp.nombre,
+        email: emp.email,
+        pin: emp.pin,
+        url: 'https://syncro-shift.vercel.app',
+        enviado_por: (currentUser&&currentUser.nombre)||'?',
+        ts: localTs()
+      })
+    });
+    if(!res.ok){ await auditLog('NOTIFY_PIN_FAIL','email:'+emp.email+' status:'+res.status); }
+    else { await auditLog('NOTIFY_PIN_SENT','Notificación cambio PIN enviada a '+emp.nombre+' <'+emp.email+'>'); }
+  }catch(err){ await auditLog('NOTIFY_PIN_ERR',emp.email+' '+((err&&err.message)||err)); }
+}
+async function reenviarInvitacion(){
+  var empId    = window._resetPinEmpId;
+  var empName  = window._resetPinEmpName||'?';
+  var empEmail = window._resetPinEmpEmail||'';
+  if(!empEmail){ toast('Este empleado no tiene correo registrado','err'); return; }
+  var emps = await getDB('employees');
+  var emp  = emps.find(function(e){ return e.id===empId; });
+  if(!emp){ toast('Empleado no encontrado','err'); return; }
+  await enviarInvitacionEmpleado({nombre:emp.nombre, email:emp.email, pin:emp.pin, esReenvio:true});
+}
+async function reenviarInvitacionDirect(empId, empNombre, empEmail){
+  if(!empEmail){ toast('Este empleado no tiene correo registrado','err'); return; }
+  var emps = await getDB('employees');
+  var emp  = emps.find(function(e){ return e.id===empId; });
+  if(!emp){ toast('Empleado no encontrado','err'); return; }
+  await enviarInvitacionEmpleado({nombre:emp.nombre, email:emp.email, pin:emp.pin, esReenvio:true});
 }
 
 async function saveEmpleado(){
   const nombre=document.getElementById('emp-nombre').value.trim();
-  const pin=document.getElementById('emp-pin').value.trim();
+  // PIN solo se lee en creación; en edición se gestiona desde el modal de reset
+  const isEdit = !!_editEmpId;
+  const pin = isEdit ? '' : ((document.getElementById('emp-pin')||{}).value||'').trim();
+  const email=((document.getElementById('emp-email')||{}).value||'').trim();
   if(!nombre){toast('Nombre obligatorio','err');return;}
-  if(!pin||pin.length<4){toast('PIN mínimo 4 dígitos','err');return;}
+  if(!isEdit){
+    // En creación PIN es obligatorio
+    if(!pin||pin.length<4){toast('PIN mínimo 4 dígitos','err');return;}
+  }
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Correo electrónico no válido','err');return;}
   const employees=await getDB('employees');
-  if(employees.find(e=>e.pin===pin&&e.id!==_editEmpId)){toast('PIN ya en uso','err');return;}
+  if(!isEdit && employees.find(function(e){return e.pin===pin&&e.id!==_editEmpId;})){toast('PIN ya en uso','err');return;}
+  if(email && employees.find(function(e){return e.email&&e.email.toLowerCase()===email.toLowerCase()&&e.id!==_editEmpId;})){toast('Correo ya en uso','err');return;}
   // Derivar área del puesto (siempre — así puesto y área son siempre coherentes)
   _syncAreaFromPuesto();
   var selectedArea = document.getElementById('emp-area').value || _getAreaFromPuesto(document.getElementById('emp-puesto').value);
@@ -3232,25 +3450,20 @@ async function saveEmpleado(){
     }
   }
   var costeVal = parseFloat(document.getElementById('emp-coste').value)||0;
-  const emp={
-    nombre, pin,
-    area: document.getElementById('emp-area').value,
+  // Explicit payload - ensure coste is always sent as number
+  var empPayload = {
+    nombre: nombre, area: document.getElementById('emp-area').value,
     puesto: document.getElementById('emp-puesto').value,
-    coste: isNaN(costeVal) ? 0 : costeVal,
+    coste: isNaN(costeVal)?0:parseFloat(costeVal)||0,
     estado: document.getElementById('emp-estado').value,
     responsable: parseInt(document.getElementById('emp-resp').value)||0,
     validador: parseInt(document.getElementById('emp-val').value)||0,
     rol: document.getElementById('emp-rol').value,
     obs: (document.getElementById('emp-obs')||{value:''}).value.trim(),
-    updated_at: localTs()
+    email: email
+    // PIN no se incluye en PATCH — se cambia solo desde confirmarResetPin()
   };
-  // Explicit payload - ensure coste is always sent as number
-  var empPayload = {
-    nombre: emp.nombre, pin: emp.pin, area: emp.area, puesto: emp.puesto,
-    coste: parseFloat(emp.coste)||0, estado: emp.estado,
-    responsable: emp.responsable, validador: emp.validador,
-    rol: emp.rol, obs: emp.obs||''
-  };
+  if(!isEdit) empPayload.pin = pin;  // solo en creación
   if(_editEmpId){
     // Direct fetch PATCH — bypasses sbRequest abstraction for reliability
     var patchRes = await fetch(
@@ -3277,15 +3490,26 @@ async function saveEmpleado(){
     empPayload.id = 'E' + Date.now();
     empPayload.fecha_alta = today();
     empPayload.created_at = localTs();
-    await dbInsert('employees', empPayload);
+    var insRes = await dbInsert('employees', empPayload);
+    if(insRes === null){ toast('Error al crear el empleado (revisa columna email en Supabase)','err'); return; }
+    // Invitación por correo SOLO en alta y SOLO si hay correo
+    if(email){ enviarInvitacionEmpleado({nombre:nombre, email:email, pin:pin}); }
   }
   invalidateCache('employees');
-  auditLog('SAVE_EMP', nombre+' — coste:'+costeVal+'€/h');
+  var auditAction = isEdit ? 'EDIT_EMP' : 'CREATE_EMP';
+  var auditDetail = nombre + (isEdit?' — editado':' — creado') + ' coste:'+costeVal+'€/h por '+(currentUser&&currentUser.nombre||'?');
+  auditLog(auditAction, auditDetail);
   closeModal('modal-empleado');
+  // Si el empleado no tiene correo y acaba de editarse, avisar
+  var sinCorreo = !email && isEdit;
   setTimeout(async function(){
     invalidateCache('employees');
     await renderMaestro();
-    toast((_editEmpId?'Empleado actualizado':'Empleado creado')+' — coste: '+costeVal+'€/h','ok');
+    var msg = isEdit ? 'Empleado actualizado correctamente' : 'Empleado creado correctamente';
+    toast(msg,'ok');
+    if(sinCorreo){
+      setTimeout(function(){ toast('⚠ Este empleado no tiene correo — no podrás enviarle la invitación','err'); }, 1200);
+    }
   }, 200);
 }
 function filterMaestro(){
@@ -3349,7 +3573,7 @@ async function deleteEmp(empId, empNombre){
 function toCSV(rows,cols){ const h=cols.join(';'); const b=rows.map(r=>cols.map(c=>{ const v=r[c]??''; return typeof v==='string'&&(v.includes(';')||v.includes('\n'))?`"${v}"`:v; }).join(';')); return [h,...b].join('\n'); }
 function dl(content,filename){ const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url); }
 async function exportCSV(type){
-  if(type==='employees') { dl(toCSV(await getDB('employees'),['id','nombre','area','puesto','pin','estado','responsable','validador','rol','coste','fecha_alta']),'BDS_Maestro.csv'); }
+  if(type==='employees') { var _empCols = isAdmin(currentUser) ? ['id','nombre','email','area','puesto','pin','estado','responsable','validador','rol','coste','fecha_alta'] : ['id','nombre','email','area','puesto','estado','responsable','validador','rol','coste','fecha_alta']; dl(toCSV(await getDB('employees'),_empCols),'BDS_Maestro.csv'); }
   if(type==='shifts') { dl(toCSV(await getDB('shifts'),['id','fecha','servicio','nombre','area','puesto','horas','responsable_nombre','follow_up','merma_declarada','incidencia_declarada','observacion','estado','validado_por','validado_ts','comentario_validador','created_at']),'BDS_Input.csv'); }
   if(type==='incidencias') { dl(toCSV(await getDB('incidencias'),['id','fecha','servicio','nombre','categoria','severidad','descripcion','accion_inmediata','requiere_formacion','requiere_disciplina','estado','created_at']),'BDS_Incidencias.csv'); }
   if(type==='merma') { dl(toCSV(await getDB('merma'),['id','fecha','servicio','nombre','producto','cantidad','unidad','causa','obs','coste_unitario','coste_total','created_at']),'BDS_Merma.csv'); }
@@ -3427,23 +3651,22 @@ function _gestionExtraRows(rec){
   var prioMap = {alta:'🔴 Alta', media:'🟡 Media', baja:'🟢 Baja'};
   var prio = prioMap[(rec.prioridad||'').toLowerCase()] || formatDisplayValue(rec.prioridad||'media');
   var out = '<div><b>Prioridad:</b><br>'+prio+'</div>';
-  if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏️ '+formatDisplayValue(rec.habitacion)+'</div>';
+  if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏 '+formatDisplayValue(rec.habitacion)+'</div>';
   if(rec.num_reserva) out += '<div><b>Nº reserva:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+formatDisplayValue(rec.num_reserva)+'</span></div>';
-  // Siempre renderiza leído por con id para actualización post-PATCH
   var leido = Array.isArray(rec.leido_por) ? rec.leido_por : [];
-  var leidoTxt = leido.length
-    ? leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ')
-    : '<span style="color:var(--text3);font-style:italic;">Nadie aún</span>';
-  out += '<div style="grid-column:1 / -1;" id="mi-leido-row"><b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+leidoTxt+'</span></div>';
+  if(leido.length){
+    var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
+    out += '<div style="grid-column:1 / -1;"><b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+formatDisplayValue(nombres)+'</span></div>';
+  }
   return out;
 }
 
-// Añade al usuario al array leido_por (PATCH jsonb) y actualiza el DOM inmediatamente
+// Añade al usuario actual al array leido_por si no estaba ya (PATCH jsonb)
 async function registrarLecturaGestion(rec){
   if(!rec || !currentUser) return;
   var leido = Array.isArray(rec.leido_por) ? rec.leido_por.slice() : [];
   var ya = leido.some(function(l){ return l && l.id === currentUser.id; });
-  if(ya){ _actualizarLeidoRow(leido); return; }
+  if(ya) return;
   leido.push({id: currentUser.id, nombre: currentUser.nombre, ts: localTs()});
   try {
     var res = await fetch(
@@ -3453,14 +3676,8 @@ async function registrarLecturaGestion(rec){
         body: JSON.stringify({leido_por: leido})
       }
     );
-    if(res.ok){ rec.leido_por = leido; invalidateCache('gestiones'); _actualizarLeidoRow(leido); }
-  } catch(e){ /* nunca bloquear el modal */ }
-}
-function _actualizarLeidoRow(leido){
-  var el = document.getElementById('mi-leido-row');
-  if(!el) return;
-  var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
-  el.innerHTML = '<b>Leído por ('+leido.length+'):</b><br><span style="font-size:11px;color:var(--text2);">'+formatDisplayValue(nombres)+'</span>';
+    if(res.ok){ rec.leido_por = leido; invalidateCache('gestiones'); }
+  } catch(e){ /* nunca bloquear el modal por un fallo de registro */ }
 }
 window.registrarLecturaGestion = registrarLecturaGestion;
 
