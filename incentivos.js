@@ -1133,6 +1133,8 @@ async function renderMiRendimiento(){
       + (on?'background:var(--bg);color:var(--text);border-bottom:2px solid var(--accent);'
            :'background:transparent;color:var(--text3);')+'">'+lbl+'</button>';
   }
+  var _esCoord = (typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser))
+    || (currentUser && currentUser.rol === 'coord_entrenadores');
   el.innerHTML = '<div class="card">'
     + '<div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">'
     +   '<div class="fg" style="min-width:200px;"><label>Mes</label>'
@@ -1140,6 +1142,7 @@ async function renderMiRendimiento(){
     + '</div>'
     + '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;">'
     +   tab('mis','📋 Mis informes') + tab('jefe','📊 Informe del jefe')
+    +   (_esCoord ? tab('equipo','👥 Mi equipo') : '')
     + '</div>'
     + '<div id="mirend-body"><p style="color:var(--text3);">Cargando…</p></div>'
     + '</div>';
@@ -1275,11 +1278,59 @@ async function _miRendJefe(){
 
 function _eNumMR(n){ return (Math.round(n*100)/100).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:2}); }
 
+// ── INFORME 3 (coordinador/admin): KPI de TODO el equipo de entrenadores ──
+async function _miRendEquipo(){
+  var filas;
+  try { filas = await getDB('entrenadores_incentivos_mes'); }
+  catch(e){ return '<div style="color:var(--text3);padding:20px 0;">No se pudo cargar el informe del equipo.</div>'; }
+  var delMes = (filas||[]).filter(function(r){ return r.ym === _miRendMonth; });
+  if(!delMes.length){
+    return '<div style="color:var(--text3);padding:20px 0;">No hay informe publicado para este mes. '
+      + 'Súbelo desde Informes → Entrenadores (archivo de VirtuGym).</div>';
+  }
+  delMes.sort(function(a,b){ return (parseFloat(b.incentivo_bruto)||0)-(parseFloat(a.incentivo_bruto)||0); });
+  var totBruto = delMes.reduce(function(s,r){ return s+(parseFloat(r.incentivo_bruto)||0); },0);
+  var nLiq = delMes.filter(function(r){ return r.liquidado===true; }).length;
+  var rows = delMes.map(function(r){
+    var efect = parseFloat(r.sesiones_efectivas)||0;
+    var umbral = parseFloat(r.umbral)||85;
+    var extra = parseFloat(r.sesiones_extra)||0;
+    var bruto = parseFloat(r.incentivo_bruto)||0;
+    var liq = (r.liquidado===true)
+      ? '<span class="badge b-green">✓ Liquidado</span>'
+      : '<span class="badge b-yellow">Pendiente</span>';
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      + '<td style="padding:8px 6px;font-weight:600;color:var(--text);">'+formatDisplayValue(r.employee_nombre)+'</td>'
+      + '<td style="text-align:center;padding:8px 4px;font-weight:700;color:'+(efect>=umbral?'var(--green)':'var(--text2)')+';">'+_eNumMR(efect)+'</td>'
+      + '<td style="text-align:center;padding:8px 4px;color:var(--text3);">'+umbral+'</td>'
+      + '<td style="text-align:center;padding:8px 4px;color:'+(extra>0?'var(--green)':'var(--text3)')+';font-weight:600;">'+_eNumMR(extra)+'</td>'
+      + '<td style="text-align:center;padding:8px 4px;color:var(--text3);">'+(parseInt(r.planes_online,10)||0)+'</td>'
+      + '<td style="text-align:right;padding:8px 6px;font-weight:700;color:var(--amber);font-family:var(--font-mono);">'+_eNumMR(bruto)+'€</td>'
+      + '<td style="text-align:center;padding:8px 4px;">'+liq+'</td>'
+      + '</tr>';
+  }).join('');
+  return '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">'
+      + delMes.length+' entrenadores · '+nLiq+'/'+delMes.length+' liquidados · Total bruto del mes: <b style="color:var(--amber);">'+_eNumMR(totBruto)+'€</b></div>'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px;">'
+    + '<thead><tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em;">'
+    +   '<th style="text-align:left;padding:8px 6px;">Entrenador</th>'
+    +   '<th style="text-align:center;padding:8px 4px;">Efectivas</th>'
+    +   '<th style="text-align:center;padding:8px 4px;">Umbral</th>'
+    +   '<th style="text-align:center;padding:8px 4px;">Extra</th>'
+    +   '<th style="text-align:center;padding:8px 4px;">Planes</th>'
+    +   '<th style="text-align:right;padding:8px 6px;">Bruto</th>'
+    +   '<th style="text-align:center;padding:8px 4px;">Estado</th>'
+    + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
 async function _miRendLoadBody(){
   var body = document.getElementById('mirend-body');
   if(!body) return;
   body.innerHTML = '<p style="color:var(--text3);">Cargando…</p>';
-  var html = (_miRendTab === 'jefe') ? await _miRendJefe() : await _miRendMis();
+  var html;
+  if(_miRendTab === 'equipo')      html = await _miRendEquipo();
+  else if(_miRendTab === 'jefe')   html = await _miRendJefe();
+  else                             html = await _miRendMis();
   body = document.getElementById('mirend-body');
   if(body) body.innerHTML = html;
 }
