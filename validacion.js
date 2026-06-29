@@ -1214,11 +1214,13 @@ var _pDeptAreas = {
   'sala':         ['Sala','F&B'],
   'recepcion':    ['Recepción','Recepción SFERA'],
   'rec-syncrolab':['Recepción SYNCROLAB','SYNCROLAB'],
-  'entrenadores': ['Entrenadores'],
+  'entrenadores': ['Entrenadores','SYNCROLAB'],  // área SYNCROLAB, filtrado por puesto abajo
   'housekeeping': ['Housekeeping'],
   'mantenimiento':['Mantenimiento'],
   'administracion':['Administración','RRHH','Recursos Humanos','F&B']
 };
+// Puestos que pertenecen al portal Entrenadores (dentro del área SYNCROLAB)
+var _entrenadorPuestos = ['Entrenador(a)','Coordinador(a) de Entrenadores'];
 
 // ── PANTALLA EQUIPO DEPARTAMENTO (pre-PIN) ──────────────────────
 async function pSel(dept, label, color){
@@ -1233,7 +1235,14 @@ async function pSel(dept, label, color){
   try { emps = (await getDB('employees')).filter(function(e){ return e.estado === 'Activo'; }); } catch(e){}
   var deptEmps = emps.filter(function(e){
     var a = (e.area||'').trim();
-    return areas.some(function(x){ return x.toLowerCase() === a.toLowerCase(); });
+    var areaMatch = areas.some(function(x){ return x.toLowerCase() === a.toLowerCase(); });
+    if(!areaMatch) return false;
+    // Para Entrenadores: solo mostrar puestos específicos del área SYNCROLAB
+    if(dept === 'entrenadores' && a.toLowerCase() === 'syncrolab'){
+      var p = (e.puesto||'').trim();
+      return _entrenadorPuestos.some(function(ep){ return ep.toLowerCase() === p.toLowerCase(); });
+    }
+    return true;
   });
 
   // Clasificar por rol
