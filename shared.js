@@ -3,9 +3,9 @@
 // ═══════════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://tsfhrpdpbkciofvejrao.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3GWGNkIs6byRG1F1BIxlkg_qhiRUgBt';
-// Webhook n8n para enviar el correo de invitación a un nuevo empleado.
-// [POR DEFINIR] — pega aquí la Production URL del webhook n8n. Vacío = no se envía.
-const N8N_INVITE_WEBHOOK = '';
+// Endpoint interno de Vercel para envío de correos via Resend.
+// No requiere configuración aquí — la ruta /api/send-email siempre existe en este proyecto.
+const SYNCRO_EMAIL_ENDPOINT = '/api/send-email';
 
 // HTTP helper for Supabase REST API
 async function sbRequest(method, table, body=null, params='') {
@@ -3244,14 +3244,14 @@ async function enviarInvitacionEmpleado(emp){
   // emp: {nombre, email, pin, esReenvio?}
   if(!emp || !emp.email) return;
   var esReenvio = !!emp.esReenvio;
-  if(!N8N_INVITE_WEBHOOK){
+  if(!SYNCRO_EMAIL_ENDPOINT){
     var msg = esReenvio ? 'Invitación NO reenviada: configura el webhook n8n' : 'Empleado creado. Invitación pendiente: configura el webhook n8n';
     toast(msg,'err');
     await auditLog('INVITE_EMP_PENDING','Invitación NO enviada (webhook sin configurar) — '+emp.nombre+' <'+emp.email+'>');
     return;
   }
   try{
-    var res = await fetch(N8N_INVITE_WEBHOOK, {
+    var res = await fetch(SYNCRO_EMAIL_ENDPOINT, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -3348,12 +3348,12 @@ async function confirmarResetPin(){
 }
 async function enviarNotificacionCambioPin(emp){
   if(!emp.email) return;
-  if(!N8N_INVITE_WEBHOOK){
+  if(!SYNCRO_EMAIL_ENDPOINT){
     await auditLog('NOTIFY_PIN_PENDING','Notificación cambio PIN NO enviada (webhook sin configurar) — '+emp.nombre);
     return;
   }
   try{
-    var res = await fetch(N8N_INVITE_WEBHOOK, {
+    var res = await fetch(SYNCRO_EMAIL_ENDPOINT, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
