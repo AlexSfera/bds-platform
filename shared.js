@@ -3237,7 +3237,95 @@ async function openEmpModal(empId){
     window._resetPinEmpId=null; window._resetPinEmpName=''; window._resetPinEmpEmail='';
   }
   _syncAreaFromPuesto();
+
+  // ── Restricciones UI según rol del usuario actual ─────────────────────
+  // Para jefes/supervisores: filtrar puestos por su departamento, ocultar
+  // roles superiores, y bloquear "Puede validar"
+  _aplicarRestriccionesModalEmp();
+
   document.getElementById('modal-empleado').classList.add('open');
+}
+
+// Aplica restricciones visuales al modal según el rol del usuario actual
+function _aplicarRestriccionesModalEmp(){
+  var esJefe = isSupervisor(currentUser) && !isAdjuntoDirectivo(currentUser) && !isAdmin(currentUser) && currentUser.rol !== 'fb';
+
+  // ── 1. PUESTO: filtrar optgroups por departamento del jefe ───────────
+  var puestoSel = document.getElementById('emp-puesto');
+  if(puestoSel){
+    var grupos = puestoSel.querySelectorAll('optgroup');
+    if(esJefe){
+      var misDeptos = getSupervisorDepartments(currentUser).map(function(d){ return d.toLowerCase(); });
+      // Mapa optgroup label → área normalizada
+      var labelAreaMap = {
+        'cocina':             'cocina',
+        'sala':               'sala',
+        'recepción / hotel':  'recepción',
+        'recepcion / hotel':  'recepción',
+        'housekeeping':       'housekeeping',
+        'mantenimiento':      'mantenimiento',
+        'syncrolab':          'syncrolab',
+        'dirección / f&b':    'administración',
+        'direccion / f&b':    'administración'
+      };
+      grupos.forEach(function(og){
+        var lbl = (og.getAttribute('label')||'').toLowerCase();
+        var area = labelAreaMap[lbl] || lbl;
+        var visible = misDeptos.some(function(d){ return d === area || area.indexOf(d) !== -1 || d.indexOf(area) !== -1; });
+        og.style.display = visible ? '' : 'none';
+        og.querySelectorAll('option').forEach(function(o){ o.disabled = !visible; });
+      });
+      // Si el puesto seleccionado actualmente no pertenece al depto del jefe, resetear al primer puesto visible
+      var currentOpt = puestoSel.options[puestoSel.selectedIndex];
+      if(currentOpt && currentOpt.disabled){
+        var firstVisible = Array.from(puestoSel.options).find(function(o){ return !o.disabled && o.value; });
+        if(firstVisible) puestoSel.value = firstVisible.value;
+        _syncAreaFromPuesto();
+      }
+    } else {
+      // admin/adjunto: mostrar todo
+      grupos.forEach(function(og){
+        og.style.display = '';
+        og.querySelectorAll('option').forEach(function(o){ o.disabled = false; });
+      });
+    }
+  }
+
+  // ── 2. ROL SISTEMA: ocultar roles superiores a jefes ────────────────
+  var rolSel = document.getElementById('emp-rol');
+  if(rolSel){
+    var rolesPermitidos = esJefe ? ['empleado'] :
+      (currentUser.rol === 'fb') ? ['empleado','jefe'] :
+      isAdjuntoDirectivo(currentUser) ? ['empleado','jefe','adjunto'] :
+      null; // admin: todos visibles
+    Array.from(rolSel.options).forEach(function(opt){
+      if(rolesPermitidos){
+        opt.style.display = rolesPermitidos.indexOf(opt.value) !== -1 ? '' : 'none';
+        opt.disabled      = rolesPermitidos.indexOf(opt.value) === -1;
+      } else {
+        opt.style.display = '';
+        opt.disabled = false;
+      }
+    });
+    // Si el rol seleccionado quedó deshabilitado, forzar al primero permitido
+    if(rolSel.options[rolSel.selectedIndex] && rolSel.options[rolSel.selectedIndex].disabled){
+      var firstOk = Array.from(rolSel.options).find(function(o){ return !o.disabled; });
+      if(firstOk) rolSel.value = firstOk.value;
+    }
+    // Bloquear el select si solo hay una opción visible
+    rolSel.disabled = esJefe;
+  }
+
+  // ── 3. PUEDE VALIDAR: solo adjunto_directivo y admin pueden cambiarlo ─
+  var valSel = document.getElementById('emp-val');
+  if(valSel){
+    var puedeEditarValidador = isAdmin(currentUser) || isAdjuntoDirectivo(currentUser);
+    valSel.disabled = !puedeEditarValidador;
+    valSel.title = puedeEditarValidador ? '' : 'Solo Adjunto Directivo o Administrador pueden modificar este campo';
+    // Estilo visual para indicar que está bloqueado
+    valSel.style.opacity = puedeEditarValidador ? '' : '0.5';
+    valSel.style.cursor  = puedeEditarValidador ? '' : 'not-allowed';
+  }
 }
 
 async function enviarInvitacionEmpleado(emp){
