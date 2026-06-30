@@ -1026,17 +1026,17 @@ function _infEntrClasificar(actividad, credits){
   // Descartes: carril piscina (reserva de calle) y nutrición/areas externas sin instructor
   if(/carril+\s*piscina|carrill\s*piscina/.test(a)) return null;
 
-  // Bañera de hielo
-  if(/banera\s*de\s*hielo/.test(a)) return {kpi:'banera_hielo', factor:0.5, efectiva:true};
+  // Bañera de hielo (solo si hubo reserva real: crédito >= 1)
+  if(/banera\s*de\s*hielo/.test(a)){ if(j <= 0) return null; return {kpi:'banera_hielo', factor:0.5, efectiva:true}; }
 
-  // Visbody
-  if(/visbody/.test(a)) return {kpi:'visbody', factor:0.5, efectiva:true};
+  // Visbody (solo si hubo reserva real)
+  if(/visbody/.test(a)){ if(j <= 0) return null; return {kpi:'visbody', factor:0.5, efectiva:true}; }
 
-  // Valoración funcional / Welcome Fit
-  if(/valoracion\s*funcional|welcome\s*fit/.test(a)) return {kpi:'val_funcional', factor:0.5, efectiva:true};
+  // Valoración funcional / Welcome Fit (solo si hubo reserva real)
+  if(/valoracion\s*funcional|welcome\s*fit/.test(a)){ if(j <= 0) return null; return {kpi:'val_funcional', factor:0.5, efectiva:true}; }
 
-  // PT 30 min en piscina
-  if(/piscina\s*pt.*30|pt\s*30/.test(a)) return {kpi:'pt_30', factor:0.5, efectiva:true};
+  // PT 30 min en piscina (solo si hubo reserva real)
+  if(/piscina\s*pt.*30|pt\s*30/.test(a)){ if(j <= 0) return null; return {kpi:'pt_30', factor:0.5, efectiva:true}; }
 
   // PT 50 min en piscina → PT normal x1
   if(/piscina\s*pt.*50|pt\s*50/.test(a)) {
