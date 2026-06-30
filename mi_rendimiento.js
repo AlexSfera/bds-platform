@@ -705,6 +705,20 @@ async function _mrEntrEquipo(){
         ? '<span class="badge b-green" title="Coincide con VirtuGym">✓ OK</span>'
         : '<span class="badge b-yellow" title="'+nDesv+' KPI no coinciden con VirtuGym">⚠ '+nDesv+'</span>';
     }
+    var _esAdmin = (typeof canActAsAdmin==='function' && canActAsAdmin(currentUser));
+    // Comprobante si ya está liquidado
+    var _f = [];
+    try { _f = Array.isArray(r.liquidado_fotos) ? r.liquidado_fotos : (r.liquidado_fotos ? JSON.parse(r.liquidado_fotos) : []); } catch(e){ _f=[]; }
+    var liqExtra = (r.liquidado===true && _f.length)
+      ? ' '+_f.map(function(u,i){ return '<a href="'+u+'" target="_blank" rel="noopener" style="color:var(--accent);" title="comprobante">📎</a>'; }).join('')
+      : '';
+    var accionCell = '';
+    if(_esAdmin){
+      accionCell = (r.liquidado===true)
+        ? '<span style="font-size:11px;color:var(--text3);">—</span>'
+        : '<button onclick="window._mrLiquidarUno(\''+(r.employee_id||'')+'\',\''+encodeURIComponent(r.employee_nombre||'')+'\')" '
+          + 'style="padding:5px 12px;border-radius:5px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;font-size:11px;font-weight:700;font-family:var(--font-mono);">✓ Liquidar</button>';
+    }
     return '<tr style="border-bottom:1px solid var(--border);">'
       + '<td style="padding:8px 6px;font-weight:600;color:var(--text);">'+formatDisplayValue(r.employee_nombre)+'</td>'
       + '<td style="text-align:center;padding:8px 4px;font-weight:700;color:'+(efect>=umbral?'var(--green)':'var(--text2)')+';">'+_mrEntrNum(efect)+'</td>'
@@ -713,12 +727,14 @@ async function _mrEntrEquipo(){
       + '<td style="text-align:center;padding:8px 4px;color:var(--text3);">'+(parseInt(r.planes_online,10)||0)+'</td>'
       + '<td style="text-align:center;padding:8px 4px;">'+autoCell+'</td>'
       + '<td style="text-align:right;padding:8px 6px;font-weight:700;color:'+(bruto<0?'var(--red)':'var(--amber)')+';font-family:var(--font-mono);">'+_mrEntrNum(bruto)+'€</td>'
-      + '<td style="text-align:center;padding:8px 4px;">'+liq+'</td>'
+      + '<td style="text-align:center;padding:8px 4px;">'+liq+liqExtra+'</td>'
+      + (_esAdmin ? '<td style="text-align:center;padding:8px 4px;">'+accionCell+'</td>' : '')
       + '</tr>';
   }).join('');
+  var _esAdminH = (typeof canActAsAdmin==='function' && canActAsAdmin(currentUser));
   return '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">'
       + delMes.length+' entrenadores · '+nLiq+'/'+delMes.length+' liquidados · Total bruto del mes: <b style="color:var(--amber);">'+_mrEntrNum(totBruto)+'€</b></div>'
-    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:620px;">'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:'+(_esAdminH?'700':'620')+'px;">'
     + '<thead><tr style="border-bottom:2px solid var(--border2);color:var(--text3);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em;">'
     +   '<th style="text-align:left;padding:8px 6px;">Entrenador</th>'
     +   '<th style="text-align:center;padding:8px 4px;">Efectivas</th>'
@@ -728,8 +744,73 @@ async function _mrEntrEquipo(){
     +   '<th style="text-align:center;padding:8px 4px;" title="Autorreporte del entrenador vs VirtuGym">Autocontrol</th>'
     +   '<th style="text-align:right;padding:8px 6px;">Bruto</th>'
     +   '<th style="text-align:center;padding:8px 4px;">Estado</th>'
+    +   (_esAdminH ? '<th style="text-align:center;padding:8px 4px;">Acción</th>' : '')
     + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
+
+// ── LIQUIDACIÓN INDIVIDUAL (solo admin) ──────────────────────────────
+window._mrLiquidarUno = function(empId, empNombreEnc){
+  if(!(typeof canActAsAdmin==='function' && canActAsAdmin(currentUser))){ toast('Solo un Administrador puede liquidar','err'); return; }
+  var empNombre = decodeURIComponent(empNombreEnc||'');
+  _ensureMrLiqModal();
+  document.getElementById('mr-liq-emp').textContent = empNombre;
+  document.getElementById('mr-liq-mes').textContent = _mrEntrMonth;
+  document.getElementById('modal-mr-liq').dataset.empId = empId;
+  document.getElementById('modal-mr-liq').dataset.empNombre = empNombre;
+  var err = document.getElementById('mr-liq-err'); if(err) err.textContent='';
+  if(typeof resetCajaFotos === 'function') resetCajaFotos('mr-liq-fotos', []);
+  document.getElementById('modal-mr-liq').style.display='flex';
+};
+
+function _ensureMrLiqModal(){
+  if(document.getElementById('modal-mr-liq')) return;
+  var ov = document.createElement('div');
+  ov.id = 'modal-mr-liq';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;';
+  ov.innerHTML = '<div class="modal-box" style="max-width:460px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:32px;">'
+    + '<div style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">✓ Liquidar incentivo</div>'
+    + '<div style="font-size:13px;color:var(--text2);margin-bottom:4px;"><b id="mr-liq-emp"></b> · <span id="mr-liq-mes"></span></div>'
+    + '<div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Marcas a este entrenador como pagado este mes. Lo verá en su Mi Rendimiento.</div>'
+    + '<div class="fg" style="margin-bottom:12px;">'
+    +   '<label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Comprobante (opcional) — justificante de pago, captura, etc.</label>'
+    +   '<input type="file" id="mr-liq-fotos-input" accept="image/*" capture="environment" multiple onchange="handleCajaFotosInput(this,\'mr-liq-fotos\',\'syncrolab\')" style="color:var(--text);font-size:13px;padding:6px 0;">'
+    +   '<div id="mr-liq-fotos-status" style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-top:4px;"></div>'
+    +   '<div id="mr-liq-fotos-thumbs" style="margin-top:6px;"></div>'
+    + '</div>'
+    + '<div id="mr-liq-err" style="color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px;"></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +   '<button class="btn btn-secondary" onclick="document.getElementById(\'modal-mr-liq\').style.display=\'none\'">Cancelar</button>'
+    +   '<button class="btn btn-primary" onclick="window._mrLiquidarConfirm()" style="background:var(--green);">✓ Confirmar</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.style.display='none'; });
+}
+
+window._mrLiquidarConfirm = async function(){
+  if(!(typeof canActAsAdmin==='function' && canActAsAdmin(currentUser))){ toast('Solo un Administrador puede liquidar','err'); return; }
+  var modal = document.getElementById('modal-mr-liq');
+  var empId = modal.dataset.empId || '';
+  var empNombre = modal.dataset.empNombre || '';
+  var ym = _mrEntrMonth;
+  var errEl = document.getElementById('mr-liq-err');
+  try {
+    var fotos = (typeof getCajaFotosUrls === 'function') ? (getCajaFotosUrls('mr-liq-fotos')||[]) : [];
+    var ts = localTs();
+    var por = (currentUser&&currentUser.nombre)||'';
+    // Filtro por mes + entrenador concreto (employee_id si hay; si no, por nombre)
+    var filtro = 'ym=eq.'+encodeURIComponent(ym)+'&'
+      + (empId ? 'employee_id=eq.'+encodeURIComponent(empId)
+               : 'employee_nombre=eq.'+encodeURIComponent(empNombre));
+    var res = await sbRequest('PATCH','entrenadores_incentivos_mes',
+      {liquidado:true, liquidado_ts:ts, liquidado_por:por, liquidado_fotos:fotos}, filtro);
+    if(res===null){ if(errEl) errEl.textContent='Error al guardar. Revisa la consola.'; return; }
+    invalidateCache('entrenadores_incentivos_mes');
+    await auditLog('ENTR_INC_LIQUIDADO_UNO', por+' liquidó incentivo de '+empNombre+' · '+ym+' ('+fotos.length+' foto/s)');
+    modal.style.display='none';
+    toast('Liquidado: '+empNombre,'ok');
+    _mrEntrLoadBody(); // refrescar tabla
+  } catch(e){ if(errEl) errEl.textContent='Error: '+e.message; }
+};
 
 async function _mrEntrLoadBody(){
   var body = document.getElementById('mr-entr-body');

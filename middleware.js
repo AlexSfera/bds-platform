@@ -1,22 +1,67 @@
 export const config = { matcher: '/((?!_next/static|_next/image|favicon.ico).*)' };
 
-const ALLOWED_IPS = [
+// IPs fijas de instalación (recinto, oficina) — gestión manual via commit.
+// Las IPs de empleados (jefes de depto, etc.) se gestionan desde la app
+// (tabla employee_ips en Supabase) y se cargan dinámicamente abajo.
+const STATIC_ALLOWED_IPS = [
   '81.0.50.118',    // SYNCROSFERA — red recinto
   '77.208.169.57',  // Teléfono 1
   '77.208.160.208', // Teléfono 2
   '45.153.97.234',  // Casa
-  '90.167.42.33',    // [POR DEFINIR]
-  '89.131.180.187',  // [POR DEFINIR]
-  '37.29.174.46',    // [POR DEFINIR]
-  '45.153.97.24',    // [POR DEFINIR]
+  '90.167.42.33',   // [POR DEFINIR]
+  '89.131.180.187', // [POR DEFINIR]
+  '37.29.174.46',   // [POR DEFINIR]
+  '45.153.97.24',   // [POR DEFINIR] — revisar: muy similar a 45.153.97.234, posible typo
 ];
 
-export default function middleware(req) {
+const SUPABASE_URL = 'https://tsfhrpdpbkciofvejrao.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_3GWGNkIs6byRG1F1BIxlkg_qhiRUgBt';
+const CACHE_TTL_MS = 60000; // 60s
+
+// Cache en memoria del runtime Edge (se reinicia entre cold starts — aceptable)
+let _ipCache = null;
+let _ipCacheTs = 0;
+
+async function getDynamicIPs() {
+  const now = Date.now();
+  if (_ipCache && (now - _ipCacheTs) < CACHE_TTL_MS) {
+    return _ipCache;
+  }
+  try {
+    const res = await fetch(
+      SUPABASE_URL + '/rest/v1/employee_ips?active=eq.true&select=ip',
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+        },
+      }
+    );
+    if (!res.ok) throw new Error('Supabase respondió ' + res.status);
+    const rows = await res.json();
+    _ipCache = rows.map(r => r.ip);
+    _ipCacheTs = now;
+    return _ipCache;
+  } catch (e) {
+    // FAIL-OPEN: si Supabase no responde, no añadimos IPs dinámicas,
+    // pero tampoco bloqueamos el acceso de las IPs estáticas.
+    // Si había cache previa (aunque caducada), la reutilizamos como mejor esfuerzo.
+    console.error('employee_ips fetch failed (fail-open):', e.message);
+    return _ipCache || [];
+  }
+}
+
+export default async function middleware(req) {
   const forwarded = req.headers.get('x-forwarded-for') || '';
   const ip = forwarded.split(',')[0].trim();
 
-  if (ALLOWED_IPS.includes(ip)) {
+  if (STATIC_ALLOWED_IPS.includes(ip)) {
     return; // permitir
+  }
+
+  const dynamicIPs = await getDynamicIPs();
+  if (dynamicIPs.includes(ip)) {
+    return; // permitir — IP de empleado autorizada desde la app
   }
 
   const html = `<!DOCTYPE html>
@@ -50,7 +95,6 @@ export default function middleware(req) {
     width: 180px;
     height: 180px;
   }
-  /* ── remo animado SVG ── */
   .boat { animation: rock 1.8s ease-in-out infinite; transform-origin: center bottom; }
   .oar-left  { animation: rowL 1.8s ease-in-out infinite; transform-origin: 52% 62%; }
   .oar-right { animation: rowR 1.8s ease-in-out infinite; transform-origin: 48% 62%; }
@@ -99,33 +143,22 @@ export default function middleware(req) {
 </head>
 <body>
   <div class="logo">SYNCROSFERA · Portal Operativo</div>
-
-  <!-- Rower SVG animado -->
   <svg class="rower" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-    <!-- agua -->
     <g class="water">
       <ellipse cx="100" cy="155" rx="85" ry="12" fill="#1a3a5c" opacity="0.8"/>
       <ellipse cx="100" cy="158" rx="75" ry="8"  fill="#142f50" opacity="0.6"/>
     </g>
-    <!-- barca -->
     <g class="boat">
-      <!-- casco -->
       <path d="M40 148 Q100 168 160 148 L155 138 Q100 155 45 138 Z" fill="#1e4d7b"/>
       <path d="M45 138 Q100 155 155 138 L150 130 Q100 147 50 130 Z" fill="#2563a0"/>
-      <!-- remero cuerpo -->
       <ellipse cx="100" cy="125" rx="10" ry="14" fill="#64a0d4"/>
-      <!-- cabeza -->
       <circle cx="100" cy="108" r="9" fill="#f1c27d"/>
-      <!-- remo izquierdo -->
       <line class="oar-left"  x1="100" y1="130" x2="55"  y2="158" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-      <!-- remo derecho -->
       <line class="oar-right" x1="100" y1="130" x2="145" y2="158" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
-      <!-- brazos -->
       <line x1="100" y1="122" x2="88"  y2="130" stroke="#4a86c0" stroke-width="2.5" stroke-linecap="round"/>
       <line x1="100" y1="122" x2="112" y2="130" stroke="#4a86c0" stroke-width="2.5" stroke-linecap="round"/>
     </g>
   </svg>
-
   <h1>No estás autorizado<br>para entrar</h1>
   <p>El acceso al portal operativo de SYNCROSFERA está restringido a las instalaciones del recinto.<br>Conéctate desde la red de SYNCROSFERA.</p>
   <div class="ip-badge">IP detectada: ${ip || 'desconocida'}</div>

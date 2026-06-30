@@ -2366,18 +2366,6 @@ async function renderValidacion(){
       shifts = shifts.filter(function(s){ return normalizeDeptName(s.area) === _nDept; });
     }
   }
-  // Fix permisos Jun 2026: el coordinador de Entrenadores (no admin) solo debe
-  // ver los turnos de SU equipo (entrenadores), no todos los de SYNCROLAB
-  // (que incluiría Recepción SYNCROLAB y Fisioterapeutas). Se filtra por puesto.
-  if(currentUser && currentUser.rol === 'coord_entrenadores' && !(typeof isAdmin==='function' && isAdmin(currentUser))){
-    var _puestosEntr = (typeof _PUESTOS_ENTRENADOR !== 'undefined') ? _PUESTOS_ENTRENADOR : ['Entrenador(a)','Coordinador(a) de Entrenadores'];
-    shifts = shifts.filter(function(s){
-      // turnos cuya área NO es SYNCROLAB pasan tal cual (no aplica); los de
-      // SYNCROLAB solo si el puesto del turno es de entrenador
-      if(!/syncrolab|syncro lab/i.test(s.area||'')) return true;
-      return _puestosEntr.indexOf(s.puesto||'') !== -1;
-    });
-  }
   if(serv) shifts=shifts.filter(function(s){
     if(!s.servicio) return false;
     if(s.area==='Recepción') return s.servicio===serv;
@@ -3283,6 +3271,12 @@ async function openEmpModal(empId){
     window._resetPinEmpId   = empId;
     window._resetPinEmpName = e.nombre;
     window._resetPinEmpEmail= e.email||'';
+    // ── Gestión de IPs autorizadas ── solo admin/adjunto, solo en edición
+    var ipsBlock = document.getElementById('emp-ips-block');
+    if(ipsBlock){
+      ipsBlock.style.display = (isAdmin(currentUser) || isAdjuntoDirectivo(currentUser)) ? '' : 'none';
+    }
+    await renderEmployeeIps(empId);
   } else {
     document.getElementById('me-title').textContent='Nuevo Empleado';
     ['emp-nombre','emp-email','emp-pin','emp-coste','emp-obs'].forEach(function(id){var el=document.getElementById(id); if(el) el.value='';});
@@ -3294,6 +3288,9 @@ async function openEmpModal(empId){
     if(createDiv) createDiv.style.display='';
     if(statusDiv) statusDiv.style.display='none';
     window._resetPinEmpId=null; window._resetPinEmpName=''; window._resetPinEmpEmail='';
+    // IPs solo aplican a empleados ya existentes (necesitan employee_id)
+    var ipsBlockNew = document.getElementById('emp-ips-block');
+    if(ipsBlockNew) ipsBlockNew.style.display='none';
   }
   _syncAreaFromPuesto();
 
@@ -3384,6 +3381,121 @@ function _aplicarRestriccionesModalEmp(){
     // Estilo visual para indicar que está bloqueado
     valSel.style.opacity = puedeEditarValidador ? '' : '0.5';
     valSel.style.cursor  = puedeEditarValidador ? '' : 'not-allowed';
+  }
+}
+
+// ── GESTIÓN DE IPs AUTORIZADAS POR EMPLEADO ──────────────────────────────
+// Permite a admin/adjunto autorizar hasta 2 IPs por empleado (acceso fuera
+// del recinto, ej. jefes de depto desde casa/móvil). El middleware de
+// Vercel consulta la tabla employee_ips (solo active=true) con cache 60s.
+// Baja inmediata: poner active=false desactiva el acceso en <=60s sin commit.
+
+function _canManageIps(){
+  return isAdmin(currentUser) || isAdjuntoDirectivo(currentUser);
+}
+
+async function renderEmployeeIps(empId){
+  var listEl = document.getElementById('emp-ips-list');
+  var addRow = document.getElementById('emp-ips-add-row');
+  if(!listEl) return;
+  if(!_canManageIps()){ listEl.innerHTML=''; if(addRow) addRow.style.display='none'; return; }
+
+  var all = await getDB('employee_ips');
+  var mine = all.filter(function(r){ return r.employee_id===empId; });
+
+  listEl.innerHTML = mine.map(function(r){
+    var badgeClass = r.active ? 'b-green' : 'b-yellow';
+    var badgeText  = r.active ? 'Activa' : 'Desactivada';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg2);border-radius:6px;">'
+      + '<span style="font-family:monospace;font-size:12px;flex:1;">'+r.ip+'</span>'
+      + '<span style="font-size:11px;color:var(--text3);">'+(r.label||'')+'</span>'
+      + '<span class="badge '+badgeClass+'" style="font-size:10px;">'+badgeText+'</span>'
+      + '<button type="button" class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="toggleEmployeeIp(\''+r.id+'\','+(!r.active)+')">'+(r.active?'⛔ Desactivar':'✅ Reactivar')+'</button>'
+      + '<button type="button" class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="deleteEmployeeIp(\''+r.id+'\')">🗑️</button>'
+      + '</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--text3);">Sin IPs adicionales autorizadas.</div>';
+
+  // Límite 2 IPs (cuenta solo activas; desactivadas no bloquean el límite)
+  var activeCount = mine.filter(function(r){ return r.active; }).length;
+  if(addRow) addRow.style.display = activeCount >= 2 ? 'none' : 'flex';
+  if(activeCount >= 2 && listEl){
+    listEl.innerHTML += '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Límite de 2 IPs activas alcanzado. Desactiva una para añadir otra.</div>';
+  }
+}
+
+async function addEmployeeIp(){
+  if(!_canManageIps()){ toast('Solo admin o adjunto directivo pueden gestionar IPs','err'); return; }
+  var empId = window._resetPinEmpId;
+  if(!empId){ toast('Guarda el empleado antes de añadir IPs','err'); return; }
+  var ipInput = document.getElementById('emp-ip-input');
+  var labelInput = document.getElementById('emp-ip-label');
+  var ip = (ipInput.value||'').trim();
+  var label = (labelInput.value||'').trim();
+  var ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if(!ipRegex.test(ip)){ toast('IP inválida — formato esperado: X.X.X.X','err'); return; }
+
+  var all = await getDB('employee_ips');
+  var activeCount = all.filter(function(r){ return r.employee_id===empId && r.active; }).length;
+  if(activeCount >= 2){ toast('Máximo 2 IPs activas por empleado','err'); return; }
+
+  var row = {
+    id: genId(),
+    employee_id: empId,
+    ip: ip,
+    label: label || null,
+    active: true,
+    created_at: localTs(),
+    created_by: (currentUser&&currentUser.nombre)||'?'
+  };
+  var saved = await dbInsert('employee_ips', row);
+  if(!saved){ toast('Error al guardar la IP','err'); return; }
+  invalidateCache('employee_ips');
+  await auditLog('IP_ADD', 'IP '+ip+' autorizada para empleado '+empId+(label?' ('+label+')':''));
+  ipInput.value=''; labelInput.value='';
+  toast('IP añadida','ok');
+  await renderEmployeeIps(empId);
+}
+
+async function toggleEmployeeIp(ipRowId, newActive){
+  if(!_canManageIps()){ toast('Solo admin o adjunto directivo pueden gestionar IPs','err'); return; }
+  if(newActive){
+    var all = await getDB('employee_ips');
+    var row = all.find(function(r){ return r.id===ipRowId; });
+    if(row){
+      var activeCount = all.filter(function(r){ return r.employee_id===row.employee_id && r.active; }).length;
+      if(activeCount >= 2){ toast('Máximo 2 IPs activas por empleado','err'); return; }
+    }
+  }
+  var ok = await dbUpdate('employee_ips', ipRowId, { active: newActive });
+  if(!ok){ toast('Error al actualizar la IP','err'); return; }
+  invalidateCache('employee_ips');
+  await auditLog(newActive?'IP_REACTIVATE':'IP_DEACTIVATE', 'IP row '+ipRowId+' → active='+newActive);
+  toast(newActive?'IP reactivada':'IP desactivada — efectiva en máx. 60s','ok');
+  await renderEmployeeIps(window._resetPinEmpId);
+}
+
+async function deleteEmployeeIp(ipRowId){
+  if(!_canManageIps()){ toast('Solo admin o adjunto directivo pueden gestionar IPs','err'); return; }
+  if(!confirm('¿Eliminar esta IP permanentemente?')) return;
+  await auditLog('IP_DELETE', 'IP row '+ipRowId+' eliminada');
+  var ok = await dbDelete('employee_ips', ipRowId);
+  if(!ok){ toast('Error al eliminar la IP','err'); return; }
+  invalidateCache('employee_ips');
+  toast('IP eliminada','ok');
+  await renderEmployeeIps(window._resetPinEmpId);
+}
+
+// Desactiva TODAS las IPs de un empleado de un solo golpe — usar en baja/despido.
+async function revokeAllEmployeeIps(empId){
+  if(!_canManageIps()) return;
+  var all = await getDB('employee_ips');
+  var mine = all.filter(function(r){ return r.employee_id===empId && r.active; });
+  for(var i=0;i<mine.length;i++){
+    await dbUpdate('employee_ips', mine[i].id, { active:false });
+  }
+  if(mine.length){
+    invalidateCache('employee_ips');
+    await auditLog('IP_REVOKE_ALL', 'Todas las IPs revocadas para empleado '+empId+' ('+mine.length+')');
   }
 }
 
@@ -3652,6 +3764,12 @@ async function saveEmpleado(){
   var auditAction = isEdit ? 'EDIT_EMP' : 'CREATE_EMP';
   var auditDetail = nombre + (isEdit?' — editado':' — creado') + ' coste:'+costeVal+'€/h por '+(currentUser&&currentUser.nombre||'?');
   auditLog(auditAction, auditDetail);
+
+  // ── Baja inmediata: si el estado pasa a "Baja", revocar todas sus IPs ──
+  // Efectivo en <=60s gracias al cache del middleware (sin esperar deploy).
+  if(isEdit && empPayload.estado === 'Baja'){
+    await revokeAllEmployeeIps(_editEmpId);
+  }
 
   // ── Lógica de correo en edición ─────────────────────────────────────────
   // Caso A: se añadió correo por primera vez → enviar invitación con PIN actual
