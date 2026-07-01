@@ -1388,7 +1388,7 @@ window._infEntrGuardar=async function(){
         n_visbody:       k.visbody,
         n_banera_hielo:  k.banera_hielo,
         sesiones_efectivas: c.efect,
-        umbral: c.metodo==='umbral' ? c.umbral : null,
+        umbral: c.metodo==='umbral' ? c.umbral : 0,
         sesiones_extra: c.extra,
         incentivo_sesiones: c.incSes,
         planes_online: c.planes,
