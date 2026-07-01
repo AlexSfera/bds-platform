@@ -446,7 +446,28 @@ var _MR_ENTR_KPI_LBL = {
 
 async function _mrEntrenador(el){
   var monthOpts = getMonthOptions(6);
-  if(!_mrEntrMonth) _mrEntrMonth = monthOpts[0].value;
+  // Inicializar siempre con el último mes que tiene datos en BD para este entrenador.
+  // Así el entrenador ve sus datos directamente sin tocar el selector.
+  // Se sobreescribe _mrEntrMonth en cada apertura de Mi Rendimiento.
+  try {
+    var _allRows = await getDB('entrenadores_incentivos_mes');
+    var _misMeses = (_allRows||[])
+      .filter(function(r){ return _mrEsMia(r); })
+      .map(function(r){ return r.ym; })
+      .sort().reverse(); // más reciente primero
+    _mrEntrMonth = (_misMeses.length > 0) ? _misMeses[0] : monthOpts[0].value;
+  } catch(e){
+    _mrEntrMonth = monthOpts[0].value;
+  }
+  // Aseguramos que el mes seleccionado esté en el selector (puede ser más antiguo que 6 meses)
+  var mesEnOpts = monthOpts.some(function(o){ return o.value === _mrEntrMonth; });
+  if(!mesEnOpts){
+    // El mes con datos es más antiguo: añadirlo al selector
+    var _p = _mrEntrMonth.split('-');
+    var _meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    monthOpts.push({value: _mrEntrMonth, label: _meses[parseInt(_p[1])-1]+' '+_p[0]});
+  }
   var selOpts = monthOpts.map(function(o){
     return '<option value="'+o.value+'"'+(o.value===_mrEntrMonth?' selected':'')+'>'+o.label+'</option>';
   }).join('');
