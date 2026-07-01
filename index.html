@@ -1136,6 +1136,15 @@ tr:hover td{background:rgba(96,165,250,.06);}
       <div id="mi-rendimiento-content"></div>
     </div>
 
+    <!-- ══ LIQUIDACIÓN ENTRENADORES (solo admin) ══ -->
+    <div class="screen" id="screen-liquidacion-entr">
+      <div class="page-header">
+        <div class="page-title">💳 Liquidación Entrenadores</div>
+        <div class="page-sub">Marcar incentivos como pagados · Solo Administrador</div>
+      </div>
+      <div id="liquidacion-entr-content"></div>
+    </div>
+
     <!-- ══ INSTRUCCIONES ══ -->
     <div class="screen" id="screen-readme">
       <div class="page-header" id="info-screen-header"><div class="page-title">📋 Instrucciones</div><div class="page-sub">Cargando...</div></div>
@@ -2428,16 +2437,6 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <option value="admin">Administrador</option>
       </select></div>
       <div class="fg sp2"><label>Observaciones</label><textarea id="emp-obs" rows="2"></textarea></div>
-      <!-- ── Gestión de IPs autorizadas — solo admin/adjunto, solo en edición ── -->
-      <div class="fg sp2" id="emp-ips-block" style="display:none;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
-        <label>IPs autorizadas (máx. 2) <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— acceso desde fuera del recinto</span></label>
-        <div id="emp-ips-list" style="display:flex;flex-direction:column;gap:6px;margin:6px 0;"></div>
-        <div id="emp-ips-add-row" style="display:flex;gap:8px;align-items:center;">
-          <input type="text" id="emp-ip-input" placeholder="Ej: 90.167.42.33" style="flex:1;">
-          <input type="text" id="emp-ip-label" placeholder="Etiqueta (móvil, casa...)" style="flex:1;">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="addEmployeeIp()" style="font-size:11px;white-space:nowrap;">➕ Añadir</button>
-        </div>
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-empleado')">Cancelar</button>

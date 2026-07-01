@@ -841,7 +841,13 @@ window._mrLiquidarConfirm = async function(){
     await auditLog('ENTR_INC_LIQUIDADO_UNO', por+' liquidó incentivo de '+empNombre+' · '+ym+' ('+fotos.length+' foto/s)');
     modal.style.display='none';
     toast('Liquidado: '+empNombre,'ok');
-    _mrEntrLoadBody(); // refrescar tabla
+    // Refrescar la pantalla activa: Liquidación (admin) o Mi equipo (tab)
+    if(document.getElementById('screen-liquidacion-entr') &&
+       document.getElementById('screen-liquidacion-entr').classList.contains('active')){
+      _liqEntrLoadTabla();
+    } else {
+      _mrEntrLoadBody();
+    }
   } catch(e){ if(errEl) errEl.textContent='Error: '+e.message; }
 };
 
@@ -857,3 +863,72 @@ async function _mrEntrLoadBody(){
   if(body) body.innerHTML = html;
 }
 window._mrEntrLoadBody = _mrEntrLoadBody;
+
+// ═══════════════════════════════════════════════════════════════════════
+// LIQUIDACIÓN ENTRENADORES — pantalla exclusiva admin
+// Selector de mes + tabla de equipo con botón liquidar individual.
+// Reutiliza _mrEntrEquipo (que ya tiene botones liquidar) y el modal
+// _mrLiquidarUno / _mrLiquidarConfirm ya definidos arriba.
+// ═══════════════════════════════════════════════════════════════════════
+var _liqEntrMonth = '';
+
+async function renderLiquidacionEntr(){
+  if(!(typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser))){
+    var el = document.getElementById('liquidacion-entr-content');
+    if(el) el.innerHTML = '<div class="card"><p style="color:var(--text3);padding:20px 0;">Solo el Administrador puede acceder a esta pantalla.</p></div>';
+    return;
+  }
+  var el = document.getElementById('liquidacion-entr-content');
+  if(!el) return;
+
+  // Detectar el mes con más pendientes en BD (el más útil de ver)
+  var monthOpts = getMonthOptions(6);
+  if(!_liqEntrMonth){
+    try {
+      var _rows = await getDB('entrenadores_incentivos_mes');
+      // Preferir el mes más reciente con algún pendiente; si todos están liquidados, el más reciente
+      var _pend = (_rows||[]).filter(function(r){ return !r.liquidado; }).map(function(r){ return r.ym; }).sort().reverse();
+      _liqEntrMonth = _pend.length ? _pend[0] : (monthOpts[0].value);
+    } catch(e){ _liqEntrMonth = monthOpts[0].value; }
+  }
+  // Añadir el mes al selector si no está en los 6 recientes
+  var mesEnOpts = monthOpts.some(function(o){ return o.value === _liqEntrMonth; });
+  if(!mesEnOpts){
+    var _p = _liqEntrMonth.split('-');
+    var _mm = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    monthOpts.push({value:_liqEntrMonth, label:_mm[parseInt(_p[1])-1]+' '+_p[0]});
+  }
+  var selOpts = monthOpts.map(function(o){
+    return '<option value="'+o.value+'"'+(o.value===_liqEntrMonth?' selected':'')+'>'+o.label+'</option>';
+  }).join('');
+
+  el.innerHTML = '<div class="card">'
+    + '<div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap;">'
+    +   '<div class="fg" style="min-width:200px;"><label>Mes</label>'
+    +     '<select id="liq-entr-month" onchange="window._liqEntrSetMonth(this.value)">'+selOpts+'</select></div>'
+    +   '<div style="font-size:12px;color:var(--text3);align-self:center;">Pulsa "✓ Liquidar" en cada entrenador para marcarlo como pagado. Puedes adjuntar un comprobante.</div>'
+    + '</div>'
+    + '<div id="liq-entr-tabla"><p style="color:var(--text3);">Cargando…</p></div>'
+    + '</div>';
+  await _liqEntrLoadTabla();
+}
+window.renderLiquidacionEntr = renderLiquidacionEntr;
+
+window._liqEntrSetMonth = function(v){
+  _liqEntrMonth = v;
+  // Sincronizar con el mes de Mi equipo para que _mrEntrEquipo use el mismo
+  _mrEntrMonth = v;
+  _liqEntrLoadTabla();
+};
+
+async function _liqEntrLoadTabla(){
+  var cont = document.getElementById('liq-entr-tabla');
+  if(!cont) return;
+  cont.innerHTML = '<p style="color:var(--text3);">Cargando…</p>';
+  // Sincronizar mes con _mrEntrEquipo
+  _mrEntrMonth = _liqEntrMonth;
+  // Reutilizar _mrEntrEquipo que ya tiene la tabla completa con botones liquidar
+  var html = await _mrEntrEquipo();
+  cont.innerHTML = html;
+}
+window._liqEntrLoadTabla = _liqEntrLoadTabla;
