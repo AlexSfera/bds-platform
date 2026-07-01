@@ -425,6 +425,18 @@ function _mrLiqChart(liquidaciones, ultMeses, bonusMesActual, ymActual){
 // ═══════════════════════════════════════════════════════════════════════
 var _mrEntrTab = 'mis';      // 'mis' | 'jefe' | 'equipo'
 var _mrEntrMonth = '';
+// Normaliza nombre para comparación: minúsculas, sin tildes, sin espacios extra.
+// Resuelve el caso CSV "Tomas Scoponi" vs BD "Tomás Scoponi".
+function _mrNormNombre(s){
+  return String(s||'').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ');
+}
+// Devuelve true si la fila de entrenadores_incentivos_mes pertenece al usuario actual.
+function _mrEsMia(r){
+  if(r.employee_id && currentUser && r.employee_id === currentUser.id) return true;
+  return _mrNormNombre(r.employee_nombre) === _mrNormNombre(currentUser && currentUser.nombre);
+}
 var _MR_ENTR_KPI_KEYS = ['dir_efectiva','dir_no_efectiva','pt','pt_duo','pt_30','val_funcional','visbody','banera_hielo'];
 var _MR_ENTR_KPI_LBL = {
   dir_efectiva:'Clases efectivas', dir_no_efectiva:'Clases NO efectivas',
@@ -532,7 +544,7 @@ async function _mrEntrComparador(sum){
   catch(e){ return ''; }
   var mia = (filas||[]).find(function(r){
     return r.ym === _mrEntrMonth &&
-      (r.employee_id === currentUser.id || r.employee_nombre === currentUser.nombre);
+      (_mrEsMia(r));
   });
   if(!mia){
     return '<div style="margin-top:16px;padding:12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text3);">'
@@ -579,7 +591,7 @@ async function _mrEntrJefe(){
   catch(e){ return '<div style="color:var(--text3);padding:20px 0;">No se pudo cargar el informe del mes.</div>'; }
   var mia = (filas||[]).find(function(r){
     return r.ym === _mrEntrMonth &&
-      (r.employee_id === currentUser.id || r.employee_nombre === currentUser.nombre);
+      (_mrEsMia(r));
   });
   if(!mia){
     return '<div style="color:var(--text3);padding:20px 0;">Tu jefe aún no ha publicado el informe oficial de este mes. '
