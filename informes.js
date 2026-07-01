@@ -1195,7 +1195,26 @@ window._infEntrLoadCSV=function(file){
       var parsed=_infParseEntrenadores(e.target.result, employees);
       parsed.fuente=file.name;
       _infEntrData=parsed;
-      _infEntrPlanes={};   // reset planes manuales en cada carga nueva
+      // Recuperar planes: 1) desde BD si el mes ya está guardado, 2) desde localStorage
+      _infEntrPlanes = {};
+      var _ym = parsed.ymPrincipal;
+      try {
+        var _lsKey = 'infEntrPlanes_'+_ym;
+        var _lsVal = localStorage.getItem(_lsKey);
+        if(_lsVal) _infEntrPlanes = JSON.parse(_lsVal);
+      } catch(e2){}
+      // Si el mes ya está en BD, precargar planes desde BD (tiene prioridad sobre localStorage)
+      try {
+        var _bdRows = await getDB('entrenadores_incentivos_mes');
+        var _bdMes = (_bdRows||[]).filter(function(r){ return r.ym === _ym; });
+        if(_bdMes.length){
+          _bdMes.forEach(function(r){
+            if(r.planes_online && parseInt(r.planes_online,10) > 0){
+              _infEntrPlanes[r.employee_nombre] = parseInt(r.planes_online,10);
+            }
+          });
+        }
+      } catch(e3){}
       _renderEntrTabla(parsed);
     } catch(err){ toast('Error al procesar el CSV: '+err.message,'err'); }
   };
@@ -1256,6 +1275,12 @@ function _infEntrCalc(rec){
 window._infEntrSetPlanes=function(nombreB64, val){
   var nombre=decodeURIComponent(atob(nombreB64));
   _infEntrPlanes[nombre]=parseInt(val,10)||0;
+  // Persistir en localStorage por mes para sobrevivir recargas
+  if(_infEntrData && _infEntrData.ymPrincipal){
+    try {
+      localStorage.setItem('infEntrPlanes_'+_infEntrData.ymPrincipal, JSON.stringify(_infEntrPlanes));
+    } catch(e){}
+  }
   // recalcular solo las celdas de esa fila + total
   if(_infEntrData) _renderEntrTabla(_infEntrData);
 };
@@ -1413,6 +1438,8 @@ window._infEntrGuardar=async function(){
     invalidateCache('entrenadores_incentivos_mes');
     await auditLog('ENTR_INCENTIVOS_SAVE', (currentUser&&currentUser.nombre)+' guardó incentivos Entrenadores '+ym+' ('+rows.length+' entrenadores) desde '+(_infEntrData.fuente||'CSV'));
     toast('Base de incentivos guardada para '+ym,'ok');
+    // Limpiar localStorage del mes (ya está en BD)
+    try { localStorage.removeItem('infEntrPlanes_'+ym); } catch(e){}
   } catch(e){ toast('Error: '+e.message,'err'); }
 };
 
