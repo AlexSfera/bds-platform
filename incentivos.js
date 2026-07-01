@@ -63,6 +63,18 @@ async function renderIncentivos(){
 }
 window.renderIncentivos = renderIncentivos;
 
+// Devuelve el departamento activo en Informes (chip L1).
+// Fallback: deduce por área del usuario para cuando se llama fuera de Informes.
+function _incDeptActivo(){
+  if(typeof _infDept !== 'undefined' && _infDept) return _infDept;
+  var area = (currentUser && currentUser.area) || '';
+  var puesto = (currentUser && currentUser.puesto) || '';
+  var esEntren = typeof _esEntrenador==='function' ? _esEntrenador(currentUser)
+    : ['Entrenador(a)','Coordinador(a) de Entrenadores'].indexOf(puesto) >= 0;
+  if(esEntren) return 'Entrenadores';
+  return area || 'Sala';
+}
+
 // ── VISTA EMPLEADO ───────────────────────────────────────────────────
 
 async function renderIncentivosEmpleado(el){
@@ -378,8 +390,26 @@ window.onIncGestMonthChange = onIncGestMonthChange;
 var _incImportTab = 'calcular'; // 'calcular' | 'importar' | 'reglas'
 
 async function renderIncentivosGestor(el){
+  var dept = _incDeptActivo();
   var monthOpts = getMonthOptions(6);
   if(!_incentivosSelectedMonth) _incentivosSelectedMonth = monthOpts[0].value;
+
+  // Depts sin incentivos activos aún
+  var PRONTO = ['SYNCROLAB','Housekeeping','Mantenimiento','RRHH','Fisioterapeutas','Marketing'];
+  if(PRONTO.indexOf(dept) >= 0){
+    el.innerHTML = '<div class="card" style="text-align:center;padding:48px 24px;">'
+      +'<div style="font-size:32px;margin-bottom:12px;">🚧</div>'
+      +'<div style="font-family:var(--font-mono);font-weight:700;color:var(--text);font-size:15px;margin-bottom:8px;">Incentivos '+dept+'</div>'
+      +'<div style="color:var(--text3);font-size:13px;">Módulo en desarrollo — próxima fase.</div>'
+      +'</div>';
+    return;
+  }
+
+  // Cocina — tabla existe pero cálculo pendiente de datos de Economato
+  if(dept === 'Cocina'){
+    await _incGestorCocina(el);
+    return;
+  }
 
   var selMonth = monthOpts.map(function(o){
     return '<option value="'+o.value+'"'+(o.value===_incentivosSelectedMonth?' selected':'')+'>'+o.label+'</option>';
@@ -393,11 +423,26 @@ async function renderIncentivosGestor(el){
       +'">'+label+'</button>';
   }
 
+  // Sala: Calcular + Importar Excel + Reglas
+  // Recepción: Calcular + Reglas
+  // Entrenadores: solo config/congelar/liquidar (lógica en mi_rendimiento.js)
+  var tabs = '';
+  if(dept === 'Sala'){
+    tabs = tabBtn('calcular','📊 Calcular mes')
+      + tabBtn('importar','📥 Importar Excel')
+      + (canActAsAdmin(currentUser) ? tabBtn('reglas','⚙ Reglas') : '');
+  } else if(dept === 'Recepción'){
+    tabs = tabBtn('calcular','📊 Calcular mes')
+      + (canActAsAdmin(currentUser) ? tabBtn('reglas','⚙ Reglas') : '');
+  } else if(dept === 'Entrenadores'){
+    // Config de métodos vive en mi_rendimiento.js — aquí solo aviso
+    el.innerHTML = '<div class="card"><p style="color:var(--text3);padding:12px 0;">⚙️ La configuración de métodos de incentivos de Entrenadores se gestiona desde <strong>Mi Rendimiento → Mi equipo</strong>.</p></div>';
+    return;
+  }
+
   el.innerHTML = '<div class="card">'
     +'<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">'
-    +tabBtn('calcular','📊 Calcular mes')
-    +tabBtn('importar','📥 Importar Excel')
-    +(canActAsAdmin(currentUser) ? tabBtn('reglas','⚙ Reglas') : '')
+    + tabs
     +'</div>'
     +'<div id="inc-gest-content"><p style="color:var(--text3);">Cargando…</p></div>'
     +'</div>';
@@ -409,15 +454,118 @@ async function renderIncentivosGestor(el){
       +'<select id="inc-gest-month" onchange="onIncGestMonthChange(this.value)">'+selMonth+'</select></div>'
       +'<button class="btn btn-primary" onclick="calcularIncentivosGestor()">⚙ Calcular mes</button>'
       +'</div>'
-      +'<div id="inc-calc-result"><p style="color:var(--text3);">Selecciona mes y pulsa Calcular.</p></div>';
+      +'<div id="inc-calc-result"><p style="color:var(--text3);">Pulsa Calcular para actualizar.</p></div>';
   } else if(_incImportTab === 'importar') {
     renderIncImportadorExcel();
   } else if(_incImportTab === 'reglas') {
     await renderIncReglas();
   }
 }
-// Sobrescribe la anterior — última definición gana (arquitectura del proyecto)
 window.renderIncentivosGestor = renderIncentivosGestor;
+
+// ── COCINA — entrada de coste MP + vista incentivo ───────────────────
+async function _incGestorCocina(el){
+  var monthOpts = getMonthOptions(6);
+  if(!_incentivosSelectedMonth) _incentivosSelectedMonth = monthOpts[0].value;
+  var selMonth = monthOpts.map(function(o){
+    return '<option value="'+o.value+'"'+(o.value===_incentivosSelectedMonth?' selected':'')+'>'+o.label+'</option>';
+  }).join('');
+
+  // Cargar dato existente del mes
+  var ym = _incentivosSelectedMonth;
+  var costeData = null;
+  try {
+    var r = await fetch(
+      SUPABASE_URL+'/rest/v1/cocina_costes_mes?mes=eq.'+ym+'&select=*&limit=1',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    );
+    var rows = r.ok ? await r.json() : [];
+    costeData = rows[0] || null;
+  } catch(e){}
+
+  var pct = costeData ? parseFloat(costeData.porcentaje||0) : null;
+  var cumpleEquipo = pct !== null && pct < 37;
+  var cumpleJefe   = pct !== null && pct < 40;
+
+  var resultadoHtml = '';
+  if(costeData){
+    resultadoHtml = '<div class="card" style="margin-top:14px;">'
+      +'<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Resultado incentivo</div>'
+      +'<div style="display:flex;gap:24px;flex-wrap:wrap;">'
+      +'<div><div style="font-size:11px;color:var(--text3);">Coste MP / Ventas</div>'
+      +'<div style="font-size:22px;font-weight:700;color:'+(cumpleJefe?'var(--green)':'var(--red)')+';">'+pct.toFixed(1)+'%</div></div>'
+      +'<div><div style="font-size:11px;color:var(--text3);">Ventas comida</div>'
+      +'<div style="font-size:18px;font-weight:700;color:var(--text);">'+parseFloat(costeData.ventas_comida||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</div></div>'
+      +'<div><div style="font-size:11px;color:var(--text3);">Coste MP</div>'
+      +'<div style="font-size:18px;font-weight:700;color:var(--text);">'+parseFloat(costeData.coste_mp||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</div></div>'
+      +'</div>'
+      +'<div style="margin-top:16px;display:flex;gap:16px;flex-wrap:wrap;">'
+      +'<div style="padding:12px 18px;border-radius:8px;background:'+(cumpleEquipo?'var(--green-dim)':'var(--bg3)')+';border:1px solid '+(cumpleEquipo?'var(--green)':'var(--border)')+';">'
+      +'<div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Equipo Cocina (< 37%)</div>'
+      +'<div style="font-weight:700;color:'+(cumpleEquipo?'var(--green)':'var(--text3)')+';">'+(cumpleEquipo?'✅ 100€/persona':'❌ No aplica')+'</div>'
+      +'</div>'
+      +'<div style="padding:12px 18px;border-radius:8px;background:'+(cumpleJefe?'var(--green-dim)':'var(--bg3)')+';border:1px solid '+(cumpleJefe?'var(--green)':'var(--border)')+';">'
+      +'<div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Andrés — Jefe Cocina (< 40%)</div>'
+      +'<div style="font-weight:700;color:'+(cumpleJefe?'var(--green)':'var(--text3)')+';">'+(cumpleJefe?'✅ 200€':'❌ No aplica')+'</div>'
+      +'</div>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:10px;">Subido por: '+(costeData.subido_por||'—')+' · '+new Date(costeData.created_at).toLocaleDateString('es-ES')+'</div>'
+      +'</div>';
+  } else {
+    resultadoHtml = '<div class="card" style="margin-top:14px;text-align:center;padding:32px;"><p style="color:var(--text3);">Sin datos para este mes. Sube el informe de Economato.</p></div>';
+  }
+
+  el.innerHTML = '<div class="card">'
+    +'<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Cocina · Coste materia prima</div>'
+    +'<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">'
+    +'<div class="fg" style="min-width:180px;"><label>Mes</label>'
+    +'<select id="inc-cocina-month" onchange="window._incentivosSelectedMonth=this.value;renderIncentivos()">'+selMonth+'</select></div>'
+    +'</div>'
+    +(canActAsAdmin(currentUser) ? '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;">'
+      +'<div class="fg"><label>Ventas comida (€)</label><input type="number" id="inc-coc-ventas" step="0.01" min="0" placeholder="0.00" value="'+(costeData?costeData.ventas_comida:'')+'"></div>'
+      +'<div class="fg"><label>Coste materia prima (€)</label><input type="number" id="inc-coc-coste" step="0.01" min="0" placeholder="0.00" value="'+(costeData?costeData.coste_mp:'')+'"></div>'
+      +'<div style="display:flex;align-items:flex-end;">'
+      +'<button class="btn btn-primary" onclick="_incGuardarCocina()">💾 Guardar</button>'
+      +'</div></div>' : '')
+    +'</div>'
+    + resultadoHtml;
+}
+window._incGestorCocina = _incGestorCocina;
+
+async function _incGuardarCocina(){
+  var ym      = _incentivosSelectedMonth;
+  var ventas  = parseFloat(document.getElementById('inc-coc-ventas').value||'0');
+  var coste   = parseFloat(document.getElementById('inc-coc-coste').value||'0');
+  if(!ventas || !coste){ toast('Introduce ventas y coste','warn'); return; }
+  var pct = (coste/ventas)*100;
+
+  // Buscar registro existente
+  try {
+    var check = await fetch(
+      SUPABASE_URL+'/rest/v1/cocina_costes_mes?mes=eq.'+ym+'&select=id&limit=1',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    );
+    var existing = check.ok ? await check.json() : [];
+    if(existing.length){
+      // PATCH
+      await fetch(SUPABASE_URL+'/rest/v1/cocina_costes_mes?id=eq.'+existing[0].id,{
+        method:'PATCH',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({ventas_comida:ventas,coste_mp:coste,porcentaje:pct,subido_por:currentUser.nombre})
+      });
+    } else {
+      // INSERT
+      await sbRequest('POST','cocina_costes_mes',{
+        id:genId(),mes:ym,ventas_comida:ventas,coste_mp:coste,porcentaje:pct,
+        subido_por:currentUser.nombre,created_at:localTs()
+      });
+    }
+    invalidateCache('cocina_costes_mes');
+    toast('Datos guardados','ok');
+    await renderIncentivos();
+  } catch(e){ toast('Error al guardar','error'); }
+}
+window._incGuardarCocina = _incGuardarCocina;
 
 // Redirigir calcularIncentivosGestor al nuevo contenedor
 async function calcularIncentivosGestor(){
@@ -425,6 +573,7 @@ async function calcularIncentivosGestor(){
   if(!el) return;
   el.innerHTML = '<p style="color:var(--text3);">Calculando…</p>';
 
+  var dept  = _incDeptActivo();
   var ym    = _incentivosSelectedMonth;
   var range = getMonthDateRange(ym);
   var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -432,144 +581,164 @@ async function calcularIncentivosGestor(){
   var parts = ym.split('-');
   var mesLabel = meses[parseInt(parts[1])-1]+' '+parts[0];
 
-  // ── SALA ──────────────────────────────────────────────────────────
   var allEmps = await getDB('employees');
-  var empsSala = allEmps.filter(function(e){
-    return e.estado==='Activo' && e.id!=='E13'
-      && (e.area==='Sala'||e.area==='Jefe de Sala');
-  });
+  var todos = [];
 
-  var allRules = await getDB('dept_incentive_rules');
-  var rules    = (allRules||[]).filter(function(r){ return r.activo && (r.departamento==='Sala'||r.departamento==='Jefe de Sala'); });
-  var rSemanal = rules.find(function(r){ return r.periodo==='semanal'; });
-  var rMensual  = rules.find(function(r){ return r.periodo==='mensual'; });
+  // ── SALA ──────────────────────────────────────────────────────────
+  if(dept === 'Sala'){
+    var empsSala = allEmps.filter(function(e){
+      return e.estado==='Activo' && (e.area==='Sala'||e.area==='Jefe de Sala');
+    });
 
-  var ventasRes = await fetch(
-    SUPABASE_URL+'/rest/v1/employee_sales_weekly'
-      +'?departamento=in.(Sala,Jefe%20de%20Sala)'
-      +'&fecha_inicio_semana=gte.'+range.inicio
-      +'&fecha_inicio_semana=lte.'+range.fin
-      +'&select=employee_id,ventas,fecha_inicio_semana',
-    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  );
-  var ventasData = ventasRes.ok ? await ventasRes.json() : [];
+    var allRules = await getDB('dept_incentive_rules');
+    var rules    = (allRules||[]).filter(function(r){ return r.activo && (r.departamento==='Sala'||r.departamento==='Jefe de Sala'); });
+    var rSemanal = rules.find(function(r){ return r.periodo==='semanal'; });
+    var rMensual  = rules.find(function(r){ return r.periodo==='mensual'; });
 
-  var empIdsSala = empsSala.map(function(e){ return e.id; }).join(',');
-  var fioResSala = empIdsSala ? await fetch(
-    SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsSala+')'
-      +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&select=employee_id,applied_points',
-    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  ) : null;
-  var fioDataSala = (fioResSala && fioResSala.ok) ? await fioResSala.json() : [];
+    var ventasRes = await fetch(
+      SUPABASE_URL+'/rest/v1/employee_sales_weekly'
+        +'?departamento=in.(Sala,Jefe%20de%20Sala)'
+        +'&fecha_inicio_semana=gte.'+range.inicio
+        +'&fecha_inicio_semana=lte.'+range.fin
+        +'&select=employee_id,ventas,fecha_inicio_semana',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    );
+    var ventasData = ventasRes.ok ? await ventasRes.json() : [];
 
-  var resultadosSala = empsSala.map(function(e){
-    var misVentas = (ventasData||[]).filter(function(v){ return v.employee_id===e.id; });
-    var totalMes  = misVentas.reduce(function(s,v){ return s+parseFloat(v.ventas||0); },0);
-    var semanasOk = rSemanal ? misVentas.filter(function(v){ return parseFloat(v.ventas||0)>=parseFloat(rSemanal.objetivo||0); }).length : 0;
-    var bonusSemanal = rSemanal ? semanasOk*parseFloat(rSemanal.importe_bonus||0) : 0;
-    var bonusMensual = (rMensual&&totalMes>=parseFloat(rMensual.objetivo||0)) ? parseFloat(rMensual.importe_bonus||0) : 0;
-    var bonusBruto   = bonusSemanal+bonusMensual;
-    var misFio   = (fioDataSala||[]).filter(function(f){ return f.employee_id===e.id; });
-    var ptosFio  = misFio.reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
-    var penPct   = getFioPenalizacion(ptosFio);
-    var bonusFinal = Math.max(0, bonusBruto*(1-penPct));
-    return { emp:e, dept:'Sala', ventasMes:totalMes, semanasOk:semanasOk, semanasTotales:misVentas.length,
-             bonusBruto:bonusBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:bonusFinal };
-  });
+    var empIdsSala = empsSala.map(function(e){ return e.id; }).join(',');
+    var fioResSala = empIdsSala ? await fetch(
+      SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsSala+')'
+        +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&select=employee_id,applied_points',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    ) : null;
+    var fioDataSala = (fioResSala && fioResSala.ok) ? await fioResSala.json() : [];
+
+    todos = empsSala.map(function(e){
+      var misVentas = (ventasData||[]).filter(function(v){ return v.employee_id===e.id; });
+      var totalMes  = misVentas.reduce(function(s,v){ return s+parseFloat(v.ventas||0); },0);
+      var semanasOk = rSemanal ? misVentas.filter(function(v){ return parseFloat(v.ventas||0)>=parseFloat(rSemanal.objetivo||0); }).length : 0;
+      var bonusSemanal = rSemanal ? semanasOk*parseFloat(rSemanal.importe_bonus||0) : 0;
+      var bonusMensual = (rMensual&&totalMes>=parseFloat(rMensual.objetivo||0)) ? parseFloat(rMensual.importe_bonus||0) : 0;
+      var bonusBruto   = bonusSemanal+bonusMensual;
+      var misFio   = (fioDataSala||[]).filter(function(f){ return f.employee_id===e.id; });
+      var ptosFio  = misFio.reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
+      var penPct   = getFioPenalizacion(ptosFio);
+      var bonusFinal = Math.max(0, bonusBruto*(1-penPct));
+      return { emp:e, dept:'Sala', ventasMes:totalMes, semanasOk:semanasOk, semanasTotales:misVentas.length,
+               bonusBruto:bonusBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:bonusFinal, liquidado:false };
+    });
+
+    var totalBonuses = todos.reduce(function(s,r){ return s+r.bonusFinal; },0);
+    var rows = _incRenderRows(todos, ym, false);
+    el.innerHTML = '<h3 style="margin:0 0 14px;font-size:15px;">Sala · '+mesLabel+'</h3>'
+      +'<div class="tbl-wrap"><table>'
+      +'<tr><th>Empleado</th><th>Ventas mes</th><th>Sem. OK</th><th>Incentivo bruto</th><th>FIO</th><th>Incentivo final</th></tr>'
+      +(rows||'<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin empleados activos</td></tr>')
+      +'<tr style="border-top:2px solid var(--border);font-weight:700;">'
+      +'<td colspan="5">TOTAL A PAGAR</td>'
+      +'<td style="font-family:var(--font-mono);font-size:15px;color:var(--amber);">'+totalBonuses.toFixed(2)+'€</td>'
+      +'</tr></table></div>'
+      +'<p style="font-size:11px;color:var(--text3);margin-top:12px;">'
+      +'Objetivo sem. '+(rSemanal?parseFloat(rSemanal.objetivo||0).toLocaleString('es-ES')+'€ → +'+parseFloat(rSemanal.importe_bonus||0)+'€':'sin regla')+'.'
+      +'</p>';
+    return;
+  }
 
   // ── RECEPCIÓN ────────────────────────────────────────────────────
-  var empsRec = allEmps.filter(function(e){
-    return e.estado==='Activo' && e.area==='Recepción';
-  });
+  if(dept === 'Recepción'){
+    var empsRec = allEmps.filter(function(e){
+      return e.estado==='Activo' && e.area==='Recepción';
+    });
 
-  // RECEPCIÓN — esquema real: empleado_id, importe (bruto IVA)
-  function _ivaFactorG(tipo){ return tipo === 'syncrolab' ? 1.21 : 1.10; }
-  var recVentasRes = empsRec.length ? await fetch(
-    SUPABASE_URL+'/rest/v1/recepcion_ventas'
-      +'?fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
-      +'&select=empleado_id,importe,tipo_venta',
-    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  ) : null;
-  var recVentasData = (recVentasRes && recVentasRes.ok) ? await recVentasRes.json() : [];
+    function _ivaFactor(tipo){ return tipo === 'syncrolab' ? 1.21 : 1.10; }
+    var recVentasRes = empsRec.length ? await fetch(
+      SUPABASE_URL+'/rest/v1/recepcion_ventas'
+        +'?fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
+        +'&select=empleado_id,importe,tipo_venta',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    ) : null;
+    var recVentasData = (recVentasRes && recVentasRes.ok) ? await recVentasRes.json() : [];
 
-  // Liquidaciones del mes para Recepción — FIO saldados no penalizan
-  var empIdsRec = empsRec.map(function(e){ return e.id; }).join(',');
-  var fioResRec = empIdsRec ? await fetch(
-    SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsRec+')'
-      +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&saldado=is.false&select=employee_id,applied_points',
-    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  ) : null;
-  var fioDataRec = (fioResRec && fioResRec.ok) ? await fioResRec.json() : [];
+    var empIdsRec = empsRec.map(function(e){ return e.id; }).join(',');
+    var fioResRec = empIdsRec ? await fetch(
+      SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsRec+')'
+        +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&saldado=is.false&select=employee_id,applied_points',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    ) : null;
+    var fioDataRec = (fioResRec && fioResRec.ok) ? await fioResRec.json() : [];
 
-  var liqRecRes = empIdsRec ? await fetch(
-    SUPABASE_URL+'/rest/v1/incentivos_liquidaciones?empleado_id=in.('+empIdsRec+')&mes=eq.'+ym+'&select=empleado_id,incentivo_final,liquidado_at',
-    {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
-  ) : null;
-  var liqRecData = (liqRecRes && liqRecRes.ok) ? await liqRecRes.json() : [];
+    var liqRecRes = empIdsRec ? await fetch(
+      SUPABASE_URL+'/rest/v1/incentivos_liquidaciones?empleado_id=in.('+empIdsRec+')&mes=eq.'+ym+'&select=empleado_id,incentivo_final,liquidado_at',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
+    ) : null;
+    var liqRecData = (liqRecRes && liqRecRes.ok) ? await liqRecRes.json() : [];
 
-  var resultadosRec = empsRec.map(function(e){
-    var misVentas  = (recVentasData||[]).filter(function(v){ return v.empleado_id===e.id; });
-    var incBruto   = misVentas.reduce(function(s,v){
-      var bruto = parseFloat(v.importe||0);
-      return s + (bruto / _ivaFactorG(v.tipo_venta)) * 0.10;
-    },0);
-    var misFio     = (fioDataRec||[]).filter(function(f){ return f.employee_id===e.id; });
-    var ptosFio    = misFio.reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
-    var penPct     = getFioPenalizacion(ptosFio);
-    var incFinal   = Math.max(0, incBruto*(1-penPct));
-    var liq        = (liqRecData||[]).find(function(l){ return l.empleado_id===e.id; });
-    return { emp:e, dept:'Recepción', ventasMes:incBruto/0.10||0, semanasOk:'—', semanasTotales:'—',
-             bonusBruto:incBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:incFinal,
-             liquidado: !!liq, liquidado_at: liq?liq.liquidado_at:null };
-  });
+    todos = empsRec.map(function(e){
+      var misVentas  = (recVentasData||[]).filter(function(v){ return v.empleado_id===e.id; });
+      var incBruto   = misVentas.reduce(function(s,v){
+        return s + (parseFloat(v.importe||0) / _ivaFactor(v.tipo_venta)) * 0.10;
+      },0);
+      var misFio     = (fioDataRec||[]).filter(function(f){ return f.employee_id===e.id; });
+      var ptosFio    = misFio.reduce(function(s,f){ return s+parseFloat(f.applied_points||0); },0);
+      var penPct     = getFioPenalizacion(ptosFio);
+      var incFinal   = Math.max(0, incBruto*(1-penPct));
+      var liq        = (liqRecData||[]).find(function(l){ return l.empleado_id===e.id; });
+      return { emp:e, dept:'Recepción', ventasMes:incBruto/0.10||0, semanasOk:'—', semanasTotales:'—',
+               bonusBruto:incBruto, ptosFio:ptosFio, penPct:penPct, bonusFinal:incFinal,
+               liquidado:!!liq, liquidado_at:liq?liq.liquidado_at:null };
+    });
 
-  // ── RENDER UNIFICADO ─────────────────────────────────────────────
-  var todos = resultadosSala.concat(resultadosRec);
-  var totalBonuses = todos.reduce(function(s,r){ return s+r.bonusFinal; },0);
+    var totalBonuses = todos.reduce(function(s,r){ return s+r.bonusFinal; },0);
+    var isAdminG = canActAsAdmin(currentUser);
+    var rows = todos.map(function(r){
+      var penBadge = r.penPct>0 ? '<span class="badge b-red">−'+Math.round(r.penPct*100)+'%</span>' : '—';
+      var liqCell = r.liquidado
+        ? '<span style="color:var(--green);font-size:11px;font-weight:600;">✅ '+new Date(r.liquidado_at).toLocaleDateString('es-ES')+'</span>'
+        : (isAdminG && r.bonusFinal>0
+          ? '<button class="btn btn-xs" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green);" '
+            +'onclick="incLiquidarMes(\''+r.emp.id+'\',\''+r.emp.nombre+'\',\''+ym+'\','+r.bonusBruto+','+(r.penPct*r.bonusBruto)+','+r.bonusFinal+')">💰 Liquidar</button>'
+          : '<span style="color:var(--text3);font-size:11px;">Pendiente</span>');
+      return '<tr>'
+        +'<td><strong>'+r.emp.nombre+'</strong></td>'
+        +'<td style="font-family:var(--font-mono);">'+r.ventasMes.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+        +'<td style="font-family:var(--font-mono);">'+r.bonusBruto.toFixed(2)+'€</td>'
+        +'<td style="text-align:center;">'+r.ptosFio.toFixed(1)+'pts '+penBadge+'</td>'
+        +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(r.bonusFinal>0?'var(--green)':'var(--text3)')+';">'+r.bonusFinal.toFixed(2)+'€</td>'
+        +'<td>'+liqCell+'</td>'
+        +'</tr>';
+    }).join('');
 
-  var isAdminGest = canActAsAdmin(currentUser);
-  var rows = todos.map(function(r){
+    el.innerHTML = '<h3 style="margin:0 0 14px;font-size:15px;">Recepción Hotel · '+mesLabel+'</h3>'
+      +'<div class="tbl-wrap"><table>'
+      +'<tr><th>Empleado</th><th>Ventas cross-sell</th><th>Incentivo bruto (10%)</th><th>FIO</th><th>Incentivo final</th><th>Liquidación</th></tr>'
+      +(rows||'<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin empleados activos</td></tr>')
+      +'<tr style="border-top:2px solid var(--border);font-weight:700;">'
+      +'<td colspan="4">TOTAL A PAGAR</td>'
+      +'<td colspan="2" style="font-family:var(--font-mono);font-size:15px;color:var(--amber);">'+totalBonuses.toFixed(2)+'€</td>'
+      +'</tr></table></div>'
+      +'<p style="font-size:11px;color:var(--text3);margin-top:12px;">Comisión: 10% sobre importe neto (sin IVA) de ventas cross-sell declaradas en turno.</p>';
+    return;
+  }
+
+  el.innerHTML = '<div class="card"><p style="color:var(--text3);padding:20px 0;">Sin cálculo disponible para este departamento.</p></div>';
+}
+window.calcularIncentivosGestor = calcularIncentivosGestor;
+
+// Helper render filas Sala (sin liquidación — la liquidación es por Mi Rendimiento)
+function _incRenderRows(todos, ym, conLiq){
+  return todos.map(function(r){
     var penBadge = r.penPct>0 ? '<span class="badge b-red">−'+Math.round(r.penPct*100)+'%</span>' : '—';
-    var deptColor = r.dept==='Recepción' ? 'var(--purple)' : 'var(--amber)';
-    var liqCell = '';
-    if(r.dept==='Recepción'){
-      if(r.liquidado){
-        var liqDateG = r.liquidado_at ? new Date(r.liquidado_at).toLocaleDateString('es-ES') : '—';
-        liqCell = '<span style="color:var(--green);font-size:11px;font-weight:600;">✅ '+liqDateG+'</span>';
-      } else if(isAdminGest && r.bonusFinal > 0){
-        liqCell = '<button class="btn btn-xs" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green);" '
-          +'onclick="incLiquidarMes(\''+r.emp.id+'\',\''+r.emp.nombre+'\',\''+ym+'\','+r.bonusBruto+','+(r.penPct*r.bonusBruto)+','+r.bonusFinal+')">💰 Liquidar</button>';
-      } else {
-        liqCell = '<span style="color:var(--text3);font-size:11px;">Pendiente</span>';
-      }
-    } else {
-      liqCell = '—';
-    }
     return '<tr>'
-      +'<td><strong>'+r.emp.nombre+'</strong> <span style="font-size:10px;color:'+deptColor+';">'+r.dept+'</span></td>'
+      +'<td><strong>'+r.emp.nombre+'</strong></td>'
       +'<td style="font-family:var(--font-mono);">'+(typeof r.ventasMes==='number'?r.ventasMes.toLocaleString('es-ES',{minimumFractionDigits:2})+'€':'—')+'</td>'
       +'<td style="text-align:center;">'+(typeof r.semanasOk==='number'?r.semanasOk+'/'+r.semanasTotales:r.semanasOk)+'</td>'
       +'<td style="font-family:var(--font-mono);">'+r.bonusBruto.toFixed(2)+'€</td>'
       +'<td style="text-align:center;">'+r.ptosFio.toFixed(1)+'pts '+penBadge+'</td>'
       +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(r.bonusFinal>0?'var(--green)':'var(--text3)')+';">'+r.bonusFinal.toFixed(2)+'€</td>'
-      +'<td>'+liqCell+'</td>'
       +'</tr>';
   }).join('');
-
-  el.innerHTML = '<h3 style="margin:0 0 14px;font-size:15px;">Sala + Recepción · '+mesLabel+'</h3>'
-    +'<div class="tbl-wrap"><table>'
-    +'<tr><th>Empleado</th><th>Ventas mes</th><th>Sem. OK</th><th>Incentivo bruto</th><th>FIO</th><th>Incentivo final</th><th>Liquidación</th></tr>'
-    +(rows||'<tr><td colspan="7" style="color:var(--text3);text-align:center;">Sin empleados activos</td></tr>')
-    +'<tr style="border-top:2px solid var(--border);font-weight:700;">'
-    +'<td colspan="6">TOTAL A PAGAR</td>'
-    +'<td style="font-family:var(--font-mono);font-size:15px;color:var(--amber);">'+totalBonuses.toFixed(2)+'€</td>'
-    +'</tr></table></div>'
-    +'<p style="font-size:11px;color:var(--text3);margin-top:12px;">'
-    +'Sala: '+(rSemanal?'objetivo sem. '+parseFloat(rSemanal.objetivo||0).toLocaleString('es-ES')+'€ → +'+parseFloat(rSemanal.importe_bonus||0)+'€. ':'sin regla. ')
-    +'Recepción: 10% neto sobre ventas cross-sell declaradas en turno.'
-    +'</p>';
 }
-window.calcularIncentivosGestor = calcularIncentivosGestor;
+window._incRenderRows = _incRenderRows;
 
 // ── IMPORTADOR EXCEL ────────────────────────────────────────────────────
 
@@ -886,40 +1055,39 @@ async function renderIncReglas() {
     return;
   }
 
+  var dept = _incDeptActivo();
+  // Reglas aplican solo a Sala por ahora
+  var deptsFiltro = dept === 'Sala' ? ['Sala','Jefe de Sala'] : [dept];
+
   var allRules = await getDB('dept_incentive_rules');
-  var rules = (allRules||[]).filter(function(r){ return r.departamento==='Sala'||r.departamento==='Jefe de Sala'; });
+  var rules = (allRules||[]).filter(function(r){
+    return deptsFiltro.indexOf(r.departamento) >= 0;
+  });
 
   var rows = rules.map(function(r){
-    return `<tr>
-      <td>${r.departamento}</td>
-      <td>${r.periodo}</td>
-      <td style="font-family:var(--font-mono);">${parseFloat(r.objetivo||0).toLocaleString('es-ES',{minimumFractionDigits:2})}€</td>
-      <td style="font-family:var(--font-mono);">${parseFloat(r.importe_bonus||0).toFixed(2)}€</td>
-      <td><span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${r.activo?'var(--green-dim)':'var(--bg4)'};color:${r.activo?'var(--green)':'var(--text3)'};">${r.activo?'Activa':'Inactiva'}</span></td>
-      <td>
-        <button class="btn btn-secondary btn-xs" onclick="incEditRegla('${r.id}')">✏ Editar</button>
-        <button class="btn btn-xs" style="background:var(--${r.activo?'orange':'green'}-dim);color:var(--${r.activo?'orange':'green'});border:1px solid var(--${r.activo?'orange':'green'});" 
-          onclick="incToggleRegla('${r.id}',${r.activo})">${r.activo?'⏸ Pausar':'▶ Activar'}</button>
-      </td>
-    </tr>`;
+    return '<tr>'
+      +'<td>'+r.departamento+'</td>'
+      +'<td>'+r.periodo+'</td>'
+      +'<td style="font-family:var(--font-mono);">'+parseFloat(r.objetivo||0).toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+      +'<td style="font-family:var(--font-mono);">'+parseFloat(r.importe_bonus||0).toFixed(2)+'€</td>'
+      +'<td><span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:'+(r.activo?'var(--green-dim)':'var(--bg4)')+';color:'+(r.activo?'var(--green)':'var(--text3)')+';">'+(r.activo?'Activa':'Inactiva')+'</span></td>'
+      +'<td>'
+      +'<button class="btn btn-secondary btn-xs" onclick="incEditRegla(\''+r.id+'\')">✏ Editar</button> '
+      +'<button class="btn btn-xs" style="background:var(--'+(r.activo?'orange':'green')+'-dim);color:var(--'+(r.activo?'orange':'green')+');border:1px solid var(--'+(r.activo?'orange':'green')+');" '
+      +'onclick="incToggleRegla(\''+r.id+'\','+r.activo+')">'+(r.activo?'⏸ Pausar':'▶ Activar')+'</button>'
+      +'</td></tr>';
   }).join('');
 
-  c.innerHTML = `
-    <div class="tbl-wrap" style="margin-bottom:16px;">
-      <table>
-        <thead><tr><th>Dept.</th><th>Periodo</th><th>Objetivo</th><th>Bonus</th><th>Estado</th><th>Acciones</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin reglas configuradas</td></tr>'}</tbody>
-      </table>
-    </div>
-    <button class="btn btn-primary" onclick="incNuevaRegla()">+ Nueva regla</button>
-    <div id="inc-regla-form" style="margin-top:16px;"></div>
-  `;
+  c.innerHTML = '<div class="tbl-wrap" style="margin-bottom:16px;">'
+    +'<table><thead><tr><th>Dept.</th><th>Periodo</th><th>Objetivo</th><th>Bonus</th><th>Estado</th><th>Acciones</th></tr></thead>'
+    +'<tbody>'+(rows||'<tr><td colspan="6" style="color:var(--text3);text-align:center;">Sin reglas configuradas</td></tr>')+'</tbody>'
+    +'</table></div>'
+    +'<button class="btn btn-primary" onclick="incNuevaRegla()">+ Nueva regla</button>'
+    +'<div id="inc-regla-form" style="margin-top:16px;"></div>';
 }
 window.renderIncReglas = renderIncReglas;
 
-function incNuevaRegla() {
-  incMostrarFormRegla(null);
-}
+function incNuevaRegla() { incMostrarFormRegla(null); }
 window.incNuevaRegla = incNuevaRegla;
 
 async function incEditRegla(id) {
@@ -933,32 +1101,33 @@ function incMostrarFormRegla(rule) {
   var el = document.getElementById('inc-regla-form');
   if(!el) return;
   var isNew = !rule;
-  el.innerHTML = `
-    <div class="card" style="border-color:var(--amber);">
-      <div class="card-title">${isNew?'NUEVA REGLA':'EDITAR REGLA'}</div>
-      <div class="grid2" style="gap:12px;">
-        <div class="fg"><label>Departamento</label>
-          <select id="rf-dept">
-            <option ${(!rule||rule.departamento==='Sala')?'selected':''}>Sala</option>
-            <option ${(rule&&rule.departamento==='Jefe de Sala')?'selected':''}>Jefe de Sala</option>
-          </select></div>
-        <div class="fg"><label>Periodo</label>
-          <select id="rf-periodo">
-            <option value="semanal" ${(!rule||rule.periodo==='semanal')?'selected':''}>Semanal</option>
-            <option value="mensual" ${(rule&&rule.periodo==='mensual')?'selected':''}>Mensual</option>
-          </select></div>
-        <div class="fg"><label>Objetivo ventas (€)</label>
-          <input type="number" id="rf-objetivo" step="0.01" min="0" value="${rule?rule.objetivo:''}"></div>
-        <div class="fg"><label>Importe bonus (€)</label>
-          <input type="number" id="rf-bonus" step="0.01" min="0" value="${rule?rule.importe_bonus:''}"></div>
-        <div class="fg sp2"><label>Notas</label>
-          <input type="text" id="rf-notas" value="${rule&&rule.notas?rule.notas:''}"></div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="incGuardarRegla('${rule?rule.id:''}')">💾 Guardar</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('inc-regla-form').innerHTML=''">Cancelar</button>
-      </div>
-    </div>`;
+  var dept = _incDeptActivo();
+  // Opciones de dept para el selector
+  var deptOpts = dept === 'Sala'
+    ? '<option '+((!rule||rule.departamento==='Sala')?'selected':'')+'>Sala</option>'
+      +'<option '+((rule&&rule.departamento==='Jefe de Sala')?'selected':'')+'>Jefe de Sala</option>'
+    : '<option selected>'+dept+'</option>';
+
+  el.innerHTML = '<div class="card" style="border-color:var(--amber);">'
+    +'<div class="card-title">'+(isNew?'NUEVA REGLA':'EDITAR REGLA')+'</div>'
+    +'<div class="grid2" style="gap:12px;">'
+    +'<div class="fg"><label>Departamento</label><select id="rf-dept">'+deptOpts+'</select></div>'
+    +'<div class="fg"><label>Periodo</label>'
+    +'<select id="rf-periodo">'
+    +'<option value="semanal" '+((!rule||rule.periodo==='semanal')?'selected':'')+'>Semanal</option>'
+    +'<option value="mensual" '+((rule&&rule.periodo==='mensual')?'selected':'')+'>Mensual</option>'
+    +'</select></div>'
+    +'<div class="fg"><label>Objetivo ventas (€)</label>'
+    +'<input type="number" id="rf-objetivo" step="0.01" min="0" value="'+(rule?rule.objetivo:'')+'"></div>'
+    +'<div class="fg"><label>Importe bonus (€)</label>'
+    +'<input type="number" id="rf-bonus" step="0.01" min="0" value="'+(rule?rule.importe_bonus:'')+'"></div>'
+    +'<div class="fg sp2"><label>Notas</label>'
+    +'<input type="text" id="rf-notas" value="'+(rule&&rule.notas?rule.notas:'')+'"></div>'
+    +'</div>'
+    +'<div class="btn-row">'
+    +'<button class="btn btn-primary" onclick="incGuardarRegla(\''+(rule?rule.id:'')+'\')">💾 Guardar</button>'
+    +'<button class="btn btn-secondary" onclick="document.getElementById(\'inc-regla-form\').innerHTML=\'\'">Cancelar</button>'
+    +'</div></div>';
 }
 window.incMostrarFormRegla = incMostrarFormRegla;
 

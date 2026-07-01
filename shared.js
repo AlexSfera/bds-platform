@@ -535,7 +535,7 @@ function getScreens(rol){
   }
 
   // ════════════════════════════════════════════════════════════════
-  // ADJUNTO DIRECTIVO — Mi Turno + Mis FIO + Alertas en MI DÍA; sin Incentivos
+  // ADJUNTO DIRECTIVO (Angélica / RRHH) — acceso a Informes de su dept
   // ════════════════════════════════════════════════════════════════
   if(isAdjDir){
     return [
@@ -545,7 +545,7 @@ function getScreens(rol){
       ITEMS.validacion, ITEMS.dashHK,
       {sep:true,label:'MANAGER BAR',dropdown:true},
       ITEMS.dashboard,
-      ITEMS.maestro, ITEMS.export, ITEMS.fio
+      ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.informes
     ];
   }
 

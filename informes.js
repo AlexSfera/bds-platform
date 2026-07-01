@@ -62,21 +62,29 @@ var INF_TURNOS_DEPT = {
 // ── Permisos ─────────────────────────────────────────────────────────
 function canAccessInformes(u){
   if(!u) return false;
-  if(typeof canActAsAdmin==='function' && canActAsAdmin(u)) return true;
-  if(typeof isSupervisor ==='function' && isSupervisor(u))  return true;
-  return ['fb','chef','jefe_recepcion','supervisor','coord_entrenadores'].indexOf(u.rol) >= 0;
+  var rol = (u.rol || '').toLowerCase();
+  if(rol === 'admin') return true;
+  if(rol === 'adjunto_directivo') return true;  // Angélica: solo ve RRHH (filtrado en _infDeptsVisibles)
+  if(typeof isSupervisor === 'function' && isSupervisor(u)) return true;
+  return ['fb','chef','jefe_recepcion','supervisor','coord_entrenadores'].indexOf(rol) >= 0;
 }
 
 // Devuelve array de keys de INF_DEPT_CATALOG que el usuario puede ver (activos)
 function _infDeptsVisibles(u){
   if(!u) return [];
-  // Admin / adjunto → todo
-  if(typeof canActAsAdmin==='function' && canActAsAdmin(u)){
-    return INF_DEPT_CATALOG.filter(function(d){ return !d.coming; }).map(function(d){ return d.key; });
-  }
   var rol  = (u.rol  || '').toLowerCase();
   var area = (u.area || '');
   var puesto = (u.puesto || '');
+
+  // Admin puro → todo (excluye adjunto_directivo que tiene acceso restringido)
+  if(rol === 'admin'){
+    return INF_DEPT_CATALOG.filter(function(d){ return !d.coming; }).map(function(d){ return d.key; });
+  }
+
+  // Adjunto directivo (Angélica / RRHH) → solo su dept
+  if(rol === 'adjunto_directivo'){
+    return ['RRHH'];
+  }
 
   // Entrenadores: comparten area=SYNCROLAB, se detectan por puesto
   var esEntren = typeof _esEntrenador==='function' ? _esEntrenador(u)
@@ -84,14 +92,8 @@ function _infDeptsVisibles(u){
 
   if(esEntren) return ['Entrenadores'];
 
-  // Sala / FnB → acceso amplio (Stefan)
+  // Sala / FnB
   if(area==='Sala' || rol==='fb' || rol==='jefe_sala') return ['Sala','Cocina'];
-
-  // Por área directa
-  var porArea = INF_DEPT_CATALOG.filter(function(d){
-    if(d.coming || d.special) return false;
-    return d.key === area;
-  }).map(function(d){ return d.key; });
 
   // SYNCROLAB (recepción syncrolab, NO entrenadores)
   if(area==='SYNCROLAB' && !esEntren) return ['SYNCROLAB'];
@@ -108,10 +110,10 @@ function _infDeptsVisibles(u){
   // Mantenimiento
   if(area==='Mantenimiento') return ['Mantenimiento'];
 
-  // RRHH puro (no admin)
+  // RRHH puro
   if(rol==='rrhh') return ['RRHH'];
 
-  return porArea.length ? porArea : [];
+  return [];
 }
 
 // Aliases de compatibilidad — las funciones de render antiguas siguen funcionando
