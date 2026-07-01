@@ -1,13 +1,12 @@
 // ═══════════════════════════════════════════════════════════════════════
-// INFORMES.JS · Manager Bar — Producción · Informe de Jefe · KPIs
-// Fase 1 activa : Sala (CSV POSMEWS + match fuzzy BD) + Informe de Jefe
-// C5 RR.HH.    : employee_status — bajas, vacaciones, sugerencias
-// Fase 2 pendiente: Cocina · Recepción · SYNCROLAB
+// INFORMES.JS · Manager Bar — Entrada de datos por departamento
+// Arquitectura: L1 = Departamento (chip) · L2 = Tipo de dato (sub-tab)
+// Resultados/analítica → Dashboard (B7). Analítica incentivos → Mi Rendimiento.
 // ═══════════════════════════════════════════════════════════════════════
 
 // ── Estado del módulo ────────────────────────────────────────────────
-var _infTab          = 'produccion';
-var _infSubTab       = 'sala';
+var _infDept         = null;   // chip L1 activo (key del catálogo)
+var _infSubTab       = null;   // sub-tab L2 activo
 var _infSalaData     = null;
 var _infSalaObjSem   = 3125.00;
 var _infSalaObjMes   = 10125.00;
@@ -21,16 +20,40 @@ var _infJefeList     = [];
 // Cache de employees para match fuzzy
 var _infEmployeesCache = null;
 
-var INF_DEPT_LABELS = {
-  'Sala':'🍽 Sala','Cocina':'🍳 Cocina','Recepción':'🏨 Recepción',
-  'SYNCROLAB':'🔬 SYNCROLAB','FnB':'🏪 F&B','Housekeeping':'🧹 Housekeeping'
+// ── CATÁLOGO ÚNICO DE DEPARTAMENTOS ─────────────────────────────────
+// key       = valor canónico usado en employees.area (o lógica especial)
+// label     = texto del chip
+// icon      = emoji
+// subtabs   = sub-tabs disponibles para ese depto (orden de aparición)
+// coming    = true → chip deshabilitado (próximamente)
+// special   = 'entrenadores' | 'rrhh' (lógica de acceso no estándar)
+var INF_DEPT_CATALOG = [
+  { key:'Sala',         label:'Sala',                  icon:'🍽', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
+  { key:'Cocina',       label:'Cocina',                icon:'🍳', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
+  { key:'Recepción',    label:'Recepción Hotel',        icon:'🏨', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
+  { key:'SYNCROLAB',    label:'Recepción SyncroLab',   icon:'🔬', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
+  { key:'Entrenadores', label:'Entrenadores',           icon:'🏋', subtabs:['kpi','incentivos','informe-jefe'], special:'entrenadores' },
+  { key:'Housekeeping', label:'Housekeeping',           icon:'🧹', subtabs:['kpi','incentivos','informe-jefe'] },
+  { key:'Mantenimiento',label:'Mantenimiento',          icon:'🔧', subtabs:['horas-extra','informe-jefe'] },
+  { key:'RRHH',         label:'Dirección / RR.HH.',    icon:'👥', subtabs:['rrhh'], special:'rrhh' },
+  { key:'Fisioterapeutas', label:'Fisioterapeutas',     icon:'🩺', subtabs:[], coming:true },
+  { key:'Marketing',    label:'Marketing',              icon:'📣', subtabs:[], coming:true }
+];
+
+// Labels de sub-tabs
+var INF_SUBTAB_LABELS = {
+  'kpi'         : '📊 KPI',
+  'ventas'      : '💶 Ventas / Datos',
+  'incentivos'  : '⚙️ Incentivos',
+  'informe-jefe': '📋 Informe de Jefe',
+  'horas-extra' : '⏱ Horas Extra',
+  'rrhh'        : '👥 RR.HH.'
 };
 
-// Tipos de turno por departamento (C5)
+// Tipos de turno por departamento (C5) — sin cambios
 var INF_TURNOS_DEPT = {
   'Sala'     : ['M','T','C'],
   'Cocina'   : ['M','T','C'],
-  'FnB'      : ['M','T','C'],
   'Recepción': ['M','T','N'],
   'SYNCROLAB': ['M','T'],
   'Housekeeping':['M','T']
@@ -41,32 +64,66 @@ function canAccessInformes(u){
   if(!u) return false;
   if(typeof canActAsAdmin==='function' && canActAsAdmin(u)) return true;
   if(typeof isSupervisor ==='function' && isSupervisor(u))  return true;
-  return ['fb','chef','jefe_recepcion','supervisor'].indexOf(u.rol) >= 0;
+  return ['fb','chef','jefe_recepcion','supervisor','coord_entrenadores'].indexOf(u.rol) >= 0;
 }
+
+// Devuelve array de keys de INF_DEPT_CATALOG que el usuario puede ver (activos)
+function _infDeptsVisibles(u){
+  if(!u) return [];
+  // Admin / adjunto → todo
+  if(typeof canActAsAdmin==='function' && canActAsAdmin(u)){
+    return INF_DEPT_CATALOG.filter(function(d){ return !d.coming; }).map(function(d){ return d.key; });
+  }
+  var rol  = (u.rol  || '').toLowerCase();
+  var area = (u.area || '');
+  var puesto = (u.puesto || '');
+
+  // Entrenadores: comparten area=SYNCROLAB, se detectan por puesto
+  var esEntren = typeof _esEntrenador==='function' ? _esEntrenador(u)
+    : ['Entrenador(a)','Coordinador(a) de Entrenadores'].indexOf(puesto) >= 0;
+
+  if(esEntren) return ['Entrenadores'];
+
+  // Sala / FnB → acceso amplio (Stefan)
+  if(area==='Sala' || rol==='fb' || rol==='jefe_sala') return ['Sala','Cocina'];
+
+  // Por área directa
+  var porArea = INF_DEPT_CATALOG.filter(function(d){
+    if(d.coming || d.special) return false;
+    return d.key === area;
+  }).map(function(d){ return d.key; });
+
+  // SYNCROLAB (recepción syncrolab, NO entrenadores)
+  if(area==='SYNCROLAB' && !esEntren) return ['SYNCROLAB'];
+
+  // Cocina
+  if(area==='Cocina' || rol==='chef') return ['Cocina'];
+
+  // Recepción hotel
+  if(area==='Recepción' || rol==='jefe_recepcion') return ['Recepción'];
+
+  // Housekeeping
+  if(area==='Housekeeping') return ['Housekeeping'];
+
+  // Mantenimiento
+  if(area==='Mantenimiento') return ['Mantenimiento'];
+
+  // RRHH puro (no admin)
+  if(rol==='rrhh') return ['RRHH'];
+
+  return porArea.length ? porArea : [];
+}
+
+// Aliases de compatibilidad — las funciones de render antiguas siguen funcionando
+var INF_DEPT_LABELS = (function(){
+  var map={};
+  INF_DEPT_CATALOG.forEach(function(d){ map[d.key]=d.icon+' '+d.label; });
+  return map;
+})();
 
 function _infDeptosDelJefe(u){
-  if(!u) return [];
-  if(typeof canActAsAdmin==='function' && canActAsAdmin(u)) return Object.keys(INF_DEPT_LABELS);
-  var rol=u.rol||'', area=u.area||'';
-  var map=(typeof SUPERVISOR_DEPT_MAP!=='undefined')?SUPERVISOR_DEPT_MAP:{};
-  if(map[rol]){
-    var lista=map[rol];
-    if(lista[0]==='*') return Object.keys(INF_DEPT_LABELS);
-    return lista.filter(function(d){ return INF_DEPT_LABELS[d]; });
-  }
-  return area && INF_DEPT_LABELS[area]?[area]:[];
-}
-
-function _infTabsVisibles(u){
-  if(!u) return [];
-  if(typeof canActAsAdmin==='function' && canActAsAdmin(u)) return ['sala','cocina','recepcion','syncrolab','entrenadores'];
-  var area=(u.area||'').toLowerCase(), rol=(u.rol||'').toLowerCase();
-  if(area==='sala'||area==='jefe de sala'||rol==='fb') return ['sala','cocina','recepcion','syncrolab','entrenadores'];
-  if(area==='cocina'||rol==='chef')          return ['cocina'];
-  if(area==='recepción'||rol==='jefe_recepcion') return ['recepcion'];
-  if(rol==='coord_entrenadores'||area==='entrenadores') return ['entrenadores'];
-  if(area==='syncrolab')                     return ['syncrolab','entrenadores'];
-  return ['sala','cocina','recepcion','syncrolab','entrenadores'];
+  // Devuelve array de keys visibles para el usuario (mismo resultado que _infDeptsVisibles)
+  return _infDeptsVisibles(u);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -121,6 +178,8 @@ async function renderInformes(){
     el.innerHTML='<div class="card"><p style="color:var(--text3);padding:20px 0;">📊 Informes disponibles solo para jefes de departamento y dirección.</p></div>';
     return;
   }
+
+  // Cargar objetivos Sala (sin cambio)
   try {
     var rulesRes=await fetch(
       SUPABASE_URL+'/rest/v1/dept_incentive_rules?departamento=in.(Sala,Jefe%20de%20Sala)&activo=eq.true&select=periodo,objetivo',
@@ -135,69 +194,126 @@ async function renderInformes(){
     }
   } catch(e){}
 
-  function mainTabBtn(id,label){
-    var active=_infTab===id;
-    return '<button onclick="window._infTab=\''+id+'\';renderInformes()" style="'
-      +'padding:9px 20px;border-radius:6px;border:1px solid;cursor:pointer;'
-      +'font-size:12px;font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;transition:all .15s;'
-      +(active?'background:var(--accent);color:#fff;border-color:var(--accent);'
-              :'background:var(--bg2);color:var(--text2);border-color:var(--border);')
-      +'">'+label+'</button>';
+  var visibles = _infDeptsVisibles(currentUser);
+
+  // Si el dept activo no es visible, resetear al primero disponible
+  if(!_infDept || visibles.indexOf(_infDept)<0){
+    _infDept = visibles[0] || null;
+    _infSubTab = null;
+  }
+
+  // Chip L1 — departamento
+  function chipDepto(d){
+    var coming = !!d.coming;
+    var active  = _infDept === d.key;
+    var visible = visibles.indexOf(d.key) >= 0;
+    var disabled = coming || (!visible && !active);
+    var base = 'padding:9px 18px;border-radius:8px;border:1px solid;cursor:'+(disabled?'default':'pointer')+';'
+      +'font-size:12px;font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;transition:all .15s;display:flex;align-items:center;gap:6px;';
+    var color = coming
+      ? 'background:var(--bg2);color:var(--text3);border-color:var(--border);opacity:.45;'
+      : active
+        ? 'background:var(--accent);color:#fff;border-color:var(--accent);'
+        : visible
+          ? 'background:var(--bg2);color:var(--text2);border-color:var(--border);'
+          : 'background:var(--bg2);color:var(--text3);border-color:var(--border);opacity:.3;';
+    var click = (disabled||!visible) ? '' : 'onclick="window._infDept=\''+d.key+'\';window._infSubTab=null;renderInformes()"';
+    var badge = coming ? ' <span style="font-size:9px;background:var(--amber);color:#0d1b2e;border-radius:3px;padding:1px 5px;font-weight:700;letter-spacing:.08em;">PRONTO</span>' : '';
+    return '<button '+click+' style="'+base+color+'" '+(disabled?'disabled':'')+'>'+d.icon+' '+d.label+badge+'</button>';
+  }
+
+  var chipsHtml = INF_DEPT_CATALOG.map(chipDepto).join('');
+
+  // Sub-tab L2 del dept activo
+  var deptDef = INF_DEPT_CATALOG.find(function(d){ return d.key===_infDept; });
+  var subTabsHtml = '';
+  if(deptDef && deptDef.subtabs && deptDef.subtabs.length){
+    if(!_infSubTab || deptDef.subtabs.indexOf(_infSubTab)<0){
+      _infSubTab = deptDef.subtabs[0];
+    }
+    subTabsHtml = deptDef.subtabs.map(function(sid){
+      var lbl = INF_SUBTAB_LABELS[sid] || sid;
+      var active = _infSubTab === sid;
+      return '<button onclick="window._infSubTab=\''+sid+'\';_infRenderSubTab()" style="'
+        +'padding:7px 16px;border-radius:6px;border:1px solid;cursor:pointer;'
+        +'font-size:12px;font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;transition:all .15s;'
+        +(active
+          ? 'background:var(--amber);color:#0d1b2e;border-color:var(--amber);'
+          : 'background:var(--bg2);color:var(--text2);border-color:var(--border);')
+        +'">'+lbl+'</button>';
+    }).join('');
   }
 
   el.innerHTML=''
+    // ── L1: chips de departamento ──
     +'<div class="card" style="margin-bottom:0;padding:14px 18px;">'
-    +  '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
-    +    mainTabBtn('produccion','📈 Producción')
-    +    mainTabBtn('incentivos','💰 Incentivos')
-    +    mainTabBtn('informe-jefe','📋 Informe de Jefe')
-    +    mainTabBtn('rrhh','👥 RR.HH.')
-    +  '</div>'
+    +  '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;">Departamento</div>'
+    +  '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+chipsHtml+'</div>'
     +'</div>'
-    +'<div id="inf-main-content" style="margin-top:16px;"></div>';
+    // ── L2: sub-tabs del dept ──
+    +(subTabsHtml
+      ? '<div class="card" style="margin-bottom:0;margin-top:8px;padding:10px 18px;">'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+subTabsHtml+'</div>'
+        +'</div>'
+      : '')
+    // ── Contenido ──
+    +'<div id="inf-main-content" style="margin-top:14px;"></div>';
 
-  var tc=document.getElementById('inf-main-content');
-  if(_infTab==='produccion')    await _renderProduccion(tc);
-  else if(_infTab==='incentivos') await _renderIncentivosTab(tc);
-  else if(_infTab==='rrhh')     await _renderRRHH(tc);
-  else                          await _renderInformeJefe(tc);
+  await _infRenderSubTab();
 }
 window.renderInformes=renderInformes;
 
-// ══════════════════════════════════════════════════════════════════════
-// TAB: INCENTIVOS — reutiliza el módulo incentivos.js sin reescribir.
-// Pinta el contenedor #incentivos-content que renderIncentivos() espera.
-// ══════════════════════════════════════════════════════════════════════
-async function _renderIncentivosTab(el){
-  el.innerHTML='<div id="incentivos-content"></div>';
-  if(typeof renderIncentivos==='function') await renderIncentivos();
-  else el.innerHTML='<div class="card"><p style="color:var(--text3);padding:20px 0;">💰 Módulo de incentivos no cargado.</p></div>';
-}
+// Renderiza el contenido del sub-tab activo según _infDept + _infSubTab
+async function _infRenderSubTab(){
+  var tc=document.getElementById('inf-main-content');
+  if(!tc) return;
 
-// ══════════════════════════════════════════════════════════════════════
-// TAB: PRODUCCIÓN (CSV POSMEWS + match fuzzy)
-// ══════════════════════════════════════════════════════════════════════
-async function _renderProduccion(el){
-  var tabs=_infTabsVisibles(currentUser);
-  if(tabs.indexOf(_infSubTab)<0) _infSubTab=tabs[0];
-  var subDefs=[{id:'sala',label:'🍽 Sala'},{id:'cocina',label:'🍳 Cocina'},{id:'recepcion',label:'🏨 Recepción'},{id:'syncrolab',label:'🔬 SYNCROLAB'},{id:'entrenadores',label:'🏋 Entrenadores'}];
-  var subBtns=subDefs.filter(function(t){return tabs.indexOf(t.id)>=0;}).map(function(t){
-    var active=t.id===_infSubTab;
-    return '<button onclick="window._infSubTab=\''+t.id+'\';_renderProduccion(document.getElementById(\'inf-main-content\'))" style="'
-      +'padding:8px 18px;border-radius:6px;border:1px solid var(--border);cursor:pointer;'
-      +'font-size:12px;font-weight:700;font-family:var(--font-mono);letter-spacing:.05em;'
-      +(active?'background:var(--amber);color:#0d1b2e;border-color:var(--amber);':'background:var(--bg2);color:var(--text2);')
-      +'">'+t.label+'</button>';
-  }).join('');
-  el.innerHTML=''
-    +'<div class="card" style="margin-bottom:0;">'
-    +  '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+subBtns+'</div>'
-    +'</div>'
-    +'<div id="inf-tab-content" style="margin-top:16px;"></div>';
-  var tc=document.getElementById('inf-tab-content');
-  if(_infSubTab==='sala') await _renderInformesSala(tc);
-  else if(_infSubTab==='entrenadores') await _renderInformesEntrenadores(tc);
-  else _renderInformesProximamente(tc,_infSubTab);
+  var dept = _infDept;
+  var sub  = _infSubTab;
+
+  if(!dept){ tc.innerHTML=''; return; }
+
+  // ── KPI ──────────────────────────────────────────────────────────
+  if(sub==='kpi'){
+    if(dept==='Sala')         { await _renderInformesSala(tc); return; }
+    if(dept==='Entrenadores') { await _renderInformesEntrenadores(tc); return; }
+    _renderInformesProximamente(tc, dept+' · KPI');
+    return;
+  }
+
+  // ── VENTAS / DATOS ───────────────────────────────────────────────
+  if(sub==='ventas'){
+    _renderInformesProximamente(tc, dept+' · Ventas / Datos');
+    return;
+  }
+
+  // ── INCENTIVOS (solo config + congelar + liquidar) ───────────────
+  if(sub==='incentivos'){
+    tc.innerHTML='<div id="incentivos-content"></div>';
+    if(typeof renderIncentivos==='function') await renderIncentivos();
+    else tc.innerHTML='<div class="card"><p style="color:var(--text3);padding:20px 0;">💰 Módulo de incentivos no cargado.</p></div>';
+    return;
+  }
+
+  // ── INFORME DE JEFE ──────────────────────────────────────────────
+  if(sub==='informe-jefe'){
+    await _renderInformeJefe(tc);
+    return;
+  }
+
+  // ── HORAS EXTRA (Mantenimiento) ──────────────────────────────────
+  if(sub==='horas-extra'){
+    _renderInformesProximamente(tc, 'Mantenimiento · Horas Extra');
+    return;
+  }
+
+  // ── RR.HH. ───────────────────────────────────────────────────────
+  if(sub==='rrhh'){
+    await _renderRRHH(tc);
+    return;
+  }
+
+  tc.innerHTML='';
 }
 
 function _renderInformesProximamente(el,tab){
@@ -385,7 +501,7 @@ function _renderSalaTabla(data){
   el.innerHTML=matchBanner
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'
     +  '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);">📅 Periodo: <strong style="color:var(--text2);">'+rangoLabel+'</strong> &nbsp;·&nbsp; '+nCam+' camarero'+(nCam===1?'':'s')+'</div>'
-    +  '<button onclick="window._infSalaData=null;_renderInformesSala(document.getElementById(\'inf-tab-content\'))" style="background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:5px 12px;cursor:pointer;">✕ Nuevo CSV</button>'
+    +  '<button onclick="window._infSalaData=null;_infRenderSubTab()" style="background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:5px 12px;cursor:pointer;">✕ Nuevo CSV</button>'
     +'</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
     +  kpiBox('Producción total',totalGeneral.toLocaleString('es-ES',{minimumFractionDigits:2})+'€','var(--amber)')
