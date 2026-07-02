@@ -47,6 +47,10 @@ function canValidateCritical(u){
 function _fioViewableDepts(u){
   if(!u) return [];
   if(isAdmin(u) || (typeof canActAsAdmin === 'function' && canActAsAdmin(u))) return [];  // [] = sin filtro = ver todos
+  // Coordinador de entrenadores → dept FIO 'Entrenadores'
+  if(u.rol === 'coord_entrenadores' || (typeof _esEntrenador === 'function' && _esEntrenador(u) && u.rol && u.rol.indexOf('coord') !== -1)){
+    return ['Entrenadores'];
+  }
   // Reusa SUPERVISOR_DEPT_MAP de shared.js
   if(typeof getSupervisorDepartments === 'function'){
     var arr = getSupervisorDepartments(u);
@@ -344,7 +348,7 @@ async function openNewFIOModal(opts){
 
   // Determinar departamentos disponibles para este usuario
   var viewable = _fioViewableDepts(currentUser);
-  var allDepts = ['Sala','Cocina','Friegue','Recepción','Recepción SFERA','Housekeeping','Mantenimiento','SYNCROLAB'];
+  var allDepts = ['Sala','Cocina','Friegue','Recepción','Recepción SFERA','Housekeeping','Mantenimiento','SYNCROLAB','Entrenadores'];
   var deptOpts = (viewable.length === 0) ? allDepts : viewable;
 
   // Default: preset > primer dept disponible
@@ -423,10 +427,16 @@ function _onFIODeptChange(){
     var deptLower = dept.toLowerCase().trim();
     var emps = window._fioAllEmps.filter(function(e){
       var a = (e.area || '').toLowerCase().trim();
+      var p = (e.puesto || '').trim();
+      var _puestosEntr = ['Entrenador(a)','Coordinador(a) de Entrenadores'];
+      if(deptLower === 'entrenadores'){
+        // Entrenadores comparten area SYNCROLAB; filtrar por puesto
+        return /syncrolab/i.test(a) && _puestosEntr.indexOf(p) !== -1;
+      }
       return a === deptLower
           || (deptLower === 'recepción' && (a === 'recepción sfera' || a === 'recepcion sfera'))
-          || (deptLower === 'cocina' && a === 'friegue')   // chef gestiona Friegue desde Cocina
-          || (deptLower === 'syncrolab' && (a === 'syncrolab' || a === 'recepción syncrolab'));
+          || (deptLower === 'cocina' && a === 'friegue')
+          || (deptLower === 'syncrolab' && (a === 'syncrolab' || a === 'recepción syncrolab') && _puestosEntr.indexOf(p) === -1);
     });
     var prevSel = empSel.value;
     empSel.innerHTML = '<option value="">— Seleccionar —</option>'

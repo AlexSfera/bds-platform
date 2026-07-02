@@ -1083,49 +1083,58 @@ function buildInfoContent(area){
     + _infoCard('🏋 ¿Para qué rellenas tu turno?',
         'SYNCRO HUB registra lo que pasa en tu turno: tu actividad del día (clases, entrenamientos, valoraciones), las gestiones que dejas pendientes y cualquier incidencia con un cliente.<br><br>'
       + '<b>La seguridad del cliente es lo primero.</b> Cualquier lesión, mareo o malestar se registra en el momento — no al final del turno.<br><br>'
-      + '<b>Tú no gestionas caja.</b> Tu turno se cierra con el cuestionario de KPI, no con un cierre de caja.',
+      + '<b>Tú no gestionas caja.</b> Tu turno se cierra con el cuestionario de KPI, no con un cierre de caja.<br><br>'
+      + '<b style="color:#ef4444;">Si no está en el sistema, no existe.</b> Una sesión sin registrar no genera incentivo. Una incidencia sin documentar no tiene seguimiento.',
         '#10b981')
 
     + _infoCard('📝 Paso 1 — Rellena tu turno',
         '<b>'+_req('Fecha')+'</b><br>El día del turno.<br><br>'
-
       + '<b>'+_req('Turno')+'</b><br>'
       + 'Mañana · Tarde · Sábado. Solo uno.<br><br>'
-
       + '<b>'+_req('Horas trabajadas')+'</b><br>'
       + 'Las horas reales del día, no las del contrato.<br><br>'
-
       + '<b>'+_req('Responsable de turno')+'</b><br>'
       + 'El nombre de quien estuvo al mando.<br><br>'
-
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
-      + 'Algo de Entrenadores que queda para el siguiente turno o para un compañero.<br>'
+      + 'Algo que queda para el siguiente turno o para un compañero.<br>'
       + '<i>Ejemplos: "Atender cliente — Juan Pérez vuelve mañana para 2ª valoración" · "Arreglar área — Queenax con anclaje suelto"</i><br>'
       + '<i>⚠ Si necesita Mantenimiento o Recepción → TAREA, no gestión.</i><br><br>'
-
       + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>'
-      + 'Cualquier problema que requiere decisión del coordinador: lesión, mareo, mala respuesta de un cliente, conflicto, fallo grave de material.<br>'
-      + '<b style="color:#ef4444;">Si hay malestar físico: para la sesión + abre incidencia + avisa al coordinador. Él la cierra.</b>',
+      + 'Lesión, mareo, mala respuesta de cliente, conflicto, fallo grave de material.<br>'
+      + '<b style="color:#ef4444;">Si hay malestar físico: para la sesión + abre incidencia + avisa a la coordinadora. Ella la cierra.</b>',
         '#10b981')
 
     + _infoCard('📊 Paso 2 — Cuestionario de actividad (KPI)',
-        'Al cerrar el turno, registras tu actividad del día. Son cifras del turno, '+_req('todas obligatorias')+' (pon 0 si no hubo).<br><br>'
-      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;">'
+        'Al cerrar el turno, registras tu actividad del día. '+_req('Todos obligatorios')+'  — pon 0 si no hubo.<br><br>'
+      + '<div style="background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:8px;">'
       + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#10b981;letter-spacing:.1em;margin-bottom:6px;">ACTIVIDAD DEL TURNO</div>'
-      + '• Clases dirigidas efectivas<br>'
-      + '• Clases dirigidas NO efectivas<br>'
-      + '• Entrenamientos personales (PT)<br>'
-      + '• Entrenamientos personales DUO<br>'
-      + '• Entrenamientos personales 30 min<br>'
-      + '• Valoraciones funcionales<br>'
-      + '• Valoraciones Visbody<br>'
-      + '• Bañeras de hielo'
+      + '• <b>Clases dirigidas efectivas</b> — 4 o más personas presentes<br>'
+      + '• <b>Clases dirigidas NO efectivas</b> — menos de 4 personas (igual cuenta como trabajo)<br>'
+      + '• <b>PT individual</b> — 1 cliente · 1 hora<br>'
+      + '• <b>PT DÚO</b> — 2 clientes a la vez · 1,5 h efectivas<br>'
+      + '• <b>PT 30 min</b> — sesión de media hora · 0,5 h efectivas<br>'
+      + '• <b>Valoración funcional</b> — solo si hubo cliente real (crédito ≥ 1 en VirtuGym)<br>'
+      + '• <b>Visbody</b> — solo si hubo cliente real<br>'
+      + '• <b>Bañera de hielo</b> — solo si hubo cliente real'
       + '</div>'
-      + '<div style="font-size:12px;color:var(--text3);margin-top:10px;padding:10px;background:#ecfdf5;border-left:3px solid #10b981;border-radius:4px;line-height:1.6;">'
-      + '<b>ℹ Esto es autocontrol.</b> Tu incentivo se calcula con los datos oficiales de VirtuGym. '
-      + 'Si lo que registras aquí no coincide con VirtuGym, verás los días con diferencia en <b>Mi Rendimiento</b> para corregirlo.'
+      + '<div style="font-size:12px;color:var(--text3);padding:10px;background:var(--bg2);border-left:3px solid #10b981;border-radius:0 4px 4px 0;line-height:1.6;">'
+      + '<b>ℹ Autocontrol.</b> Tu incentivo se calcula con los datos oficiales de VirtuGym que sube la coordinadora. '
+      + 'En <b>Mi Rendimiento</b> verás si lo que registraste aquí cuadra con VirtuGym, KPI por KPI.'
       + '</div>',
         '#10b981')
+
+    + _infoCard('⚡ Sistema de penalización — FIO',
+        'Los fallos operativos se registran con código y nivel. Se descuentan de tu incentivo mensual.<br><br>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'
+      + '<div style="background:var(--bg2);padding:8px 10px;border-radius:6px;border-left:3px solid #ef4444;"><div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#ef4444;margin-bottom:4px;">A · CLIENTE</div><div style="font-size:11px;color:var(--text2);">A01 Actitud · A02 Abandona sesión · A03 No respeta programa · A04 No contacta cliente ausente · A05 Checklist valoración · A06 Sin uniforme</div></div>'
+      + '<div style="background:var(--bg2);padding:8px 10px;border-radius:6px;border-left:3px solid #f59e0b;"><div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#f59e0b;margin-bottom:4px;">B · OPERATIVO</div><div style="font-size:11px;color:var(--text2);">B01 Tardanza · B02 Abandona turno · B03 Descanso excesivo · B04 Fichaje fuera · B05-06 Checklist · B07-09 VirtuGym · B10-11 Bitrix · B12-15 Sala</div></div>'
+      + '<div style="background:var(--bg2);padding:8px 10px;border-radius:6px;border-left:3px solid #8b5cf6;grid-column:1/-1;"><div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#a78bfa;margin-bottom:4px;">C · CONVIVENCIA</div><div style="font-size:11px;color:var(--text2);">C01 Falta de respeto al superior · C02 No avisa ausencia · C03 Escala a Dirección sin pasar por coordinación</div></div>'
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--text2);line-height:1.7;padding:8px 10px;background:var(--bg2);border-radius:6px;">'
+      + '<b style="color:var(--text);">Penalización por puntos/mes:</b> 0p=0% · 1-2p=−5% · 3-4p=−10% · 5-7p=−25% · 8-10p=−50% · 11-14p=−75% · ≥15p=−100%<br>'
+      + '<b style="color:var(--text);">Tienes derecho a disputar</b> cualquier FIO que consideres injusto. Hazlo desde Mis FIO antes del cierre del mes.'
+      + '</div>',
+        '#ef4444')
 
     + _infoCard('🫁 Hypoxic Room — Solo si hay problema',
         '<b>No registres el uso normal de las cámaras.</b> Solo cuando algo falla.<br><br>'
@@ -1140,10 +1149,10 @@ function buildInfoContent(area){
     + bloqueDiferencias
 
     + _infoCard('✅ Checklist antes de guardar',
-        '☐ Turno, fecha y horas correctos<br>'
-      + '☐ Gestión marcada si queda algo pendiente<br>'
+        '☐ Fecha, turno y horas correctos<br>'
+      + '☐ Gestión marcada si queda algo pendiente para el siguiente turno<br>'
       + '☐ Incidencia marcada si hubo algo con un cliente<br>'
-      + '☐ KPI de actividad rellenado (0 si no hubo)<br>'
+      + '☐ Los 8 KPIs rellenados (0 si no hubo — incluido valoraciones/bañera sin reserva)<br>'
       + '☐ Incidencia Hypoxic creada si hubo problema técnico en cámara<br>'
       + '☐ Si falta material o hay que arreglar un área → gestión o tarea según corresponda',
         '#10b981')
