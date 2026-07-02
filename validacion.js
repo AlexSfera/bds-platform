@@ -1242,6 +1242,11 @@ async function pSel(dept, label, color){
       var p = (e.puesto||'').trim();
       return _entrenadorPuestos.some(function(ep){ return ep.toLowerCase() === p.toLowerCase(); });
     }
+    // Para Recepción SyncroLab: excluir puestos de entrenador (comparten area=SYNCROLAB)
+    if(dept === 'rec-syncrolab' && a.toLowerCase() === 'syncrolab'){
+      var p = (e.puesto||'').trim();
+      return !_entrenadorPuestos.some(function(ep){ return ep.toLowerCase() === p.toLowerCase(); });
+    }
     return true;
   });
 
