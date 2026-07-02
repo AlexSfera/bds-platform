@@ -1002,10 +1002,21 @@ function buildInfoContent(area){
 
     + bloqueDiferencias
 
+    + _infoCard('🫁 Hypoxic Room — Incidencias técnicas',
+        '<b>Mantenimiento es responsable de la resolución técnica</b> de las cámaras de hipoxia. Recepción Hotel abre la incidencia; tú actúas y la cierras con la acción tomada.<br><br>'
+      + 'Habitaciones: 104–109 · 202–209<br><br>'
+      + '<b>Tipos de fallo que te llegan:</b><br>'
+      + '• Hipoxia por debajo del set point · CO₂ alto · Sensor sin datos<br>'
+      + '• Puerta con fallo de cierre · Problema eléctrico · Equipo sin respuesta<br><br>'
+      + 'Estados: '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
+      + 'Al cerrar: describe exactamente '+_req('qué hiciste')+' y si requiere seguimiento.',
+        '#06b6d4')
+
     + _infoCard('✅ Checklist antes de guardar',
         '☐ Todas las tareas trabajadas hoy → estado actualizado<br>'
       + '☐ Tareas cerradas tienen "Acción tomada" descrita<br>'
       + '☐ Bloqueos por falta de pieza → gestión creada<br>'
+      + '☐ Incidencias Hypoxic recibidas → actuadas y cerradas con descripción<br>'
       + '☐ Daño grave detectado → incidencia',
         '#10b981')
     + jefe;
@@ -1136,16 +1147,6 @@ function buildInfoContent(area){
       + '</div>',
         '#ef4444')
 
-    + _infoCard('🫁 Hypoxic Room — Solo si hay problema',
-        '<b>No registres el uso normal de las cámaras.</b> Solo cuando algo falla.<br><br>'
-      + 'Habitaciones: 104–109 · 202–209<br><br>'
-      + '<b>Cuándo crear una incidencia:</b><br>'
-      + '• Hipoxia bajo set point · CO₂ alto · Puerta abierta repetidamente · Sensor sin datos<br>'
-      + '• El cliente avisa de cualquier sensación anormal<br><br>'
-      + 'Estados: '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
-      + 'Al cerrar: describe exactamente '+_req('qué hiciste')+'.',
-        '#06b6d4')
-
     + bloqueDiferencias
 
     + _infoCard('✅ Checklist antes de guardar',
@@ -1153,7 +1154,6 @@ function buildInfoContent(area){
       + '☐ Gestión marcada si queda algo pendiente para el siguiente turno<br>'
       + '☐ Incidencia marcada si hubo algo con un cliente<br>'
       + '☐ Los 8 KPIs rellenados (0 si no hubo — incluido valoraciones/bañera sin reserva)<br>'
-      + '☐ Incidencia Hypoxic creada si hubo problema técnico en cámara<br>'
       + '☐ Si falta material o hay que arreglar un área → gestión o tarea según corresponda',
         '#10b981')
     + jefe;
@@ -1228,18 +1228,6 @@ function buildInfoContent(area){
       + '<b style="color:#f59e0b;">⚠ Esto no es efectivo de tu caja.</b> Es un cobro que Recepción confirma y carga en MEWS. Si no lo registras, Recepción no sabe que tiene que cargarlo y el servicio se pierde.',
         '#f59e0b')
 
-    + _infoCard('🫁 Hypoxic Room — Solo si hay problema',
-        '<b>No registres el uso normal de las cámaras.</b> Solo cuando algo falla.<br><br>'
-      + 'Habitaciones: 104–109 · 202–209<br><br>'
-      + '<b>Cuándo crear una incidencia:</b><br>'
-      + '• Hipoxia bajo set point · CO₂ alto · Puerta abierta repetidamente · Sensor sin datos<br>'
-      + '• El cliente avisa de cualquier sensación anormal<br><br>'
-      + '<b>Campos:</b> '+_req('Habitación')+' · '+_req('Tipo')+' · CO₂ · Altitud · Set point · ☐ Cliente notificó · Anotaciones<br><br>'
-      + 'Estados: '+_tag('Abierta','#ef4444')+' → '+_tag('En proceso','#3b82f6')+' → '+_tag('Cerrada','#10b981')+'<br>'
-      + 'Al cerrar: describe exactamente '+_req('qué hiciste')+'.<br><br>'
-      + '<b style="color:#ef4444;">Si el cliente tiene malestar físico: para la sesión + incidencia + coordin. inmediatamente.</b>',
-        '#06b6d4')
-
     + bloqueDiferencias
 
     + _infoCard('✅ Checklist antes de guardar',
@@ -1249,7 +1237,6 @@ function buildInfoContent(area){
       + '☐ Caja Nubimed cuadrada o diferencia explicada<br>'
       + '☐ Caja VirtuGym cuadrada o diferencia explicada<br>'
       + '☐ Cargos a habitación añadidos si algún cliente pagó contra habitación<br>'
-      + '☐ Incidencia Hypoxic creada si hubo problema técnico en cámara<br>'
       + '☐ Si falta material → tarea a Economato',
         '#10b981')
     + jefe;
