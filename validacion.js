@@ -82,6 +82,11 @@ async function openShiftDetail(shiftId){
   if(s.observacion) html += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+s.observacion+'</div>';
   html += '</div></div>';
 
+  // ── BLOQUE 1B: KPIs DEL TURNO (dept-aware) ──
+  // Renderiza los KPIs que el empleado declaró al cerrar turno.
+  // Solo pinta lo que EXISTE en la BD (Fase 1 puramente visual).
+  html += _renderKpisTurno(s);
+
   // ── BLOQUE 2: Checklist ──
   if(s.checklist_items){
     try{
@@ -1242,11 +1247,6 @@ async function pSel(dept, label, color){
       var p = (e.puesto||'').trim();
       return _entrenadorPuestos.some(function(ep){ return ep.toLowerCase() === p.toLowerCase(); });
     }
-    // Para Recepción SyncroLab: excluir puestos de entrenador (comparten area=SYNCROLAB)
-    if(dept === 'rec-syncrolab' && a.toLowerCase() === 'syncrolab'){
-      var p = (e.puesto||'').trim();
-      return !_entrenadorPuestos.some(function(ep){ return ep.toLowerCase() === p.toLowerCase(); });
-    }
     return true;
   });
 
@@ -1948,3 +1948,167 @@ async function renderValNotasList(){
     +'</table>';
 }
 window.renderValNotasList = renderValNotasList;
+
+// ═══════════════════════════════════════════════════════════════════════
+// BLOQUE 1B · KPIs DEL TURNO — Fase 1 puramente visual
+// Renderiza en el modal de validación los KPIs que el empleado declaró
+// al cerrar turno. Solo pinta lo que EXISTE hoy en la tabla `shifts`.
+// Roadmap:
+//  - Sala        → campos ya persistidos (descuentos/anulaciones/etc.) ✓
+//  - Entrenadores→ shifts.kpi_entrenador (JSON) ✓
+//  - Cocina      → merma se muestra en bloque 4B (no se duplica aquí)
+//  - Recepción   → check-in/check-out/leads NO están en shifts (Fase 2)
+//  - HK/Mant/Admon/Fisios/Rec.SYNCROLAB → pendientes Fase 3
+// ═══════════════════════════════════════════════════════════════════════
+function _renderKpisTurno(s){
+  if(!s) return '';
+  var area = (s.area || s.departamento || '').toLowerCase().trim();
+  var puesto = (s.puesto || '').toLowerCase();
+
+  var isSala      = area === 'sala' || area === 'jefe de sala' || area === 'f&b' || area === 'food & beverage' || area === 'fnb';
+  var isCocina    = area === 'cocina' || area === 'friegue';
+  var isRecep     = /recep/.test(area) && !/syncrolab/.test(area);
+  var isRecLab    = /recep.*syncrolab/.test(area);
+  var isEntrenador = /entrenador/.test(area) || /entrenador/.test(puesto) || /coord.*entren/.test(puesto);
+  var isFisio     = /fisio|cl[ií]nica/.test(area) || /fisio/.test(puesto);
+  var isHK        = area === 'housekeeping' || area === 'hk' || area === 'limpieza';
+  var isMant      = area === 'mantenimiento';
+  var isAdmon     = area === 'administración' || area === 'administracion';
+
+  var bodyHtml = '';
+
+  // ── SALA ────────────────────────────────────────────────────
+  if(isSala){
+    var rows = [];
+    if(s.descuentos_si)   rows.push({lbl:'Descuentos',   num:s.descuentos_num,   motivo:s.descuentos_motivo});
+    if(s.anulaciones_si)  rows.push({lbl:'Anulaciones',  num:s.anulaciones_num,  motivo:s.anulaciones_motivo});
+    if(s.devoluciones_si) rows.push({lbl:'Devoluciones', num:s.devoluciones_num, motivo:s.devoluciones_motivo});
+    if(s.invitaciones_si){
+      var invMotivo = [];
+      if(s.invitaciones_tipo)      invMotivo.push('Tipo: '+s.invitaciones_tipo);
+      if(s.invitaciones_producto)  invMotivo.push('Producto: '+s.invitaciones_producto);
+      if(s.invitaciones_posmews)   invMotivo.push('En POSMEWS');
+      rows.push({lbl:'Invitaciones', num:s.invitaciones_num, motivo:invMotivo.join(' · ')});
+    }
+    if(rows.length > 0){
+      bodyHtml += '<div style="display:grid;grid-template-columns:1fr 60px 2fr;gap:6px 12px;font-size:13px;">';
+      bodyHtml += '<div style="color:var(--text3);font-size:11px;">CONCEPTO</div>'
+                + '<div style="color:var(--text3);font-size:11px;text-align:right;">Nº</div>'
+                + '<div style="color:var(--text3);font-size:11px;">MOTIVO / DETALLE</div>';
+      rows.forEach(function(r){
+        bodyHtml += '<div><strong>'+r.lbl+'</strong></div>'
+                  + '<div style="text-align:right;font-family:var(--font-mono);">'+(parseInt(r.num)||0)+'</div>'
+                  + '<div style="color:var(--text2);">'+(formatDisplayValue(r.motivo)||'—')+'</div>';
+      });
+      bodyHtml += '</div>';
+    } else {
+      bodyHtml += '<div style="color:var(--text3);font-size:12px;">Sin descuentos, anulaciones, invitaciones ni devoluciones declaradas.</div>';
+    }
+    return _kpiBlockWrap('1B · KPI SALA · descuentos / anulaciones / invitaciones / devoluciones', bodyHtml, '#2ec4b6');
+  }
+
+  // ── ENTRENADORES ────────────────────────────────────────────
+  if(isEntrenador){
+    var CAMPOS_ENTR = [
+      ['dir_efectiva',    '📢 Clases dirigidas efectivas'],
+      ['dir_no_efectiva', '📢 Clases dirigidas NO efectivas'],
+      ['pt',              '🏋 PT individuales'],
+      ['pt_duo',          '🏋 PT DUO'],
+      ['pt_30',           '🏋 PT 30 min'],
+      ['val_funcional',   '📊 Valoraciones funcionales'],
+      ['visbody',         '📊 Valoraciones Visbody'],
+      ['banera_hielo',    '🧊 Bañeras de hielo']
+    ];
+    var kpi = null;
+    if(s.kpi_entrenador){
+      try{ kpi = JSON.parse(s.kpi_entrenador); }catch(e){ kpi = null; }
+    }
+    if(kpi){
+      bodyHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:13px;">';
+      var totalAct = 0;
+      CAMPOS_ENTR.forEach(function(pair){
+        var v = parseInt(kpi[pair[0]])||0; totalAct += v;
+        var col = v > 0 ? 'var(--text)' : 'var(--text3)';
+        bodyHtml += '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);">'
+                  + '<span style="color:'+col+';">'+pair[1]+'</span>'
+                  + '<strong style="font-family:var(--font-mono);color:'+col+';">'+v+'</strong>'
+                  + '</div>';
+      });
+      bodyHtml += '</div>';
+      bodyHtml += '<div style="margin-top:10px;font-size:12px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px;">'
+                + 'Total actividades autodeclaradas: <strong style="color:var(--text);font-family:var(--font-mono);">'+totalAct+'</strong> '
+                + '· <em>El incentivo oficial se calcula con VirtuGym (Informes → Entrenadores).</em>'
+                + '</div>';
+    } else {
+      bodyHtml += '<div style="color:var(--text3);font-size:12px;">'
+                + 'El empleado no rellenó el cuestionario KPI de entrenadores (turno cerrado sin declarar actividad).'
+                + '</div>';
+    }
+    return _kpiBlockWrap('1B · KPI ENTRENADORES · autocontrol de actividad', bodyHtml, '#8b5cf6');
+  }
+
+  // ── RECEPCIÓN HOTEL ─────────────────────────────────────────
+  if(isRecep){
+    // Nota honesta: cross-selling ya se muestra en bloque 5B.
+    // Los KPIs simples (check-in/out, leads, clientes) NO están hoy en shifts.
+    bodyHtml += '<div style="color:var(--text3);font-size:12px;line-height:1.5;">'
+              + 'Los KPIs de check-in, check-out, número de reservas, upsell desayuno, leads Bitrix24 y clientes insatisfechos '
+              + '<strong style="color:var(--amber);">se rellenan al cerrar turno pero no se persisten actualmente</strong>. '
+              + 'Se guardan solo las ventas cross-selling (visibles en el bloque 5B) y el cuadre de caja.<br><br>'
+              + '<em>Fase 2 pendiente:</em> añadir columnas a <code>shifts</code> y persistirlas en <code>submitRecKpi</code>. '
+              + 'Hasta entonces, para trazar KPIs de Recepción usa Bitrix24 + POSMEWS + MEWS.'
+              + '</div>';
+    return _kpiBlockWrap('1B · KPI RECEPCIÓN HOTEL · pendiente Fase 2', bodyHtml, '#f59e0b');
+  }
+
+  // ── RECEPCIÓN SYNCROLAB ─────────────────────────────────────
+  if(isRecLab){
+    bodyHtml += '<div style="color:var(--text3);font-size:12px;">'
+              + 'Recepción SYNCROLAB registra el cuadre de caja al cerrar turno. Los KPIs específicos de actividad '
+              + '(reservas, no-shows, upsells) no están definidos en shifts todavía — <em>Fase 3</em>.'
+              + '</div>';
+    return _kpiBlockWrap('1B · KPI RECEPCIÓN SYNCROLAB · pendiente Fase 3', bodyHtml, '#f59e0b');
+  }
+
+  // ── COCINA ──────────────────────────────────────────────────
+  if(isCocina){
+    var mermaFlag = (s.merma_declarada||'').toLowerCase();
+    bodyHtml += '<div style="font-size:13px;">'
+              + '<span style="color:var(--text3);">Merma declarada: </span>'
+              + '<strong>'+(mermaFlag === 'si' ? '✓ Sí (ver bloque de merma abajo)' : mermaFlag === 'no' ? '✗ No' : '—')+'</strong>'
+              + '</div>'
+              + '<div style="color:var(--text3);font-size:12px;margin-top:6px;">'
+              + 'KPIs específicos de cocina (platos vendidos, incidencias de servicio, retrasos) — <em>pendiente Fase 3</em>.'
+              + '</div>';
+    return _kpiBlockWrap('1B · KPI COCINA · resumen', bodyHtml, '#2ec4b6');
+  }
+
+  // ── HOUSEKEEPING / MANT / ADMON / FISIO — placeholder honesto ──
+  if(isHK || isMant || isAdmon || isFisio){
+    var deptLbl = isHK ? 'HOUSEKEEPING'
+                : isMant ? 'MANTENIMIENTO'
+                : isAdmon ? 'ADMINISTRACIÓN'
+                : 'FISIOTERAPEUTAS';
+    bodyHtml += '<div style="color:var(--text3);font-size:12px;line-height:1.5;">'
+              + 'Este departamento no tiene KPIs específicos declarados en el turno todavía. '
+              + 'Se registran horas, observaciones, checklist y gestiones/incidencias/tareas de forma estándar.<br>'
+              + '<em>Fase 3 pendiente:</em> definir KPIs propios (habitaciones limpiadas, incidencias resueltas, gestiones cerradas, sesiones realizadas…).'
+              + '</div>';
+    return _kpiBlockWrap('1B · KPI '+deptLbl+' · pendiente Fase 3', bodyHtml, '#64748b');
+  }
+
+  // Departamento no reconocido: no pintar bloque para no ensuciar el modal.
+  return '';
+}
+
+// Helper visual — wrapper consistente con el resto de bloques del modal
+function _kpiBlockWrap(titulo, innerHtml, color){
+  return '<div style="background:var(--bg2);border:1px solid '+color+';border-radius:8px;padding:14px;margin-bottom:12px;">'
+       + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+color+';letter-spacing:.15em;margin-bottom:10px;">'
+       + titulo + '</div>'
+       + innerHtml
+       + '</div>';
+}
+
+window._renderKpisTurno = _renderKpisTurno;
+window._kpiBlockWrap    = _kpiBlockWrap;
