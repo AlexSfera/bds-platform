@@ -441,6 +441,9 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
   leyenda.innerHTML = '<span>🟢 hecha hoy</span><span>🔵 en proceso</span><span>🟡 toca hoy</span><span>⚫ no toca</span>';
   wrap.appendChild(leyenda);
 
+  // Nota: la gobernanta ve solo SUS zonas aquí (como una camarera más).
+  // La supervisión completa vive en 🧽 Zonas Públicas (renderHKZonasPublicas).
+
   // Agrupar por zona_grupo, ordenar grupos alfabéticamente
   var grupos = {};
   zonas.forEach(function(z){
@@ -451,8 +454,8 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
   var gruposOrdenados = Object.keys(grupos).sort();
 
   gruposOrdenados.forEach(function(g){
-    // Empleado: filtrar para mostrar solo zonas asignadas a él
-    var zonasDelGrupo = isGob ? grupos[g] : grupos[g].filter(function(z){
+    // Filtrar SIEMPRE por asignación al usuario actual (gobernanta o camarera)
+    var zonasDelGrupo = grupos[g].filter(function(z){
       var asigMia = asigs.find(function(a){
         if(a.tipo_objeto !== 'zona_publica' || a.objeto_id !== z.id) return false;
         if(a.ad_hoc) return (a.hora_inicio||a.created_at||'').slice(0,10) === hoy;
@@ -484,11 +487,10 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
       if(minHoy > 0){
         if(asigHoy && (asigHoy.estado === 'finalizado' || asigHoy.estado === 'revisado')){
           icon = '🟢'; color = '#10b981';
-          estadoText = 'Hecha · ' + (asigHoy.hora_fin||'').slice(11,16)
-            + (isGob && asigHoy.employee_nombre ? ' · ' + asigHoy.employee_nombre : '');
+          estadoText = 'Hecha · ' + (asigHoy.hora_fin||'').slice(11,16);
         } else if(asigHoy && (asigHoy.estado === 'en_proceso' || asigHoy.estado === 'pausada')){
           icon = '🔵'; color = '#3b82f6';
-          estadoText = 'En curso' + (isGob && asigHoy.employee_nombre ? ' · ' + asigHoy.employee_nombre : '');
+          estadoText = 'En curso';
         } else {
           icon = '🟡'; color = '#f59e0b';
           estadoText = 'Pendiente · ' + minHoy + 'min';
@@ -503,11 +505,8 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
         + '<div style="font-size:11px;color:var(--text3);margin-top:2px;">' + estadoText + (z.tarea_grupo ? ' · ' + z.tarea_grupo : '') + '</div>'
         + '</div>';
 
-      // Empleado puede abrir si la zona está asignada a él (pendiente/en proceso/pausada)
-      var esMiZona = asigHoy && asigHoy.employee_id === currentUser.id;
-      var puedeAbrir = asigHoy && (asigHoy.estado === 'en_proceso' || asigHoy.estado === 'pausada' || (asigHoy.estado === 'pendiente' && (esMiZona || isGob)));
-      var puedeEjec  = isGob && minHoy > 0 && !(asigHoy && (asigHoy.estado === 'finalizado' || asigHoy.estado === 'revisado'));
-
+      // Ejecución: solo puede abrir si la zona está asignada a él (pendiente/en_proceso/pausada)
+      var puedeAbrir = asigHoy && (asigHoy.estado === 'en_proceso' || asigHoy.estado === 'pausada' || asigHoy.estado === 'pendiente');
       if(puedeAbrir){
         var btnAbrir = document.createElement('button');
         btnAbrir.className = 'tbtn';
@@ -515,13 +514,6 @@ async function _hkRenderZonasEnRuta(wrap, isGob){
         btnAbrir.textContent = 'Abrir';
         btnAbrir.addEventListener('click', (function(id){ return function(){ hkOpenExec(id); }; })(asigHoy.id));
         row.appendChild(btnAbrir);
-      } else if(puedeEjec && !asigHoy){
-        var btnLimp = document.createElement('button');
-        btnLimp.className = 'tbtn';
-        btnLimp.style.cssText = 'font-size:11px;background:var(--orange);color:white;';
-        btnLimp.textContent = '▶ Limpiar ahora';
-        btnLimp.addEventListener('click', (function(zid, znom, min){ return function(){ hkAdHocZona(zid, znom, min); }; })(z.id, z.nombre, minHoy));
-        row.appendChild(btnLimp);
       }
 
       gList.appendChild(row);
@@ -1474,86 +1466,445 @@ async function hkBorrarAsig(id){
 // ═══════════════════════════════════════════════════════════════════════
 // ZONAS PÚBLICAS — vista de estado + ejecución ad-hoc Gobernanta
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// 🧽 ZONAS PÚBLICAS — Panel Supervisor Zona-céntrica (solo gobernanta)
+// Complementa Planificación (mañana), Revisión (hoy) y Dashboard (KPI global)
+// aportando la vista LONGITUDINAL por zona: histórico y rendimiento.
+// Bloques:
+//   1 · Radar del día (KPIs + alertas)
+//   2 · Tabla estado por zona (última vez · rendimiento · incidencias)
+//   3 · Modal histórico por zona (últimas 30 ejec. + mini-gráfica semanal)
+//   4 · Matriz empleado × zona (últimos 30d)
+// ═══════════════════════════════════════════════════════════════════════
+
+function _hkYesterdayYMD(){
+  var d = new Date(); d.setDate(d.getDate()-1);
+  return toYMD(d);
+}
+function _hkYesterdayDow(){
+  var d = new Date(); d.setDate(d.getDate()-1);
+  return HK_DIAS[d.getDay()];
+}
+function _hkDaysAgoYMD(n){
+  var d = new Date(); d.setDate(d.getDate()-n);
+  return toYMD(d);
+}
+
 async function renderHKZonasPublicas(){
   var content = document.getElementById('hk-zonas-content');
   if(!content) return;
-  content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);">Cargando…</div>';
+  if(!hkIsGobernanta(currentUser)){
+    content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);">Sin permisos</div>';
+    return;
+  }
+  content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3);">Cargando panel supervisor…</div>';
 
   invalidateCache('housekeeping_public_areas');
   invalidateCache('housekeeping_assignments');
-  var [zonas, asigs] = await Promise.all([
+  invalidateCache('housekeeping_plans');
+  invalidateCache('incidencias');
+  invalidateCache('employees');
+
+  var [zonas, asigs, plans, incis, emps] = await Promise.all([
     getDB('housekeeping_public_areas'),
-    getDB('housekeeping_assignments')
+    getDB('housekeeping_assignments'),
+    getDB('housekeeping_plans'),
+    getDB('incidencias'),
+    getDB('employees')
   ]);
 
-  var dow = hkTodayDow();
+  zonas = zonas.filter(function(z){ return z.activa; });
+  zonas.sort(function(a,b){ return (a.orden||0)-(b.orden||0) || (a.nombre||'').localeCompare(b.nombre||'','es'); });
+
+  // Solo asignaciones de zonas públicas — reduce ruido y CPU
+  var zAsigs = asigs.filter(function(a){ return a.tipo_objeto === 'zona_publica'; });
+
   var hoy = today();
+  var ayer = _hkYesterdayYMD();
+  var d30 = _hkDaysAgoYMD(30);
+  var dow = hkTodayDow();
+  var dowAyer = _hkYesterdayDow();
 
-  // Estado por zona: si tiene asignación finalizado/revisado hoy → verde
-  // Si tiene asignación en proceso → azul
-  // Si toca hoy y no hay asignación → amarillo
-  // Si no toca hoy → gris
+  var planIdsHoy = plans.filter(function(p){ return p.fecha === hoy; }).map(function(p){ return p.id; });
+  var planIdsAyer = plans.filter(function(p){ return p.fecha === ayer; }).map(function(p){ return p.id; });
 
-  zonas.sort(function(a,b){ return (a.orden||0)-(b.orden||0); });
+  // Helper para saber si una asig pertenece a fecha X
+  function _asigFecha(a){
+    if(a.ad_hoc) return (a.hora_inicio||a.created_at||'').slice(0,10);
+    // planificada: usar fecha del plan
+    var p = plans.find(function(pp){ return pp.id === a.plan_id; });
+    return p ? p.fecha : (a.created_at||'').slice(0,10);
+  }
+  function _asigDeHoy(a){ if(a.ad_hoc) return _asigFecha(a) === hoy; return planIdsHoy.indexOf(a.plan_id) >= 0; }
+  function _asigDeAyer(a){ if(a.ad_hoc) return _asigFecha(a) === ayer; return planIdsAyer.indexOf(a.plan_id) >= 0; }
 
-  var html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;font-family:var(--font-mono);">';
-  html += '<span>🟢 hecha hoy</span><span>🔵 en proceso</span><span>🟡 toca hoy</span><span>⚫ no toca</span>';
-  html += '</div>';
+  var html = '';
 
-  // Agrupar por zona_grupo
-  var grupos = {};
-  zonas.forEach(function(z){
-    var g = z.zona_grupo || 'OTROS';
-    if(!grupos[g]) grupos[g] = [];
-    grupos[g].push(z);
-  });
+  // ── BLOQUE 1: RADAR DEL DÍA ────────────────────────────────
+  html += _hkZP_Radar(zonas, zAsigs, incis, hoy, ayer, dow, dowAyer, _asigDeHoy, _asigDeAyer);
 
-  Object.keys(grupos).forEach(function(g){
-    html += `<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.15em;margin:14px 0 6px;">${g}</div>`;
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    grupos[g].forEach(function(z){
-      var dm = hkParseDiasMin(z.dias_minutos);
-      var minHoy = dm[dow] || 0;
-      var asigHoy = asigs.find(function(a){
-        if(a.tipo_objeto !== 'zona_publica') return false;
-        if(a.objeto_id !== z.id) return false;
-        if(a.ad_hoc){
-          return (a.hora_inicio||a.created_at||'').indexOf(hoy) === 0;
-        }
-        // si está en plan de hoy
-        return true; // simplificación: consideramos asignación reciente
-      });
+  // ── BLOQUE 2: TABLA ESTADO POR ZONA ────────────────────────
+  html += _hkZP_TablaZonas(zonas, zAsigs, incis, dow, hoy, d30, _asigFecha, _asigDeHoy);
 
-      var icon = '⚫', color = '#9ca3af', estadoText = 'No toca hoy';
-      if(minHoy>0){
-        if(asigHoy && (asigHoy.estado==='finalizado' || asigHoy.estado==='revisado')){
-          icon='🟢'; color='#10b981'; estadoText = 'Hecha · '+(asigHoy.hora_fin||'').slice(11,16);
-        } else if(asigHoy && (asigHoy.estado==='en_proceso' || asigHoy.estado==='pausada')){
-          icon='🔵'; color='#3b82f6'; estadoText = 'En curso';
-        } else {
-          icon='🟡'; color='#f59e0b'; estadoText = 'Pendiente · '+minHoy+'min';
-        }
-      }
-
-      var puedeEjecutar = hkIsGobernanta(currentUser) && minHoy>0 && !(asigHoy && (asigHoy.estado==='finalizado' || asigHoy.estado==='revisado'));
-      var puedeAbrir = asigHoy && (asigHoy.estado==='en_proceso' || asigHoy.estado==='pausada' || asigHoy.estado==='pendiente');
-
-      html += `
-        <div style="background:var(--bg2);border:1px solid var(--border);border-left:4px solid ${color};border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px;">
-          <div style="font-size:16px;">${icon}</div>
-          <div style="flex:1;">
-            <div style="font-size:13px;font-weight:600;color:var(--text);">${z.nombre}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px;">${estadoText}${z.tarea_grupo?' · '+z.tarea_grupo:''}</div>
-          </div>
-          ${puedeAbrir ? `<button class="tbtn" style="font-size:11px;" onclick="hkOpenExec('${asigHoy.id}')">Abrir</button>` : ''}
-          ${puedeEjecutar && !asigHoy ? `<button class="tbtn" style="font-size:11px;background:var(--orange);color:white;" onclick="hkAdHocZona('${z.id}', '${z.nombre.replace(/'/g,"\\'")}', ${minHoy})">▶ Limpiar ahora</button>` : ''}
-        </div>
-      `;
-    });
-    html += '</div>';
-  });
+  // ── BLOQUE 4: MATRIZ EMPLEADO × ZONA ───────────────────────
+  html += _hkZP_Matriz(zonas, zAsigs, emps, d30, _asigFecha);
 
   content.innerHTML = html;
+}
+
+// ── BLOQUE 1 ─────────────────────────────────────────────────
+function _hkZP_Radar(zonas, zAsigs, incis, hoy, ayer, dow, dowAyer, _asigDeHoy, _asigDeAyer){
+  var tocanHoy = zonas.filter(function(z){ var dm = hkParseDiasMin(z.dias_minutos); return (dm[dow]||0) > 0; });
+  var hechasHoy = 0, enProcesoHoy = 0, pendientesHoy = 0;
+  var sinAsignarHoy = [];
+  var enCursoLargo = [];   // en curso > 60 min desde hora_inicio
+
+  var now = new Date();
+  tocanHoy.forEach(function(z){
+    var asig = zAsigs.find(function(a){ return a.objeto_id === z.id && _asigDeHoy(a); });
+    if(!asig){ sinAsignarHoy.push(z); return; }
+    if(asig.estado === 'finalizado' || asig.estado === 'revisado'){ hechasHoy++; return; }
+    if(asig.estado === 'en_proceso' || asig.estado === 'pausada'){
+      enProcesoHoy++;
+      if(asig.hora_inicio){
+        var ini = new Date(asig.hora_inicio);
+        var mins = (now - ini) / 60000;
+        var pausa = parseInt(asig.total_pausa_min)||0;
+        if((mins - pausa) > 60) enCursoLargo.push({z:z, a:asig, mins: Math.round(mins - pausa)});
+      }
+      return;
+    }
+    pendientesHoy++;
+  });
+
+  // Zonas que tocaban ayer y NO se hicieron
+  var tocanAyer = zonas.filter(function(z){ var dm = hkParseDiasMin(z.dias_minutos); return (dm[dowAyer]||0) > 0; });
+  var faltantesAyer = [];
+  tocanAyer.forEach(function(z){
+    var asig = zAsigs.find(function(a){ return a.objeto_id === z.id && _asigDeAyer(a) && (a.estado === 'finalizado' || a.estado === 'revisado'); });
+    if(!asig) faltantesAyer.push(z);
+  });
+
+  var noTocan = zonas.length - tocanHoy.length;
+
+  var html = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">';
+  html += '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:12px;">1 · RADAR DEL DÍA</div>';
+
+  // KPIs
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:8px;margin-bottom:14px;">';
+  html += '<div class="kpi k-green"><div class="kpi-lbl">Hechas hoy</div><div class="kpi-val">'+hechasHoy+'/'+tocanHoy.length+'</div></div>';
+  html += '<div class="kpi k-blue"><div class="kpi-lbl">En curso</div><div class="kpi-val">'+enProcesoHoy+'</div></div>';
+  html += '<div class="kpi k-orange"><div class="kpi-lbl">Pendientes</div><div class="kpi-val">'+pendientesHoy+'</div></div>';
+  html += '<div class="kpi"><div class="kpi-lbl">No tocan</div><div class="kpi-val">'+noTocan+'</div></div>';
+  html += '</div>';
+
+  // Alertas
+  var alertas = [];
+  if(faltantesAyer.length){
+    alertas.push({icon:'⚠', color:'#ef4444', txt:faltantesAyer.length+' zona(s) que tocaban ayer NO se limpiaron: '+faltantesAyer.map(function(z){return z.nombre;}).slice(0,3).join(', ')+(faltantesAyer.length>3?'…':'')});
+  }
+  if(sinAsignarHoy.length){
+    alertas.push({icon:'🟡', color:'#f59e0b', txt:sinAsignarHoy.length+' zona(s) tocan hoy y siguen SIN asignar: '+sinAsignarHoy.map(function(z){return z.nombre;}).slice(0,3).join(', ')+(sinAsignarHoy.length>3?'…':'')});
+  }
+  if(enCursoLargo.length){
+    alertas.push({icon:'🔵', color:'#3b82f6', txt:enCursoLargo.length+' zona(s) en curso hace más de 1h: '+enCursoLargo.map(function(x){return x.z.nombre+' ('+x.mins+'min)';}).slice(0,3).join(', ')});
+  }
+  if(alertas.length === 0){
+    html += '<div style="font-size:12px;color:var(--text3);padding:8px 0;">✓ Sin alertas.</div>';
+  } else {
+    alertas.forEach(function(al){
+      html += '<div style="background:var(--bg3);border-left:3px solid '+al.color+';padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:12px;color:var(--text);">'
+        + '<span style="margin-right:6px;">'+al.icon+'</span>' + al.txt + '</div>';
+    });
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ── BLOQUE 2 ─────────────────────────────────────────────────
+function _hkZP_TablaZonas(zonas, zAsigs, incis, dow, hoy, d30, _asigFecha, _asigDeHoy){
+  var html = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">';
+  html += '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:12px;">2 · ESTADO POR ZONA</div>';
+
+  html += '<div class="tbl-wrap"><table style="font-size:12px;width:100%;">';
+  html += '<tr style="color:var(--text3);border-bottom:1px solid var(--border);">'
+       + '<th style="text-align:left;padding:6px;">Zona</th>'
+       + '<th style="text-align:left;padding:6px;">Grupo</th>'
+       + '<th style="text-align:center;padding:6px;">Días × min</th>'
+       + '<th style="text-align:left;padding:6px;">Última vez</th>'
+       + '<th style="text-align:center;padding:6px;">Rend. 30d</th>'
+       + '<th style="text-align:center;padding:6px;">Inc. 30d</th>'
+       + '<th style="text-align:right;padding:6px;">Acciones</th>'
+       + '</tr>';
+
+  zonas.forEach(function(z){
+    var dm = hkParseDiasMin(z.dias_minutos);
+    var diasActivos = Object.keys(dm).filter(function(k){ return (dm[k]||0) > 0; }).length;
+    var minEstZona = (dm[dow]||0) || z.tiempo_estimado_min || 0;
+
+    // Última asig finalizada
+    var asigsZona = zAsigs.filter(function(a){ return a.objeto_id === z.id && (a.estado === 'finalizado' || a.estado === 'revisado') && a.hora_fin; });
+    asigsZona.sort(function(a,b){ return (b.hora_fin||'').localeCompare(a.hora_fin||''); });
+    var ultima = asigsZona[0];
+    var ultimaTxt = ultima
+      ? (ultima.hora_fin||'').slice(0,10) + ' · ' + (ultima.employee_nombre||'—') + ' · ' + hkFmtDuration(ultima.tiempo_real_min||0)
+      : '<span style="color:var(--text3);">Nunca</span>';
+
+    // Rendimiento 30d = media (tiempo_real / tiempo_estimado)
+    var asigs30 = zAsigs.filter(function(a){
+      return a.objeto_id === z.id
+        && (a.estado === 'finalizado' || a.estado === 'revisado')
+        && a.tiempo_real_min > 0
+        && a.tiempo_estimado_min > 0
+        && (a.hora_fin||'').slice(0,10) >= d30;
+    });
+    var rendPct = null;
+    if(asigs30.length){
+      var sum = 0;
+      asigs30.forEach(function(a){ sum += (a.tiempo_real_min / a.tiempo_estimado_min); });
+      rendPct = Math.round((sum / asigs30.length) * 100);
+    }
+    var rendTxt, rendColor;
+    if(rendPct === null){ rendTxt = '—'; rendColor = 'var(--text3)'; }
+    else if(rendPct <= 100){ rendTxt = rendPct+'%'; rendColor = '#10b981'; }
+    else if(rendPct <= 150){ rendTxt = rendPct+'%'; rendColor = '#f59e0b'; }
+    else { rendTxt = rendPct+'%'; rendColor = '#ef4444'; }
+
+    // Incidencias 30d asociadas a esta zona (vía asignaciones)
+    var incIds30 = zAsigs
+      .filter(function(a){ return a.objeto_id === z.id && a.incidencia_id && (a.hora_fin||a.hora_inicio||a.created_at||'').slice(0,10) >= d30; })
+      .map(function(a){ return a.incidencia_id; });
+    var incCount = incIds30.filter(function(id, i, arr){ return arr.indexOf(id) === i; }).length;
+
+    // Asig activa (para saber si hay algo abrir/ejecutar hoy)
+    var asigActivaHoy = zAsigs.find(function(a){
+      return a.objeto_id === z.id && _asigDeHoy(a)
+        && (a.estado === 'pendiente' || a.estado === 'en_proceso' || a.estado === 'pausada');
+    });
+    var yaHechaHoy = zAsigs.find(function(a){
+      return a.objeto_id === z.id && _asigDeHoy(a) && (a.estado === 'finalizado' || a.estado === 'revisado');
+    });
+    var puedeLimpNow = minEstZona > 0 && !asigActivaHoy && !yaHechaHoy;
+
+    var nombreEsc = (z.nombre||'').replace(/'/g, "\\'").replace(/"/g,'&quot;');
+
+    var acciones = '<button class="tbtn" style="font-size:10px;" onclick="hkZonaVerHistorico(\''+z.id+'\',\''+nombreEsc+'\')">📊 Histórico</button>';
+    if(puedeLimpNow){
+      acciones += ' <button class="tbtn" style="font-size:10px;background:var(--orange);color:white;" onclick="hkAdHocZona(\''+z.id+'\',\''+nombreEsc+'\','+minEstZona+')">▶ Limpiar ahora</button>';
+    }
+    if(asigActivaHoy){
+      acciones += ' <button class="tbtn" style="font-size:10px;" onclick="hkOpenExec(\''+asigActivaHoy.id+'\')">Abrir</button>';
+    }
+
+    html += '<tr style="border-bottom:1px solid var(--border);">';
+    html += '<td style="padding:8px 6px;font-weight:600;color:var(--text);">'+z.nombre+'</td>';
+    html += '<td style="padding:8px 6px;color:var(--text3);">'+(z.zona_grupo||'—')+'</td>';
+    html += '<td style="padding:8px 6px;text-align:center;font-family:var(--font-mono);color:var(--text2);">'+diasActivos+' × '+minEstZona+'m</td>';
+    html += '<td style="padding:8px 6px;font-size:11px;">'+ultimaTxt+'</td>';
+    html += '<td style="padding:8px 6px;text-align:center;font-family:var(--font-mono);font-weight:700;color:'+rendColor+';">'+rendTxt+'</td>';
+    html += '<td style="padding:8px 6px;text-align:center;font-family:var(--font-mono);color:'+(incCount>0?'#ef4444':'var(--text3)')+';">'+incCount+'</td>';
+    html += '<td style="padding:8px 6px;text-align:right;white-space:nowrap;">'+acciones+'</td>';
+    html += '</tr>';
+  });
+
+  html += '</table></div>';
+  html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;">'
+       + 'Rend. = media (tiempo real ÷ tiempo estimado) últimos 30d. '
+       + '<span style="color:#10b981;">≤100%</span> · <span style="color:#f59e0b;">≤150%</span> · <span style="color:#ef4444;">&gt;150%</span>'
+       + '</div>';
+  html += '</div>';
+  return html;
+}
+
+// ── BLOQUE 3 · MODAL HISTÓRICO ───────────────────────────────
+async function hkZonaVerHistorico(zonaId, zonaNombre){
+  var asigs = await getDB('housekeeping_assignments');
+  var incis = await getDB('incidencias');
+  var d30 = _hkDaysAgoYMD(90); // histórico 90d para modal
+
+  var lista = asigs.filter(function(a){
+    return a.tipo_objeto === 'zona_publica'
+      && a.objeto_id === zonaId
+      && (a.estado === 'finalizado' || a.estado === 'revisado')
+      && a.hora_fin;
+  });
+  lista.sort(function(a,b){ return (b.hora_fin||'').localeCompare(a.hora_fin||''); });
+  lista = lista.slice(0, 30);
+
+  // Gráfica: tiempo real por semana (últimas 8 semanas)
+  var semanas = _hkZP_UltimasSemanas(8);
+  var totPorSem = semanas.map(function(){ return {sum:0, n:0}; });
+  lista.forEach(function(a){
+    var f = (a.hora_fin||'').slice(0,10);
+    for(var i=0;i<semanas.length;i++){
+      if(f >= semanas[i].ini && f <= semanas[i].fin){
+        totPorSem[i].sum += (a.tiempo_real_min||0);
+        totPorSem[i].n += 1;
+        break;
+      }
+    }
+  });
+  var mediasSem = totPorSem.map(function(t){ return t.n ? Math.round(t.sum/t.n) : 0; });
+  var maxSem = Math.max.apply(null, mediasSem.concat([1]));
+
+  var svgW = 320, svgH = 90, barW = svgW / semanas.length;
+  var svg = '<svg width="100%" viewBox="0 0 '+svgW+' '+svgH+'" style="max-width:'+svgW+'px;">';
+  mediasSem.forEach(function(v, i){
+    var h = v > 0 ? Math.max(2, (v / maxSem) * (svgH - 20)) : 0;
+    var x = i * barW + 2;
+    var y = svgH - h - 14;
+    var col = v > 0 ? '#3b82f6' : '#334155';
+    svg += '<rect x="'+x+'" y="'+y+'" width="'+(barW-4)+'" height="'+h+'" fill="'+col+'" rx="2"/>';
+    if(v > 0) svg += '<text x="'+(x + (barW-4)/2)+'" y="'+(y - 2)+'" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">'+v+'</text>';
+    svg += '<text x="'+(x + (barW-4)/2)+'" y="'+(svgH - 2)+'" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">'+semanas[i].lbl+'</text>';
+  });
+  svg += '</svg>';
+
+  // Tabla últimas 30
+  var filas = lista.map(function(a){
+    var delta = (a.tiempo_estimado_min && a.tiempo_real_min)
+      ? Math.round((a.tiempo_real_min - a.tiempo_estimado_min))
+      : null;
+    var deltaTxt = delta === null ? '—'
+      : (delta > 0 ? '<span style="color:#ef4444;">+'+delta+'m</span>'
+                   : (delta < 0 ? '<span style="color:#10b981;">'+delta+'m</span>'
+                                : '<span style="color:var(--text3);">0m</span>'));
+    var incTxt = a.incidencia_id ? '<span class="badge b-red" style="font-size:10px;">Sí</span>' : '';
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      + '<td style="padding:6px;font-family:var(--font-mono);font-size:11px;">'+(a.hora_fin||'').slice(0,10)+' '+(a.hora_fin||'').slice(11,16)+'</td>'
+      + '<td style="padding:6px;font-size:12px;">'+formatDisplayValue(a.employee_nombre||'—')+'</td>'
+      + '<td style="padding:6px;text-align:right;font-family:var(--font-mono);">'+hkFmtDuration(a.tiempo_real_min||0)+'</td>'
+      + '<td style="padding:6px;text-align:right;font-family:var(--font-mono);color:var(--text3);">'+hkFmtDuration(a.tiempo_estimado_min||0)+'</td>'
+      + '<td style="padding:6px;text-align:right;font-family:var(--font-mono);">'+deltaTxt+'</td>'
+      + '<td style="padding:6px;text-align:center;">'+incTxt+'</td>'
+      + '</tr>';
+  }).join('');
+  if(!filas){ filas = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text3);">Sin ejecuciones en el histórico.</td></tr>'; }
+
+  var bodyHtml = '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Media tiempo real por semana (últimas 8):</div>'
+    + svg
+    + '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin:16px 0 8px;">ÚLTIMAS 30 EJECUCIONES</div>'
+    + '<div class="tbl-wrap"><table style="font-size:12px;width:100%;">'
+    + '<tr style="color:var(--text3);border-bottom:1px solid var(--border);">'
+    + '<th style="text-align:left;padding:4px 6px;">Fecha</th>'
+    + '<th style="text-align:left;padding:4px 6px;">Camarera</th>'
+    + '<th style="text-align:right;padding:4px 6px;">Tiempo real</th>'
+    + '<th style="text-align:right;padding:4px 6px;">Estimado</th>'
+    + '<th style="text-align:right;padding:4px 6px;">Δ</th>'
+    + '<th style="text-align:center;padding:4px 6px;">Inc.</th>'
+    + '</tr>'
+    + filas
+    + '</table></div>';
+
+  _hkZP_OpenModal('📊 Histórico · ' + zonaNombre, bodyHtml);
+}
+
+function _hkZP_UltimasSemanas(n){
+  var out = [];
+  var now = new Date();
+  // Alinear al lunes de esta semana
+  var dow = now.getDay(); // 0=dom
+  var offsetLun = (dow === 0) ? 6 : (dow - 1);
+  var lunes = new Date(now); lunes.setDate(now.getDate() - offsetLun); lunes.setHours(0,0,0,0);
+  for(var i = n - 1; i >= 0; i--){
+    var ini = new Date(lunes); ini.setDate(lunes.getDate() - i*7);
+    var fin = new Date(ini);   fin.setDate(ini.getDate() + 6);
+    out.push({
+      ini: toYMD(ini),
+      fin: toYMD(fin),
+      lbl: 'S' + Math.ceil(((ini - new Date(ini.getFullYear(),0,1)) / 86400000 + new Date(ini.getFullYear(),0,1).getDay() + 1) / 7)
+    });
+  }
+  return out;
+}
+
+function _hkZP_OpenModal(title, bodyHtml){
+  var ov = document.getElementById('modal-hk-zona-hist');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'modal-hk-zona-hist';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(6px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;';
+    ov.innerHTML = '<div class="modal-box" style="max-width:680px;width:100%;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:24px;">'
+      + '<div id="hk-zona-hist-title" style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--text);margin-bottom:14px;"></div>'
+      + '<div id="hk-zona-hist-body"></div>'
+      + '<div style="display:flex;justify-content:flex-end;margin-top:16px;">'
+      + '<button class="btn btn-secondary" onclick="document.getElementById(\'modal-hk-zona-hist\').style.display=\'none\'">Cerrar</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target === ov) ov.style.display = 'none'; });
+  }
+  document.getElementById('hk-zona-hist-title').textContent = title;
+  document.getElementById('hk-zona-hist-body').innerHTML = bodyHtml;
+  ov.style.display = 'flex';
+}
+
+// ── BLOQUE 4 · MATRIZ EMPLEADO × ZONA ────────────────────────
+function _hkZP_Matriz(zonas, zAsigs, emps, d30, _asigFecha){
+  var empsHK = emps.filter(function(e){
+    if(e.estado && e.estado !== 'Activo') return false;
+    return (e.area||'').toLowerCase().match(/(hk|housekeeping|limpieza)/);
+  });
+  empsHK.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'','es'); });
+
+  var html = '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">';
+  html += '<div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:#2ec4b6;letter-spacing:.15em;margin-bottom:12px;">4 · RENDIMIENTO EMPLEADA × ZONA · últimos 30d</div>';
+
+  if(!empsHK.length){
+    html += '<div style="font-size:12px;color:var(--text3);">Sin empleadas HK activas.</div></div>';
+    return html;
+  }
+
+  // Precalcular: por (empId, zonaId) → {n:count, sumReal:min, sumEst:min}
+  var mapa = {};
+  zAsigs.forEach(function(a){
+    if(a.estado !== 'finalizado' && a.estado !== 'revisado') return;
+    if(!a.tiempo_real_min || a.tiempo_real_min <= 0) return;
+    var f = _asigFecha(a);
+    if(f < d30) return;
+    var k = a.employee_id + '|' + a.objeto_id;
+    if(!mapa[k]) mapa[k] = {n:0, sumReal:0, sumEst:0};
+    mapa[k].n += 1;
+    mapa[k].sumReal += a.tiempo_real_min;
+    mapa[k].sumEst  += (a.tiempo_estimado_min || 0);
+  });
+
+  html += '<div class="tbl-wrap" style="overflow-x:auto;"><table style="font-size:11px;width:100%;min-width:'+(200 + zonas.length * 90)+'px;">';
+  // Header con nombres de zona rotados
+  html += '<tr style="border-bottom:1px solid var(--border);">';
+  html += '<th style="text-align:left;padding:6px;position:sticky;left:0;background:var(--bg2);z-index:2;color:var(--text3);">Empleada</th>';
+  zonas.forEach(function(z){
+    html += '<th style="padding:6px;color:var(--text3);text-align:center;vertical-align:bottom;height:100px;">'
+         + '<div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;">'+z.nombre+'</div>'
+         + '</th>';
+  });
+  html += '</tr>';
+
+  empsHK.forEach(function(e){
+    html += '<tr style="border-bottom:1px solid var(--border);">';
+    html += '<td style="padding:6px;font-weight:600;color:var(--text);position:sticky;left:0;background:var(--bg2);z-index:1;white-space:nowrap;">'+formatDisplayValue(e.nombre)+'</td>';
+    zonas.forEach(function(z){
+      var k = e.id + '|' + z.id;
+      var d = mapa[k];
+      if(!d){
+        html += '<td style="padding:6px;text-align:center;color:var(--text3);">·</td>';
+      } else {
+        var med = Math.round(d.sumReal / d.n);
+        var ratio = d.sumEst > 0 ? (d.sumReal / d.sumEst) : null;
+        var col = ratio === null ? 'var(--text2)'
+          : (ratio <= 1.0 ? '#10b981' : (ratio <= 1.5 ? '#f59e0b' : '#ef4444'));
+        html += '<td style="padding:6px;text-align:center;font-family:var(--font-mono);color:'+col+';">'
+             + '<div style="font-weight:700;">'+d.n+'</div>'
+             + '<div style="font-size:9px;">'+med+'m</div>'
+             + '</td>';
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</table></div>';
+  html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;">Cada celda: nº limpiezas · tiempo medio. Color = rendimiento medio (real÷estimado).</div>';
+  html += '</div>';
+  return html;
 }
 
 async function hkAdHocZona(zonaId, zonaNombre, tEst){
@@ -1947,6 +2298,7 @@ window.hkRecalcEst = hkRecalcEst;
 window.hkGuardarAsig = hkGuardarAsig;
 window.hkBorrarAsig = hkBorrarAsig;
 window.hkAdHocZona = hkAdHocZona;
+window.hkZonaVerHistorico = hkZonaVerHistorico;
 window.hkIsGobernanta = hkIsGobernanta;
 window.hkIsHK = hkIsHK;
 window.hkToggleInciPanel = hkToggleInciPanel;
