@@ -1459,7 +1459,10 @@ async function _doSaveTurno(){
     // BUG-REC-VENTAS: borrar ventas cross-sell antiguas del turno para evitar duplicados en reenvio
     const allRecVentas = await getDB('recepcion_ventas');
     for(const v of allRecVentas){ if(v.shift_id===editingShiftId) await dbDelete('recepcion_ventas',v.id); }
-    invalidateCache('merma'); invalidateCache('incidencias'); invalidateCache('recepcion_ventas');
+    // AJUSTES-TURNO: borrar ajustes viejos del turno (del modal Ajustes) para re-crearlos limpios
+    const allAjustesPrev = await getDB('ajustes');
+    for(const a of allAjustesPrev){ if(a.shift_id===editingShiftId) await dbDelete('ajustes', a.id); }
+    invalidateCache('merma'); invalidateCache('incidencias'); invalidateCache('recepcion_ventas'); invalidateCache('ajustes');
     auditLog('CORRECTION_RESEND', currentUser.nombre+' — '+fecha+' — '+servicio);
     toast('Turno corregido y reenviado','ok');
     window._lastSavedShiftId = editingShiftId; // BUG-REC-VENTAS: necesario para _saveRecepcionVentas en correccion
@@ -1570,6 +1573,37 @@ async function _doSaveTurno(){
     } catch(eAssoc){
       console.error('No se pudieron asociar mermas pendientes', eAssoc);
     }
+  }
+
+  // ── Guardar líneas del modal Ajustes (Sala/Recepción) en tabla `ajustes` ──
+  // _ajustesLines viene del modal-ajustes (sala.js/caja.js). Cada línea = un
+  // registro en la tabla ajustes, fuente de verdad que el jefe consulta en
+  // Validación (bloque 4B). Antes solo iba a shifts.ajustes_sala como JSON
+  // y el jefe NO lo veía. Tipos de descuento (Descuento/Anulación/Devolución/
+  // Invitación) se guardan con importe negativo automáticamente.
+  if(Array.isArray(_ajustesLines) && _ajustesLines.length > 0){
+    var TIPOS_NEG_TURNO = ['Descuento','Anulación','Devolución','Invitación'];
+    for(const l of _ajustesLines){
+      var _impAj = parseFloat(l.importe)||0;
+      if(TIPOS_NEG_TURNO.indexOf(l.tipo) >= 0) _impAj = -Math.abs(_impAj);
+      await dbInsert('ajustes', {
+        id: genId(),
+        shift_id: shiftId,
+        employee_id: currentUser.id,
+        nombre: currentUser.nombre,
+        area: currentUser.area||'',
+        fecha: fecha,
+        tipo: l.tipo,
+        num: parseInt(l.num)||1,
+        importe: _impAj,
+        motivo: l.motivo||'',
+        comunicado_responsable: l.comunicado_responsable||'',
+        obs: '',
+        created_at: ts
+      });
+    }
+    invalidateCache('ajustes');
+    await auditLog('AJUSTES_TURNO', _ajustesLines.length+' ajustes desde modal turno '+shiftId);
   }
 
   // ── Asociar ajustes pendientes (sin turno) del empleado al turno nuevo ──

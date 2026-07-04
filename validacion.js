@@ -198,9 +198,15 @@ async function openShiftDetail(shiftId){
       html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">4 · AJUSTES ('+ajustes.length+' líneas · total '+totAj.toFixed(2)+' €)</div>';
       ajustes.forEach(function(a){
         var col = (parseFloat(a.importe)||0) < 0 ? 'var(--red)' : 'var(--green)';
+        var comLbl = '';
+        if(a.comunicado_responsable === 'si')      comLbl = '<span class="badge b-green" style="font-size:10px;">✓ Comunicado</span>';
+        else if(a.comunicado_responsable === 'no') comLbl = '<span class="badge b-red" style="font-size:10px;">✗ No comunicado</span>';
+        var numLbl = (parseInt(a.num)>1) ? '<span style="color:var(--text3);font-size:11px;">×'+parseInt(a.num)+'</span>' : '';
         html += '<div style="font-size:13px;display:flex;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">';
         html += '<strong>'+formatDisplayValue(a.tipo)+'</strong>';
+        if(numLbl) html += numLbl;
         html += '<span style="color:'+col+';font-family:var(--font-mono);font-weight:600;">'+(parseFloat(a.importe)||0).toFixed(2)+' €</span>';
+        if(comLbl) html += comLbl;
         if(a.motivo) html += '<span style="color:var(--text3);">'+formatDisplayValue(a.motivo)+'</span>';
         if(a.obs) html += '<span style="color:var(--text3);font-size:11px;">📝 '+formatDisplayValue(a.obs)+'</span>';
         html += '</div>';
