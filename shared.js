@@ -592,10 +592,6 @@ function getScreens(rol){
     miDpto.push(ITEMS.fichaje);
     miDpto.push(ITEMS.misfio);
     if(!noIncMiDpto) miDpto.push(ITEMS.miRendimiento);
-    // HK Gobernanta: extras de planificación
-    if(isHK && isJefe){
-      gestion.push(ITEMS.hkConfig);          // Config HK se queda en Manager Bar
-    }
   }
 
   // ── MANAGER BAR (solo jefe) ──────────────────────────────────────
@@ -606,6 +602,8 @@ function getScreens(rol){
     gestion.push(ITEMS.fio);
     gestion.push(ITEMS.informes);
   }
+  // C4: Config HK en Manager Bar (después de inicializar gestion)
+  if(isHK && isJefe) gestion.push(ITEMS.hkConfig);
 
   // ── Ensamblar ────────────────────────────────────────────────────
   var out = miDia.slice();
