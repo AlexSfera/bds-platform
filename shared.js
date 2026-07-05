@@ -2325,6 +2325,8 @@ function onValDeptChange(){
   }
   // MERMA: mostrar/ocultar pestaña según dept y rol
   if(typeof _updateMermaTabVisibility === 'function') _updateMermaTabVisibility();
+  // FIO tab visibility (C6)
+  if(typeof _updateFIOTabVisibility === 'function') _updateFIOTabVisibility();
 }
 
 // Departamentos (valores de v-dept) que corresponden al área de un jefe
@@ -2361,6 +2363,7 @@ function initValDeptFilter(){
   onValDeptChange();
   if(typeof _updateMermaTabVisibility === 'function') _updateMermaTabVisibility();
   if(typeof _updateNotasTabVisibility === 'function') _updateNotasTabVisibility();
+  if(typeof _updateFIOTabVisibility === 'function') _updateFIOTabVisibility();
 }
 
 function filtrarValidacion(){
@@ -2522,6 +2525,7 @@ async function renderValidacion(){
   // Sync tab visibility after every render (dept filter may have changed)
   if(typeof _updateMermaTabVisibility==='function') _updateMermaTabVisibility();
   if(typeof _updateNotasTabVisibility==='function') _updateNotasTabVisibility();
+  if(typeof _updateFIOTabVisibility==='function') _updateFIOTabVisibility();
   // Si tab OPERATIVO está visible, refrescarlo también con el mismo filtro de dept
   var _opDiv = document.getElementById('val-content-operativo');
   if(_opDiv && _opDiv.style.display !== 'none' && typeof renderFollowUpExtras === 'function'){

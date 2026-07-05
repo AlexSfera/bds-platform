@@ -289,7 +289,7 @@ function _renderFIOTable(list){
         if(canVal && f.status === FIO_STATUS.REGISTRADO){
           acciones += ' <button class="btn btn-primary btn-sm" onclick="openFIOValidate(\''+f.id+'\')">Validar</button>';
         }
-        if(isAdmin(currentUser)){
+        if(typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser)){
           acciones += ' <button class="btn btn-danger btn-sm" onclick="deleteFIO(\''+f.id+'\')">🗑</button>';
         }
         return '<tr>'
@@ -769,7 +769,7 @@ async function resolveDisputeFIO(fid, decision){
 window.resolveDisputeFIO = resolveDisputeFIO;
 
 async function deleteFIO(fid){
-  if(!isAdmin(currentUser)){ toast('Solo admin','err'); return; }
+  if(!(typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser))){ toast('Solo admin / adjunto directivo','err'); return; }
   if(!confirm('¿Eliminar este FIO? La acción se registra en audit_log.')) return;
   var all = await getDB('fio');
   var f = all.find(function(x){ return x.id === fid; });

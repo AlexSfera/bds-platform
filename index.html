@@ -1391,6 +1391,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <button id="val-tab-caja" onclick="switchValTab('caja')" style="padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">CIERRE CAJA</button>
         <button id="val-tab-merma" onclick="switchValTab('merma')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">🍋 MERMA</button>
         <button id="val-tab-notas" onclick="switchValTab('notas')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">💬 NOTAS</button>
+        <button id="val-tab-fio" onclick="switchValTab('fio')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">⚖ FIO</button>
       </div>
       </div>
       <div class="filter-bar">
@@ -1489,6 +1490,13 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:12px;">💬 NOTAS Y SUGERENCIAS</div>
         <div id="val-notas-kpis" style="margin-bottom:10px;"></div>
         <div class="card"><div class="tbl-wrap" id="val-notas-table"></div></div>
+      </div>
+
+      <!-- FIO TAB -->
+      <div id="val-content-fio" style="display:none;">
+        <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#ef4444;letter-spacing:.15em;margin-bottom:12px;">⚖ FIO · FALLOS INDIVIDUALES OPERATIVOS</div>
+        <div id="val-fio-kpis" style="margin-bottom:10px;"></div>
+        <div class="card"><div class="tbl-wrap" id="val-fio-table"></div></div>
       </div>
 
     <!-- ══ DASHBOARD ══ -->

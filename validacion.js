@@ -514,12 +514,14 @@ function switchValTab(tab) {
   var hypoxicDiv   = document.getElementById('val-content-hypoxic');
   var mermaDiv     = document.getElementById('val-content-merma');
   var notasDiv     = document.getElementById('val-content-notas');
+  var fioDiv       = document.getElementById('val-content-fio');
   var btnF = document.getElementById('val-tab-followup');
   var btnO = document.getElementById('val-tab-operativo');
   var btnC = document.getElementById('val-tab-caja');
   var btnH = document.getElementById('val-tab-hypoxic');
   var btnM = document.getElementById('val-tab-merma');
   var btnN = document.getElementById('val-tab-notas');
+  var btnFIO = document.getElementById('val-tab-fio');
   if(!followupDiv||!cajaDiv) { console.warn('Tab divs not found'); return; }
 
   // Hide all
@@ -529,6 +531,7 @@ function switchValTab(tab) {
   if(hypoxicDiv) hypoxicDiv.style.display = 'none';
   if(mermaDiv) mermaDiv.style.display = 'none';
   if(notasDiv) notasDiv.style.display = 'none';
+  if(fioDiv) fioDiv.style.display = 'none';
 
   // Reset all buttons inactive
   _valTabStyleInactive(btnF);
@@ -537,6 +540,7 @@ function switchValTab(tab) {
   _valTabStyleInactive(btnH);
   if(btnM) _valTabStyleInactive(btnM);
   if(btnN) _valTabStyleInactive(btnN);
+  if(btnFIO) _valTabStyleInactive(btnFIO);
 
   if(tab === 'caja'){
     cajaDiv.style.display = 'block';
@@ -563,6 +567,12 @@ function switchValTab(tab) {
       btnN.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid #8b5cf6;background:rgba(139,92,246,.15);color:#8b5cf6;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;';
     }
     renderValNotasList();
+  } else if(tab === 'fio'){
+    if(fioDiv) fioDiv.style.display = 'block';
+    if(btnFIO){
+      btnFIO.style.cssText='padding:8px 18px;border-radius:6px;border:2px solid #ef4444;background:rgba(239,68,68,.15);color:#ef4444;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;';
+    }
+    if(typeof renderValFIOList === 'function') renderValFIOList();
   } else {
     followupDiv.style.display = 'block';
     _valTabStyleActive(btnF, '#2ec4b6');
@@ -1954,6 +1964,142 @@ async function renderValNotasList(){
     +'</table>';
 }
 window.renderValNotasList = renderValNotasList;
+
+// ═══════════════════════════════════════════════════════════════════════
+// FIO TAB en Validación (C6)
+// ═══════════════════════════════════════════════════════════════════════
+function _canSeeFIOTab(user){
+  if(!user) return false;
+  if(typeof canActAsAdmin === 'function' && canActAsAdmin(user)) return true;
+  if(typeof isSupervisor === 'function' && isSupervisor(user)) return true;
+  return false;
+}
+
+function _updateFIOTabVisibility(){
+  var btn = document.getElementById('val-tab-fio');
+  if(!btn) return;
+  var visible = _canSeeFIOTab(currentUser);
+  btn.style.display = visible ? 'inline-block' : 'none';
+  if(!visible){
+    var fioDiv = document.getElementById('val-content-fio');
+    if(fioDiv && fioDiv.style.display !== 'none') switchValTab('followup');
+  }
+}
+
+async function renderValFIOList(){
+  var kpiEl = document.getElementById('val-fio-kpis');
+  var tblEl = document.getElementById('val-fio-table');
+  if(!tblEl) return;
+
+  var all = [];
+  try { all = await getDB('fio'); } catch(e){ all = []; }
+
+  // Scope por departamento (reutiliza _fioViewableDepts de fio.js)
+  var viewable = typeof _fioViewableDepts === 'function' ? _fioViewableDepts(currentUser) : [];
+  if(viewable.length > 0){
+    var vLow = viewable.map(function(d){ return String(d||'').trim().toLowerCase(); });
+    all = all.filter(function(f){
+      return vLow.indexOf(String(f.departamento||'').trim().toLowerCase()) >= 0;
+    });
+  }
+
+  // Filtro por dept del selector de validación si hay uno seleccionado
+  var vDept = (document.getElementById('v-dept')||{}).value || '';
+  if(vDept){
+    var vDeptLow = vDept.toLowerCase().trim();
+    all = all.filter(function(f){
+      return (f.departamento||'').toLowerCase().trim() === vDeptLow;
+    });
+  }
+
+  // Ordenar por fecha desc
+  all.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+  // Limitar a últimos 3 meses para rendimiento
+  var cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 3);
+  var cutoffStr = cutoff.toISOString().slice(0,10);
+  var list = all.filter(function(f){ return (f.fecha||f.created_at||'') >= cutoffStr; });
+
+  // KPIs
+  var pendientes = list.filter(function(f){ return f.status === 'Registrado'; });
+  var validados  = list.filter(function(f){ return f.status === 'Validado' || f.status === 'Cerrado'; });
+  var disputados = list.filter(function(f){ return f.status === 'Disputado'; });
+  var puntos     = validados.reduce(function(s,f){ return s + (parseFloat(f.applied_points)||0); }, 0);
+
+  if(kpiEl){
+    kpiEl.innerHTML =
+        '<div class="kpi-grid">'
+      +   '<div class="kpi k-red"><div class="kpi-lbl">Pendientes</div><div class="kpi-val">'+pendientes.length+'</div></div>'
+      +   '<div class="kpi k-green"><div class="kpi-lbl">Validados</div><div class="kpi-val">'+validados.length+'</div></div>'
+      +   '<div class="kpi k-amber"><div class="kpi-lbl">Puntos</div><div class="kpi-val">'+puntos+'</div></div>'
+      +   '<div class="kpi k-blue"><div class="kpi-lbl">Disputados</div><div class="kpi-val">'+disputados.length+'</div></div>'
+      + '</div>';
+  }
+
+  if(!list.length){
+    tblEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin FIO en los últimos 3 meses</div></div>';
+    return;
+  }
+
+  var isAdm = typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser);
+  var canVal = typeof canValidateFIO === 'function' && canValidateFIO(currentUser);
+  var FIO_LEVELS = window.FIO_LEVELS || {};
+
+  tblEl.innerHTML = '<table>'
+    + '<tr><th>Fecha</th><th>Empleado</th><th>Dept</th><th>Fallo</th><th>Nivel · Puntos</th><th>Estado</th><th>Acción</th></tr>'
+    + list.map(function(f){
+        var L = FIO_LEVELS[f.level_code] || {name:'?',color:'#9ca3af',points:0};
+        var pts = (f.applied_points !== undefined && f.applied_points !== null) ? parseFloat(f.applied_points) : L.points;
+        var lvlBadge = '<span class="badge" style="background:'+L.color+'22;color:'+L.color+';border:1px solid '+L.color+'66;">'+L.name+' · '+pts+'p</span>';
+        var stBadge = f.status === 'Validado' || f.status === 'Cerrado'
+          ? '<span class="badge b-green">'+f.status+'</span>'
+          : f.status === 'Disputado' ? '<span class="badge b-yellow">Disputado</span>'
+          : f.status === 'Rechazado' ? '<span class="badge b-gray">Rechazado</span>'
+          : '<span class="badge b-red">Registrado</span>';
+        var acciones = '';
+        if(typeof openFIODetail === 'function'){
+          acciones += '<button class="btn btn-secondary btn-sm" onclick="openFIODetail(\''+f.id+'\')">Ver</button>';
+        }
+        if(canVal && f.status === 'Registrado' && typeof openFIOValidate === 'function'){
+          acciones += ' <button class="btn btn-primary btn-sm" onclick="openFIOValidate(\''+f.id+'\')">Validar</button>';
+        }
+        if(isAdm){
+          acciones += ' <button class="btn btn-danger btn-sm" onclick="_valDeleteFIO(\''+f.id+'\')">🗑</button>';
+        }
+        return '<tr>'
+          + '<td style="font-family:var(--font-mono);font-size:11px">'+formatDisplayValue(f.fecha)+'</td>'
+          + '<td style="font-size:12px"><strong>'+formatDisplayValue(f.employee_name)+'</strong></td>'
+          + '<td>'+deptBadge(f.departamento)+'</td>'
+          + '<td style="font-size:12px;max-width:200px">'+formatDisplayValue(f.fault_name)+'</td>'
+          + '<td>'+lvlBadge+'</td>'
+          + '<td>'+stBadge+'</td>'
+          + '<td style="white-space:nowrap">'+acciones+'</td>'
+          + '</tr>';
+      }).join('')
+    + '</table>';
+}
+window.renderValFIOList = renderValFIOList;
+
+async function _valDeleteFIO(fid){
+  if(!(typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser))){
+    toast('Solo admin / adjunto directivo','err'); return;
+  }
+  if(!confirm('¿Eliminar este FIO? La acción se registra en audit_log.')) return;
+  var all = [];
+  try { all = await getDB('fio'); } catch(e){}
+  var f = all.find(function(x){ return x.id === fid; });
+  auditLog('FIO_DELETE', currentUser.nombre+' eliminó FIO '+fid+' | '+(f ? (f.employee_name||'?')+' · '+(f.fault_name||'?') : '?'));
+  try {
+    await dbDelete('fio', fid);
+    invalidateCache('fio');
+    toast('FIO eliminado','ok');
+    renderValFIOList();
+  } catch(e){
+    toast('Error al eliminar: '+e.message,'err');
+  }
+}
+window._valDeleteFIO = _valDeleteFIO;
 
 // ═══════════════════════════════════════════════════════════════════════
 // BLOQUE 1B · KPIs DEL TURNO — Fase 1 puramente visual
