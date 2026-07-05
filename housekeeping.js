@@ -161,6 +161,7 @@ function hkIsGobernanta(user){
   if(!user) return false;
   if(user.rol === 'admin') return true;
   if(user.rol === 'gobernante') return true;
+  if(user.rol === 'subgobernante') return true;
   if(user.rol === 'jefe_departamento' && hkIsHK(user)) return true;
   if(user.rol === 'jefe' && hkIsHK(user)) return true;
   return false;

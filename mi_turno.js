@@ -519,6 +519,7 @@ function _esJefe(){
   var r = currentUser.rol || '';
   return r === 'admin' || r === 'chef' || r === 'fb' || r === 'jefe_recepcion'
       || r === 'gobernante' || r === 'jefe_departamento'
+      || r === 'subgobernante' || r === 'jefe_mantenimiento'
       || r === 'coord_recepcion_syncrolab' || r === 'coord_entrenadores' || r === 'coord_fisioterapeutas'
       || r === 'supervisor' || r === 'jefe';
 }

@@ -144,6 +144,8 @@ const SUPERVISOR_DEPT_MAP = {
   fb: ['Sala', 'Cocina', 'Friegue', 'FnB', 'Food & Beverage'],
   jefe_recepcion: ['Recepción', 'Recepción SFERA'],
   gobernante: ['Housekeeping', 'Limpieza'],
+  subgobernante: ['Housekeeping', 'Limpieza'],
+  jefe_mantenimiento: ['Mantenimiento'],
   coord_recepcion_syncrolab: ['Recepción SYNCROLAB', 'SyncroLab', 'SYNCROLAB'],
   coord_entrenadores: ['Entrenadores', 'SYNCROLAB', 'SyncroLab'],
   coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab'],
@@ -445,7 +447,7 @@ async function startApp(){
   if(_portal){ _portal.style.display='none'; _portal.style.pointerEvents='none'; _portal.style.visibility='hidden'; }
   document.getElementById('app').style.display='block';
   var unTop=document.getElementById('user-name-top'); if(unTop) unTop.textContent=currentUser.nombre;
-  const rl={admin:'ADMIN',adjunto:'ADJ.DIR/RRHH',adjunto_directivo:'ADJ.DIR',jefe:(currentUser.area?'JEFE · '+currentUser.area.toUpperCase():'JEFE'),chef:'CHEF',fb:'F&B',jefe_recepcion:'JEF.REC',supervisor:'SUPERV.',mantenimiento:'MANT.',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
+  const rl={admin:'ADMIN',adjunto:'ADJ.DIR/RRHH',adjunto_directivo:'ADJ.DIR',jefe:(currentUser.area?'JEFE · '+currentUser.area.toUpperCase():'JEFE'),chef:'CHEF',fb:'F&B',jefe_recepcion:'JEF.REC',jefe_mantenimiento:'JEF.MANT.',subgobernante:'SUBGOB.',supervisor:'SUPERV.',mantenimiento:'MANT.',empleado:currentUser.area?currentUser.area.toUpperCase():'EMPLEADO'};
   var urTop=document.getElementById('user-role-top'); if(urTop) urTop.textContent=rl[currentUser.rol]||currentUser.rol.toUpperCase();
   buildNav();
   // Show loading state
@@ -481,7 +483,8 @@ function getScreens(rol){
                  || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
                  || ['chef','fb','jefe_recepcion','supervisor','jefe',
                      'coord_recepcion_syncrolab','coord_entrenadores',
-                     'coord_fisioterapeutas','gobernante'].indexOf(rol) >= 0;
+                     'coord_fisioterapeutas','gobernante',
+                     'jefe_mantenimiento','subgobernante'].indexOf(rol) >= 0;
 
   // ── Áreas que NO generan incentivos ──────────────────────────────
   var noIncMiDpto   = isFriegue || isMant || isAdmon;
@@ -2549,8 +2552,6 @@ async function openValidarModal(shiftId){
     return (g.shift_id===shiftId || g.employee_id===s.employee_id)
       && g.estado !== 'Cerrada';  // BUG-47b: no mostrar cerradas
   });
-  // Cross-selling declarado en el turno (Recepción) — para mostrar al supervisor
-  const shiftRecVentas=(await getDB('recepcion_ventas')).filter(function(v){ return v.shift_id===shiftId; });
   // Cargar KPI Recepción desde recepcion_cash (tabla separada)
   var recKpiRow = null;
   if(s.area === 'Recepción'){
@@ -2683,46 +2684,6 @@ async function openValidarModal(shiftId){
           +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:8px;">KPI · HOUSEKEEPING</div>'
           +hkHtml+'</div>';
       }
-    }
-    // ── RESTO DE DEPARTAMENTOS: delegar en el renderer dept-aware ──
-    // Los branches inline anteriores solo cubren Sala/F&B, Recepción y Housekeeping.
-    // Entrenadores (kpi_entrenador), Cocina, Rec. SYNCROLAB y Mant/Admón/Fisio los
-    // cubre _renderKpisTurno (validacion.js). Sin esto, sus jefes no veían KPI.
-    var _cubiertoInline = (_area==='Sala'||_area==='F&B'||_area==='Recepción'||_area==='Housekeeping');
-    if(!_cubiertoInline && typeof _renderKpisTurno === 'function'){
-      info += _renderKpisTurno(s);
-    }
-  })();
-
-  // Block 1.6: Cross-selling (recepcion_ventas) — antes solo visible en la vista admin
-  (function(){
-    var esRecep = (s.area||'').toLowerCase().indexOf('recep') !== -1;
-    if(!esRecep) return;
-    var TIPO_LABEL_RV = {desayuno:'🌅 Desayuno', comida_cena:'🍽️ Comida/Cena', syncrolab:'💪 SYNCROLAB'};
-    function _ivaF(t){ return t === 'syncrolab' ? 1.21 : 1.10; }
-    if(shiftRecVentas.length > 0){
-      var totInc = 0;
-      shiftRecVentas.forEach(function(v){ totInc += (parseFloat(v.importe||0) / _ivaF(v.tipo_venta)) * 0.10; });
-      var h = '<div style="background:var(--bg);border:1px solid var(--green);border-radius:8px;padding:12px;margin-bottom:10px;">';
-      h += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:8px;">CROSS-SELLING ('+shiftRecVentas.length+' venta(s) · incentivo estimado '+totInc.toFixed(2)+'€)</div>';
-      h += '<div class="tbl-wrap"><table style="font-size:12px;width:100%;">';
-      h += '<tr style="color:var(--text3);"><th style="text-align:left;padding:4px 8px;">Tipo</th><th style="text-align:right;padding:4px 8px;">Bruto</th><th style="text-align:right;padding:4px 8px;">Neto</th><th style="text-align:right;padding:4px 8px;">Incentivo</th><th style="text-align:left;padding:4px 8px;">MEWS ref</th></tr>';
-      shiftRecVentas.forEach(function(v){
-        var bruto = parseFloat(v.importe||0);
-        var neto  = bruto / _ivaF(v.tipo_venta);
-        var inc   = neto * 0.10;
-        h += '<tr style="border-top:1px solid var(--border);">';
-        h += '<td style="padding:4px 8px;">'+(TIPO_LABEL_RV[v.tipo_venta]||formatDisplayValue(v.tipo_venta))+(v.servicio_detalle?' · <span style="color:var(--text3);">'+formatDisplayValue(v.servicio_detalle)+'</span>':'')+'</td>';
-        h += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">'+bruto.toFixed(2)+'€</td>';
-        h += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--text2);">'+neto.toFixed(2)+'€</td>';
-        h += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--green);">+'+inc.toFixed(2)+'€</td>';
-        h += '<td style="padding:4px 8px;color:var(--text3);">'+(v.reserva_mews||'—')+'</td>';
-        h += '</tr>';
-      });
-      h += '</table></div></div>';
-      info += h;
-    } else {
-      info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">CROSS-SELLING · Sin ventas cross-sell registradas</div>';
     }
   })();
 
@@ -3656,7 +3617,7 @@ async function saveEmpleado(){
       if(fbAreas.indexOf(selectedArea) === -1){
         toast('F&B Manager solo puede gestionar empleados de Sala / Cocina / Friegue','err'); return;
       }
-      if(['adjunto_directivo','admin','fb','chef','jefe_recepcion','gobernante','coord_recepcion_syncrolab','coord_entrenadores','coord_fisioterapeutas','mantenimiento'].indexOf(selectedRol) !== -1){
+      if(['adjunto_directivo','admin','fb','chef','jefe_recepcion','gobernante','subgobernante','jefe_mantenimiento','coord_recepcion_syncrolab','coord_entrenadores','coord_fisioterapeutas','mantenimiento'].indexOf(selectedRol) !== -1){
         toast('F&B Manager solo puede asignar roles base/supervisor/jefe_departamento','err'); return;
       }
     } else if(isSupervisor(currentUser)){
