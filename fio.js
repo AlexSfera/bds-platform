@@ -798,8 +798,25 @@ async function renderMisFIOScreen(){
 
   var all = [];
   try { all = await getDB('fio'); } catch(e){ all = []; }
-  // Filtrar a SOLO los FIO del empleado actual
-  var mine = all.filter(function(f){ return f.employee_id === currentUser.id; });
+
+  // C3: jefe ve sus FIO + los de sus subordinados
+  var _mfIsJefe = typeof isSupervisor === 'function' && isSupervisor(currentUser)
+                && !(typeof canActAsAdmin === 'function' && canActAsAdmin(currentUser));
+  var _mfScopeIds = [currentUser.id];
+  var _mfEmpMap = {};
+  if(_mfIsJefe){
+    var _mfDepts = typeof getSupervisorDepartments === 'function' ? getSupervisorDepartments(currentUser) : [];
+    var _mfEmps = [];
+    try { _mfEmps = await getDB('employees'); } catch(e){}
+    _mfEmps.forEach(function(e){
+      _mfEmpMap[e.id] = e.nombre || e.id;
+      var ea = (e.area || '').toLowerCase();
+      if(_mfDepts.some(function(d){ return ea === d.toLowerCase(); })){
+        if(_mfScopeIds.indexOf(e.id) === -1) _mfScopeIds.push(e.id);
+      }
+    });
+  }
+  var mine = all.filter(function(f){ return _mfScopeIds.indexOf(f.employee_id) >= 0; });
   mine.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
 
   // KPIs personales
@@ -811,10 +828,14 @@ async function renderMisFIOScreen(){
   var puntosMes  = validados.filter(function(f){ return f.incentive_month === thisMonth; })
                             .reduce(function(s,f){ return s + (parseFloat(f.applied_points)||0); }, 0);
 
+  var _mfDeptLabel = _mfIsJefe
+    ? ((typeof getSupervisorDepartments === 'function' ? getSupervisorDepartments(currentUser) : []).join(' / ') || currentUser.area || '')
+    : '';
+
   el.innerHTML =
       '<div class="page-header">'
-    +   '<div class="page-title">⚖ Mis FIO</div>'
-    +   '<div class="page-sub">Tus incidencias de proceso registradas — solo lectura</div>'
+    +   '<div class="page-title">⚖ ' + (_mfIsJefe ? 'FIO · ' + _mfDeptLabel : 'Mis FIO') + '</div>'
+    +   '<div class="page-sub">' + (_mfIsJefe ? 'FIO de tu equipo y los tuyos propios' : 'Tus incidencias de proceso registradas — solo lectura') + '</div>'
     + '</div>'
 
     + '<div class="kpi-grid" style="margin-bottom:14px;">'
@@ -825,19 +846,21 @@ async function renderMisFIOScreen(){
     + '</div>'
 
     + (mine.length
-        ? _renderMisFIOTable(mine)
+        ? _renderMisFIOTable(mine, _mfIsJefe, _mfEmpMap)
         : '<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">No tienes FIO registrados</div></div>');
 }
 window.renderMisFIOScreen = renderMisFIOScreen;
 
-function _renderMisFIOTable(list){
+function _renderMisFIOTable(list, showEmp, empMap){
+  empMap = empMap || {};
   return '<div style="overflow-x:auto"><table>'
-    + '<tr><th>Fecha</th><th>Fallo</th><th>Nivel · Puntos</th><th>Impacto</th><th>Descripción</th><th>Estado</th><th>Acción</th></tr>'
+    + '<tr>' + (showEmp ? '<th>Empleado</th>' : '') + '<th>Fecha</th><th>Fallo</th><th>Nivel · Puntos</th><th>Impacto</th><th>Descripción</th><th>Estado</th><th>Acción</th></tr>'
     + list.map(function(f){
         var canDispute = (f.status === FIO_STATUS.REGISTRADO || f.status === FIO_STATUS.VALIDADO);
         var acciones = '<button class="btn btn-secondary btn-sm" onclick="openMisFIODetail(\''+f.id+'\')">Ver</button>'
-          + (canDispute ? ' <button class="btn btn-warn btn-sm" onclick="disputeMisFIO(\''+f.id+'\')">⚠ Disputar</button>' : '');
+          + (canDispute && f.employee_id === currentUser.id ? ' <button class="btn btn-warn btn-sm" onclick="disputeMisFIO(\''+f.id+'\')">⚠ Disputar</button>' : '');
         return '<tr>'
+          + (showEmp ? '<td style="font-size:12px;font-weight:600">'+(empMap[f.employee_id] || f.employee_id)+'</td>' : '')
           + '<td style="font-family:var(--font-mono);font-size:11px">'+formatDisplayValue(f.fecha)+'</td>'
           + '<td style="font-size:12px;max-width:240px">'+formatDisplayValue(f.fault_name)+'</td>'
           + '<td>'+bFIOLevel(f.level_code, f.applied_points)+'</td>'
@@ -855,10 +878,16 @@ async function openMisFIODetail(fid){
   var all = await getDB('fio');
   var f = all.find(function(x){ return x.id === fid; });
   if(!f){ toast('FIO no encontrado','err'); return; }
-  if(f.employee_id !== currentUser.id){ toast('No autorizado','err'); return; }
+  // C3: jefe puede ver FIO de sus subordinados
+  var _canViewThis = f.employee_id === currentUser.id;
+  if(!_canViewThis && typeof isSupervisor === 'function' && isSupervisor(currentUser)){
+    _canViewThis = typeof _fioCanViewDept === 'function' && _fioCanViewDept(currentUser, f.departamento);
+  }
+  if(!_canViewThis){ toast('No autorizado','err'); return; }
 
   var L = FIO_LEVELS[f.level_code] || FIO_LEVELS.L0;
-  var canDispute = (f.status === FIO_STATUS.REGISTRADO || f.status === FIO_STATUS.VALIDADO);
+  var canDispute = (f.status === FIO_STATUS.REGISTRADO || f.status === FIO_STATUS.VALIDADO)
+                 && f.employee_id === currentUser.id;  // solo puedes disputar los tuyos
 
   var ov = document.getElementById('modal-mis-fio-detail');
   if(!ov){
