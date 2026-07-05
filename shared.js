@@ -562,7 +562,6 @@ function getScreens(rol){
   if(isHK){
     // HK: Mi Ruta y Revisión (gobernanta) se anteponen a Mi Turno
     miDia.push(ITEMS.ruta);
-    if(isJefe) miDia.push(ITEMS.hkRevision);
     miDia.push(ITEMS.checklist);
     miDia.push(ITEMS.turno);
   } else {
@@ -595,10 +594,7 @@ function getScreens(rol){
     if(!noIncMiDpto) miDpto.push(ITEMS.miRendimiento);
     // HK Gobernanta: extras de planificación
     if(isHK && isJefe){
-      miDpto.push(ITEMS.hkPlan);
-      miDpto.push(ITEMS.hkZonas);
-      miDpto.push(ITEMS.dashHK);
-      miDpto.push(ITEMS.hkConfig);
+      gestion.push(ITEMS.hkConfig);          // Config HK se queda en Manager Bar
     }
   }
 
@@ -616,6 +612,14 @@ function getScreens(rol){
   if(miDpto.length){
     out.push({sep:true,label:'MI DEPARTAMENTO'});
     out = out.concat(miDpto);
+  }
+  // ── C4: Gestión HK dropdown (Gobernante / Subgobernanta) ──
+  if(isHK && isJefe){
+    out.push({sep:true,label:'GESTIÓN HK',dropdown:true});
+    out.push(ITEMS.hkRevision);
+    out.push(ITEMS.dashHK);
+    out.push(ITEMS.hkPlan);
+    out.push(ITEMS.hkZonas);
   }
   if(gestion.length){
     out.push({sep:true,label:'MANAGER BAR',dropdown:true});
