@@ -2095,6 +2095,48 @@ async function renderFollowUpExtras(dept){
     +_vkTask('Total',_allTasks.length,'var(--text3)','')
     +'</div>';
   valTaskRenderTable();
+
+  // ── C7: Notas del empleado (bloque Operativo) ──
+  var notasEl = document.getElementById('val-op-notas-list');
+  if(notasEl){
+    var notes = [];
+    try { notes = await getDB('employee_notes'); } catch(e){}
+    // Filtrar por dept
+    if(dept){
+      var nDeptLow = dept.toLowerCase().trim();
+      notes = notes.filter(function(n){ return (n.area||'').toLowerCase().trim() === nDeptLow; });
+    } else if(!(typeof isAdmin==='function' && isAdmin(currentUser)) && !(typeof isAdjuntoDirectivo==='function' && isAdjuntoDirectivo(currentUser))){
+      var _notaDepts = typeof getSupervisorDepartments==='function' ? getSupervisorDepartments(currentUser) : [currentUser.area||''];
+      notes = notes.filter(function(n){ return _notaDepts.some(function(d){ return (n.area||'').toLowerCase() === d.toLowerCase(); }); });
+    }
+    notes.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+    notes = notes.slice(0,30);
+    var isAdmN = typeof canActAsAdmin==='function' && canActAsAdmin(currentUser);
+    if(!notes.length){
+      notasEl.innerHTML = '<div class="empty" style="padding:16px;"><div class="empty-text" style="font-size:12px;">Sin notas</div></div>';
+    } else {
+      notasEl.innerHTML = notes.map(function(n){
+        var hora = n.created_at ? new Date(n.created_at).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+        var catColor = n.categoria==='Queja' ? '#ef4444' : n.categoria==='Mejora' ? '#10b981' : '#8b5cf6';
+        var leidaTag = (!n.leida && n.employee_id!==currentUser.id)
+          ? '<span style="font-size:10px;background:rgba(239,68,68,.15);color:#ef4444;padding:2px 7px;border-radius:6px;margin-left:6px;">Nueva</span>'
+          : '';
+        var markBtn = (isAdmN && !n.leida && n.employee_id!==currentUser.id)
+          ? ' <button class="btn btn-secondary btn-sm" style="font-size:10px;" onclick="markNotaLeida(\''+n.id+'\')">✓ Leída</button>'
+          : '';
+        return '<div class="task-card" style="'+(n.leida?'opacity:.7;':'')+'border-left:3px solid '+catColor+';padding:10px 14px;margin-bottom:6px;">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+          +'<span class="badge" style="background:rgba(139,92,246,.15);color:'+catColor+';border:1px solid '+catColor+';font-size:10px;">'+n.categoria+'</span>'
+          +'<span style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">'+hora+'</span>'
+          +'<span style="font-size:11px;font-weight:600;color:var(--text2);">'+formatDisplayValue(n.nombre)+'</span>'
+          +'<span class="dept-badge" style="font-size:10px;">'+formatDisplayValue(n.area||'—')+'</span>'
+          +leidaTag+markBtn
+          +'</div>'
+          +'<div style="font-size:13px;color:var(--text);margin-top:6px;line-height:1.4;">'+formatDisplayValue(n.texto)+'</div>'
+          +'</div>';
+      }).join('');
+    }
+  }
 }
 window.renderFollowUpExtras = renderFollowUpExtras;
 
