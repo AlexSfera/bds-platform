@@ -137,9 +137,12 @@ async function renderFichaje() {
   if (!el) return;
 
   var isGestor = canActAsAdmin(currentUser);
+  var isJefeFichaje = !isGestor && (typeof isSupervisor === 'function' && isSupervisor(currentUser));
 
   if (isGestor) {
     await renderFichajeAdmin(el);
+  } else if (isJefeFichaje) {
+    await renderFichajeJefe(el);
   } else {
     await renderFichajeEmpleado(el);
   }
@@ -264,6 +267,72 @@ async function renderFichajeAdmin(el) {
       </div>
     </div>
   `;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// VISTA JEFE — alertas propias + subordinados del departamento
+// ════════════════════════════════════════════════════════════════════════
+async function renderFichajeJefe(el) {
+  var allAlerts = await cargarBitrixAlerts();
+  var employees = [];
+  try { employees = await getDB('employees'); } catch(e) {}
+
+  // Departamentos en alcance del jefe
+  var myDepts = (typeof getSupervisorDepartments === 'function')
+    ? getSupervisorDepartments(currentUser)
+    : (currentUser.area ? [currentUser.area] : []);
+
+  // Empleados en alcance (subordinados + el propio jefe)
+  var scopeEmps = employees.filter(function(e) {
+    if (e.id === currentUser.id) return true;
+    var ea = (e.area || '').toLowerCase();
+    return myDepts.some(function(d) { return ea === d.toLowerCase(); });
+  });
+  var scopeNames = scopeEmps.map(function(e) { return (e.nombre || '').toLowerCase().trim(); });
+
+  // Filtrar alertas a las que coinciden con empleados en alcance
+  var alertasScope = allAlerts.filter(function(a) {
+    var aNorm = (a.nombre_empleado || '').toLowerCase().trim();
+    return scopeNames.some(function(name) {
+      return name === aNorm || name.split(' ')[0] === aNorm.split(' ')[0];
+    });
+  });
+
+  // Periodos únicos
+  var periodosUnicos = [];
+  alertasScope.forEach(function(a) {
+    if (periodosUnicos.indexOf(a.periodo_control) === -1) periodosUnicos.push(a.periodo_control);
+  });
+  periodosUnicos.sort(function(a, b) { return b.localeCompare(a); });
+
+  if (!_fichajeFilterPeriodo && periodosUnicos.length > 0) {
+    _fichajeFilterPeriodo = periodosUnicos[0];
+  }
+
+  var alertasFiltradas = _fichajeFilterPeriodo
+    ? alertasScope.filter(function(a) { return a.periodo_control === _fichajeFilterPeriodo; })
+    : alertasScope;
+
+  var deptLabel = myDepts.join(' / ') || currentUser.area || '—';
+
+  el.innerHTML = ''
+    + '<div class="card">'
+    + '<div class="card-title">📋 ALERTAS FICHAJE · ' + deptLabel + '</div>'
+    + '<p style="font-size:12px;color:var(--text2);margin-bottom:14px;">'
+    + 'Alertas de tu equipo y las tuyas propias.'
+    + '</p>'
+    + '<div class="fg" style="margin-bottom:14px;">'
+    + '<label>Periodo</label>'
+    + '<select onchange="_fichajeFilterPeriodo=this.value;renderFichaje()">'
+    + '<option value="">— Todos —</option>'
+    + periodosUnicos.map(function(p) {
+        return '<option value="' + p + '"' + (p === _fichajeFilterPeriodo ? ' selected' : '') + '>' + p + '</option>';
+      }).join('')
+    + '</select>'
+    + '</div>'
+    + renderFichajeRanking(alertasFiltradas)
+    + '</div>'
+    + renderFichajeSummaryCards(alertasFiltradas);
 }
 
 function renderFichajeRanking(alertas) {
