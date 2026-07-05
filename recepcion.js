@@ -347,9 +347,29 @@ function submitRecKpi() {
   _recKpiState.lead_fecha  = (document.getElementById('kpi-lead-fecha')||{}).value||'';
   _recKpiState.clientes_num = parseInt((document.getElementById('kpi-clientes-num')||{}).value)||0;
 
+  // REC-KPI-01: persistir KPI de trabajo en el turno (shifts.kpi_recepcion).
+  // Siempre — independiente de que luego se cierre caja o no. El cross-sell va
+  // aparte en recepcion_ventas; aquí solo los KPI operativos del turno.
+  var _giRec = function(id){ return parseInt((document.getElementById(id)||{}).value)||0; };
+  window._recepKpiState = {
+    checkins:               _recKpiState.checkins,
+    checkouts:              _recKpiState.checkouts,
+    reservas:               _recKpiState.reservas,
+    upsell_desayuno:        _recKpiState.upsell_desayuno || 'na',
+    desal_ofertados:        _giRec('kpi-desal-ofertados'),
+    desal_vendidos:         _giRec('kpi-desal-vendidos'),
+    clientes_insatisfechos: _recKpiState.clientes_insatisfechos || 'no',
+    clientes_num:           _recKpiState.clientes_num,
+    lead_pendiente:         _recKpiState.lead_pendiente || 'no',
+    lead_desc:              _recKpiState.lead_desc || '',
+    lead_resp:              _recKpiState.lead_resp || '',
+    lead_fecha:             _recKpiState.lead_fecha || ''
+  };
+
   closeRecKpiModal();
   // BUG-01 FIX: guardar turno PRIMERO, luego ventas cross-sell, luego abrir caja
   _doSaveTurno().then(function() {
+    window._recepKpiState = null; // limpiar tras guardar (ya persistido en el turno)
     _saveRecepcionVentas(window._lastSavedShiftId).then(function(){
       openRecCajaChoice();
     });
