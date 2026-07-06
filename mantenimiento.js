@@ -1,12 +1,12 @@
 // ════════════════════════════════════════════════════════════════════════
-// MANTENIMIENTO — Tablero Kanban del departamento de Mantenimiento
+// KANBAN TAREAS — Tablero Kanban del departamento de Mantenimiento
 // ────────────────────────────────────────────────────────────────────────
 // Función: ejecutar las tareas que otros departamentos asignan a Mantenimiento.
 // Reutiliza la tabla `tareas` (NO crea tabla nueva). Filtra dept_destino='Mantenimiento'.
-// Columnas por PLANIFICACIÓN (no por estado): A planificar · Hoy · Mañana ·
-// Próxima semana · Hecho. La columna `planificacion` es independiente de `estado`.
+// Columnas por PRIORIDAD MANUAL (drag-drop): Pendiente · Urgente hoy · Urgente mañana ·
+// Planificado · Hecho. La columna `planificacion` es independiente de `estado`.
 //   - Mover entre las 4 primeras columnas → cambia `planificacion`.
-//     Si la tarea estaba Abierta y se mueve a Hoy/Mañana/Próxima → pasa a En proceso.
+//     Si la tarea estaba Abierta y se mueve a Urgente hoy/mañana/Planificado → pasa a En proceso.
 //   - Soltar en "Hecho" → cierra la tarea por completo (estado='Cerrada').
 // Permisos: solo área Mantenimiento (+ admin) ve, mueve y cierra estas tareas.
 //
@@ -15,11 +15,11 @@
 // ════════════════════════════════════════════════════════════════════════
 
 var MANT_PLAN_COLS = [
-  { key: 'a_planificar', label: 'A planificar', icon: '📥', accent: '#64748b' },
-  { key: 'hoy',          label: 'Hoy',          icon: '📌', accent: '#ef4444' },
-  { key: 'manana',       label: 'Mañana',       icon: '📅', accent: '#f59e0b' },
-  { key: 'proxima',      label: 'Próxima semana',icon: '🗓', accent: '#3b82f6' },
-  { key: 'hecho',        label: 'Hecho',        icon: '✅', accent: '#22c55e' }
+  { key: 'a_planificar', label: 'Pendiente',       icon: '📥', accent: '#64748b' },
+  { key: 'hoy',          label: 'Urgente hoy',     icon: '🔴', accent: '#ef4444' },
+  { key: 'manana',       label: 'Urgente mañana',  icon: '🟡', accent: '#f59e0b' },
+  { key: 'proxima',      label: 'Planificado',     icon: '🗓', accent: '#3b82f6' },
+  { key: 'hecho',        label: 'Hecho',           icon: '✅', accent: '#22c55e' }
 ];
 
 // Drag state (id de la tarea arrastrada)
