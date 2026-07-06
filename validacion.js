@@ -508,6 +508,8 @@ function _valTabStyleInactive(btn){
 }
 
 function switchValTab(tab) {
+  // Contable: solo puede estar en la pestaña de Caja
+  if(typeof isContable==='function' && isContable(currentUser)) tab = 'caja';
   var followupDiv  = document.getElementById('val-content-followup');
   var operativoDiv = document.getElementById('val-content-operativo');
   var cajaDiv      = document.getElementById('val-content-caja');
@@ -579,6 +581,16 @@ function switchValTab(tab) {
     renderValidacion();
   }
 }
+
+// ── CONTABLE: ocultar todas las pestañas de Validación salvo Caja ──
+function _updateContableTabLock(){
+  if(typeof isContable!=='function' || !isContable(currentUser)) return;
+  ['val-tab-followup','val-tab-operativo','val-tab-hypoxic','val-tab-merma','val-tab-notas','val-tab-fio'].forEach(function(id){
+    var b=document.getElementById(id); if(b) b.style.display='none';
+  });
+  var c=document.getElementById('val-tab-caja'); if(c) c.style.display='';
+}
+window._updateContableTabLock = _updateContableTabLock;
 
 // ── HYPOXIC ROOM TAB CONTENT ──
 async function renderValHypoxicList(){
@@ -762,8 +774,9 @@ async function renderValCajaRecepcion(deptArg) {
   if(!block || !el) return;
 
   var isAdminU  = currentUser && currentUser.rol === 'admin';
+  var _esContable = typeof isContable==='function' && isContable(currentUser);
   var canValRec = (typeof canValidateDepartment==='function') && canValidateDepartment(currentUser,'Recepción');
-  if(!isAdminU && !canValRec){ block.style.display = 'none'; return; }
+  if(!isAdminU && !canValRec && !_esContable){ block.style.display = 'none'; return; }
 
   // Regla de departamento: mostrar solo cuando dept = Recepción o Todos (vacío)
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
@@ -794,7 +807,7 @@ async function renderValCajaRecepcion(deptArg) {
   }
 
   var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Recepcionista</th>'
-    + '<th>Fondo recibido</th><th>Retiro</th><th>Fondo traspasado</th><th>Δ Total</th>'
+    + '<th>Fondo recibido</th><th>Retiro</th><th>Fondo traspasado</th><th>TRJ TPV</th><th>Efectivo</th><th>Δ Total</th>'
     + '<th>Estado</th><th>Acción</th></tr>';
 
   rows.forEach(function(r){
@@ -812,7 +825,7 @@ async function renderValCajaRecepcion(deptArg) {
 
     var acciones = '<div style="display:flex;flex-direction:column;gap:4px;">'
       + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
-      + (estado !== 'reabierto' ? '<button class="btn btn-warn btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">↩ Reabrir</button>' : '')
+      + (estado !== 'reabierto' && !_esContable ? '<button class="btn btn-warn btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">↩ Reabrir</button>' : '')
       + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaRec(\''+r.id+'\')">🗑 Eliminar</button>' : '')
       + '</div>';
 
@@ -824,6 +837,8 @@ async function renderValCajaRecepcion(deptArg) {
       + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_recibido)||0).toFixed(2) + '€</td>'
       + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.retiro_caja_fuerte)||0).toFixed(2) + '€</td>'
       + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_real_a_traspasar)||0).toFixed(2) + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.tpv_real)||0).toFixed(2) + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.cash_real)||0).toFixed(2) + '€</td>'
       + '<td style="font-family:var(--font-mono);font-weight:700;color:' + difColor + '">' + (dif >= 0 ? '+' : '') + dif.toFixed(2) + '€</td>'
       + '<td>' + estadoBadge + '</td>'
       + '<td style="white-space:nowrap">' + acciones + '</td>'
@@ -842,7 +857,8 @@ async function renderValCajaLab(deptArg){
   if(!block || !el) return;
   var isAdminU  = currentUser && currentUser.rol === 'admin';
   var isValidador = (typeof canValidateDepartment==='function') && canValidateDepartment(currentUser,'SYNCROLAB');
-  if(!isAdminU && !isValidador){ block.style.display = 'none'; return; }
+  var _esContableLab = typeof isContable==='function' && isContable(currentUser);
+  if(!isAdminU && !isValidador && !_esContableLab){ block.style.display = 'none'; return; }
   // Regla dept: admin ve siempre; coordinadora solo en contexto SYNCROLAB
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
   if(!isAdminU && dept && dept.indexOf('SYNCROLAB') === -1 && dept !== 'Recepción SYNCROLAB'){ block.style.display = 'none'; return; }

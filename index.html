@@ -2372,6 +2372,9 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <option>Administración</option><option>Friegue</option>
       </select>
       <div class="fg sp2"><label>Puesto <span class="req">*</span> <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— el área se asigna automáticamente</span></label><select id="emp-puesto" onchange="_syncAreaFromPuesto()">
+  <optgroup label="F&amp;B (superior de Cocina y Sala)">
+    <option>F&amp;B Manager</option>
+  </optgroup>
   <optgroup label="Cocina">
     <option>Jefe de Cocina</option>
     <option>Segundo Jefe de Cocina</option>
@@ -2417,9 +2420,10 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <option>Entrenador(a)</option>
     <option>Fisioterapeuta</option>
   </optgroup>
-  <optgroup label="Dirección / F&amp;B">
-    <option>F&amp;B Manager</option>
+  <optgroup label="Dirección">
     <option>Administrador</option>
+    <option>Adjunto Directivo</option>
+    <option>Contable</option>
     <option>Responsable</option>
   </optgroup>
 </select></div>
@@ -2450,6 +2454,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <option value="jefe">Jefe / Coordinador</option>
         <option value="adjunto">Adjunto Directivo / RRHH</option>
         <option value="admin">Administrador</option>
+        <option value="contable">Contable</option>
       </select></div>
       <div class="fg sp2"><label>Observaciones</label><textarea id="emp-obs" rows="2"></textarea></div>
     </div>

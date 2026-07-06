@@ -283,6 +283,8 @@ function isAdmin(user){ return !!user && user.rol==='admin'; }
 function isAdjuntoDirectivo(user){ return !!user && (user.rol==='adjunto' || user.rol==='adjunto_directivo'); }
 // Quién puede hacer cosas de admin operativo (todo salvo gestionar al usuario admin):
 function canActAsAdmin(user){ return isAdmin(user) || isAdjuntoDirectivo(user); }
+// Contable: solo lectura de cierres de caja + dashboard. No valida, no es jefe ni admin.
+function isContable(user){ return !!user && user.rol==='contable'; }
 // Quién puede gestionar usuarios con rol=admin (solo el propio admin):
 function canManageAdminUsers(user){ return isAdmin(user); }
 function isSupervisor(user){ return !!user && (user.rol==='jefe' || Object.prototype.hasOwnProperty.call(SUPERVISOR_DEPT_MAP,user.rol)); }
@@ -550,6 +552,14 @@ function getScreens(rol){
       ITEMS.dashboard,
       ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.informes
     ];
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // CONTABLE — solo cierres de caja (Validación · pestaña Caja) + Dashboard
+  // Entra a los cierres pero NO valida (read-only, ver validacion.js)
+  // ════════════════════════════════════════════════════════════════
+  if(rol === 'contable'){
+    return [ ITEMS.validacion, ITEMS.dashboard ];
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -838,8 +848,9 @@ async function showScreen(id){
   if(id==='tareas'){ renderTareas(); }
   if(id==='validacion'){
     initValDeptFilter();
-    var _startTab = (currentUser && currentUser.rol==='coord_recepcion_syncrolab') ? 'caja' : 'followup';
+    var _startTab = (currentUser && (currentUser.rol==='coord_recepcion_syncrolab' || currentUser.rol==='contable')) ? 'caja' : 'followup';
     switchValTab(_startTab);
+    if(typeof _updateContableTabLock==='function') _updateContableTabLock();
   }
   if(id==='dashboard'){
     // Show dept filter for admin/fb
@@ -3304,7 +3315,8 @@ var PUESTO_AREA_MAP = {
   'Housekeeping':['Gobernanta','Subgobernanta','Camarero de pisos','Camarera de pisos','Ayudante camarero de pisos','Ayudante camarera de pisos','Lavandería'],
   'Mantenimiento':['Jefe de Mantenimiento','Técnico'],
   'SYNCROLAB':['Club Manager','Coordinador(a) de Atención al Cliente','Coordinador(a) de Entrenadores','Coordinador(a) de Fisioterapeutas','Atención al Cliente','Entrenador(a)','Fisioterapeuta'],
-  'Administración':['F&B Manager','Administrador','Responsable']
+  'F&B':['F&B Manager'],
+  'Administración':['Administrador','Responsable','Adjunto Directivo','Contable']
 };
 function _getAreaFromPuesto(puesto){
   var p=(puesto||'').trim();
@@ -3496,8 +3508,9 @@ function _aplicarRestriccionesModalEmp(){
         'housekeeping':       'housekeeping',
         'mantenimiento':      'mantenimiento',
         'syncrolab':          'syncrolab',
-        'dirección / f&b':    'administración',
-        'direccion / f&b':    'administración'
+        'dirección':          'administración',
+        'direccion':          'administración',
+        'f&b (superior de cocina y sala)': 'f&b'
       };
       grupos.forEach(function(og){
         var lbl = (og.getAttribute('label')||'').toLowerCase();
