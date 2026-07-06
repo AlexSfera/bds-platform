@@ -2633,6 +2633,9 @@ async function openValidarModal(shiftId){
       }) || null;
     } catch(e){ recKpiRow = null; }
   }
+  // Cross-selling: líneas de recepcion_ventas de este turno (detalle + incentivo)
+  var recVentas = [];
+  try { recVentas = (await getDB('recepcion_ventas')).filter(function(v){ return v.shift_id===shiftId; }); } catch(e){ recVentas = []; }
   document.getElementById('mv-title').textContent=`${formatDisplayValue(s.nombre)} — ${fmtDateTs(s.fecha,s.created_at)} — ${formatServiceOrTurn(s.servicio)}`;
   // ── BUILD FULL SHIFT DETAIL FOR SUPERVISOR ──
   var info = '';
@@ -2751,6 +2754,68 @@ async function openValidarModal(shiftId){
         info += '<div style="background:var(--bg);border:1px solid var(--green);border-radius:8px;padding:12px;margin-bottom:10px;">'
           +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:8px;">KPI · HOUSEKEEPING</div>'
           +hkHtml+'</div>';
+      }
+    }
+
+    // ── ENTRENADORES: shifts.kpi_entrenador (JSON autodeclarado por el empleado) ──
+    // Se pinta siempre que el turno tenga kpi_entrenador, sin depender de area/puesto
+    // (los entrenadores comparten area='SYNCROLAB' con Recepción SYNCROLAB).
+    if(s.kpi_entrenador){
+      var _kEntr = null;
+      try { _kEntr = JSON.parse(s.kpi_entrenador); } catch(e){ _kEntr = null; }
+      if(_kEntr){
+        var CAMPOS_ENTR = [
+          ['dir_efectiva','📢 Clases dirigidas efectivas'],
+          ['dir_no_efectiva','📢 Clases dirigidas NO efectivas'],
+          ['pt','🏋 PT individuales'],
+          ['pt_duo','🏋 PT DUO'],
+          ['pt_30','🏋 PT 30 min'],
+          ['val_funcional','📊 Valoraciones funcionales'],
+          ['visbody','📊 Valoraciones Visbody'],
+          ['banera_hielo','🧊 Bañeras de hielo']
+        ];
+        var _entrHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:13px;">';
+        var _totEntr = 0;
+        CAMPOS_ENTR.forEach(function(p){
+          var v = parseInt(_kEntr[p[0]])||0; _totEntr += v;
+          var col = v>0 ? 'var(--text)' : 'var(--text3)';
+          _entrHtml += '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);">'
+            +'<span style="color:'+col+';">'+p[1]+'</span>'
+            +'<strong style="font-family:var(--font-mono);color:'+col+';">'+v+'</strong></div>';
+        });
+        _entrHtml += '</div><div style="margin-top:8px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:6px;">'
+          +'Total autodeclarado: <strong style="color:var(--text);font-family:var(--font-mono);">'+_totEntr+'</strong> '
+          +'· <em>El incentivo oficial se calcula con VirtuGym (Informes → Entrenadores).</em></div>';
+        info += '<div style="background:var(--bg);border:1px solid #8b5cf6;border-radius:8px;padding:12px;margin-bottom:10px;">'
+          +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">KPI · ENTRENADORES · autocontrol de actividad</div>'
+          +_entrHtml+'</div>';
+      }
+    }
+
+    // ── CROSS-SELLING (Recepción): detalle línea a línea de recepcion_ventas ──
+    if(/recep/i.test(_area)){
+      var TIPO_LABEL_RV = {desayuno:'🌅 Desayuno', comida_cena:'🍽️ Comida/Cena', syncrolab:'💪 SYNCROLAB'};
+      var _ivaRV = function(t){ return t==='syncrolab' ? 1.21 : 1.10; };
+      if(recVentas && recVentas.length>0){
+        var _totIncRV = 0;
+        recVentas.forEach(function(v){ _totIncRV += (parseFloat(v.importe||0)) / _ivaRV(v.tipo_venta) * 0.10; });
+        var _rvHtml = '<div class="tbl-wrap"><table style="font-size:12px;width:100%;">'
+          +'<tr style="color:var(--text3);"><th style="text-align:left;padding:4px 8px;">Tipo</th><th style="text-align:right;padding:4px 8px;">Bruto</th><th style="text-align:right;padding:4px 8px;">Neto</th><th style="text-align:right;padding:4px 8px;">Incentivo</th><th style="text-align:left;padding:4px 8px;">MEWS ref</th></tr>';
+        recVentas.forEach(function(v){
+          var b = parseFloat(v.importe||0); var n = b / _ivaRV(v.tipo_venta); var inc = n * 0.10;
+          _rvHtml += '<tr style="border-top:1px solid var(--border);">'
+            +'<td style="padding:4px 8px;">'+(TIPO_LABEL_RV[v.tipo_venta]||v.tipo_venta)+(v.servicio_detalle?' · <span style="color:var(--text3);">'+v.servicio_detalle+'</span>':'')+'</td>'
+            +'<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">'+b.toFixed(2)+'€</td>'
+            +'<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--text2);">'+n.toFixed(2)+'€</td>'
+            +'<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--green);">+'+inc.toFixed(2)+'€</td>'
+            +'<td style="padding:4px 8px;color:var(--text3);">'+(v.reserva_mews||'—')+'</td></tr>';
+        });
+        _rvHtml += '</table></div>';
+        info += '<div style="background:var(--bg);border:1px solid var(--green);border-radius:8px;padding:12px;margin-bottom:10px;">'
+          +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:8px;">CROSS-SELLING ('+recVentas.length+' venta(s) · incentivo estimado '+_totIncRV.toFixed(2)+'€)</div>'
+          +_rvHtml+'</div>';
+      } else {
+        info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">Cross-selling: sin ventas registradas en este turno</div>';
       }
     }
   })();
