@@ -1291,12 +1291,21 @@ function clearTurnoForm(){
     if(el.tagName==='SELECT') el.value=''; else el.value=el.type==='date'?today():'';
   });
   const fechaInput = document.getElementById('t-fecha');
-  if(fechaInput) fechaInput.value=today();
+  // FIX-CENA-MEDIANOCHE: turnos nocturnos que cruzan medianoche usan fecha = ayer
+  // Sala: Cena hasta las 2 AM · Recepción: Noche hasta las 7 AM
+  var _fechaTurno = today();
+  var _hNow = (new Date()).getHours();
+  var _areaNow = currentUser ? String(currentUser.area||'') : '';
+  if((_areaNow === 'Sala' && _hNow < 2) || (_areaNow === 'Recepción' && _hNow < 7)){
+    var _ayerD = getDateOnly(new Date()); _ayerD.setDate(_ayerD.getDate()-1);
+    _fechaTurno = toYMD(_ayerD);
+  }
+  if(fechaInput) fechaInput.value=_fechaTurno;
   // Fix Jun 2026: bloquear fecha para todos salvo admin (antes solo empleado).
   var _esAdminCF = currentUser && currentUser.rol === 'admin';
   if(fechaInput && !_esAdminCF && !editingShiftId){
-    fechaInput.min = today();
-    fechaInput.max = today();
+    fechaInput.min = _fechaTurno;
+    fechaInput.max = _fechaTurno;
     fechaInput.setAttribute('readonly','readonly');
     fechaInput.setAttribute('tabindex','-1');
     fechaInput.style.pointerEvents = 'none';
@@ -1380,7 +1389,15 @@ async function _doSaveTurno(){
   // Fix Jun 2026: si fecha llega vacía (input borrado por jefe/coord, navegador
   // que ignora readonly, etc.) se usa today() como defensa.
   var fecha    = document.getElementById('t-fecha').value;
-  if(!fecha){ fecha = today(); }
+  if(!fecha){
+    // FIX-CENA-MEDIANOCHE: fallback nocturno — Sala < 2h, Recepción < 7h
+    fecha = today();
+    var _hF = (new Date()).getHours();
+    var _aF = currentUser ? String(currentUser.area||'') : '';
+    if((_aF === 'Sala' && _hF < 2) || (_aF === 'Recepción' && _hF < 7)){
+      var _fd = getDateOnly(new Date()); _fd.setDate(_fd.getDate()-1); fecha = toYMD(_fd);
+    }
+  }
   var _isRecSave = currentUser && currentUser.area === 'Recepción';
   const servicio = _isRecSave ? getRecTurnoValue() : getServicioValue();
   const horas    = parseFloat(document.getElementById('t-horas').value)||0;

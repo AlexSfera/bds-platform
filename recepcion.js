@@ -228,6 +228,18 @@
 // ── TABLA CORRECTA ──
 var REC_TABLE = 'recepcion_cash';
 
+// ── FECHA OPERATIVA RECEPCIÓN ─────────────────────────────────────────────
+// Turno de Noche empieza a las 23:00, termina a las 07:00 del día siguiente.
+// Si hora actual < 07:00, la fecha operativa es "ayer" (turno del día anterior).
+function _recFechaOperativa(){
+  var now = new Date();
+  if(now.getHours() < 7){
+    var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    return toYMD(ayer);
+  }
+  return today();
+}
+
 function getRecTurnoValue() {
   var sel = document.querySelector('input[name="rec-turno"]:checked');
   return sel ? sel.value : '';
@@ -572,7 +584,7 @@ async function submitRecCaja() {
     try { _turnosHoyCheck = await getDB('shifts'); } catch(e_hg){ _turnosHoyCheck = []; }
     var _turnoHoyBD = (_turnosHoyCheck||[]).find(function(s){
       return s.employee_id === currentUser.id
-        && (s.fecha||'').slice(0,10) === today()
+        && (s.fecha||'').slice(0,10) === _recFechaOperativa()
         && (s.estado === 'Pendiente' || s.estado === 'En corrección');
     });
     if(_turnoHoyBD){
@@ -664,7 +676,7 @@ async function submitRecCaja() {
   }
 
   var ts    = localTs();
-  var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : today();
+  var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : _recFechaOperativa();
 
   // BUG-16 FIX: nombres de columnas reales de recepcion_cash
   var record = {
@@ -772,7 +784,7 @@ async function renderRecepcionCajaList() {
   try { rows = await getDB(REC_TABLE); } catch(e){ rows = []; }
 
   // Filtro por periodo
-  var t = today(), sw = startOfWeek(), sm = startOfMonth();
+  var t = _recFechaOperativa(), sw = startOfWeek(), sm = startOfMonth();
   if(periodo === 'hoy')    rows = rows.filter(function(r){ return r.fecha === t; });
   else if(periodo === 'semana') rows = rows.filter(function(r){ return r.fecha >= sw; });
   else if(periodo === 'mes')    rows = rows.filter(function(r){ return r.fecha >= sm; });
@@ -855,7 +867,7 @@ async function renderRecepcionDashboard() {
   var rows = [];
   try { rows = await getDB(REC_TABLE); } catch(e){ rows = []; }
 
-  var t = today(), sw = startOfWeek(), sm = startOfMonth();
+  var t = _recFechaOperativa(), sw = startOfWeek(), sm = startOfMonth();
   if(periodo === 'hoy')    rows = rows.filter(function(r){ return r.fecha === t; });
   else if(periodo === 'semana') rows = rows.filter(function(r){ return r.fecha >= sw; });
   else if(periodo === 'mes')    rows = rows.filter(function(r){ return r.fecha >= sm; });
@@ -962,7 +974,7 @@ async function _saveRecepcionVentas(shiftId) {
   // importe (bruto con IVA), reserva_mews, servicio_detalle,
   // departamento_relacionado, created_at, comentario
   if(!currentUser || !shiftId){ console.warn('[REC_VENTAS] abortado — currentUser:',!!currentUser,'shiftId:',shiftId); return; }
-  var fecha = (document.getElementById('t-fecha')||{}).value || today();
+  var fecha = (document.getElementById('t-fecha')||{}).value || _recFechaOperativa();
   var ts    = localTs();
   var filas = [];
 
@@ -1258,7 +1270,7 @@ async function lockRecTurnoIfCajaToday() {
   if(!currentUser) return;
   var rows = [];
   try { rows = await getDB(REC_TABLE); } catch(e){ return; }
-  var t = today();
+  var t = _recFechaOperativa();
   var mine = rows.find(function(r){
     return r.fecha === t && (r.responsable_id === currentUser.id || r.usuario_id === currentUser.id);
   });
@@ -1287,7 +1299,7 @@ async function lockRecTurnoIfCajaToday() {
 async function getRecOpToday(turno) {
   var rows = [];
   try { rows = await getDB(REC_TABLE); } catch(e){ rows = []; }
-  var t = today();
+  var t = _recFechaOperativa();
   return rows.find(function(r){ return r.fecha === t && r.turno === turno; }) || null;
 }
 
@@ -1648,7 +1660,7 @@ async function submitRecTraspaso() {
 
   var ts    = localTs();
   var fecha = document.getElementById('t-fecha') && document.getElementById('t-fecha').value
-            ? document.getElementById('t-fecha').value : today();
+            ? document.getElementById('t-fecha').value : _recFechaOperativa();
 
   var record = {
     id:                      _recTraspasoEditId || genId(),

@@ -260,6 +260,18 @@
 </div>`;
 })();
 
+// ── FECHA OPERATIVA SALA ──────────────────────────────────────────────────
+// Cena puede pasar de medianoche. Si hora actual < 02:00, la fecha operativa
+// es "ayer" (el servicio de Cena del día anterior). Margen: hasta las 2 AM.
+function _salaFechaOperativa(){
+  var now = new Date();
+  if(now.getHours() < 2){
+    var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    return toYMD(ayer);
+  }
+  return today();
+}
+
 function initCajaForm() {
   renderCajaList();
 }
@@ -269,7 +281,7 @@ function openCajaForm(existingId) {
   var title = document.getElementById('caja-form-title');
   if(title) title.textContent = existingId ? 'Editar Cierre de Caja' : 'Nuevo Cierre de Caja';
   var fechaEl = document.getElementById('caja-fecha');
-  if(fechaEl) fechaEl.value = today();
+  if(fechaEl) fechaEl.value = _salaFechaOperativa();
   var respEl = document.getElementById('caja-responsable');
   if(respEl){
     respEl.value = currentUser.nombre + ' — ' + currentUser.puesto;
@@ -291,7 +303,7 @@ function openCajaForm(existingId) {
   if(!existingId){
     invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
-      var t = today();
+      var t = _salaFechaOperativa();
       // 1. Último traspaso del mismo día
       var traspasoHoy = rows
         .filter(function(r){
@@ -479,7 +491,7 @@ function getCajaServicios() {
 }
 
 async function saveCajaForm() {
-  var fecha = (document.getElementById('caja-fecha')||{}).value||today();
+  var fecha = (document.getElementById('caja-fecha')||{}).value||_salaFechaOperativa();
   var servicios = _cierreServicios();
   // CAJA-V2: una operación por servicio+fecha (admin exento, edición exenta)
   if(!_editingCajaId && currentUser.rol !== 'admin' && servicios.length){
@@ -631,7 +643,7 @@ async function renderCajaList() {
       data = data.filter(function(c){ return c.responsable_id===currentUser.id||c.responsable_nombre===currentUser.nombre; });
     }
     var filter = (document.getElementById('caja-filter-date')||{}).value||'hoy';
-    var today2 = today();
+    var today2 = _salaFechaOperativa();
     data = data.filter(function(c){
       if(filter==='hoy') return c.fecha === today2;
       if(filter==='semana') return c.fecha >= startOfWeek();
@@ -880,7 +892,7 @@ async function renderValCajaList() {
   try {
     var data = await dbGetAll('sala_cash_closures');
     var periodo = (document.getElementById('val-caja-periodo')||{}).value||'hoy';
-    var t = today();
+    var t = _salaFechaOperativa();
     data = data.filter(function(c){
       if(periodo==='hoy') return c.fecha===t;
       if(periodo==='semana') return c.fecha>=startOfWeek();
@@ -1130,7 +1142,7 @@ async function lockSalaServIfCajaToday() {
   if(!currentUser) return;
   var rows = [];
   try { rows = await dbGetAll('sala_cash_closures'); } catch(e){ return; }
-  var t = today();
+  var t = _salaFechaOperativa();
   var mine = rows.find(function(r){ return r.fecha === t && r.responsable_id === currentUser.id; });
   if(!mine) return;
   var servs = [];
@@ -1162,7 +1174,7 @@ function getSalaTurnoServicio() {
 async function getSalaOpToday(servicio) {
   var rows = [];
   try { rows = await dbGetAll('sala_cash_closures'); } catch(e){ rows = []; }
-  var t = today();
+  var t = _salaFechaOperativa();
   return rows.find(function(r){
     if(r.fecha !== t) return false;
     var servs = [];
@@ -1330,7 +1342,7 @@ function openSalaTraspasoModal(existingId) {
     if(label) label.textContent = _salaTipoServ || '—';
     invalidateCache('sala_cash_closures');
     dbGetAll('sala_cash_closures').then(function(rows){
-      var t = today();
+      var t = _salaFechaOperativa();
       // FIX-FONDO-TRASPASO: fondo_recibido = fondo_final del último CIERRE del día anterior
       // No tomar traspasos anteriores ni registros del mismo día
       var cierreAnterior = rows
@@ -1432,7 +1444,7 @@ async function submitSalaTraspaso() {
   var ts = localTs();
   var record = {
     id: _salaTraspasoEditId || genId(),
-    fecha: today(),
+    fecha: _salaFechaOperativa(),
     servicios: JSON.stringify([serv]),
     tipo: 'traspaso',
     responsable_id: currentUser.id,
