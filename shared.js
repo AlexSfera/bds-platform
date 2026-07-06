@@ -1851,7 +1851,10 @@ function saveTurno(){
   var _isSalaUser = currentUser && currentUser.area === 'Sala';
   var _isHKUser = currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza');
   var _isLabUser = currentUser && /syncrolab|entrenador|fisioterapeuta/i.test(currentUser.area||'');
-  if(!_isSalaUser && !_isRecepcion && !_isHKUser && !_isLabUser){
+  // Admin/adjunto puede cerrar turnos de Cocina SIN declarar merma (datos aún por cargar).
+  // El jefe NO es canActAsAdmin → sigue obligado a declarar merma (mismo rol de cierre).
+  var _isAdminUser = typeof canActAsAdmin==='function' && canActAsAdmin(currentUser);
+  if(!_isSalaUser && !_isRecepcion && !_isHKUser && !_isLabUser && !_isAdminUser){
     if(!sinMermaFlag&&mermaRows.length===0) errs.push('Declara merma o marca Sin merma');
     const mermaDataCheck=collectMerma();
     mermaDataCheck.forEach(function(m,i){if(!m.producto)errs.push('Merma #'+(i+1)+': producto');if(!m.cantidad||m.cantidad<=0)errs.push('Merma #'+(i+1)+': cantidad');if(!m.causa)errs.push('Merma #'+(i+1)+': causa');});
