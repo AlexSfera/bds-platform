@@ -687,7 +687,7 @@ async function renderValCajaList() {
     var _totalRaw = data.length;
     var _lastFecha = _totalRaw > 0 ? (data.slice().sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');})[0].fecha || '—') : '—';
     var periodo = (document.getElementById('val-caja-periodo')||{}).value||'semana';
-    var t = today();
+    var t = (typeof _salaFechaOperativa === 'function') ? _salaFechaOperativa() : today();
     data = data.filter(function(c){
       if(periodo==='hoy') return c.fecha===t;
       if(periodo==='semana') return c.fecha>=startOfWeek();
@@ -777,7 +777,7 @@ async function renderValCajaRecepcion(deptArg) {
   try { rows = await getDB('recepcion_cash'); } catch(e){ rows = []; }
 
   var periodo = (document.getElementById('val-caja-periodo')||{value:'semana'}).value || 'semana';
-  var t = today();
+  var t = (typeof _recFechaOperativa === 'function') ? _recFechaOperativa() : today();
   rows = rows.filter(function(r){
     if(periodo === 'hoy')    return r.fecha === t;
     if(periodo === 'semana') return r.fecha >= startOfWeek();
@@ -1482,7 +1482,7 @@ async function renderValAjustes(deptArg){
   block.style.display='block';
   el.innerHTML='<div class="empty"><div class="empty-text">Cargando...</div></div>';
   var periodo=(document.getElementById('val-caja-periodo')||{value:'semana'}).value||'semana';
-  var t=today();
+  var t=(typeof _salaFechaOperativa === 'function') ? _salaFechaOperativa() : today();
   var rows=[];
   try{ rows=await getDB('ajustes'); }catch(e){ rows=[]; }
   rows=rows.filter(function(r){

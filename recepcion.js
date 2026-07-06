@@ -486,9 +486,8 @@ function openRecCajaModal(existingId) {
       set('rec-dif-accion',        row.accion_diferencia);
       calcRecDifs();
 
-      // Readonly: jefe_recepcion puede leer siempre; edita solo si estado='reabierto'
-      // Admin y fb pueden editar siempre
-      var esAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol === 'fb');
+      // Readonly: admin/fb/jefe_recepcion pueden editar siempre; el resto solo si reabierto
+      var esAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol === 'fb' || currentUser.rol === 'jefe_recepcion');
       var estaReabierto = row.estado === 'reabierto';
       var soloLectura = !esAdmin && !estaReabierto;
 
@@ -573,30 +572,32 @@ function clearRecCajaImagen() {
 async function submitRecCaja() {
   var errs = [];
 
-  // ── Guard horas: solo bloquea si el turno NO fue guardado en esta sesión ──
-  // Bug: si el empleado navega entre pantallas tras guardar turno, el DOM queda
-  // vacío pero _lastSavedShiftId confirma que el turno ya pasó por _doSaveTurno().
-  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
-  var _turnoYaGuardado = !!window._lastSavedShiftId;
-  if(!_turnoYaGuardado && (!_horasTrab || _horasTrab <= 0)){
-    // Fallback: buscar en BD si hay turno pendiente de hoy (flujo sidebar directo)
-    var _turnosHoyCheck = [];
-    try { _turnosHoyCheck = await getDB('shifts'); } catch(e_hg){ _turnosHoyCheck = []; }
-    var _turnoHoyBD = (_turnosHoyCheck||[]).find(function(s){
-      return s.employee_id === currentUser.id
-        && (s.fecha||'').slice(0,10) === _recFechaOperativa()
-        && (s.estado === 'Pendiente' || s.estado === 'En corrección');
-    });
-    if(_turnoHoyBD){
-      window._lastSavedShiftId = _turnoHoyBD.id;
-    } else {
-      var _msg = '⚠ Horas trabajadas obligatorias. Declara las horas en el formulario de turno antes de cerrar caja.';
-      var _errEl = document.getElementById('rec-caja-err');
-      if(_errEl){ _errEl.textContent = _msg; _errEl.style.display='block'; }
-      toast(_msg, 'err');
-      var _ti = document.getElementById('t-horas');
-      if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
-      return;
+  // ── Guard horas: SOLO para cierres nuevos (no edición/corrección) ──
+  // Cuando un jefe o admin corrige un cierre existente desde Validación,
+  // no están en Mi Turno → t-horas está vacío. Exigir horas bloquea la corrección.
+  if(!_recCajaEditId){
+    var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
+    var _turnoYaGuardado = !!window._lastSavedShiftId;
+    if(!_turnoYaGuardado && (!_horasTrab || _horasTrab <= 0)){
+      // Fallback: buscar en BD si hay turno pendiente de hoy (flujo sidebar directo)
+      var _turnosHoyCheck = [];
+      try { _turnosHoyCheck = await getDB('shifts'); } catch(e_hg){ _turnosHoyCheck = []; }
+      var _turnoHoyBD = (_turnosHoyCheck||[]).find(function(s){
+        return s.employee_id === currentUser.id
+          && (s.fecha||'').slice(0,10) === _recFechaOperativa()
+          && (s.estado === 'Pendiente' || s.estado === 'En corrección');
+      });
+      if(_turnoHoyBD){
+        window._lastSavedShiftId = _turnoHoyBD.id;
+      } else {
+        var _msg = '⚠ Horas trabajadas obligatorias. Declara las horas en el formulario de turno antes de cerrar caja.';
+        var _errEl = document.getElementById('rec-caja-err');
+        if(_errEl){ _errEl.textContent = _msg; _errEl.style.display='block'; }
+        toast(_msg, 'err');
+        var _ti = document.getElementById('t-horas');
+        if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+        return;
+      }
     }
   }
 
@@ -828,6 +829,8 @@ async function renderRecepcionCajaList() {
     var verFn    = esTraspaso ? 'openRecTraspasoModal' : 'openRecCajaModal';
     var verViewFn = esTraspaso ? 'openRecTraspasoValView' : 'openRecCajaValView';
     var acciones = '<button class="btn btn-secondary btn-sm" onclick="'+verViewFn+'(\''+r.id+'\')"  >Ver</button>';
+    if(isAdminU || isJefeRec)
+      acciones += ' <button class="btn btn-primary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">✏ Editar</button>';
     if(canReopen && estado !== 'reabierto')
       acciones += ' <button class="btn btn-secondary btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">Reabrir</button>';
     if(isAdminU)
