@@ -883,11 +883,16 @@ async function renderValCajaLab(deptArg){
   var allCharges = [];
   try { allCharges = await getDB('syncrolab_room_charges'); } catch(e){ allCharges = []; }
 
-  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Responsable</th><th>Cargos MEWS</th><th>Δ Nubimed</th><th>Δ VirtuGym</th><th>Δ Total</th><th>Estado</th><th>Acción</th></tr>';
+  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Responsable</th><th>Fondo</th><th>Efectivo</th><th>Tarjeta</th><th>Cargos MEWS</th><th>Δ Nubimed</th><th>Δ VirtuGym</th><th>Δ Total</th><th>Estado</th><th>Acción</th></tr>';
   rows.forEach(function(r){
     var difN = parseFloat(r.diferencia_total_nubimed || 0);
     var difV = parseFloat(r.diferencia_total_virtugym || 0);
     var difT = parseFloat(r.diferencia_total_syncrolab || 0);
+    // Totales combinados Nubimed + VirtuGym
+    var fondoTotal    = (parseFloat(r.fondo_recibido_nubimed||0)) + (parseFloat(r.fondo_recibido_virtugym||0));
+    var efectivoTotal = (parseFloat(r.efectivo_nubimed_real||0))  + (parseFloat(r.efectivo_virtugym_real||0));
+    var tarjetaTotal  = (parseFloat(r.tarjeta_nubimed_real||0))   + (parseFloat(r.tarjeta_virtugym_real||0));
+    function mc(v){ return '<td style="font-family:var(--font-mono)">'+v.toFixed(2)+'€</td>'; }
     function dc(v){ return '<td style="font-family:var(--font-mono);color:'+(Math.abs(v)<0.01?'var(--green)':'var(--red)')+'">'+(v>=0?'+':'')+v.toFixed(2)+'€</td>'; }
     var esTraspaso = r.tipo === 'traspaso';
     var tipoBadge = esTraspaso
@@ -921,6 +926,7 @@ async function renderValCajaLab(deptArg){
       + '<td>' + (r.turno || '—') + '</td>'
       + '<td>' + tipoBadge + '</td>'
       + '<td style="font-weight:600">' + (r.responsable_nombre || '—') + '</td>'
+      + mc(fondoTotal) + mc(efectivoTotal) + mc(tarjetaTotal)
       + cargosCell
       + dc(difN) + dc(difV) + dc(difT)
       + '<td>' + estBadge + '</td>'
