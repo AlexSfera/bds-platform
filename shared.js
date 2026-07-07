@@ -2426,6 +2426,12 @@ function initValDeptFilter(){
   if(typeof isAdjuntoDirectivo==='function' && isAdjuntoDirectivo(currentUser)){
     sel.innerHTML=fullOpts; sel.value=''; sel.disabled=false; onValDeptChange(); return;
   }
+  // Contable: acceso a las 3 cajas (Sala, Recepción, Recepción SYNCROLAB), read-only
+  if(typeof isContable==='function' && isContable(currentUser)){
+    var cajaDepts=['Sala','Recepción','Recepción SYNCROLAB'];
+    sel.innerHTML='<option value="">Todas las cajas</option>'+cajaDepts.map(function(d){return '<option>'+d+'</option>';}).join('');
+    sel.value=''; sel.disabled=false; onValDeptChange(); return;
+  }
   // Jefe / coordinador: el selector SOLO ofrece sus departamentos (sin "Todos"); bloqueado si es uno.
   var opts=_jefeDeptOptions(currentUser);
   if(opts.length){
