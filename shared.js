@@ -3363,7 +3363,6 @@ async function renderMaestro(){
   if(csvBtn) csvBtn.style.display = isAdmin(currentUser) ? '' : 'none';
 
   var allEmps = (await getDB('employees'))
-    .filter(function(e){ return e.id !== 'E13'; })
     .filter(inMyScope);
   var employees = estadoFilt === '' ? allEmps : allEmps.filter(function(e){ return e.estado === estadoFilt; });
 
@@ -3473,6 +3472,7 @@ async function openEmpModal(empId){
     window._resetPinEmpId   = empId;
     window._resetPinEmpName = e.nombre;
     window._resetPinEmpEmail= e.email||'';
+    _renderEmpIpPanel(e);
   } else {
     document.getElementById('me-title').textContent='Nuevo Empleado';
     ['emp-nombre','emp-email','emp-pin','emp-coste','emp-obs'].forEach(function(id){var el=document.getElementById(id); if(el) el.value='';});
@@ -3484,6 +3484,7 @@ async function openEmpModal(empId){
     if(createDiv) createDiv.style.display='';
     if(statusDiv) statusDiv.style.display='none';
     window._resetPinEmpId=null; window._resetPinEmpName=''; window._resetPinEmpEmail='';
+    _renderEmpIpPanel(null);
   }
   _syncAreaFromPuesto();
 
@@ -3493,6 +3494,73 @@ async function openEmpModal(empId){
   _aplicarRestriccionesModalEmp();
 
   document.getElementById('modal-empleado').classList.add('open');
+}
+
+// ── IP AUTORIZADA (employee_ips) — solo admin/adjunto ──────────────────
+async function _renderEmpIpPanel(emp){
+  var modal = document.getElementById('modal-empleado');
+  if(!modal) return;
+  var panel = document.getElementById('emp-ip-panel');
+  if(!emp || !canActAsAdmin(currentUser)){ if(panel) panel.style.display='none'; return; }
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = 'emp-ip-panel';
+    panel.className = 'fg sp2';
+    var grid = modal.querySelector('.grid2');
+    if(grid) grid.appendChild(panel); else modal.querySelector('.modal').appendChild(panel);
+  }
+  panel.style.display='';
+  panel.innerHTML = '<label>IP AUTORIZADA <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— máx. 2 IPs · acceso al portal desde fuera del recinto</span></label>'
+    + '<div id="emp-ip-list" style="margin:6px 0;">Cargando…</div>'
+    + '<div style="display:flex;gap:8px;">'
+    +   '<input type="text" id="emp-ip-input" placeholder="Ej. 45.153.97.234" autocomplete="off" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;">'
+    +   '<button type="button" class="btn btn-secondary btn-sm" onclick="addEmpIp(\''+emp.id+'\',\''+String(emp.nombre||'').replace(/'/g,"\\'")+'\')">➕ Añadir IP</button>'
+    + '</div>';
+  _loadEmpIpList(emp.id);
+}
+async function _loadEmpIpList(empId){
+  var box = document.getElementById('emp-ip-list');
+  if(!box) return;
+  var rows = [];
+  try { rows = (await getDB('employee_ips')).filter(function(r){ return r.employee_id===empId && r.active!==false; }); } catch(e){}
+  if(!rows.length){ box.innerHTML = '<span style="font-size:12px;color:var(--text3);">Sin IP autorizada. Solo entra desde la red del recinto.</span>'; return; }
+  box.innerHTML = rows.map(function(r){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">'
+      + '<span style="font-family:var(--font-mono);font-size:12px;color:var(--text1);">'+r.ip+'</span>'
+      + (r.label?'<span style="font-size:11px;color:var(--text3);">'+r.label+'</span>':'')
+      + '<button type="button" class="btn btn-danger btn-sm" style="font-size:11px;margin-left:auto;" onclick="removeEmpIp(\''+r.id+'\',\''+empId+'\',\''+String(r.ip).replace(/'/g,"\\'")+'\')">Quitar</button>'
+      + '</div>';
+  }).join('');
+}
+async function addEmpIp(empId, empNombre){
+  if(!canActAsAdmin(currentUser)){ toast('Solo admin/adjunto gestiona IPs','err'); return; }
+  var inp = document.getElementById('emp-ip-input');
+  var ip = ((inp&&inp.value)||'').trim();
+  var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if(!m || m.slice(1).some(function(o){ return +o>255; })){ toast('IP no válida (formato x.x.x.x)','err'); return; }
+  // Máximo 2 IPs activas por empleado
+  var existing = (await getDB('employee_ips')).filter(function(r){ return r.employee_id===empId && r.active!==false; });
+  if(existing.length >= 2){ toast('Máximo 2 IPs por empleado. Quita una antes de añadir otra.','err'); return; }
+  var dup = existing.some(function(r){ return r.ip===ip; });
+  if(dup){ toast('Esa IP ya está autorizada','err'); return; }
+  var row = { id:genId(), employee_id:empId, nombre:empNombre||'', ip:ip, label:'', active:true, ts:localTs() };
+  var res = await dbInsert('employee_ips', row);
+  if(!res){ toast('Error al guardar IP — revisa el esquema de employee_ips','err'); return; }
+  await auditLog('EMP_IP_ADD', (empNombre||empId)+' → '+ip);
+  invalidateCache('employee_ips');
+  if(inp) inp.value='';
+  await _loadEmpIpList(empId);
+  toast('IP autorizada: '+ip,'ok');
+}
+async function removeEmpIp(rowId, empId, ip){
+  if(!canActAsAdmin(currentUser)){ toast('Solo admin/adjunto gestiona IPs','err'); return; }
+  if(!confirm('¿Quitar la IP '+ip+'? Dejará de poder entrar desde fuera del recinto con esa IP.')) return;
+  await auditLog('EMP_IP_REMOVE', empId+' → '+ip);
+  var res = await dbUpdate('employee_ips', rowId, { active:false });
+  if(!res){ toast('Error al quitar IP','err'); return; }
+  invalidateCache('employee_ips');
+  await _loadEmpIpList(empId);
+  toast('IP retirada','ok');
 }
 
 // Aplica restricciones visuales al modal según el rol del usuario actual
