@@ -3316,7 +3316,7 @@ var PUESTO_AREA_MAP = {
   'Mantenimiento':['Jefe de Mantenimiento','Técnico'],
   'SYNCROLAB':['Club Manager','Coordinador(a) de Atención al Cliente','Coordinador(a) de Entrenadores','Coordinador(a) de Fisioterapeutas','Atención al Cliente','Entrenador(a)','Fisioterapeuta'],
   'F&B':['F&B Manager'],
-  'Administración':['Administrador','Responsable','Adjunto Directivo','Contable']
+  'Administración':['Administrador','Adjunto Directivo','Contable']
 };
 function _getAreaFromPuesto(puesto){
   var p=(puesto||'').trim();
@@ -3343,11 +3343,7 @@ async function renderMaestro(){
   var myDepts = seeAll ? ['*'] : getSupervisorDepartments(currentUser);
   function inMyScope(e){
     if(seeAll) return true;
-    // Perfiles creados por subida de fichaje (estado 'Sin asignar' / sin área):
-    // visibles a TODOS los jefes para que los completen en vez de duplicar.
-    if(e.estado === 'Sin asignar') return true;
     var ea = normalizeDeptName(e.area);
-    if(!ea) return true;
     return myDepts.some(function(d){ return normalizeDeptName(d) === ea; });
   }
   // Cabecera + botón CSV dinámicos según rol
@@ -3364,10 +3360,6 @@ async function renderMaestro(){
     .filter(function(e){ return e.id !== 'E13'; })
     .filter(inMyScope);
   var employees = estadoFilt === '' ? allEmps : allEmps.filter(function(e){ return e.estado === estadoFilt; });
-
-  // Perfiles pendientes de asignar (creados por subida de fichaje). Se muestran
-  // SIEMPRE arriba, independientemente del filtro de estado, para evitar duplicados.
-  var sinAsignar = allEmps.filter(function(e){ return e.estado === 'Sin asignar'; });
 
   // Permisos de fila:
   //  - adjunto_directivo NO toca fila con rol=admin
@@ -3434,24 +3426,7 @@ async function renderMaestro(){
           +'</tr>';
       }).join('');
 
-  var canAsignar = function(e){ return canActAsAdmin(currentUser) || (isSupervisor(currentUser) && e.rol === 'empleado'); };
-  var orphanBlock = '';
-  if(sinAsignar.length){
-    orphanBlock = '<div style="background:var(--yellow-dim,#3a2f0e);border:1px solid #b45309;border-radius:10px;padding:12px 14px;margin-bottom:14px;">'
-      + '<div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:8px;">⚠ Perfiles pendientes de asignar ('+sinAsignar.length+') — creados desde subida de fichaje</div>'
-      + '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Asigna su puesto en vez de crear un empleado nuevo, así evitas duplicados.</div>'
-      + sinAsignar.map(function(e){
-          var btn = canAsignar(e)
-            ? '<button class="btn btn-primary btn-sm" style="font-size:11px;" onclick="openEmpModal(\''+e.id+'\')">Asignar</button>'
-            : '<span style="font-size:11px;color:var(--text3);">🔒</span>';
-          return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--border);">'
-            + '<strong style="font-size:13px;">'+e.nombre+'</strong>'
-            + '<span style="margin-left:auto;">'+btn+'</span></div>';
-        }).join('')
-      + '</div>';
-  }
-
-  document.getElementById('maestro-table').innerHTML = orphanBlock + '<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Correo</th><th>Acciones</th></tr>'+rows+'</table>';
+  document.getElementById('maestro-table').innerHTML = '<table><tr><th>Nombre</th><th>Área</th><th>Puesto</th><th>Estado</th><th>Resp.</th><th>Val.</th><th>Rol</th><th>€/h</th><th>PIN</th><th>Correo</th><th>Acciones</th></tr>'+rows+'</table>';
 }
 async function openEmpModal(empId){
   _editEmpId=empId||null;
@@ -3492,7 +3467,6 @@ async function openEmpModal(empId){
     window._resetPinEmpId   = empId;
     window._resetPinEmpName = e.nombre;
     window._resetPinEmpEmail= e.email||'';
-    _renderEmpIpPanel(e);
   } else {
     document.getElementById('me-title').textContent='Nuevo Empleado';
     ['emp-nombre','emp-email','emp-pin','emp-coste','emp-obs'].forEach(function(id){var el=document.getElementById(id); if(el) el.value='';});
@@ -3504,7 +3478,6 @@ async function openEmpModal(empId){
     if(createDiv) createDiv.style.display='';
     if(statusDiv) statusDiv.style.display='none';
     window._resetPinEmpId=null; window._resetPinEmpName=''; window._resetPinEmpEmail='';
-    _renderEmpIpPanel(null);
   }
   _syncAreaFromPuesto();
 
@@ -3514,72 +3487,6 @@ async function openEmpModal(empId){
   _aplicarRestriccionesModalEmp();
 
   document.getElementById('modal-empleado').classList.add('open');
-}
-
-// ── IP AUTORIZADA (employee_ips) — solo admin ──────────────────────────────
-// Reconstruye la gestión de IPs de acceso al portal desde el modal de empleado.
-// El middleware (middleware.js) whitelistea toda IP con active=true.
-async function _renderEmpIpPanel(emp){
-  var modal = document.getElementById('modal-empleado');
-  if(!modal) return;
-  var panel = document.getElementById('emp-ip-panel');
-  if(!emp || !isAdmin(currentUser)){ if(panel) panel.style.display='none'; return; }
-  if(!panel){
-    panel = document.createElement('div');
-    panel.id = 'emp-ip-panel';
-    panel.className = 'fg sp2';
-    var grid = modal.querySelector('.grid2');
-    if(grid) grid.appendChild(panel); else modal.querySelector('.modal').appendChild(panel);
-  }
-  panel.style.display='';
-  panel.innerHTML = '<label>IP autorizada — acceso al portal <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— podrá abrir SYNCRO SHIFT desde fuera del recinto</span></label>'
-    + '<div id="emp-ip-list" style="margin:6px 0;">Cargando…</div>'
-    + '<div style="display:flex;gap:8px;">'
-    +   '<input type="text" id="emp-ip-input" placeholder="Ej. 45.153.97.234" autocomplete="off" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;">'
-    +   '<button type="button" class="btn btn-secondary btn-sm" onclick="addEmpIp(\''+emp.id+'\',\''+String(emp.nombre||'').replace(/'/g,"\\'")+'\')">➕ Añadir IP</button>'
-    + '</div>';
-  _loadEmpIpList(emp.id);
-}
-async function _loadEmpIpList(empId){
-  var box = document.getElementById('emp-ip-list');
-  if(!box) return;
-  var rows = [];
-  try { rows = (await getDB('employee_ips')).filter(function(r){ return r.employee_id===empId && r.active!==false; }); } catch(e){}
-  if(!rows.length){ box.innerHTML = '<span style="font-size:12px;color:var(--text3);">Sin IP autorizada. Solo entra desde la red del recinto.</span>'; return; }
-  box.innerHTML = rows.map(function(r){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">'
-      + '<span style="font-family:var(--font-mono);font-size:12px;color:var(--text1);">'+r.ip+'</span>'
-      + (r.label?'<span style="font-size:11px;color:var(--text3);">'+r.label+'</span>':'')
-      + '<button type="button" class="btn btn-danger btn-sm" style="font-size:11px;margin-left:auto;" onclick="removeEmpIp(\''+r.id+'\',\''+empId+'\',\''+String(r.ip).replace(/'/g,"\\'")+'\')">Quitar</button>'
-      + '</div>';
-  }).join('');
-}
-async function addEmpIp(empId, empNombre){
-  if(!isAdmin(currentUser)){ toast('Solo admin gestiona IPs','err'); return; }
-  var inp = document.getElementById('emp-ip-input');
-  var ip = ((inp&&inp.value)||'').trim();
-  var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
-  if(!m || m.slice(1).some(function(o){ return +o>255; })){ toast('IP no válida (formato x.x.x.x)','err'); return; }
-  var dup = (await getDB('employee_ips')).some(function(r){ return r.ip===ip && r.active!==false; });
-  if(dup){ toast('Esa IP ya está autorizada','err'); return; }
-  var row = { id:genId(), employee_id:empId, nombre:empNombre||'', ip:ip, label:'', active:true, ts:localTs() };
-  var res = await dbInsert('employee_ips', row);
-  if(!res){ toast('Error al guardar IP — revisa el esquema de employee_ips','err'); return; }
-  await auditLog('EMP_IP_ADD', (empNombre||empId)+' → '+ip);
-  invalidateCache('employee_ips');
-  if(inp) inp.value='';
-  await _loadEmpIpList(empId);
-  toast('IP autorizada: '+ip,'ok');
-}
-async function removeEmpIp(rowId, empId, ip){
-  if(!isAdmin(currentUser)){ toast('Solo admin gestiona IPs','err'); return; }
-  if(!confirm('¿Quitar la IP '+ip+'? Dejará de poder entrar desde fuera del recinto con esa IP.')) return;
-  await auditLog('EMP_IP_REMOVE', empId+' → '+ip);
-  var res = await dbUpdate('employee_ips', rowId, { active:false });
-  if(!res){ toast('Error al quitar IP','err'); return; }
-  invalidateCache('employee_ips');
-  await _loadEmpIpList(empId);
-  toast('IP retirada','ok');
 }
 
 // Aplica restricciones visuales al modal según el rol del usuario actual

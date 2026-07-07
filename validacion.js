@@ -1313,7 +1313,7 @@ async function pSel(dept, label, color){
   responsables = responsables.filter(function(e){ return jefeIds.indexOf(e.id) === -1; });
   respIds = responsables.map(function(e){ return e.id; });
   var equipo = deptEmps.filter(function(e){
-    return e.rol === 'empleado' && jefeIds.indexOf(e.id) === -1 && respIds.indexOf(e.id) === -1;
+    return (e.rol === 'empleado' || e.rol === 'contable') && jefeIds.indexOf(e.id) === -1 && respIds.indexOf(e.id) === -1;
   });
 
   function empInitials(nombre){
