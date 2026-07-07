@@ -389,7 +389,7 @@ async function _renderInformesSala(el){
     +'<input type="file" id="inf-csv-input" accept=".csv" style="display:none" onchange="window._infLoadCSV(this.files[0])">'
     +'<div id="inf-sala-result"></div>'
     +'</div>';
-  if(_infSalaData) _renderSalaTabla(_infSalaData);
+  if(_infSalaData) _renderSalaTabla(_infSalaData,_infSalaData._costData||{});
 }
 
 window._infHandleDrop=function(ev){
@@ -408,7 +408,12 @@ window._infLoadCSV=function(file){
       var employees=await _infGetEmployees();
       var parsed=_infParsePOSMEWS(e.target.result, employees);
       _infSalaData=parsed;
-      _renderSalaTabla(parsed);
+      var costData={};
+      if(parsed.fechas.length){
+        try{ costData=await _infSalaCostLaboral(parsed.fechas[0],parsed.fechas[parsed.fechas.length-1]); }catch(x){}
+      }
+      _infSalaData._costData=costData;
+      _renderSalaTabla(parsed,costData);
     } catch(err){ toast('Error al procesar el CSV: '+err.message,'err'); }
   };
   rdr.readAsText(file,'utf-8');
@@ -452,7 +457,10 @@ function _infParsePOSMEWS(text, employees){
     var usuario=resolveNombre(usuarioRaw);
     if(usuario!==usuarioRaw) matchLog.push(usuarioRaw+' → '+usuario);
 
-    if(!porUsuario[usuario]) porUsuario[usuario]={fechas:{},totalBruto:0,facturas:0,descuentos:{},csvNombre:usuarioRaw};
+    if(!porUsuario[usuario]){
+      var _emp=(employees||[]).find(function(e){return e.nombre===usuario;});
+      porUsuario[usuario]={fechas:{},totalBruto:0,facturas:0,descuentos:{},csvNombre:usuarioRaw,employee_id:_emp?_emp.id:null};
+    }
     if(!porUsuario[usuario].fechas[fecha]) porUsuario[usuario].fechas[fecha]=0;
     porUsuario[usuario].fechas[fecha]+=total;
     porUsuario[usuario].totalBruto+=total;
@@ -478,7 +486,71 @@ function _csvSplitLine(line){
   return cols;
 }
 
-function _renderSalaTabla(data){
+// ── Coste laboral: employees.coste × shifts.horas (solo turnos Sala en rango) ──
+async function _infSalaCostLaboral(fechaMin,fechaMax){
+  var shifts=await getDB('shifts');
+  var employees=await _infGetEmployees();
+  var sala=shifts.filter(function(s){return s.area==='Sala'&&s.fecha>=fechaMin&&s.fecha<=fechaMax;});
+  var m={};
+  sala.forEach(function(s){
+    if(!s.employee_id) return;
+    if(!m[s.employee_id]){
+      var emp=employees.find(function(e){return e.id===s.employee_id;});
+      m[s.employee_id]={horas:0,coste_hora:emp?parseFloat(emp.coste)||0:0,nombre:s.nombre};
+    }
+    m[s.employee_id].horas+=parseFloat(s.horas)||0;
+  });
+  var byNombre={};
+  Object.keys(m).forEach(function(eid){
+    var c=m[eid];
+    byNombre[c.nombre]={horas:+c.horas.toFixed(2),coste_hora:c.coste_hora,coste_total:+(c.horas*c.coste_hora).toFixed(2)};
+  });
+  return byNombre;
+}
+
+// ── Guardar producción semanal en tabla sala_produccion_semanal ──
+window._infSalaGuardar=async function(){
+  if(!_infSalaData||!_infSalaData.fechas.length){ toast('No hay datos para guardar','err'); return; }
+  var data=_infSalaData, fechas=data.fechas;
+  var fechaMin=fechas[0], fechaMax=fechas[fechas.length-1];
+  var periodo=fechaMin+'_'+fechaMax;
+  // Comprobar duplicados
+  try{
+    var chk=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo)+'&select=id,nombre',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    if(chk.ok){
+      var prev=await chk.json();
+      if(prev.length>0&&!confirm('⚠ Ya existen '+prev.length+' registros para '+periodo+'. ¿Sobreescribir?')) return;
+      if(prev.length>0){
+        await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
+          {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+      }
+    }
+  }catch(e){}
+  var rows=data.usuarios.map(function(u){
+    var d=data.porUsuario[u];
+    return {
+      employee_id:d.employee_id||null, nombre:u, csv_nombre:d.csvNombre||u,
+      semana_inicio:fechaMin, semana_fin:fechaMax, periodo:periodo,
+      produccion_bruta:+d.totalBruto.toFixed(2), facturas:d.facturas,
+      detalle_diario:d.fechas,
+      subido_por:currentUser?currentUser.nombre:'?', subido_ts:localTs()
+    };
+  });
+  try{
+    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal',{
+      method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
+      'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(rows)});
+    if(!res.ok){ var txt=await res.text(); throw new Error('HTTP '+res.status+' '+txt); }
+    invalidateCache('sala_produccion_semanal');
+    toast('✅ Guardado: '+rows.length+' camareros · '+periodo,'ok');
+    var btn=document.getElementById('inf-sala-guardar');
+    if(btn){ btn.disabled=true; btn.textContent='✅ Guardado'; }
+  }catch(e){ toast('Error al guardar: '+e.message,'err'); }
+};
+
+function _renderSalaTabla(data,costData){
+  costData=costData||{};
   var el=document.getElementById('inf-sala-result');
   if(!el) return;
   var {usuarios,fechas,porUsuario,matchLog}=data;
@@ -508,10 +580,23 @@ function _renderSalaTabla(data){
     }).join('');
     // Indicador de match fuzzy
     var matchInd=(d.csvNombre&&d.csvNombre!==u)?'<span title="CSV: '+_escHtml(d.csvNombre)+'" style="font-size:9px;color:var(--amber);margin-left:4px;cursor:help;">~</span>':'';
+    // Coste laboral
+    var c=costData[u]||null;
+    var hCell=c?c.horas.toFixed(1)+'h':'—';
+    var rCell=c?c.coste_hora.toFixed(2)+'€':'—';
+    var cCell=c?c.coste_total.toFixed(2)+'€':'—';
+    var pVal=c&&total>0?(c.coste_total/total*100):0;
+    var pCell=c&&total>0?pVal.toFixed(1)+'%':'—';
+    var pColor=c&&total>0?(pVal>40?'var(--red)':pVal>25?'var(--amber)':'var(--green)'):'var(--text3)';
+    var _cs='text-align:right;font-family:var(--font-mono);font-size:11px;padding:8px 8px;color:';
     return '<tr style="background:'+rowBg+';border-bottom:1px solid var(--border);">'
       +'<td style="padding:8px 12px;font-size:13px;white-space:nowrap;font-weight:600;color:var(--text);">'+_escHtml(u)+matchInd+'</td>'
       +celdas
       +'<td style="text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:700;padding:8px 12px;color:var(--amber);">'+total.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+      +'<td style="'+_cs+'var(--text3);">'+hCell+'</td>'
+      +'<td style="'+_cs+'var(--text3);">'+rCell+'</td>'
+      +'<td style="'+_cs+'var(--text2);font-weight:600;">'+cCell+'</td>'
+      +'<td style="'+_cs+pColor+';font-weight:700;">'+pCell+'</td>'
       +'<td style="text-align:center;padding:8px 12px;"><span style="font-size:11px;font-weight:700;color:'+statusColor+';">'+statusBadge+'</span></td>'
       +'</tr>';
   }).join('');
@@ -523,6 +608,11 @@ function _renderSalaTabla(data){
   var pctCump=usuarios.length?Math.round(nCumplen/usuarios.length*100):0;
   var mediaProd=usuarios.length?totalGeneral/usuarios.length:0;
   var nCam=usuarios.length;
+  // Totales coste laboral
+  var _totHoras=0,_totCoste=0,_nConCoste=0;
+  usuarios.forEach(function(u){ var c=costData[u]; if(c){_totHoras+=c.horas;_totCoste+=c.coste_total;_nConCoste++;} });
+  var _pctCosteProd=totalGeneral>0?(_totCoste/totalGeneral*100):0;
+  var _mediaCoste=_nConCoste?(_totCoste/_nConCoste):0;
   var kpiBox=function(label,val,color){
     return '<div style="flex:1;min-width:130px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:center;">'
       +'<div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">'+label+'</div>'
@@ -539,7 +629,6 @@ function _renderSalaTabla(data){
   el.innerHTML=matchBanner
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'
     +  '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);">📅 Periodo: <strong style="color:var(--text2);">'+rangoLabel+'</strong> &nbsp;·&nbsp; '+nCam+' camarero'+(nCam===1?'':'s')+'</div>'
-    +  '<button onclick="window._infSalaData=null;_infRenderSubTab()" style="background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:5px 12px;cursor:pointer;">✕ Nuevo CSV</button>'
     +'</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
     +  kpiBox('Producción total',totalGeneral.toLocaleString('es-ES',{minimumFractionDigits:2})+'€','var(--amber)')
@@ -547,12 +636,26 @@ function _renderSalaTabla(data){
     +  kpiBox('Cumplen objetivo',nCumplen+' / '+nCam,nCumplen===nCam?'var(--green)':'var(--red)')
     +  kpiBox('% cumplimiento',pctCump+'%',pctCump>=80?'var(--green)':pctCump>=50?'var(--amber)':'var(--red)')
     +'</div>'
+    +(_nConCoste?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
+    +  kpiBox('Horas totales',_totHoras.toFixed(1)+'h','var(--text)')
+    +  kpiBox('Coste laboral',_totCoste.toFixed(2)+'€',_pctCosteProd>40?'var(--red)':'var(--text2)')
+    +  kpiBox('% Coste/Prod',_pctCosteProd.toFixed(1)+'%',_pctCosteProd>40?'var(--red)':_pctCosteProd>25?'var(--amber)':'var(--green)')
+    +  kpiBox('Coste medio/cam',_mediaCoste.toFixed(2)+'€','var(--text3)')
+    +'</div>':'')
+    +'<div style="display:flex;gap:8px;margin-bottom:14px;">'
+    +  '<button id="inf-sala-guardar" onclick="window._infSalaGuardar()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;font-family:var(--font-mono);cursor:pointer;">💾 Guardar semana</button>'
+    +  '<button onclick="window._infSalaData=null;_infRenderSubTab()" style="background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:5px 12px;cursor:pointer;">✕ Nuevo CSV</button>'
+    +'</div>'
     +'<div style="overflow-x:auto;">'
     +  '<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px;">'
     +    '<thead><tr style="background:var(--bg2);border-bottom:2px solid var(--border2);">'
     +      '<th style="text-align:left;padding:10px 12px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);">Camarero</th>'
     +      thFechas
     +      '<th style="text-align:right;padding:10px 12px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--amber);">Total</th>'
+    +      '<th style="text-align:right;padding:10px 8px;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Horas</th>'
+    +      '<th style="text-align:right;padding:10px 8px;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">€/h</th>'
+    +      '<th style="text-align:right;padding:10px 8px;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Coste</th>'
+    +      '<th style="text-align:right;padding:10px 8px;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">%</th>'
     +      '<th style="text-align:center;padding:10px 12px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);">Obj. '+_infSalaObjSem.toLocaleString('es-ES',{maximumFractionDigits:0})+'€</th>'
     +    '</tr></thead>'
     +    '<tbody>'+rows
@@ -560,6 +663,7 @@ function _renderSalaTabla(data){
     +        '<td style="padding:10px 12px;font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;">TOTAL</td>'
     +        celdaTotDia
     +        '<td style="text-align:right;font-family:var(--font-mono);font-size:14px;font-weight:700;padding:10px 12px;color:var(--amber);">'+totalGeneral.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
+    +        (function(){ return '<td style="text-align:right;font-family:var(--font-mono);font-size:11px;font-weight:700;padding:10px 8px;color:var(--text3);">'+_totHoras.toFixed(1)+'h</td><td></td><td style="text-align:right;font-family:var(--font-mono);font-size:11px;font-weight:700;padding:10px 8px;color:var(--text2);">'+_totCoste.toFixed(2)+'€</td><td style="text-align:right;font-family:var(--font-mono);font-size:11px;font-weight:700;padding:10px 8px;color:'+(_pctCosteProd>40?'var(--red)':_pctCosteProd>25?'var(--amber)':'var(--green)')+';">'+_pctCosteProd.toFixed(1)+'%</td>'; })()
     +        '<td></td>'
     +      '</tr>'
     +    '</tbody></table>'
