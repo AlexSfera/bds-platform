@@ -327,6 +327,19 @@ function _renderInformesProximamente(el,tab){
     +'</div>';
 }
 
+function _infReportRow(nombre, ruta, fmt){
+  var badge = (fmt==='CSV')
+    ? 'background:rgba(46,204,113,.15);color:#57d38c;'
+    : 'background:rgba(245,158,11,.15);color:var(--amber);';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border:1px solid var(--border2);border-radius:6px;">'
+    +  '<div style="min-width:0;">'
+    +    '<div style="font-size:10.5px;color:var(--text2);line-height:1.3;">'+nombre+'</div>'
+    +    '<div style="font-size:9px;color:var(--text3);line-height:1.3;">'+ruta+'</div>'
+    +  '</div>'
+    +  '<span style="font-size:9px;font-weight:700;font-family:var(--font-mono);padding:2px 6px;border-radius:4px;flex-shrink:0;'+badge+'">'+fmt+'</span>'
+    +'</div>';
+}
+
 async function _renderInformesSala(el){
   var objSemFmt=_infSalaObjSem.toLocaleString('es-ES',{minimumFractionDigits:2});
   var objMesFmt=_infSalaObjMes.toLocaleString('es-ES',{minimumFractionDigits:2});
@@ -341,14 +354,37 @@ async function _renderInformesSala(el){
     +    ' &nbsp;·&nbsp; Obj. mes: <strong style="color:var(--amber);">'+objMesFmt+'€</strong>'
     +  '</div>'
     +'</div>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;margin-bottom:16px;">'
+    // ── Columna izquierda: dropzone (sin cambios funcionales) ──
+    +'<div style="flex:1 1 360px;min-width:280px;">'
     +'<div id="inf-dropzone" onclick="document.getElementById(\'inf-csv-input\').click()" '
     +  'ondragover="event.preventDefault();this.style.borderColor=\'var(--amber)\'" '
     +  'ondragleave="this.style.borderColor=\'var(--border2)\'" '
     +  'ondrop="window._infHandleDrop(event)" '
-    +  'style="border:2px dashed var(--border2);border-radius:10px;padding:36px 24px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px;">'
+    +  'style="border:2px dashed var(--border2);border-radius:10px;padding:36px 24px;text-align:center;cursor:pointer;transition:border-color .2s;height:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">'
     +  '<div style="font-size:28px;margin-bottom:10px;">📂</div>'
     +  '<div style="font-family:var(--font-mono);font-size:13px;color:var(--text2);font-weight:600;">Arrastra el CSV aquí o haz clic para seleccionar</div>'
     +  '<div style="font-size:11px;color:var(--text3);margin-top:6px;">POSMEWS · Facturas · Periodo semanal o mensual</div>'
+    +'</div>'
+    +'</div>'
+    // ── Columna derecha: guía semanal para el Jefe de Sala ──
+    +'<div style="flex:1 1 320px;min-width:280px;border:1px solid var(--border2);border-radius:10px;padding:16px 18px;background:rgba(255,255,255,.02);box-sizing:border-box;">'
+    +  '<div style="font-family:var(--font-mono);font-weight:700;font-size:12px;color:var(--text);margin-bottom:3px;">📋 Rutina semanal → Claude</div>'
+    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:14px;line-height:1.5;">pos.mews.com › LA SELLA ACADEMY SL · desde ordenador (no móvil) · periodo <strong style="color:var(--text2);">domingo → sábado</strong></div>'
+    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px;">1 · Ajustar fechas</div>'
+    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;line-height:1.5;">Menú izquierdo › Informes › Ventas → rango <strong style="color:var(--text2);">domingo a sábado</strong> de la semana a reportar.</div>'
+    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:6px;">2 · Descargar 4 archivos</div>'
+    +  '<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;">'
+    +    _infReportRow('Ventas por empleado','Informes › Ventas','CSV')
+    +    _infReportRow('Pagos','Informes › Pagos','CSV')
+    +    _infReportRow('Compensaciones y anulaciones','Informes › Compensaciones','XLSX')
+    +    _infReportRow('Descuentos','Informes › Descuentos','XLSX')
+    +  '</div>'
+    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px;">3 · Enviar a Claude</div>'
+    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:6px;line-height:1.5;">Adjunta los 4 archivos en un mensaje con el texto:</div>'
+    +  '<div style="font-family:var(--font-mono);font-size:10.5px;color:var(--amber);border:1px dashed var(--border2);border-radius:6px;padding:8px 10px;line-height:1.5;">Análisis semanal POSMEWS [domingo] al [sábado]</div>'
+    +  '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border2);font-size:10px;color:var(--text3);line-height:1.5;">El CSV de <strong style="color:var(--text2);">Ventas por empleado</strong> se arrastra también al recuadro de la izquierda → alimenta KPI e incentivos dentro de SYNCRO SHIFT.</div>'
+    +'</div>'
     +'</div>'
     +'<input type="file" id="inf-csv-input" accept=".csv" style="display:none" onchange="window._infLoadCSV(this.files[0])">'
     +'<div id="inf-sala-result"></div>'
