@@ -637,7 +637,7 @@ async function _renderInformesSala(el){
     +    '<div style="margin-top:10px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:rgba(255,255,255,.02);">'
     +      '<div style="font-size:10px;color:var(--amber);border:1px solid var(--amber);border-radius:4px;padding:6px 8px;margin-bottom:10px;line-height:1.4;">pos.mews.com › <strong>LA SELLA ACADEMY SL</strong> · desde ordenador · periodo <strong>domingo → sábado</strong></div>'
     +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">1 · Facturas</div>'
-    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Ventas</strong> → ajustar fechas dom→sáb → clic ⋮ → <strong style="color:var(--text2);">Exportar CSV</strong></div>'
+    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Ventas → Facturas</strong> → ajustar fechas dom→sáb → clic ⋮ → <strong style="color:var(--text2);">Exportar CSV</strong></div>'
     +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">2 · Pagos / Acumulativo</div>'
     +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Ventas</strong> → mismas fechas → clic ⋮ → <strong style="color:var(--text2);">Acumulativo</strong></div>'
     +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">3 · Compensaciones y Anulaciones</div>'
