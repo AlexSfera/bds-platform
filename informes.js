@@ -11,6 +11,27 @@ var _infSalaData     = null;
 var _infSalaObjSem   = 3125.00;
 var _infSalaObjMes   = 10125.00;
 
+// ── Control semanal POSMEWS ─────────────────────────────────
+var _infControlWeek  = null;  // {inicio:'YYYY-MM-DD', fin:'YYYY-MM-DD'}
+var _infControlTicks = {};    // {acumulativo:{ok,filename,ts,error}, ...}
+
+var _INF_FILE_TYPES = [
+  // CSV: POSMEWS nombra TODO "Acumulativo_*.csv" — detección obligatoria por contenido
+  {key:'acumulativo',     label:'Acumulativo',                  fmt:'csv',
+   detect:function(t){ return /Ventas netas/i.test(t)&&/Impuestos/i.test(t); },
+   desc:'Resumen ventas con desglose por producto'},
+  {key:'pagos',           label:'Pagos / Ventas por empleado',  fmt:'csv',
+   detect:function(t){ return /M\xe9todos de pago/i.test(t)&&/Usuarios/i.test(t)&&!/Ventas netas/i.test(t); },
+   desc:'Métodos de pago + totales por camarero'},
+  // XLSX: filenames únicos — detección por nombre
+  {key:'compensaciones',  label:'Compensaciones y Anulaciones', fmt:'xlsx',
+   fnPattern:/compensacion|anulacion/i,
+   desc:'Anulaciones y compensaciones por empleado'},
+  {key:'descuentos',      label:'Descuentos',                   fmt:'xlsx',
+   fnPattern:/descuento/i,
+   desc:'Descuentos aplicados por empleado'}
+];
+
 // Estado informe de jefe
 var _infJefeMode     = 'lista';
 var _infJefeEditId   = null;
@@ -340,10 +361,259 @@ function _infReportRow(nombre, ruta, fmt){
     +'</div>';
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// CONTROL SEMANAL POSMEWS — helpers
+// ══════════════════════════════════════════════════════════════════════
+function _infGetWeekOf(dateStr){
+  var d=dateStr?new Date(dateStr+'T12:00:00'):new Date();
+  var day=d.getDay();
+  var sun=new Date(d); sun.setDate(sun.getDate()-day);
+  var sat=new Date(sun); sat.setDate(sat.getDate()+6);
+  return {inicio:sun.toISOString().slice(0,10), fin:sat.toISOString().slice(0,10)};
+}
+function _infFmtDateShort(iso){ if(!iso) return ''; var p=iso.split('-'); return p[2]+'/'+p[1]; }
+function _infFmtDateFull(iso){ if(!iso) return ''; var p=iso.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+function _infExtractFileDates(filename){
+  var m=filename.match(/(\d{8})-(\d{8})/);
+  if(!m) return null;
+  var s=m[1],e=m[2];
+  return {inicio:s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8), fin:e.slice(0,4)+'-'+e.slice(4,6)+'-'+e.slice(6,8)};
+}
+function _infIs7Days(inicio,fin){
+  var d1=new Date(inicio+'T12:00:00'),d2=new Date(fin+'T12:00:00');
+  return Math.round((d2-d1)/(864e5))===6;
+}
+function _readFileText(file){
+  return new Promise(function(ok,fail){
+    var r=new FileReader();
+    r.onload=function(e){ ok(e.target.result); };
+    r.onerror=function(){ fail(new Error('Error leyendo archivo')); };
+    r.readAsText(file,'utf-8');
+  });
+}
+
+window._infControlPrev=function(){ _infShiftControlWeek(-1); };
+window._infControlNext=function(){ _infShiftControlWeek(1); };
+function _infShiftControlWeek(dir){
+  var w=_infControlWeek||_infGetWeekOf();
+  var d=new Date(w.inicio+'T12:00:00');
+  d.setDate(d.getDate()+(dir*7));
+  _infControlWeek=_infGetWeekOf(d.toISOString().slice(0,10));
+  _infControlTicks={};
+  _renderControlBody();
+  _infLoadControlTicks();
+}
+
+async function _infLoadControlTicks(){
+  if(!_infControlWeek) _infControlWeek=_infGetWeekOf();
+  var periodo=_infControlWeek.inicio+'_'+_infControlWeek.fin;
+  try{
+    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&select=*',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    if(res.ok){
+      var rows=await res.json();
+      _infControlTicks={};
+      rows.forEach(function(r){
+        _infControlTicks[r.tipo]={ok:!!(r.formato_ok&&r.periodo_ok&&r.contenido_ok),filename:r.filename,ts:r.subido_ts,
+          formato_ok:r.formato_ok,periodo_ok:r.periodo_ok,contenido_ok:r.contenido_ok};
+      });
+    }
+  }catch(e){}
+  _renderControlBody();
+}
+
+async function _infControlSaveTick(typeKey,filename,dates,ok,checks){
+  var periodo=_infControlWeek.inicio+'_'+_infControlWeek.fin;
+  var row={
+    periodo:periodo, semana_inicio:_infControlWeek.inicio, semana_fin:_infControlWeek.fin,
+    tipo:typeKey, filename:filename,
+    formato_ok:!!(checks&&checks.fmt), periodo_ok:!!(checks&&checks.periodo), contenido_ok:!!(checks&&checks.contenido),
+    subido_por:currentUser?currentUser.nombre:'?', subido_ts:localTs()
+  };
+  try{
+    // Upsert: delete then insert
+    await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&tipo=eq.'+encodeURIComponent(typeKey),
+      {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control',{
+      method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
+      'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(row)});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    invalidateCache('sala_informes_control');
+  }catch(e){ console.error('Error guardando control:',e); }
+}
+
+// ── Validación de archivo de control ──
+window._infControlDrop=function(ev){
+  ev.preventDefault();
+  var dz=document.getElementById('inf-control-dropzone');
+  if(dz) dz.style.borderColor='var(--border2)';
+  var files=ev.dataTransfer&&ev.dataTransfer.files;
+  if(!files||!files.length) return;
+  for(var i=0;i<files.length;i++) _infControlValidateFile(files[i]);
+};
+window._infControlFiles=function(inp){
+  if(!inp||!inp.files) return;
+  for(var i=0;i<inp.files.length;i++) _infControlValidateFile(inp.files[i]);
+  inp.value='';
+};
+
+async function _infControlValidateFile(file){
+  if(!_infControlWeek) _infControlWeek=_infGetWeekOf();
+  var ext=file.name.split('.').pop().toLowerCase();
+
+  // ── 1. Detect type: for CSV use CONTENT (deep), for XLSX use filename ──
+  var type=null;
+  if(ext==='csv'){
+    try{
+      var text=await _readFileText(file);
+      file._text=text;
+      // Intentar clasificar con detect() de cada tipo CSV
+      _INF_FILE_TYPES.forEach(function(t){
+        if(type||t.fmt!=='csv'||!t.detect) return;
+        if(t.detect(text)) type=t;
+      });
+    }catch(e){}
+  } else if(ext==='xlsx'){
+    _INF_FILE_TYPES.forEach(function(t){
+      if(t.fmt==='xlsx'&&t.fnPattern&&t.fnPattern.test(file.name)) type=t;
+    });
+  }
+  if(!type){
+    toast('Archivo no reconocido: '+file.name+'. CSV: debe contener datos de Acumulativo o Pagos. XLSX: nombre debe contener Compensaciones o Descuentos.','err');
+    return;
+  }
+
+  var checks={fmt:false,periodo:false,contenido:false};
+
+  // ── 2. Extension ──
+  if(ext!==type.fmt){
+    toast(type.label+': formato incorrecto. Esperado .'+type.fmt+', recibido .'+ext,'err');
+    _infControlTicks[type.key]={ok:false,filename:file.name,error:'Formato .'+ext+' ≠ .'+type.fmt};
+    _renderControlBody();
+    _infControlSaveTick(type.key,file.name,null,false,checks);
+    return;
+  }
+  checks.fmt=true;
+
+  // ── 3. Date range from filename ──
+  var dates=_infExtractFileDates(file.name);
+  if(!dates||!_infIs7Days(dates.inicio,dates.fin)){
+    var msg=dates?'Periodo no es 7 días (dom→sáb)':'No se detectan fechas en el nombre';
+    toast(type.label+': '+msg,'err');
+    _infControlTicks[type.key]={ok:false,filename:file.name,error:msg};
+    _renderControlBody();
+    _infControlSaveTick(type.key,file.name,dates,false,checks);
+    return;
+  }
+  // ── 4. Dates match selected week ──
+  if(dates.inicio!==_infControlWeek.inicio||dates.fin!==_infControlWeek.fin){
+    toast(type.label+': periodo '+_infFmtDateFull(dates.inicio)+'–'+_infFmtDateFull(dates.fin)+' no coincide con semana seleccionada','err');
+    _infControlTicks[type.key]={ok:false,filename:file.name,error:'Periodo no coincide con semana'};
+    _renderControlBody();
+    _infControlSaveTick(type.key,file.name,dates,false,checks);
+    return;
+  }
+  checks.periodo=true;
+
+  // ── 5. Content validation ──
+  // CSV: contenido ya verificado en detect() del paso 1
+  if(ext==='csv') checks.contenido=true;
+  // XLSX: check ZIP magic bytes (PK)
+  if(ext==='xlsx'){
+    try{
+      var buf=await file.slice(0,4).arrayBuffer();
+      var bytes=new Uint8Array(buf);
+      if(bytes[0]===0x50&&bytes[1]===0x4B) checks.contenido=true;
+      else {
+        toast(type.label+': archivo no es XLSX válido','err');
+        _infControlTicks[type.key]={ok:false,filename:file.name,error:'No es XLSX válido'};
+        _renderControlBody();
+        _infControlSaveTick(type.key,file.name,dates,false,checks);
+        return;
+      }
+    }catch(e){ checks.contenido=true; }
+  }
+
+  // ── 6. All OK ──
+  _infControlTicks[type.key]={ok:true,filename:file.name,ts:localTs()};
+  _renderControlBody();
+  _infControlSaveTick(type.key,file.name,dates,true,checks);
+  toast('✅ '+type.label+' validado','ok');
+}
+
+// ── Renderizar cuerpo del control panel ──
+function _renderControlBody(){
+  var el=document.getElementById('inf-control-body');
+  if(!el) return;
+  var w=_infControlWeek||_infGetWeekOf();
+  var nOk=0;
+  _INF_FILE_TYPES.forEach(function(t){ if(_infControlTicks[t.key]&&_infControlTicks[t.key].ok) nOk++; });
+  var completa=nOk===_INF_FILE_TYPES.length;
+
+  var weekLabel=_infFmtDateFull(w.inicio)+' — '+_infFmtDateFull(w.fin);
+  var statusBadge=completa
+    ?'<span style="background:rgba(16,185,129,.15);color:var(--green);border:1px solid var(--green);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;font-family:var(--font-mono);">✅ COMPLETA '+nOk+'/4</span>'
+    :'<span style="background:rgba(239,68,68,.1);color:var(--red);border:1px solid var(--red);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;font-family:var(--font-mono);">❌ '+nOk+'/4</span>';
+
+  var filas=_INF_FILE_TYPES.map(function(t){
+    var tick=_infControlTicks[t.key];
+    var fmtBadge=t.fmt==='csv'
+      ?'<span style="font-size:9px;font-weight:700;font-family:var(--font-mono);padding:2px 6px;border-radius:4px;background:rgba(46,204,113,.15);color:#57d38c;">CSV</span>'
+      :'<span style="font-size:9px;font-weight:700;font-family:var(--font-mono);padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.15);color:var(--amber);">XLSX</span>';
+    var tickIcon,tickDetail;
+    if(!tick){
+      tickIcon='<span style="font-size:16px;opacity:.3;">☐</span>';
+      tickDetail='<span style="font-size:10px;color:var(--text3);">Pendiente</span>';
+    } else if(tick.ok){
+      tickIcon='<span style="font-size:16px;">✅</span>';
+      tickDetail='<span style="font-size:10px;color:var(--green);font-family:var(--font-mono);">'+_escHtml(tick.filename||'')+'</span>';
+    } else {
+      tickIcon='<span style="font-size:16px;">❌</span>';
+      tickDetail='<span style="font-size:10px;color:var(--red);">'+_escHtml(tick.error||tick.filename||'Error')+'</span>';
+    }
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);">'
+      +tickIcon
+      +'<div style="flex:1;min-width:0;">'
+      +  '<div style="font-size:12px;font-weight:600;color:var(--text);">'+t.label+' '+fmtBadge+'</div>'
+      +  tickDetail
+      +'</div>'
+      +'</div>';
+  }).join('');
+
+  el.innerHTML=''
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'
+    +  '<div style="display:flex;align-items:center;gap:8px;">'
+    +    '<button onclick="_infControlPrev()" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">◄</button>'
+    +    '<span style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text);">'+weekLabel+'</span>'
+    +    '<button onclick="_infControlNext()" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">►</button>'
+    +  '</div>'
+    +  statusBadge
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'+filas+'</div>'
+    +'<div id="inf-control-dropzone" '
+    +  'onclick="document.getElementById(\'inf-control-input\').click()" '
+    +  'ondragover="event.preventDefault();this.style.borderColor=\'var(--amber)\'" '
+    +  'ondragleave="this.style.borderColor=\'var(--border2)\'" '
+    +  'ondrop="_infControlDrop(event)" '
+    +  'style="border:2px dashed var(--border2);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:border-color .2s;">'
+    +  '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);">📂 Arrastra archivos POSMEWS aquí <span style="font-size:10px;">(1 o varios a la vez)</span></div>'
+    +'</div>'
+    +'<input type="file" id="inf-control-input" multiple accept=".csv,.xlsx" style="display:none" onchange="_infControlFiles(this)">';
+}
+
 async function _renderInformesSala(el){
+  if(!_infControlWeek) _infControlWeek=_infGetWeekOf();
   var objSemFmt=_infSalaObjSem.toLocaleString('es-ES',{minimumFractionDigits:2});
   var objMesFmt=_infSalaObjMes.toLocaleString('es-ES',{minimumFractionDigits:2});
-  el.innerHTML='<div class="card">'
+  el.innerHTML=''
+    // ── Card 1: Control semanal POSMEWS ──
+    +'<div class="card" style="margin-bottom:16px;">'
+    +  '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);margin-bottom:4px;">📋 Control semanal POSMEWS</div>'
+    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:14px;">Sube los 4 archivos obligatorios de cada semana (dom→sáb). Todos deben estar ✅ para marcar la semana como completa.</div>'
+    +  '<div id="inf-control-body"></div>'
+    +'</div>'
+    // ── Card 2: Producción por camarero (parser Facturas) ──
+    +'<div class="card">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">'
     +  '<div>'
     +    '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);">📥 Importar producción POSMEWS</div>'
@@ -390,6 +660,9 @@ async function _renderInformesSala(el){
     +'<div id="inf-sala-result"></div>'
     +'</div>';
   if(_infSalaData) _renderSalaTabla(_infSalaData,_infSalaData._costData||{});
+  // Inicializar control semanal
+  _renderControlBody();
+  _infLoadControlTicks();
 }
 
 window._infHandleDrop=function(ev){
