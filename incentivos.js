@@ -936,27 +936,27 @@ function incParseWithSheetJS(arrayBuf) {
   }).sort(function(a,b){ return b.total - a.total; });
 }
 
-// Distribuir ventas diarias en semanas ISO del mes
+// Distribuir ventas diarias en semanas dom→sáb del mes
+// Regla: una semana pertenece al mes de su DOMINGO (fecha inicio)
 function incDistribuirPorSemana(empleados, ym) {
   var parts = ym.split('-');
   var y = parseInt(parts[0]), m = parseInt(parts[1]);
 
-  // Obtener lunes de cada semana del mes
+  // Encontrar todos los domingos que caen dentro de este mes
   var semanas = [];
-  var d = new Date(y, m-1, 1);
-  // Ir al lunes de la primera semana que toca este mes
-  var dow = d.getDay(); // 0=dom
-  var lunes = new Date(d);
-  if(dow !== 1) {
-    var diff = (dow === 0) ? -6 : 1 - dow;
-    lunes.setDate(lunes.getDate() + diff);
+  var d = new Date(y, m-1, 1); // Día 1 del mes
+  var dow = d.getDay(); // 0=dom, 1=lun, ...
+  var domingo = new Date(d);
+  if(dow !== 0) {
+    // Avanzar al primer domingo del mes
+    domingo.setDate(domingo.getDate() + (7 - dow));
   }
-  while(lunes.getMonth() <= m-1 || (lunes.getFullYear() < y)) {
-    var ini = new Date(lunes);
-    var fin = new Date(lunes); fin.setDate(fin.getDate()+6);
+  // Generar semanas: domingo→sábado, mientras el domingo esté en este mes
+  while(domingo.getMonth() === m-1 && domingo.getFullYear() === y) {
+    var ini = new Date(domingo);
+    var fin = new Date(domingo); fin.setDate(fin.getDate()+6); // sábado
     semanas.push({ ini: ini, fin: fin });
-    lunes = new Date(lunes); lunes.setDate(lunes.getDate()+7);
-    if(ini.getFullYear() > y || (ini.getFullYear() === y && ini.getMonth() > m-1)) break;
+    domingo = new Date(domingo); domingo.setDate(domingo.getDate()+7);
   }
 
   var result = {};
