@@ -625,71 +625,31 @@ async function _renderInformesSala(el){
   el.innerHTML=''
     // ── Card 1: Control semanal POSMEWS ──
     +'<div class="card" style="margin-bottom:16px;">'
-    +  '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);margin-bottom:4px;">📋 Control semanal POSMEWS</div>'
+    +  '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;">'
+    +    '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);">📋 Control semanal POSMEWS</div>'
+    +    '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">Obj. semana: <strong style="color:var(--amber);">'+objSemFmt+'€</strong> · Obj. mes: <strong style="color:var(--amber);">'+objMesFmt+'€</strong></div>'
+    +  '</div>'
     +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:14px;">Sube los 4 archivos obligatorios de cada semana (dom→sáb). Todos deben estar ✅ para marcar la semana como completa.</div>'
     +  '<div id="inf-control-body"></div>'
+    // ── Instrucciones colapsables ──
+    +  '<details style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">'
+    +    '<summary style="font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;">📋 Instrucciones: cómo descargar los 4 archivos de POSMEWS</summary>'
+    +    '<div style="margin-top:10px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:rgba(255,255,255,.02);">'
+    +      '<div style="font-size:10px;color:var(--amber);border:1px solid var(--amber);border-radius:4px;padding:6px 8px;margin-bottom:10px;line-height:1.4;">pos.mews.com › <strong>LA SELLA ACADEMY SL</strong> · desde ordenador · periodo <strong>domingo → sábado</strong></div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">1 · Facturas</div>'
+    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Ventas</strong> → ajustar fechas dom→sáb → clic ⋮ → <strong style="color:var(--text2);">Exportar CSV</strong></div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">2 · Pagos / Acumulativo</div>'
+    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Ventas</strong> → mismas fechas → clic ⋮ → <strong style="color:var(--text2);">Acumulativo</strong></div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">3 · Compensaciones y Anulaciones</div>'
+    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Compensaciones y Anulaciones</strong> → mismas fechas → descargar <strong style="color:var(--text2);">XLSX</strong></div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">4 · Descuentos</div>'
+    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Descuentos</strong> → mismas fechas → descargar <strong style="color:var(--text2);">XLSX</strong></div>'
+    +      '<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;font-size:10px;color:var(--text3);line-height:1.4;"><strong style="color:var(--text2);">5 · Enviar a Claude:</strong> adjunta los 4 archivos con el texto: <span style="font-family:var(--font-mono);color:var(--amber);">Análisis semanal POSMEWS [domingo] al [sábado]</span></div>'
+    +    '</div>'
+    +  '</details>'
     +'</div>'
-    // ── Card 2: Producción por camarero (parser Facturas) ──
-    +'<div class="card">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">'
-    +  '<div>'
-    +    '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);">📥 Importar producción POSMEWS</div>'
-    +    '<div style="font-size:11px;color:var(--text3);margin-top:3px;">CSV exportado desde POSMEWS · Facturas · Rango semanal</div>'
-    +  '</div>'
-    +  '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">'
-    +    'Obj. semana: <strong style="color:var(--amber);">'+objSemFmt+'€</strong>'
-    +    ' &nbsp;·&nbsp; Obj. mes: <strong style="color:var(--amber);">'+objMesFmt+'€</strong>'
-    +  '</div>'
-    +'</div>'
-    +'<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch;margin-bottom:16px;">'
-    // ── Columna izquierda: dropzone (sin cambios funcionales) ──
-    +'<div style="flex:1 1 360px;min-width:280px;">'
-    +'<div id="inf-dropzone" onclick="document.getElementById(\'inf-csv-input\').click()" '
-    +  'ondragover="event.preventDefault();this.style.borderColor=\'var(--amber)\'" '
-    +  'ondragleave="this.style.borderColor=\'var(--border2)\'" '
-    +  'ondrop="window._infHandleDrop(event)" '
-    +  'style="border:2px dashed var(--border2);border-radius:10px;padding:36px 24px;text-align:center;cursor:pointer;transition:border-color .2s;height:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;">'
-    +  '<div style="font-size:28px;margin-bottom:10px;">📂</div>'
-    +  '<div style="font-family:var(--font-mono);font-size:13px;color:var(--text2);font-weight:600;">Arrastra el CSV aquí o haz clic para seleccionar</div>'
-    +  '<div style="font-size:11px;color:var(--text3);margin-top:6px;">POSMEWS · Facturas · Periodo semanal o mensual</div>'
-    +'</div>'
-    +'</div>'
-    // ── Columna derecha: instrucciones operativas ──
-    +'<div style="flex:1 1 320px;min-width:280px;border:1px solid var(--border2);border-radius:10px;padding:16px 18px;background:rgba(255,255,255,.02);box-sizing:border-box;">'
-    +  '<div style="font-family:var(--font-mono);font-weight:700;font-size:12px;color:var(--text);margin-bottom:2px;">📋 Extracción semanal POSMEWS</div>'
-    +  '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.4;">Responsable: <strong style="color:var(--text2);">Jefe de Sala</strong> · Deadline: <strong style="color:var(--text2);">lunes 12:00</strong></div>'
-    +  '<div style="font-size:10px;color:var(--amber);border:1px solid var(--amber);border-radius:4px;padding:6px 8px;margin-bottom:12px;line-height:1.4;">pos.mews.com › <strong>LA SELLA ACADEMY SL</strong> · desde ordenador · periodo <strong>domingo → sábado</strong></div>'
-    // Paso 1
-    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px;">1 · Descargar Facturas</div>'
-    +  '<div style="font-size:10px;color:var(--text3);margin-bottom:4px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Ventas</strong> → ajustar fechas dom→sáb → clic ⋮ → <strong style="color:var(--text2);">Exportar CSV</strong></div>'
-    +  '<div style="display:flex;gap:5px;margin-bottom:10px;">'
-    +    _infReportRow('Facturas','Ventas → ⋮ → Exportar CSV','CSV')
-    +  '</div>'
-    // Paso 2
-    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px;">2 · Descargar Acumulativo</div>'
-    +  '<div style="font-size:10px;color:var(--text3);margin-bottom:4px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Ventas</strong> → mismas fechas → clic ⋮ → <strong style="color:var(--text2);">Acumulativo</strong></div>'
-    +  '<div style="display:flex;gap:5px;margin-bottom:10px;">'
-    +    _infReportRow('Pagos / Acumulativo','Informes › Ventas → ⋮ → Acumulativo','CSV')
-    +  '</div>'
-    // Paso 3
-    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px;">3 · Descargar Compensaciones y Descuentos</div>'
-    +  '<div style="font-size:10px;color:var(--text3);margin-bottom:4px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes</strong> → mismas fechas en cada uno → descargar XLSX</div>'
-    +  '<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">'
-    +    _infReportRow('Compensaciones y Anulaciones','Informes › Compensaciones y Anulaciones','XLSX')
-    +    _infReportRow('Descuentos','Informes › Descuentos','XLSX')
-    +  '</div>'
-    // Paso 4
-    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px;">4 · Subir a SYNCRO SHIFT</div>'
-    +  '<div style="font-size:10px;color:var(--text3);margin-bottom:4px;line-height:1.4;">Arrastra los 4 archivos al panel de control ↑ (arriba). La producción por camarero se calcula automáticamente desde Facturas.</div>'
-    // Paso 5
-    +  '<div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:4px;">5 · Enviar a Claude (análisis)</div>'
-    +  '<div style="font-size:10px;color:var(--text3);margin-bottom:4px;line-height:1.4;">Adjunta los 4 archivos en un mensaje con:</div>'
-    +  '<div style="font-family:var(--font-mono);font-size:10px;color:var(--amber);border:1px dashed var(--border2);border-radius:5px;padding:6px 8px;line-height:1.4;">Análisis semanal POSMEWS [domingo] al [sábado]</div>'
-    +'</div>'
-    +'</div>'
-    +'<input type="file" id="inf-csv-input" accept=".csv" style="display:none" onchange="window._infLoadCSV(this.files[0])">'
-    +'<div id="inf-sala-result"></div>'
-    +'</div>';
+    // ── Resultado de producción (se rellena al subir Facturas) ──
+    +'<div id="inf-sala-result"></div>';
   if(_infSalaData) _renderSalaTabla(_infSalaData,_infSalaData._costData||{});
   // Inicializar control semanal
   _renderControlBody();
