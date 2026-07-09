@@ -46,6 +46,15 @@ function renderLabCharges(containerId){
       + '<input type="text" placeholder="Concepto" value="'+(ch.concepto||'')+'" oninput="_labInputFilter(this,\'letters\','+i+',\'concepto\',\''+containerId+'\')" style="flex:1;min-width:120px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
       + '<input type="text" inputmode="decimal" placeholder="€" value="'+(ch.importe||'')+'" oninput="_labInputFilter(this,\'decimal\','+i+',\'importe\',\''+containerId+'\')" style="width:70px;color:#111827;background:#fff;padding:5px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;">'
       + '<button onclick="_labChargeDel('+i+',\''+containerId+'\')" style="background:var(--red);color:#fff;border:none;border-radius:5px;width:28px;height:28px;cursor:pointer;font-weight:700;">×</button>'
+      + '<div style="display:flex;align-items:center;gap:4px;width:100%;margin-top:4px;">'
+        + '<label style="font-size:11px;color:var(--text3);white-space:nowrap;">Foto:</label>'
+        + (ch.imagen_url
+          ? '<span id="lab-ch-foto-st-'+i+'"><a href="'+ch.imagen_url+'" target="_blank" rel="noopener"><img src="'+ch.imagen_url+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border);vertical-align:middle;"></a></span>'
+            + ' <button onclick="_labChargePhotoDel('+i+',\''+containerId+'\')" style="background:transparent;border:none;color:var(--red);font-size:11px;cursor:pointer;text-decoration:underline;">Quitar</button>'
+          : '<input type="file" accept="image/*" capture="environment" onchange="_labChargePhotoUpload(this,'+i+',\''+containerId+'\')" style="font-size:11px;max-width:180px;">'
+            + '<span id="lab-ch-foto-st-'+i+'"></span>'
+        )
+      + '</div>'
       + '</div>';
   }).join('');
   var total = _labCharges.reduce(function(s,ch){ return s + (parseFloat(ch.importe)||0); }, 0);
@@ -78,6 +87,36 @@ function _labInputFilter(el, mode, idx, key, containerId){
   _labChargeSet(idx, key, el.value);
   if(key === 'importe') _labUpdateTotal(containerId);
 }
+// ── Foto por línea de cargo (P28) ──────────────────────────────────────
+async function _labChargePhotoUpload(inputEl, idx, containerId){
+  if(!inputEl.files || !inputEl.files.length) return;
+  var file = inputEl.files[0];
+  if(!file.type.startsWith('image/')){ toast('Solo imágenes','err'); inputEl.value=''; return; }
+  if(file.size > 5*1024*1024){ toast('Máximo 5 MB por foto','err'); inputEl.value=''; return; }
+  var statusEl = document.getElementById('lab-ch-foto-st-'+idx);
+  if(statusEl) statusEl.innerHTML = '<span style="color:var(--text3);font-size:11px;">Subiendo…</span>';
+  try {
+    var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'').substring(0,60);
+    var path = 'charges/' + genId() + '_' + safeName;
+    var res = await fetch(SUPABASE_URL + '/storage/v1/object/syncrolab/' + encodeURIComponent(path), {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
+      body: file
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    var publicUrl = SUPABASE_URL + '/storage/v1/object/public/syncrolab/' + path;
+    if(_labCharges[idx]) _labCharges[idx].imagen_url = publicUrl;
+    if(statusEl) statusEl.innerHTML = '<a href="'+publicUrl+'" target="_blank" rel="noopener"><img src="'+publicUrl+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border);vertical-align:middle;"></a>';
+  } catch(e) {
+    if(statusEl) statusEl.innerHTML = '<span style="color:var(--red);font-size:11px;">Error</span>';
+    toast('Error al subir foto del cargo: '+e.message,'err');
+  }
+}
+function _labChargePhotoDel(idx, containerId){
+  if(_labCharges[idx]) _labCharges[idx].imagen_url = null;
+  renderLabCharges(containerId);
+}
+
 function _labChargesValid(){
   // cada cargo debe tener habitación, concepto e importe > 0
   for(var i=0;i<_labCharges.length;i++){
@@ -98,6 +137,7 @@ async function _labSaveCharges(syncrolabCashId, fecha){
       huesped_nombre: (ch.huesped||'').trim(), concepto: (ch.concepto||'').trim(),
       importe: parseFloat(ch.importe)||0,
       solicitado_por_id: currentUser.id, solicitado_por_nombre: currentUser.nombre,
+      imagen_url: ch.imagen_url || null,
       estado: 'pendiente', created_at: ts, updated_at: ts
     };
     await fetch(url, { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify(rec) });
