@@ -186,7 +186,7 @@ function _renderGestiones(gestiones, shiftMap) {
   var isAdminUser = currentUser && currentUser.rol === 'admin';
 
   tableEl.innerHTML = '<div style="overflow-x:auto"><table>'
-    + '<tr><th>Fecha</th><th>Hora</th><th>Departamento</th><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Acción tomada</th><th>Acción</th></tr>'
+    + '<tr><th>Fecha</th><th>Hora</th><th>Departamento</th><th>Cliente</th><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Acción tomada</th><th>Acción</th></tr>'
     + filtered.map(function(t) {
       var normSt = normalizeTaskState(t.estado);
       var stColor = normSt === TASK_STATES.ABIERTA ? 'b-red' : normSt === TASK_STATES.EN_PROCESO ? 'b-blue' : 'b-green';
@@ -201,6 +201,7 @@ function _renderGestiones(gestiones, shiftMap) {
         + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(fechaVal) + '</td>'
         + '<td style="font-family:var(--font-mono);font-size:11px">' + hora + '</td>'
         + '<td>' + deptBadge(t.departamento || t.area || '—') + '</td>'
+        + '<td style="font-size:12px">' + (t.nombre_cliente ? formatDisplayValue(t.nombre_cliente) : '—') + '</td>'
         + '<td style="font-size:12px">' + tipo + '</td>'
         + '<td style="font-size:12px;max-width:200px">' + formatDisplayValue(t.descripcion) + '</td>'
         + '<td><span class="badge ' + stColor + '">' + normSt + '</span></td>'

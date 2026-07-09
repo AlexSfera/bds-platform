@@ -209,6 +209,13 @@ window._esEntrenador = _esEntrenador;
 window._esFisio      = _esFisio;
 window._deptCatalogo = _deptCatalogo;
 
+// Departamentos que usan nombre_cliente en gestiones (SYNCROLAB + Recepción Hotel)
+var _DEPTS_NOMBRE_CLIENTE = ['Recepción','Recepción SYNCROLAB','Entrenadores','Fisioterapeutas'];
+function _showNombreCliente(dept){
+  return _DEPTS_NOMBRE_CLIENTE.indexOf(dept) !== -1;
+}
+window._showNombreCliente = _showNombreCliente;
+
 // ═══════════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 let currentUser = null;
@@ -929,6 +936,12 @@ function setT(name,val){
     if(blk) val==='si'?blk.classList.add('visible'):blk.classList.remove('visible');
     if(val==='si' && typeof poblarSelectorHabitacion==='function'){
       poblarSelectorHabitacion(document.getElementById('g-habitacion'), '');
+    }
+    // Mostrar campo nombre_cliente solo para deptos con clientes/huéspedes
+    var fgNc=document.getElementById('fg-nombre-cliente');
+    if(fgNc){
+      var _dept=(typeof _deptCatalogo==='function')?_deptCatalogo(currentUser):(currentUser&&currentUser.area||'');
+      fgNc.style.display=(val==='si'&&_showNombreCliente(_dept))?'':'none';
     }
   }
   if(name==='incidencia'){
@@ -1667,6 +1680,7 @@ async function _doSaveTurno(){
     const gPrio   = (document.getElementById('g-prioridad')||{}).value || 'media';
     const gHab    = ((document.getElementById('g-habitacion')||{}).value || '').trim();
     const gRes    = ((document.getElementById('g-reserva')||{}).value || '').trim();
+    const gNomCli = ((document.getElementById('g-nombre-cliente')||{}).value || '').trim();
     if(gDesc){
       const gRecord = {
         id:           genId(),
@@ -1682,6 +1696,7 @@ async function _doSaveTurno(){
         prioridad:    gPrio,
         habitacion:   gHab || null,
         num_reserva:  gRes || null,
+        nombre_cliente: gNomCli || null,
         leido_por:    [],
         accion_tomada: '',
         estado:       INCIDENT_STATES.ABIERTA,
@@ -2888,6 +2903,7 @@ async function openValidarModal(shiftId){
       info += '<div style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
       if(g.tipo_gestion) info += '<div><span style="color:var(--text3)">Tipo: </span><span class="badge b-yellow">'+formatDisplayValue(g.tipo_gestion)+'</span></div>';
       info += '<div><span style="color:var(--text3)">Estado: </span>'+bGestionEstado(gState)+'</div>';
+      if(g.nombre_cliente) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Cliente: </span>👤 <strong>'+formatDisplayValue(g.nombre_cliente)+'</strong></div>';
       info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Descripción: </span><strong>'+formatDisplayValue(g.descripcion)+'</strong></div>';
       if(g.accion_tomada) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Acción tomada: </span>'+formatDisplayValue(g.accion_tomada)+'</div>';
       info += '</div>';
@@ -4086,6 +4102,7 @@ function _gestionExtraRows(rec){
   var prioMap = {alta:'🔴 Alta', media:'🟡 Media', baja:'🟢 Baja'};
   var prio = prioMap[(rec.prioridad||'').toLowerCase()] || formatDisplayValue(rec.prioridad||'media');
   var out = '<div><b>Prioridad:</b><br>'+prio+'</div>';
+  if(rec.nombre_cliente) out += '<div><b>Cliente:</b><br>👤 '+formatDisplayValue(rec.nombre_cliente)+'</div>';
   if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏 '+formatDisplayValue(rec.habitacion)+'</div>';
   if(rec.num_reserva) out += '<div><b>Nº reserva:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+formatDisplayValue(rec.num_reserva)+'</span></div>';
   var leido = Array.isArray(rec.leido_por) ? rec.leido_por : [];
@@ -4483,6 +4500,7 @@ async function renderGestionesScreen(){
         +     bGestionEstadoClick(st, g.id)
         +   '</div>'
         +   '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
+        +   (g.nombre_cliente ? '<div style="font-size:11px;color:var(--text2);margin-top:2px;">👤 '+formatDisplayValue(g.nombre_cliente)+'</div>' : '')
         +   '<div class="task-footer">'
         +     '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
         +       '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
@@ -4518,6 +4536,7 @@ function openNewGestionStandalone(){
       + '<div class="fg"><label>Prioridad</label><select id="ng-prioridad"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>'
       + '<div class="fg"><label>Habitación</label><select id="ng-habitacion"><option value="">— Sin habitación —</option></select></div>'
       + '<div class="fg"><label>Nº reserva (opcional)</label><input id="ng-reserva" type="text" placeholder="Ej. 123456"></div>'
+      + '<div class="fg" id="fg-ng-nombre-cliente" style="display:none;"><label>Nombre del cliente</label><input id="ng-nombre-cliente" type="text" placeholder="Nombre del cliente o huésped" autocomplete="off"></div>'
       + '<div class="fg"><label>Descripción</label><textarea id="ng-desc" rows="3" placeholder="Detalle de la gestión..."></textarea></div>'
       + '</div>'
       + '<div class="modal-f">'
@@ -4541,6 +4560,9 @@ function openNewGestionStandalone(){
   ov.querySelector('#ng-desc').value = '';
   var pr = ov.querySelector('#ng-prioridad'); if(pr) pr.value = 'media';
   var rs = ov.querySelector('#ng-reserva'); if(rs) rs.value = '';
+  var ncEl = ov.querySelector('#ng-nombre-cliente'); if(ncEl) ncEl.value = '';
+  var fgNc = ov.querySelector('#fg-ng-nombre-cliente');
+  if(fgNc) fgNc.style.display = _showNombreCliente(dept) ? '' : 'none';
   poblarSelectorHabitacion(ov.querySelector('#ng-habitacion'), '');
   ov.classList.add('open');
 }
@@ -4553,6 +4575,7 @@ async function saveNewGestionStandalone(){
   var prio = (document.getElementById('ng-prioridad')||{}).value || 'media';
   var hab  = ((document.getElementById('ng-habitacion')||{}).value || '').trim();
   var res  = ((document.getElementById('ng-reserva')||{}).value || '').trim();
+  var nomCli = ((document.getElementById('ng-nombre-cliente')||{}).value || '').trim();
   var rec = {
     id: genId(),
     employee_id: currentUser.id,
@@ -4565,6 +4588,7 @@ async function saveNewGestionStandalone(){
     prioridad: prio,
     habitacion: hab || null,
     num_reserva: res || null,
+    nombre_cliente: nomCli || null,
     leido_por: [],
     accion_tomada: '',
     estado: 'Abierta',

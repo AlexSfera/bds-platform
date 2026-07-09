@@ -411,7 +411,6 @@ async function loadStaffImplicado(){
     'Recepción SYNCROLAB','Entrenadores','Fisioterapeutas','Economato','F&B',
     'Administración','RRHH'];
   var keys=deptOrder.filter(function(d){return groups[d];});
-  // Añadir departamentos no listados
   Object.keys(groups).forEach(function(d){if(keys.indexOf(d)===-1) keys.push(d);});
   var html='';
   keys.forEach(function(dept){
@@ -428,7 +427,7 @@ async function loadStaffImplicado(){
   container.innerHTML=html;
 }
 
-// Filtro de búsqueda para staff-implicado-list (corrige filterStaffList que apuntaba a otro elemento)
+// Filtro de búsqueda para staff-implicado-list
 function filterStaffImplicado(query){
   var container=document.getElementById('staff-implicado-list');
   if(!container) return;
@@ -439,7 +438,6 @@ function filterStaffImplicado(query){
     var text=lbl.textContent.toLowerCase();
     lbl.style.display=(!q||text.indexOf(q)!==-1)?'flex':'none';
   });
-  // Ocultar cabecera de grupo si no tiene labels visibles
   groups.forEach(function(g){
     var vis=g.querySelectorAll('label[style*="flex"]');
     g.style.display=(vis.length||!q)?'':'none';
