@@ -1414,12 +1414,6 @@ function closeEntrKpiModal(){
 
 function submitEntrKpi(){
   var errEl = document.getElementById('entrkpi-err');
-  // Horas obligatorias (mismo guard que _doSaveTurno, mensaje claro aquí)
-  var horas = parseFloat((document.getElementById('t-horas')||{value:''}).value);
-  if(!horas || horas <= 0){
-    if(errEl) errEl.textContent = 'Horas trabajadas obligatorias — decláralas en el formulario de turno.';
-    return;
-  }
   var kpi = {};
   for(var i=0;i<_ENTR_KPI_CAMPOS.length;i++){
     var c = _ENTR_KPI_CAMPOS[i];

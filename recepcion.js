@@ -316,13 +316,6 @@ function closeRecKpiModal() {
 function submitRecKpi() {
   var errs = [];
 
-  // ── Fix Jun 2026: Horas trabajadas obligatorias ANTES de guardar el turno ──
-  // (Antes se ejecutaba _doSaveTurno() sin haber declarado horas → turno con 0h)
-  var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
-  if(!_horasTrab || _horasTrab <= 0){
-    errs.push('Horas trabajadas obligatorias — declara las horas en el formulario de turno');
-  }
-
   if(!_recKpiState.upsell_desayuno)     errs.push('Indica si ofertaste desayunos');
   if(!_recKpiState.clientes_insatisfechos) errs.push('Indica si hubo clientes insatisfechos');
 
@@ -574,35 +567,6 @@ async function submitRecCaja() {
   var _isCorrection = window._cajaCorrectMode; window._cajaCorrectMode = false;
   var _corrNote = window._cajaCorrectNote || ''; window._cajaCorrectNote = '';
   var errs = [];
-
-  // ── Guard horas: SOLO para cierres nuevos (no edición/corrección) ──
-  // Cuando un jefe o admin corrige un cierre existente desde Validación,
-  // no están en Mi Turno → t-horas está vacío. Exigir horas bloquea la corrección.
-  if(!_recCajaEditId){
-    var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
-    var _turnoYaGuardado = !!window._lastSavedShiftId;
-    if(!_turnoYaGuardado && (!_horasTrab || _horasTrab <= 0)){
-      // Fallback: buscar en BD si hay turno pendiente de hoy (flujo sidebar directo)
-      var _turnosHoyCheck = [];
-      try { _turnosHoyCheck = await getDB('shifts'); } catch(e_hg){ _turnosHoyCheck = []; }
-      var _turnoHoyBD = (_turnosHoyCheck||[]).find(function(s){
-        return s.employee_id === currentUser.id
-          && (s.fecha||'').slice(0,10) === _recFechaOperativa()
-          && (s.estado === 'Pendiente' || s.estado === 'En corrección');
-      });
-      if(_turnoHoyBD){
-        window._lastSavedShiftId = _turnoHoyBD.id;
-      } else {
-        var _msg = '⚠ Horas trabajadas obligatorias. Declara las horas en el formulario de turno antes de cerrar caja.';
-        var _errEl = document.getElementById('rec-caja-err');
-        if(_errEl){ _errEl.textContent = _msg; _errEl.style.display='block'; }
-        toast(_msg, 'err');
-        var _ti = document.getElementById('t-horas');
-        if(_ti){ _ti.focus(); try{ _ti.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
-        return;
-      }
-    }
-  }
 
   function gv(id){ return parseFloat(document.getElementById(id) ? document.getElementById(id).value : ''); }
   function gi(id){ return parseInt(document.getElementById(id) ? document.getElementById(id).value : '')||0; }

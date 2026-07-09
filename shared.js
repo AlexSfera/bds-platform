@@ -209,11 +209,8 @@ window._esEntrenador = _esEntrenador;
 window._esFisio      = _esFisio;
 window._deptCatalogo = _deptCatalogo;
 
-// Departamentos que usan nombre_cliente en gestiones (SYNCROLAB + Recepción Hotel)
 var _DEPTS_NOMBRE_CLIENTE = ['Recepción','Recepción SYNCROLAB','Entrenadores','Fisioterapeutas'];
-function _showNombreCliente(dept){
-  return _DEPTS_NOMBRE_CLIENTE.indexOf(dept) !== -1;
-}
+function _showNombreCliente(dept){ return _DEPTS_NOMBRE_CLIENTE.indexOf(dept) !== -1; }
 window._showNombreCliente = _showNombreCliente;
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -937,11 +934,10 @@ function setT(name,val){
     if(val==='si' && typeof poblarSelectorHabitacion==='function'){
       poblarSelectorHabitacion(document.getElementById('g-habitacion'), '');
     }
-    // Mostrar campo nombre_cliente solo para deptos con clientes/huéspedes
-    var fgNc=document.getElementById('fg-nombre-cliente');
-    if(fgNc){
-      var _dept=(typeof _deptCatalogo==='function')?_deptCatalogo(currentUser):(currentUser&&currentUser.area||'');
-      fgNc.style.display=(val==='si'&&_showNombreCliente(_dept))?'':'none';
+    var _fgNc = document.getElementById('fg-nombre-cliente');
+    if(_fgNc){
+      var _dNc = (typeof _deptCatalogo === 'function') ? _deptCatalogo(currentUser) : (currentUser ? currentUser.area : '');
+      _fgNc.style.display = _showNombreCliente(_dNc) ? '' : 'none';
     }
   }
   if(name==='incidencia'){
@@ -1372,9 +1368,9 @@ async function loadForCorrection(shiftId){
   // autocompleta con hoy para que el empleado pueda corregir.
   document.getElementById('t-fecha').value = s.fecha || today();
   document.getElementById('t-servicio').value=s.servicio;
-  document.getElementById('t-horas').value=s.horas;
+  var _elHoras = document.getElementById('t-horas'); if(_elHoras) _elHoras.value=s.horas;
   document.getElementById('t-responsable').value=s.responsable_id||'';
-  document.getElementById('t-obs').value=s.observacion||'';
+  var _elObs = document.getElementById('t-obs'); if(_elObs) _elObs.value=s.observacion||'';
   setT('incidencia',s.incidencia_declarada);
   sinMermaFlag=s.merma_declarada==='no';
   if(sinMermaFlag) document.getElementById('sinmerma-btn').className='tbtn t-si';
@@ -1390,25 +1386,6 @@ async function loadForCorrection(shiftId){
 // ═══════════════════════════════════════════════════════════════════════
 // SAVE TURNO
 async function _doSaveTurno(){
-  // ── GUARD GLOBAL (Fix Jun 2026): Horas trabajadas son obligatorias ──
-  // Punto único por donde pasan TODOS los flows de guardar turno
-  // (Cocina/Sala vía saveTurno, Recepción vía submitRecKpi, SYNCROLAB vía caja).
-  // Antes los empleados Recepción/SYNCROLAB podían cerrar turno con horas=0
-  // porque la validación solo existía en saveTurno (botón Cocina/Sala).
-  var _horasGuard = parseFloat((document.getElementById('t-horas')||{value:''}).value);
-  if(!_horasGuard || _horasGuard <= 0){
-    var _msgG = '⚠ Horas trabajadas obligatorias. Declara las horas en el formulario de turno antes de guardar.';
-    if(typeof toast === 'function') toast(_msgG, 'err');
-    var _aaG = document.getElementById('turno-alert-area');
-    if(_aaG) _aaG.innerHTML = '<div class="alert a-err">'+_msgG+'</div>';
-    var _tiG = document.getElementById('t-horas');
-    if(_tiG){
-      try{ _tiG.focus(); _tiG.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
-      _tiG.style.borderColor = 'var(--red)';
-      _tiG.style.boxShadow = '0 0 0 2px rgba(239,68,68,.35)';
-    }
-    throw new Error('HORAS_OBLIGATORIAS');
-  }
   // ── Read all form values (already validated by saveTurno) ──
   // Fix Jun 2026: si fecha llega vacía (input borrado por jefe/coord, navegador
   // que ignora readonly, etc.) se usa today() como defensa.
@@ -1424,9 +1401,9 @@ async function _doSaveTurno(){
   }
   var _isRecSave = currentUser && currentUser.area === 'Recepción';
   const servicio = _isRecSave ? getRecTurnoValue() : getServicioValue();
-  const horas    = parseFloat(document.getElementById('t-horas').value)||0;
+  const horas    = parseFloat((document.getElementById('t-horas')||{value:''}).value)||null;
   const resp     = _isRecSave ? null : document.getElementById('t-responsable').value;
-  const obs      = (document.getElementById('t-obs')||{value:''}).value.trim();
+  const obs      = (document.getElementById('t-obs')||{value:''}).value.trim() || null;
   const ts       = localTs();
   const shiftId  = editingShiftId || genId();
 
@@ -1439,6 +1416,7 @@ async function _doSaveTurno(){
   // ── Build shift object ──
   // Sala data now collected via ajustes popup (_ajustesLines)
   var salaData = {};
+  const gNomCli = (document.getElementById('g-nombre-cliente')||{value:''}).value.trim();
 
   const shift = {
     id: shiftId,
@@ -1452,6 +1430,7 @@ async function _doSaveTurno(){
     merma_declarada: sinMermaFlag ? 'no' : 'si',
     incidencia_declarada: toggleState.incidencia||'no',
     observacion: obs,
+    nombre_cliente: gNomCli || null,
     checklist_items: JSON.stringify(_chkSavedState),
     kpi_entrenador: (typeof window._entrKpiState !== 'undefined' && window._entrKpiState) ? JSON.stringify(window._entrKpiState) : null,
     ajustes_sala: JSON.stringify(_ajustesLines||[]),
@@ -1680,7 +1659,7 @@ async function _doSaveTurno(){
     const gPrio   = (document.getElementById('g-prioridad')||{}).value || 'media';
     const gHab    = ((document.getElementById('g-habitacion')||{}).value || '').trim();
     const gRes    = ((document.getElementById('g-reserva')||{}).value || '').trim();
-    const gNomCli = ((document.getElementById('g-nombre-cliente')||{}).value || '').trim();
+    const gNomCliG = ((document.getElementById('g-nombre-cliente')||{}).value || '').trim();
     if(gDesc){
       const gRecord = {
         id:           genId(),
@@ -1696,7 +1675,7 @@ async function _doSaveTurno(){
         prioridad:    gPrio,
         habitacion:   gHab || null,
         num_reserva:  gRes || null,
-        nombre_cliente: gNomCli || null,
+        nombre_cliente: gNomCliG || null,
         leido_por:    [],
         accion_tomada: '',
         estado:       INCIDENT_STATES.ABIERTA,
@@ -1856,7 +1835,7 @@ function saveTurno(){
     return;
   }
   const servicio=getServicioValue();
-  const horas=parseFloat(document.getElementById('t-horas').value);
+  const horas=parseFloat((document.getElementById('t-horas')||{value:''}).value)||null;
   const resp=_isRecepcion ? 'ok' : document.getElementById('t-responsable').value;
   if(!fecha) errs.push('Fecha obligatoria');
   // Servicio/Turno validation — Recepción uses rec-turno radio, not servicio
@@ -1865,7 +1844,6 @@ function saveTurno(){
   } else {
     if(!servicio||servicio==='[]'||servicio==='') errs.push('Turno obligatorio');
   }
-  if(!horas||horas<=0) errs.push('Horas obligatorias');
   // Responsable: only required for Sala and Cocina, NOT Recepción
   if(!_isRecepcion && !resp){
     var _isSala2 = currentUser && currentUser.area === 'Sala';
@@ -2903,8 +2881,8 @@ async function openValidarModal(shiftId){
       info += '<div style="font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">';
       if(g.tipo_gestion) info += '<div><span style="color:var(--text3)">Tipo: </span><span class="badge b-yellow">'+formatDisplayValue(g.tipo_gestion)+'</span></div>';
       info += '<div><span style="color:var(--text3)">Estado: </span>'+bGestionEstado(gState)+'</div>';
-      if(g.nombre_cliente) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Cliente: </span>👤 <strong>'+formatDisplayValue(g.nombre_cliente)+'</strong></div>';
       info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Descripción: </span><strong>'+formatDisplayValue(g.descripcion)+'</strong></div>';
+      if(g.nombre_cliente) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Cliente: </span>👤 '+formatDisplayValue(g.nombre_cliente)+'</div>';
       if(g.accion_tomada) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Acción tomada: </span>'+formatDisplayValue(g.accion_tomada)+'</div>';
       info += '</div>';
       var isClosed = gState==='Cerrada';
@@ -4102,9 +4080,9 @@ function _gestionExtraRows(rec){
   var prioMap = {alta:'🔴 Alta', media:'🟡 Media', baja:'🟢 Baja'};
   var prio = prioMap[(rec.prioridad||'').toLowerCase()] || formatDisplayValue(rec.prioridad||'media');
   var out = '<div><b>Prioridad:</b><br>'+prio+'</div>';
-  if(rec.nombre_cliente) out += '<div><b>Cliente:</b><br>👤 '+formatDisplayValue(rec.nombre_cliente)+'</div>';
   if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏 '+formatDisplayValue(rec.habitacion)+'</div>';
   if(rec.num_reserva) out += '<div><b>Nº reserva:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+formatDisplayValue(rec.num_reserva)+'</span></div>';
+  if(rec.nombre_cliente) out += '<div><b>Cliente:</b><br>👤 '+formatDisplayValue(rec.nombre_cliente)+'</div>';
   var leido = Array.isArray(rec.leido_por) ? rec.leido_por : [];
   if(leido.length){
     var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
