@@ -278,6 +278,7 @@ function initCajaForm() {
 
 function openCajaForm(existingId) {
   _editingCajaId = existingId || null;
+  window._cajaCorrectMode = false;
   var title = document.getElementById('caja-form-title');
   if(title) title.textContent = existingId ? 'Editar Cierre de Caja' : 'Nuevo Cierre de Caja';
   var fechaEl = document.getElementById('caja-fecha');
@@ -352,7 +353,7 @@ function openCajaForm(existingId) {
       var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb';
       var isPendiente = row.estado === 'Pendiente validación';
       var esPropio    = row.responsable_id === currentUser.id;
-      var canEdit     = canEditCaja || (isPendiente && esPropio);
+      var canEdit     = canEditCaja || (isPendiente && esPropio) || (window._cajaCorrectMode && typeof canCorrectCaja==='function' && canCorrectCaja('Sala'));
       if(!canEdit){
         document.querySelectorAll('#modal-caja input, #modal-caja textarea, #modal-caja select').forEach(function(el){ el.readOnly=true; el.style.pointerEvents='none'; });
         var btnGuardar = document.getElementById('caja-btn-guardar');
@@ -391,7 +392,7 @@ function calcCajaDifs() {
     var abs = Math.abs(val);
     el.style.color = abs < 0.01 ? 'var(--green)' : abs > 5 ? 'var(--red)' : 'var(--amber)';
   }
-  function fmt(val){ return (val >= 0 ? '+' : '') + val.toFixed(2) + ' €'; }
+  function fmt(val){ return (val >= 0 ? '+' : '') + val.toFixed(2).replace('.',',') + ' €'; }
   function setEl(id, val){
     var el = document.getElementById(id);
     if(el){ el.textContent = fmt(val); setColor(el, val); }
@@ -408,7 +409,7 @@ function calcCajaDifs() {
   var difEf = efEsperado - efReal;
 
   var efEspEl = document.getElementById('caja-ef-esperado');
-  if(efEspEl) efEspEl.textContent = efEsperado.toFixed(2) + ' €';
+  if(efEspEl) efEspEl.textContent = efEsperado.toFixed(2).replace('.',',') + ' €';
   setEl('caja-dif-ef', difEf);
   setEl('dif-ef-disp', difEf);
 
@@ -445,7 +446,7 @@ function calcCajaDifs() {
   var retiroV    = getV('caja-retiro');
   var fondoEspV  = fondoRealV - retiroV;
   var fondoEspEl = document.getElementById('caja-fondo-esperado');
-  if(fondoEspEl) fondoEspEl.textContent = fondoEspV.toFixed(2) + ' €';
+  if(fondoEspEl) fondoEspEl.textContent = fondoEspV.toFixed(2).replace('.',',') + ' €';
 
   // TOTAL BRUTO (display informativo: suma de todos los conceptos facturados,
   // incluidos cargos internos teóricos). NO se usa para la Δ de verificación.
@@ -453,7 +454,7 @@ function calcCajaDifs() {
                  + getV('caja-room') + getV('caja-syncrolab') + getV('caja-alexander')
                  + getV('caja-eur-pension-desayuno') + getV('caja-eur-pension-comidacena');
   var brutoEl = document.getElementById('caja-total-bruto-display');
-  if(brutoEl) brutoEl.textContent = totalBruto.toFixed(2) + ' €';
+  if(brutoEl) brutoEl.textContent = totalBruto.toFixed(2).replace('.',',') + ' €';
 
   // VERIFICACION CON REALES — FIX-DELTA-VERIF (Jun 2026)
   // Δ = Venta total (sistema) − Venta real (cobrada físicamente)
@@ -469,7 +470,7 @@ function calcCajaDifs() {
   var difVerif  = ventaTotal - ventaRealFisica;
   var verifEl   = document.getElementById('caja-total-verif');
   if(verifEl){
-    verifEl.textContent = Math.abs(difVerif)<0.01 ? '✓ Cuadrado' : ('Δ '+(difVerif>=0?'+':'')+difVerif.toFixed(2)+'€');
+    verifEl.textContent = Math.abs(difVerif)<0.01 ? '✓ Cuadrado' : ('Δ '+(difVerif>=0?'+':'')+difVerif.toFixed(2).replace('.',',')+'€');
     verifEl.style.color = Math.abs(difVerif)<0.01 ? 'var(--green)' : 'var(--amber)';
   }
 }
@@ -491,6 +492,8 @@ function getCajaServicios() {
 }
 
 async function saveCajaForm() {
+  var _isCorrection = window._cajaCorrectMode; window._cajaCorrectMode = false;
+  var _corrNote = window._cajaCorrectNote || ''; window._cajaCorrectNote = '';
   var fecha = (document.getElementById('caja-fecha')||{}).value||_salaFechaOperativa();
   var servicios = _cierreServicios();
   // CAJA-V2: una operación por servicio+fecha (admin exento, edición exenta)
@@ -589,6 +592,11 @@ async function saveCajaForm() {
     updated_at: localTs()
   };
 
+  if(_isCorrection){
+    closure.corregida = true; closure.corrected_by = currentUser.nombre;
+    closure.corrected_at = localTs(); closure.correction_note = _corrNote || null;
+    if(window._cajaPrevEstado === 'validado' || window._cajaPrevEstado === 'Validado') closure.estado = window._cajaPrevEstado;
+  }
   try {
     var cajaUrl = SUPABASE_URL + '/rest/v1/sala_cash_closures';
     var cajaMethod = _editingCajaId ? 'PATCH' : 'POST';
@@ -673,7 +681,7 @@ async function renderCajaList() {
         +'<td>'+servs+'</td>'
         +'<td>'+tipoBadge+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
-        +'<td style="font-family:var(--font-mono);font-weight:700;color:#3b82f6">'+(c.subtotal_neto||0).toFixed(2)+' €</td>'
+        +'<td style="font-family:var(--font-mono);font-weight:700;color:#3b82f6">'+(c.subtotal_neto||0).toFixed(2).replace('.',',')+' €</td>'
         +'<td style="font-family:var(--font-mono);color:'+diffColor+'">'+(c.diferencia_caja>=0?'+':'')+((c.diferencia_caja||0).toFixed(2))+' €</td>'
         +'<td>'+bEstado(c.estado)+'</td>'
         +'<td><button class="btn btn-secondary btn-sm" onclick="'+verFn+'(this.dataset.id)" data-id="'+c.id+'">✏️</button></td>'
@@ -914,33 +922,34 @@ async function renderValCajaList() {
       var canValidar = canEdit;
       var totalPens = (parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0);
       // BUG-CAJ-04: Total ajustes (desc+anulaciones+invitaciones) — nuevo campo guardado
-      var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2)+'€' : '—';
+      var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2).replace('.',',')+'€' : '—';
       var ajColor = c.total_ajustes > 0 ? 'var(--amber)' : 'var(--text3)';
       return '<tr>'
         +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?(function(ts){try{return new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});}catch(e){return ts.slice(11,16);}})(c.created_at):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.efectivo_real||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.retiro_caja_fuerte||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.tarjeta_tpv||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.stripe_real||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.subtotal_neto||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.total_bruto||0).toFixed(2)+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.efectivo_real||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.retiro_caja_fuerte||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.tarjeta_tpv||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.stripe_real||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.subtotal_neto||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.total_bruto||0).toFixed(2).replace('.',',')+'€</td>'
         +(function(){
           var difEf=(c.diferencia_efectivo||0);
           var difTar=(c.diferencia_tarjeta||0);
           var difStr=(c.diferencia_stripe||0);
-          var breakdown='<div style="font-size:10px;color:var(--text3);margin-top:2px">Ef:'+(difEf>=0?'+':'')+difEf.toFixed(2)+'€ Tar:'+(difTar>=0?'+':'')+difTar.toFixed(2)+'€ Str:'+(difStr>=0?'+':'')+difStr.toFixed(2)+'€</div>';
-          return '<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€'+breakdown+'</td>';
+          var breakdown='<div style="font-size:10px;color:var(--text3);margin-top:2px">Ef:'+(difEf>=0?'+':'')+difEf.toFixed(2).replace('.',',')+'€ Tar:'+(difTar>=0?'+':'')+difTar.toFixed(2).replace('.',',')+'€ Str:'+(difStr>=0?'+':'')+difStr.toFixed(2).replace('.',',')+'€</div>';
+          return '<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2).replace('.',',')+'€'+breakdown+'</td>';
         })()
         +'<td style="font-family:var(--font-mono);color:'+ajColor+'">'+totalAjustes+'</td>'
         +'<td style="text-align:center">'+totalPens+'p</td>'
-        +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+'</td>'
+        +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+(typeof correctedBadge==='function'?correctedBadge(c):'')+'</td>'
         +'<td style="white-space:nowrap">'
         +'<div style="display:flex;flex-direction:column;gap:4px;">'
         +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
         +'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
         +(isAdmin?'<button class="btn btn-warn btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">✏️ Corregir</button>':'')
+        +((isAdmin||(typeof canCorrectCaja==='function'&&canCorrectCaja('Sala')))?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="corregirCajaSala(this.dataset.cid)">✎ Corregir en sitio</button>':'')
         +(isAdmin?'<button class="btn btn-danger btn-sm" data-cid="'+c.id+'" onclick="eliminarCierreCaja(this.dataset.cid)">🗑 Eliminar</button>':'')
         +'</div>'
         +'</td>'
@@ -977,40 +986,40 @@ async function openCajaSummary(cajaId, showValidar) {
     + row('Turno', displayServicio(c.servicios||''), false)
     + row('Estado', c.estado, false)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">EFECTIVO</div>'
-    + row('Fondo inicial', (c.fondo_inicial||0).toFixed(2)+'€', true)
-    + row('Cash POSMEWS', (c.efectivo_posmews||0).toFixed(2)+'€', true)
-    + row('Cash POSMEWS traspaso anterior', (c.cash_posmews_traspaso_previo||0).toFixed(2)+'€', true)
-    + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2)+'€', true)
-    + row('Δ Efectivo', (difEf>=0?'+':'')+difEf.toFixed(2)+'€', true, Math.abs(difEf)<0.01?'var(--green)':'var(--red)')
-    + row('Retiro caja fuerte', (c.retiro_caja_fuerte||0).toFixed(2)+'€', true)
-    + row('Fondo final a traspasar', ((c.efectivo_real||0)-(c.retiro_caja_fuerte||0)).toFixed(2)+'€', true)
+    + row('Fondo inicial', (c.fondo_inicial||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Cash POSMEWS', (c.efectivo_posmews||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Cash POSMEWS traspaso anterior', (c.cash_posmews_traspaso_previo||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Δ Efectivo', (difEf>=0?'+':'')+difEf.toFixed(2).replace('.',',')+'€', true, Math.abs(difEf)<0.01?'var(--green)':'var(--red)')
+    + row('Retiro caja fuerte', (c.retiro_caja_fuerte||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Fondo final a traspasar', ((c.efectivo_real||0)-(c.retiro_caja_fuerte||0)).toFixed(2).replace('.',',')+'€', true)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TARJETA Y STRIPE</div>'
-    + row('Tarjeta POSMEWS', (c.tarjeta_posmews||0).toFixed(2)+'€', true)
-    + row('Tarjeta TPV físico', (c.tarjeta_tpv||0).toFixed(2)+'€', true)
-    + row('Propinas TPV', (c.propinas_tpv||0).toFixed(2)+'€', true)
-    + row('Propinas efectivo', (c.propinas||c.propinas_efectivo||0).toFixed(2)+'€', true)
+    + row('Tarjeta POSMEWS', (c.tarjeta_posmews||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Tarjeta TPV físico', (c.tarjeta_tpv||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Propinas TPV', (c.propinas_tpv||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Propinas efectivo', (c.propinas||c.propinas_efectivo||0).toFixed(2).replace('.',',')+'€', true)
     + (function(){
         var calcDifTar = (c.tarjeta_tpv||0) - (c.propinas_tpv||0) - (c.tarjeta_posmews||0);
         var nota = Math.abs(calcDifTar - difTar) > 0.01
-          ? ' ⚠ DB: '+(difTar>=0?'+':'')+difTar.toFixed(2)+'€'
+          ? ' ⚠ DB: '+(difTar>=0?'+':'')+difTar.toFixed(2).replace('.',',')+'€'
           : '';
-        return row('Δ Tarjeta (TPV - Propinas - POSMEWS)', (calcDifTar>=0?'+':'')+calcDifTar.toFixed(2)+'€'+nota, true, Math.abs(calcDifTar)<0.01?'var(--green)':'var(--red)');
+        return row('Δ Tarjeta (TPV - Propinas - POSMEWS)', (calcDifTar>=0?'+':'')+calcDifTar.toFixed(2).replace('.',',')+'€'+nota, true, Math.abs(calcDifTar)<0.01?'var(--green)':'var(--red)');
       })()
-    + row('Stripe POSMEWS', (c.stripe_posmews||0).toFixed(2)+'€', true)
-    + row('Stripe real', (c.stripe_real||0).toFixed(2)+'€', true)
-    + row('Δ Stripe', (difStr>=0?'+':'')+difStr.toFixed(2)+'€', true, Math.abs(difStr)<0.01?'var(--green)':'var(--red)')
+    + row('Stripe POSMEWS', (c.stripe_posmews||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Stripe real', (c.stripe_real||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Δ Stripe', (difStr>=0?'+':'')+difStr.toFixed(2).replace('.',',')+'€', true, Math.abs(difStr)<0.01?'var(--green)':'var(--red)')
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">CARGOS Y CONCEPTOS INTERNOS</div>'
-    + row('Room Charge', (c.room_charge||0).toFixed(2)+'€', true)
-    + row('SYNCROLAB Charge clientes', (c.syncrolab_charge||0).toFixed(2)+'€', true)
-    + row('Cargo Alexander', (c.cargo_alexander||0).toFixed(2)+'€', true)
+    + row('Room Charge', (c.room_charge||0).toFixed(2).replace('.',',')+'€', true)
+    + row('SYNCROLAB Charge clientes', (c.syncrolab_charge||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Cargo Alexander', (c.cargo_alexander||0).toFixed(2).replace('.',',')+'€', true)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">PENSIONES (informativo)</div>'
     + row('Pensiones desayunos (pax)', (parseInt(c.pension_desayuno_pax)||0)+'p', true)
     + row('Pensiones comida+cena (pax)', (parseInt(c.pension_comidacena_pax)||0)+'p', true)
-    + row('€ Pensiones desayunos', (c.eur_pension_desayuno||0).toFixed(2)+'€', true)
-    + row('€ Pensiones comidas+cenas', (c.eur_pension_comidacena||0).toFixed(2)+'€', true)
+    + row('€ Pensiones desayunos', (c.eur_pension_desayuno||0).toFixed(2).replace('.',',')+'€', true)
+    + row('€ Pensiones comidas+cenas', (c.eur_pension_comidacena||0).toFixed(2).replace('.',',')+'€', true)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TOTALES</div>'
-    + row('Total neto sin IVA', (c.subtotal_neto||0).toFixed(2)+'€', true)
-    + row('Total bruto con IVA', (c.total_bruto||0).toFixed(2)+'€', true)
+    + row('Total neto sin IVA', (c.subtotal_neto||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Total bruto con IVA', (c.total_bruto||0).toFixed(2).replace('.',',')+'€', true)
     + (function(){
         // Verificación con reales: Venta total (sistema) − Venta real física
         var ventaTotal = (c.efectivo_posmews||0) + (c.tarjeta_posmews||0) + (c.stripe_posmews||0)
@@ -1023,9 +1032,9 @@ async function openCajaSummary(cajaId, showValidar) {
         var dvCol = Math.abs(dv)<0.01?'var(--green)':Math.abs(dv)>5?'var(--red)':'var(--amber)';
         return '<div style="margin:12px 0 6px;padding:10px;border-radius:6px;background:var(--bg2);border:1px solid '+dvCol+'">'
           + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+dvCol+';letter-spacing:.1em;margin-bottom:4px">VERIFICACIÓN CON REALES</div>'
-          + '<div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:'+dvCol+'">'+(Math.abs(dv)<0.01?'✓ Cuadrado':((dv>=0?'+':'')+dv.toFixed(2)+'€'))+'</div>'
+          + '<div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:'+dvCol+'">'+(Math.abs(dv)<0.01?'✓ Cuadrado':((dv>=0?'+':'')+dv.toFixed(2).replace('.',',')+'€'))+'</div>'
           + '<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">'
-          + 'Venta total (sistema): <b>'+ventaTotal.toFixed(2)+'€</b> − Venta real (física): <b>'+ventaReal.toFixed(2)+'€</b><br>'
+          + 'Venta total (sistema): <b>'+ventaTotal.toFixed(2).replace('.',',')+'€</b> − Venta real (física): <b>'+ventaReal.toFixed(2).replace('.',',')+'€</b><br>'
           + '<span style="color:var(--text3)">Venta total = POSMEWS (efectivo+tarjeta+Stripe) + cargos internos (Room+SYNCROLAB+Alexander+€ pensiones). '
           + 'Venta real = (Efectivo real − Fondo inicial) + (TPV físico − Propinas) + Stripe real. '
           + 'Compara lo que el sistema dice que se vendió contra lo realmente cobrado. 0 = cuadra; Δ alta = revisar antes de validar.</span>'
@@ -1039,8 +1048,8 @@ async function openCajaSummary(cajaId, showValidar) {
         var col = Math.abs(calcTotal)<0.01?'var(--green)':Math.abs(calcTotal)>5?'var(--red)':'var(--amber)';
         return '<div style="margin:12px 0 6px;padding:10px;border-radius:6px;background:var(--bg2);border:1px solid '+col+'">'
           + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+col+';letter-spacing:.1em;margin-bottom:4px">DIFERENCIA OPERATIVA (recalculada)</div>'
-          + '<div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:'+col+'">'+(calcTotal>=0?'+':'')+calcTotal.toFixed(2)+'€</div>'
-          + '<div style="font-size:11px;color:var(--text3);margin-top:4px">Ef:'+(calcDifEf>=0?'+':'')+calcDifEf.toFixed(2)+'€ · Tar:'+(calcDifTar2>=0?'+':'')+calcDifTar2.toFixed(2)+'€ · Str:'+(calcDifStr>=0?'+':'')+calcDifStr.toFixed(2)+'€</div>'
+          + '<div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:'+col+'">'+(calcTotal>=0?'+':'')+calcTotal.toFixed(2).replace('.',',')+'€</div>'
+          + '<div style="font-size:11px;color:var(--text3);margin-top:4px">Ef:'+(calcDifEf>=0?'+':'')+calcDifEf.toFixed(2).replace('.',',')+'€ · Tar:'+(calcDifTar2>=0?'+':'')+calcDifTar2.toFixed(2).replace('.',',')+'€ · Str:'+(calcDifStr>=0?'+':'')+calcDifStr.toFixed(2).replace('.',',')+'€</div>'
           + '</div>';
       })()
     + (c.comentario ? row('Comentario', c.comentario) : '')
@@ -1391,7 +1400,7 @@ function calcSalaTraspaso() {
   // Sin retiro: esperado = fondo recibido + ventas efectivo POSMEWS
   var esperado = fondoRec + ventas;
   var espEl = document.getElementById('sala-tras-fondo-esperado');
-  if(espEl){ espEl.textContent = esperado.toFixed(2) + ' €'; espEl.style.color = esperado >= 0 ? 'var(--green)' : 'var(--red)'; }
+  if(espEl){ espEl.textContent = esperado.toFixed(2).replace('.',',') + ' €'; espEl.style.color = esperado >= 0 ? 'var(--green)' : 'var(--red)'; }
 
   var realRaw = (document.getElementById('sala-tras-fondo-real')||{value:''}).value;
   var difEl    = document.getElementById('sala-tras-dif');
@@ -1404,7 +1413,7 @@ function calcSalaTraspaso() {
   var dif = (parseFloat(realRaw)||0) - esperado;
   var cuadrado = Math.abs(dif) < 0.01;
   if(difEl){
-    difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + (dif>=0?'+':'') + dif.toFixed(2) + '€';
+    difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + (dif>=0?'+':'') + dif.toFixed(2).replace('.',',') + '€';
     difEl.style.color = cuadrado ? 'var(--green)' : 'var(--red)';
   }
   if(difBlock) difBlock.style.display = cuadrado ? 'none' : 'block';
@@ -1483,7 +1492,7 @@ async function submitSalaTraspaso() {
     });
     if(!res.ok){ throw new Error('HTTP '+res.status+' '+(await res.text())); }
     invalidateCache('sala_cash_closures');
-    if(typeof auditLog === 'function') auditLog(_salaTraspasoEditId ? 'SALA_TRASPASO_EDIT' : 'SALA_TRASPASO_SAVE', currentUser.nombre+' '+(_salaTraspasoEditId?'editó':'traspasó')+' caja Sala '+today()+' servicio '+serv+' · fondo '+(fondoReal||0).toFixed(2)+'€');
+    if(typeof auditLog === 'function') auditLog(_salaTraspasoEditId ? 'SALA_TRASPASO_EDIT' : 'SALA_TRASPASO_SAVE', currentUser.nombre+' '+(_salaTraspasoEditId?'editó':'traspasó')+' caja Sala '+today()+' servicio '+serv+' · fondo '+(fondoReal||0).toFixed(2).replace('.',',')+'€');
     await _doSaveTurno();
     closeSalaTraspasoModal();
     toast('Traspaso de caja guardado','ok');
@@ -1560,6 +1569,17 @@ function bCajaEstado(e){
   if(e==='pendiente_validacion') return '<span class="badge b-gray">● Pendiente validación</span>';
   return '<span class="badge b-gray">'+e+'</span>';
 }
+
+async function corregirCajaSala(id){
+  if(typeof canCorrectCaja!=='function' || !canCorrectCaja('Sala')){ toast('Sin permiso para corregir esta caja','err'); return; }
+  var nota = prompt('Nota de corrección (obligatoria):');
+  if(nota===null) return;
+  if(!nota.trim()){ toast('La nota de corrección es obligatoria','err'); return; }
+  openCajaForm(id);
+  window._cajaCorrectMode = true; window._cajaCorrectNote = nota.trim();
+  toast('Modo corrección: edita los importes y guarda. La caja seguirá validada.','ok');
+}
+window.corregirCajaSala = corregirCajaSala;
 
 async function reabrirCierre(cajaId) {
   var motivo = prompt('Motivo para reabrir el cierre (obligatorio):');

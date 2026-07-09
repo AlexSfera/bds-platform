@@ -49,7 +49,7 @@ function renderLabCharges(containerId){
       + '</div>';
   }).join('');
   var total = _labCharges.reduce(function(s,ch){ return s + (parseFloat(ch.importe)||0); }, 0);
-  c.innerHTML = rows + '<div id="lab-total-'+containerId+'" style="text-align:right;font-size:12px;font-family:var(--font-mono);color:var(--text2);margin-top:4px;">Total cargos a habitación: <b>'+total.toFixed(2)+' €</b></div>';
+  c.innerHTML = rows + '<div id="lab-total-'+containerId+'" style="text-align:right;font-size:12px;font-family:var(--font-mono);color:var(--text2);margin-top:4px;">Total cargos a habitación: <b>'+total.toFixed(2).replace('.',',')+' €</b></div>';
 }
 function _labChargeAdd(containerId){
   var defSys = _labTipoTurno ? 'Nubimed' : 'Nubimed';
@@ -63,7 +63,7 @@ function _labChargeDel(i, containerId){ _labCharges.splice(i,1); renderLabCharge
 function _labUpdateTotal(containerId){
   var total = _labCharges.reduce(function(s,ch){ return s + (parseFloat(ch.importe)||0); }, 0);
   var el = document.getElementById('lab-total-'+containerId);
-  if(el) el.innerHTML = 'Total cargos a habitación: <b>'+total.toFixed(2)+' €</b>';
+  if(el) el.innerHTML = 'Total cargos a habitación: <b>'+total.toFixed(2).replace('.',',')+' €</b>';
 }
 // ── Filtro de entrada: letters = solo letras/espacios; decimal = solo números ──
 function _labInputFilter(el, mode, idx, key, containerId){
@@ -333,12 +333,12 @@ function calcLabTraspaso(){
   var vFondo=gv('lab-tras-vg-fondo'),  vVentas=gv('lab-tras-vg-ventas');
   // Esperado por caja = fondo + ventas efectivo (sin retiro)
   var nEsp = nFondo + nVentas, vEsp = vFondo + vVentas;
-  var espN=document.getElementById('lab-tras-nub-esperado'); if(espN) espN.textContent = nEsp.toFixed(2)+' €';
-  var espV=document.getElementById('lab-tras-vg-esperado');  if(espV) espV.textContent = vEsp.toFixed(2)+' €';
+  var espN=document.getElementById('lab-tras-nub-esperado'); if(espN) espN.textContent = nEsp.toFixed(2).replace('.',',')+' €';
+  var espV=document.getElementById('lab-tras-vg-esperado');  if(espV) espV.textContent = vEsp.toFixed(2).replace('.',',')+' €';
   // Real a traspasar por caja
   var nReal=gv('lab-tras-nub-real'), vReal=gv('lab-tras-vg-real');
   var totalTras = nReal + vReal;
-  var totEl=document.getElementById('lab-tras-total'); if(totEl) totEl.textContent = totalTras.toFixed(2)+' €';
+  var totEl=document.getElementById('lab-tras-total'); if(totEl) totEl.textContent = totalTras.toFixed(2).replace('.',',')+' €';
   // Diferencia total (real − esperado de ambas)
   var dif = (nReal - nEsp) + (vReal - vEsp);
   var difEl=document.getElementById('lab-tras-dif'); var difBlock=document.getElementById('lab-tras-dif-block');
@@ -346,7 +346,7 @@ function calcLabTraspaso(){
   var vRealRaw=(document.getElementById('lab-tras-vg-real')||{value:''}).value;
   if(nRealRaw==='' && vRealRaw===''){ if(difEl){ difEl.textContent='—'; difEl.style.color='var(--text3)'; } if(difBlock) difBlock.style.display='none'; return; }
   var cuadrado = Math.abs(dif) < 0.01;
-  if(difEl){ difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: '+(dif>=0?'+':'')+dif.toFixed(2)+'€'; difEl.style.color = cuadrado?'var(--green)':'var(--red)'; }
+  if(difEl){ difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: '+(dif>=0?'+':'')+dif.toFixed(2).replace('.',',')+'€'; difEl.style.color = cuadrado?'var(--green)':'var(--red)'; }
   if(difBlock) difBlock.style.display = cuadrado ? 'none' : 'block';
 }
 
@@ -403,7 +403,7 @@ async function submitLabTraspaso(){
   try{
     await _labSave(record,_labTraspasoEditId);
     if(!_labTraspasoEditId) await _labSaveCharges(record.id, record.fecha);
-    if(typeof auditLog==='function') auditLog(_labTraspasoEditId?'LAB_TRASPASO_EDIT':'LAB_TRASPASO_SAVE', currentUser.nombre+' '+(_labTraspasoEditId?'editó':'traspasó')+' caja SYNCROLAB '+today()+' turno '+turno+' · total '+totalTras.toFixed(2)+'€'+(_labCharges.length?' · '+_labCharges.length+' cargo(s) habitación':''));
+    if(typeof auditLog==='function') auditLog(_labTraspasoEditId?'LAB_TRASPASO_EDIT':'LAB_TRASPASO_SAVE', currentUser.nombre+' '+(_labTraspasoEditId?'editó':'traspasó')+' caja SYNCROLAB '+today()+' turno '+turno+' · total '+totalTras.toFixed(2).replace('.',',')+'€'+(_labCharges.length?' · '+_labCharges.length+' cargo(s) habitación':''));
     await _doSaveTurno();
     closeLabTraspasoModal();
     toast('Caja SYNCROLAB guardada correctamente y pendiente de validación.','ok');
@@ -420,6 +420,7 @@ function _labCG(sys, campo, tipo){ return parseFloat((document.getElementById('l
 
 function openLabCierreModal(existingId){
   _labCierreEditId = existingId || null;
+  window._cajaCorrectMode = false;
   ['nub','vg'].forEach(function(sys){
     _LAB_C_FIELDS.forEach(function(c){
       ['sistema','real'].forEach(function(t){ var el=document.getElementById('lab-c-'+sys+'-'+c+'-'+t); if(el) el.value=''; });
@@ -483,20 +484,33 @@ function calcLabCierre(){
     _LAB_C_FIELDS.forEach(function(c){
       var d=_labCG(sys,c,'real')-_labCG(sys,c,'sistema');
       var cell=document.getElementById('lab-c-'+sys+'-'+c+'-dif');
-      if(cell){ cell.textContent=(d>=0?'+':'')+d.toFixed(2)+'€'; cell.style.color=Math.abs(d)<0.01?'var(--green)':'var(--red)'; }
+      if(cell){ cell.textContent=(d>=0?'+':'')+d.toFixed(2).replace('.',',')+'€'; cell.style.color=Math.abs(d)<0.01?'var(--green)':'var(--red)'; }
       difSys+=d;
     });
     var difSysEl=document.getElementById('lab-c-'+sys+'-dif-total');
-    if(difSysEl){ difSysEl.textContent=(difSys>=0?'+':'')+difSys.toFixed(2)+'€'; difSysEl.style.color=Math.abs(difSys)<0.01?'var(--green)':'var(--red)'; }
+    if(difSysEl){ difSysEl.textContent=(difSys>=0?'+':'')+difSys.toFixed(2).replace('.',',')+'€'; difSysEl.style.color=Math.abs(difSys)<0.01?'var(--green)':'var(--red)'; }
     difTotalGeneral+=difSys;
   });
   var totEl=document.getElementById('lab-c-dif-total-syncrolab');
-  if(totEl){ totEl.textContent=(difTotalGeneral>=0?'+':'')+difTotalGeneral.toFixed(2)+' €'; totEl.style.color=Math.abs(difTotalGeneral)<0.01?'var(--green)':'var(--red)'; }
+  if(totEl){ totEl.textContent=(difTotalGeneral>=0?'+':'')+difTotalGeneral.toFixed(2).replace('.',',')+' €'; totEl.style.color=Math.abs(difTotalGeneral)<0.01?'var(--green)':'var(--red)'; }
   var difBlock=document.getElementById('lab-c-dif-block');
   if(difBlock) difBlock.style.display = Math.abs(difTotalGeneral)<0.01 ? 'none' : 'block';
 }
 
+async function corregirCajaLab(id){
+  if(typeof canCorrectCaja!=='function' || !canCorrectCaja('SYNCROLAB')){ toast('Sin permiso para corregir esta caja','err'); return; }
+  var nota = prompt('Nota de corrección (obligatoria):');
+  if(nota===null) return;
+  if(!nota.trim()){ toast('La nota de corrección es obligatoria','err'); return; }
+  openLabCierreModal(id);
+  window._cajaCorrectMode = true; window._cajaCorrectNote = nota.trim();
+  toast('Modo corrección: edita los importes y guarda. La caja seguirá validada.','ok');
+}
+window.corregirCajaLab = corregirCajaLab;
+
 async function submitLabCierre(){
+  var _isCorrection = window._cajaCorrectMode; window._cajaCorrectMode = false;
+  var _corrNote = window._cajaCorrectNote || ''; window._cajaCorrectNote = '';
   // ── Fix Jun 2026: Horas trabajadas son obligatorias antes de cerrar caja ──
   // (Antes empleados Recepción SYNCROLAB cerraban turno sin declarar horas)
   var _horasTrab = parseFloat((document.getElementById('t-horas')||{value:''}).value);
@@ -551,10 +565,11 @@ async function submitLabCierre(){
     estado:(_labCierreEditId && _labPrevEstado==='correccion') ? 'corregido' : 'pendiente_validacion', updated_at:ts
   });
   if(!_labCierreEditId) rec.created_at=ts;
+  if(_isCorrection){ rec.corregida=true; rec.corrected_by=currentUser.nombre; rec.corrected_at=ts; rec.correction_note=_corrNote||null; if(_labPrevEstado==='validado') rec.estado='validado'; }
   try{
     await _labSave(rec,_labCierreEditId);
     if(!_labCierreEditId) await _labSaveCharges(rec.id, rec.fecha);
-    if(typeof auditLog==='function') auditLog(_labCierreEditId?'LAB_CAJA_EDIT':'LAB_CAJA_SAVE', currentUser.nombre+' '+(_labCierreEditId?'editó':'cerró')+' caja SYNCROLAB '+today()+' turno '+turno+' · Δ '+rec.diferencia_total_syncrolab.toFixed(2)+'€'+(_labCharges.length?' · '+_labCharges.length+' cargo(s) habitación':''));
+    if(typeof auditLog==='function') auditLog(_labCierreEditId?'LAB_CAJA_EDIT':'LAB_CAJA_SAVE', currentUser.nombre+' '+(_labCierreEditId?'editó':'cerró')+' caja SYNCROLAB '+today()+' turno '+turno+' · Δ '+rec.diferencia_total_syncrolab.toFixed(2).replace('.',',')+'€'+(_labCharges.length?' · '+_labCharges.length+' cargo(s) habitación':''));
     await _doSaveTurno();
     closeLabCierreModal();
     toast('Caja SYNCROLAB guardada correctamente y pendiente de validación.','ok');

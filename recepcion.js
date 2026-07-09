@@ -230,10 +230,10 @@ var REC_TABLE = 'recepcion_cash';
 
 // ── FECHA OPERATIVA RECEPCIÓN ─────────────────────────────────────────────
 // Turno de Noche empieza a las 23:00, termina a las 07:00 del día siguiente.
-// Si hora actual < 07:00, la fecha operativa es "ayer" (turno del día anterior).
+// Si hora actual < 08:00, la fecha operativa es "ayer" (turno del día anterior).
 function _recFechaOperativa(){
   var now = new Date();
-  if(now.getHours() < 7){
+  if(now.getHours() < 8){
     var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     return toYMD(ayer);
   }
@@ -396,6 +396,7 @@ function submitRecKpi() {
 // ═══════════════════════════════════════════════════════════════════════
 function openRecCajaModal(existingId) {
   _recCajaEditId = existingId || null;
+  window._cajaCorrectMode = false;
   if(typeof renderRecLabCharges === 'function') renderRecLabCharges();
 
   // Reset todos los campos
@@ -570,6 +571,8 @@ function clearRecCajaImagen() {
 // CAJA RECEPCIÓN — Guardar (BUG-16 FIX: tabla y campos correctos)
 // ═══════════════════════════════════════════════════════════════════════
 async function submitRecCaja() {
+  var _isCorrection = window._cajaCorrectMode; window._cajaCorrectMode = false;
+  var _corrNote = window._cajaCorrectNote || ''; window._cajaCorrectNote = '';
   var errs = [];
 
   // ── Guard horas: SOLO para cierres nuevos (no edición/corrección) ──
@@ -737,6 +740,7 @@ async function submitRecCaja() {
   };
 
   if(!_recCajaEditId) record.created_at = ts;
+  if(_isCorrection){ record.corregida=true; record.corrected_by=currentUser.nombre; record.corrected_at=ts; record.correction_note=_corrNote||null; if(window._recCorrectPrevEstado==='validado') record.estado='validado'; }
 
   // Guardado con retry: si la tabla no tiene columnas opcionales (notas/imagen),
   // reintentar sin ellas para no bloquear el cierre.
@@ -811,7 +815,7 @@ async function renderRecepcionCajaList() {
   rows.forEach(function(r){
     var dif      = parseFloat(r.dif_total || 0);
     var difColor = Math.abs(dif) < 0.01 ? 'var(--green)' : 'var(--red)';
-    var difTxt   = (dif >= 0 ? '+' : '') + dif.toFixed(2) + '€';
+    var difTxt   = (dif >= 0 ? '+' : '') + dif.toFixed(2).replace('.',',') + '€';
 
     var estado = r.estado || 'cerrado';
     var estadoBadge = estado === 'validado'      ? '<span class="badge b-green">✓ Validado</span>'
@@ -821,6 +825,7 @@ async function renderRecepcionCajaList() {
                     : (estado === 'cerrado' || estado === 'Cerrado' || estado === 'CERRADO')
                     ? '<span class="badge" style="background:var(--bg2);border:1px solid var(--border);color:var(--text3);">● Pdte. validar</span>'
                     : '<span class="badge b-gray">● '+estado+'</span>';
+    estadoBadge += (typeof correctedBadge==='function'?correctedBadge(r):'');
 
     var esTraspaso = r.tipo === 'traspaso';
     var tipoBadge  = esTraspaso
@@ -831,12 +836,13 @@ async function renderRecepcionCajaList() {
     var acciones = '<button class="btn btn-secondary btn-sm" onclick="'+verViewFn+'(\''+r.id+'\')"  >Ver</button>';
     if(isAdminU || isJefeRec)
       acciones += ' <button class="btn btn-primary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">✏ Editar</button>';
+    if(!esTraspaso && typeof canCorrectCaja==='function' && canCorrectCaja('Recepción')) acciones += ' <button class="btn btn-secondary btn-sm" onclick="corregirCajaRec(\''+r.id+'\')">✎ Corregir</button>';
     if(canReopen && estado !== 'reabierto')
       acciones += ' <button class="btn btn-secondary btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">Reabrir</button>';
     if(isAdminU)
       acciones += ' <button class="btn btn-danger btn-sm" onclick="eliminarCajaRec(\''+r.id+'\')">Eliminar</button>';
 
-    function dCell(val){ return '<td style="font-family:var(--font-mono);color:'+(Math.abs(val||0)<0.01?'var(--green)':'var(--red)')+'">'+((val||0)>=0?'+':'')+(parseFloat(val||0)).toFixed(2)+'€</td>'; }
+    function dCell(val){ return '<td style="font-family:var(--font-mono);color:'+(Math.abs(val||0)<0.01?'var(--green)':'var(--red)')+'">'+((val||0)>=0?'+':'')+(parseFloat(val||0)).toFixed(2).replace('.',',')+'€</td>'; }
 
     html += '<tr>'
       + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
@@ -888,14 +894,26 @@ async function renderRecepcionDashboard() {
   el.innerHTML = '<div class="kpi-grid">'
     + '<div class="kpi k-amber"><div class="kpi-lbl">Cierres</div><div class="kpi-val">'+turnos+'</div></div>'
     + '<div class="kpi k-red"><div class="kpi-lbl">Con diferencia</div><div class="kpi-val">'+conError+'</div></div>'
-    + '<div class="kpi k-orange"><div class="kpi-lbl">Δ Total acum.</div><div class="kpi-val" style="color:'+(totalDif>0?'var(--red)':'var(--green)')+'">'+totalDif.toFixed(2)+'€</div></div>'
-    + '<div class="kpi k-blue"><div class="kpi-lbl">Δ Transferencias</div><div class="kpi-val" style="color:'+(totalTrans>0?'var(--red)':'var(--green)')+'">'+totalTrans.toFixed(2)+'€</div></div>'
+    + '<div class="kpi k-orange"><div class="kpi-lbl">Δ Total acum.</div><div class="kpi-val" style="color:'+(totalDif>0?'var(--red)':'var(--green)')+'">'+totalDif.toFixed(2).replace('.',',')+'€</div></div>'
+    + '<div class="kpi k-blue"><div class="kpi-lbl">Δ Transferencias</div><div class="kpi-val" style="color:'+(totalTrans>0?'var(--red)':'var(--green)')+'">'+totalTrans.toFixed(2).replace('.',',')+'€</div></div>'
     + '</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // REABRIR / ELIMINAR CAJA
 // ═══════════════════════════════════════════════════════════════════════
+async function corregirCajaRec(id){
+  if(typeof canCorrectCaja!=='function' || !canCorrectCaja('Recepción')){ toast('Sin permiso para corregir esta caja','err'); return; }
+  var nota = prompt('Nota de corrección (obligatoria):');
+  if(nota===null) return;
+  if(!nota.trim()){ toast('La nota de corrección es obligatoria','err'); return; }
+  try { var rows = await getDB(REC_TABLE); var row=(rows||[]).find(function(r){return r.id===id;}); window._recCorrectPrevEstado = row ? (row.estado||'') : ''; } catch(e){ window._recCorrectPrevEstado=''; }
+  openRecCajaModal(id);
+  window._cajaCorrectMode = true; window._cajaCorrectNote = nota.trim();
+  toast('Modo corrección: edita los importes y guarda. La caja seguirá validada.','ok');
+}
+window.corregirCajaRec = corregirCajaRec;
+
 async function reabrirCajaRec(cajaId) {
   var motivo = prompt('Motivo de reapertura (obligatorio):');
   if(!motivo || !motivo.trim()){ toast('Motivo obligatorio','err'); return; }
@@ -1215,7 +1233,7 @@ function calcRecDifs() {
   var difTrans = mewsTrans - realTrans;
   var difTotal = difCash + difTar + difStr + difTrans;
 
-  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2)+' €'; }
+  function fmt(val){ return (val>=0?'+':'')+val.toFixed(2).replace('.',',')+' €'; }
   function setColor(id, val){
     var el=document.getElementById(id); if(!el) return;
     el.textContent = fmt(val);
@@ -1229,12 +1247,12 @@ function calcRecDifs() {
 
   var fondoEsperado = fondoRec + mewsCash - cfImporte;
   var feEl = document.getElementById('rec-fondo-esperado');
-  if(feEl){ feEl.textContent=fondoEsperado.toFixed(2)+' €'; feEl.style.color=fondoEsperado>=0?'var(--green)':'var(--red)'; }
+  if(feEl){ feEl.textContent=fondoEsperado.toFixed(2).replace('.',',')+' €'; feEl.style.color=fondoEsperado>=0?'var(--green)':'var(--red)'; }
   var fondoReal2 = parseFloat((document.getElementById('rec-fondo-traspaso')||{}).value)||0;
   var difFondo2 = fondoReal2 - fondoEsperado;
   var fondoDifEl = document.getElementById('rec-fondo-dif');
   if(fondoDifEl){
-    fondoDifEl.textContent = Math.abs(difFondo2)<0.01 ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: '+(difFondo2>=0?'+':'')+difFondo2.toFixed(2)+'€';
+    fondoDifEl.textContent = Math.abs(difFondo2)<0.01 ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: '+(difFondo2>=0?'+':'')+difFondo2.toFixed(2).replace('.',',')+'€';
     fondoDifEl.style.color = Math.abs(difFondo2)<0.01 ? 'var(--green)' : 'var(--red)';
   }
 
@@ -1567,11 +1585,11 @@ function calcRecTraspaso() {
     var difCtrl   = cashReal - cashEsperado;
     var cuadCtrl  = Math.abs(difCtrl) < 0.01;
     if(ctrlEspEl){
-      ctrlEspEl.textContent = cashEsperado.toFixed(2) + ' €';
+      ctrlEspEl.textContent = cashEsperado.toFixed(2).replace('.',',') + ' €';
       ctrlEspEl.style.color = 'var(--text)';
     }
     if(ctrlRealEl){
-      ctrlRealEl.textContent = cashReal.toFixed(2) + ' €';
+      ctrlRealEl.textContent = cashReal.toFixed(2).replace('.',',') + ' €';
       ctrlRealEl.style.color = cuadCtrl ? 'var(--green)' : 'var(--red)';
     }
     if(ctrlResEl){
@@ -1581,7 +1599,7 @@ function calcRecTraspaso() {
         ctrlResEl.style.color = 'var(--green)';
         ctrlResEl.style.border = '1px solid var(--green)';
       } else {
-        ctrlResEl.textContent = '⚠ Diferencia: ' + (difCtrl >= 0 ? '+' : '') + difCtrl.toFixed(2) + ' € — revisa el conteo';
+        ctrlResEl.textContent = '⚠ Diferencia: ' + (difCtrl >= 0 ? '+' : '') + difCtrl.toFixed(2).replace('.',',') + ' € — revisa el conteo';
         ctrlResEl.style.background = 'rgba(248,113,113,.15)';
         ctrlResEl.style.color = 'var(--red)';
         ctrlResEl.style.border = '1px solid var(--red)';
@@ -1595,7 +1613,7 @@ function calcRecTraspaso() {
   var esperado = cashEsperado - cf;
   var espEl = document.getElementById('rec-tras-fondo-esperado');
   if(espEl){
-    espEl.textContent = esperado.toFixed(2) + ' €';
+    espEl.textContent = esperado.toFixed(2).replace('.',',') + ' €';
     espEl.style.color = esperado >= 0 ? 'var(--green)' : 'var(--red)';
   }
 
@@ -1610,7 +1628,7 @@ function calcRecTraspaso() {
   var dif = (parseFloat(realRaw)||0) - esperado;
   var cuadrado = Math.abs(dif) < 0.01;
   if(difEl){
-    difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + (dif >= 0 ? '+' : '') + dif.toFixed(2) + '€';
+    difEl.textContent = cuadrado ? '✓ Fondo cuadrado' : '⚠ Diferencia fondo: ' + (dif >= 0 ? '+' : '') + dif.toFixed(2).replace('.',',') + '€';
     difEl.style.color = cuadrado ? 'var(--green)' : 'var(--red)';
   }
   if(difBlock) difBlock.style.display = cuadrado ? 'none' : 'block';
@@ -1707,11 +1725,11 @@ async function submitRecTraspaso() {
   try {
     if(_recTraspasoEditId){
       await dbUpdate(REC_TABLE, _recTraspasoEditId, record);
-      await auditLog('REC_TRASPASO_EDIT', currentUser.nombre+' editó traspaso caja recepción '+fecha+' turno '+turno+' · fondo '+(fondoReal||0).toFixed(2)+'€');
+      await auditLog('REC_TRASPASO_EDIT', currentUser.nombre+' editó traspaso caja recepción '+fecha+' turno '+turno+' · fondo '+(fondoReal||0).toFixed(2).replace('.',',')+'€');
       toast('Traspaso actualizado', 'ok');
     } else {
       await dbInsert(REC_TABLE, record);
-      await auditLog('REC_TRASPASO_SAVE', currentUser.nombre+' traspasó caja recepción '+fecha+' turno '+turno+' · fondo '+(fondoReal||0).toFixed(2)+'€');
+      await auditLog('REC_TRASPASO_SAVE', currentUser.nombre+' traspasó caja recepción '+fecha+' turno '+turno+' · fondo '+(fondoReal||0).toFixed(2).replace('.',',')+'€');
       toast('Traspaso de caja guardado', 'ok');
       if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
     }
@@ -1747,7 +1765,7 @@ async function renderRecLabCharges() {
     return '<div style="padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">'
       + '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">'
         + '<div style="font-size:13px;"><b>Hab. '+(c.habitacion||'—')+'</b> · '+(c.huesped_nombre||'—')+' '+sysBadge+'</div>'
-        + '<div style="font-family:var(--font-mono);font-weight:700;color:var(--text);">'+(parseFloat(c.importe)||0).toFixed(2)+' €</div>'
+        + '<div style="font-family:var(--font-mono);font-weight:700;color:var(--text);">'+(parseFloat(c.importe)||0).toFixed(2).replace('.',',')+' €</div>'
       + '</div>'
       + '<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">'+(c.concepto||'')+' <span style="color:var(--text3);">· '+fmtDate(c.fecha)+' · pidió '+(c.solicitado_por_nombre||'')+'</span></div>'
       + '<div style="display:flex;gap:6px;">'
@@ -1814,8 +1832,8 @@ async function openRecCajaValView(id){
     var rows = await getDB(REC_TABLE);
     var r = (rows||[]).find(function(x){ return x.id===id; });
     if(!r){ if(body) body.innerHTML='<div style="color:var(--red);">Registro no encontrado.</div>'; return; }
-    var fmt = function(v){ return (v!=null&&v!=='')?parseFloat(v).toFixed(2)+' €':'—'; };
-    var dCell = function(v){ var n=parseFloat(v||0); return '<span style="color:'+(Math.abs(n)<0.01?'var(--green)':'var(--red)')+';">'+(n>=0?'+':'')+n.toFixed(2)+' €</span>'; };
+    var fmt = function(v){ return (v!=null&&v!=='')?parseFloat(v).toFixed(2).replace('.',',')+' €':'—'; };
+    var dCell = function(v){ var n=parseFloat(v||0); return '<span style="color:'+(Math.abs(n)<0.01?'var(--green)':'var(--red)')+';">'+(n>=0?'+':'')+n.toFixed(2).replace('.',',')+' €</span>'; };
     var estadoBadge = r.estado==='validado'?'<span class="badge b-green">✓ Validado</span>'
       :r.estado==='con_error'?'<span class="badge b-red">✗ Con error</span>'
       :r.estado==='reabierto'?'<span class="badge b-orange">↩ Reabierto</span>'
@@ -1869,8 +1887,8 @@ async function openRecTraspasoValView(id){
     var rows = await getDB(REC_TABLE);
     var r = (rows||[]).find(function(x){ return x.id===id; });
     if(!r){ if(body) body.innerHTML='<div style="color:var(--red);">No encontrado.</div>'; return; }
-    var fmt = function(v){ return (v!=null&&v!=='')?parseFloat(v).toFixed(2)+' €':'—'; };
-    var dCell = function(v){ var n=parseFloat(v||0); return '<span style="color:'+(Math.abs(n)<0.01?'var(--green)':'var(--red)')+';">'+(n>=0?'+':'')+n.toFixed(2)+' €</span>'; };
+    var fmt = function(v){ return (v!=null&&v!=='')?parseFloat(v).toFixed(2).replace('.',',')+' €':'—'; };
+    var dCell = function(v){ var n=parseFloat(v||0); return '<span style="color:'+(Math.abs(n)<0.01?'var(--green)':'var(--red)')+';">'+(n>=0?'+':'')+n.toFixed(2).replace('.',',')+' €</span>'; };
     var estadoBadge = r.estado==='validado'?'<span class="badge b-green">✓ Validado</span>'
       :r.estado==='con_error'?'<span class="badge b-red">✗ Con error</span>'
       :'<span class="badge" style="background:var(--bg2);border:1px solid var(--border);color:var(--text3);">● Pdte. validar</span>';

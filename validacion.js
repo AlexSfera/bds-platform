@@ -179,7 +179,7 @@ async function openShiftDetail(shiftId){
         html += '<strong>'+m.producto+'</strong>';
         html += '<span style="color:var(--text3)">'+m.cantidad+' '+m.unidad+'</span>';
         html += '<span class="badge b-yellow">'+m.causa+'</span>';
-        if(m.coste_total>0) html += '<span style="color:var(--orange);font-family:var(--font-mono);">'+m.coste_total.toFixed(2)+'€</span>';
+        if(m.coste_total>0) html += '<span style="color:var(--orange);font-family:var(--font-mono);">'+m.coste_total.toFixed(2).replace('.',',')+'€</span>';
         if(m.obs) html += '<span style="color:var(--text3);font-size:11px;">'+m.obs+'</span>';
         html += '</div>';
       });
@@ -195,7 +195,7 @@ async function openShiftDetail(shiftId){
       var totAj = 0;
       ajustes.forEach(function(a){ totAj += parseFloat(a.importe)||0; });
       html += '<div style="background:var(--bg2);border:1px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:12px;">';
-      html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">4 · AJUSTES ('+ajustes.length+' líneas · total '+totAj.toFixed(2)+' €)</div>';
+      html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:10px;">4 · AJUSTES ('+ajustes.length+' líneas · total '+totAj.toFixed(2).replace('.',',')+' €)</div>';
       ajustes.forEach(function(a){
         var col = (parseFloat(a.importe)||0) < 0 ? 'var(--red)' : 'var(--green)';
         var comLbl = '';
@@ -205,7 +205,7 @@ async function openShiftDetail(shiftId){
         html += '<div style="font-size:13px;display:flex;gap:16px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;">';
         html += '<strong>'+formatDisplayValue(a.tipo)+'</strong>';
         if(numLbl) html += numLbl;
-        html += '<span style="color:'+col+';font-family:var(--font-mono);font-weight:600;">'+(parseFloat(a.importe)||0).toFixed(2)+' €</span>';
+        html += '<span style="color:'+col+';font-family:var(--font-mono);font-weight:600;">'+(parseFloat(a.importe)||0).toFixed(2).replace('.',',')+' €</span>';
         if(comLbl) html += comLbl;
         if(a.motivo) html += '<span style="color:var(--text3);">'+formatDisplayValue(a.motivo)+'</span>';
         if(a.obs) html += '<span style="color:var(--text3);font-size:11px;">📝 '+formatDisplayValue(a.obs)+'</span>';
@@ -225,7 +225,7 @@ async function openShiftDetail(shiftId){
       var totalBruto = 0; var totalIncentivo = 0;
       recVentas.forEach(function(v){ totalBruto += parseFloat(v.importe||0); totalIncentivo += parseFloat(v.importe||0) / _ivaFactorVal(v.tipo_venta) * 0.10; });
       html += '<div style="background:var(--bg2);border:1px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;">';
-      html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:10px;">5B · CROSS-SELLING ('+recVentas.length+' venta(s) · incentivo estimado '+totalIncentivo.toFixed(2)+'€)</div>';
+      html += '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--green);letter-spacing:.15em;margin-bottom:10px;">5B · CROSS-SELLING ('+recVentas.length+' venta(s) · incentivo estimado '+totalIncentivo.toFixed(2).replace('.',',')+'€)</div>';
       html += '<div class="tbl-wrap"><table style="font-size:12px;width:100%;">';
       html += '<tr style="color:var(--text3);"><th style="text-align:left;padding:4px 8px;">Tipo</th><th style="text-align:right;padding:4px 8px;">Bruto</th><th style="text-align:right;padding:4px 8px;">Neto</th><th style="text-align:right;padding:4px 8px;">Incentivo</th><th style="text-align:left;padding:4px 8px;">MEWS ref</th></tr>';
       recVentas.forEach(function(v){
@@ -234,9 +234,9 @@ async function openShiftDetail(shiftId){
         var inc   = neto * 0.10;
         html += '<tr style="border-top:1px solid var(--border);">';
         html += '<td style="padding:4px 8px;">'+(TIPO_LABEL_RV[v.tipo_venta]||v.tipo_venta)+(v.servicio_detalle?' · <span style="color:var(--text3);">'+v.servicio_detalle+'</span>':'')+'</td>';
-        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">'+bruto.toFixed(2)+'€</td>';
-        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--text2);">'+neto.toFixed(2)+'€</td>';
-        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--green);">+'+inc.toFixed(2)+'€</td>';
+        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);">'+bruto.toFixed(2).replace('.',',')+'€</td>';
+        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--text2);">'+neto.toFixed(2).replace('.',',')+'€</td>';
+        html += '<td style="padding:4px 8px;text-align:right;font-family:var(--font-mono);color:var(--green);">+'+inc.toFixed(2).replace('.',',')+'€</td>';
         html += '<td style="padding:4px 8px;color:var(--text3);">'+(v.reserva_mews||'—')+'</td>';
         html += '</tr>';
       });
@@ -727,33 +727,34 @@ async function renderValCajaList() {
       var canValidar = isAdmin || (typeof canValidateDepartment==='function' && canValidateDepartment(currentUser,'Sala'));
       var totalPens = (parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0);
       // BUG-CAJ-04: Total ajustes
-      var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2)+'€' : '—';
+      var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2).replace('.',',')+'€' : '—';
       var ajColor = c.total_ajustes > 0 ? 'var(--amber)' : 'var(--text3)';
       return '<tr>'
         +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
         +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.efectivo_real||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.retiro_caja_fuerte||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.tarjeta_tpv||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.stripe_real||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.subtotal_neto||0).toFixed(2)+'€</td>'
-        +'<td style="font-family:var(--font-mono)">'+(c.total_bruto||0).toFixed(2)+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.efectivo_real||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.retiro_caja_fuerte||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.tarjeta_tpv||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.stripe_real||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.subtotal_neto||0).toFixed(2).replace('.',',')+'€</td>'
+        +'<td style="font-family:var(--font-mono)">'+(c.total_bruto||0).toFixed(2).replace('.',',')+'€</td>'
         +(function(){
           var difEf=(c.diferencia_efectivo||0);
           var difTar=(c.diferencia_tarjeta||0);
           var difStr=(c.diferencia_stripe||0);
-          var breakdown='<div style="font-size:10px;color:var(--text3);margin-top:2px">Ef:'+(difEf>=0?'+':'')+difEf.toFixed(2)+'€ Tar:'+(difTar>=0?'+':'')+difTar.toFixed(2)+'€ Str:'+(difStr>=0?'+':'')+difStr.toFixed(2)+'€</div>';
-          return '<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2)+'€'+breakdown+'</td>';
+          var breakdown='<div style="font-size:10px;color:var(--text3);margin-top:2px">Ef:'+(difEf>=0?'+':'')+difEf.toFixed(2).replace('.',',')+'€ Tar:'+(difTar>=0?'+':'')+difTar.toFixed(2).replace('.',',')+'€ Str:'+(difStr>=0?'+':'')+difStr.toFixed(2).replace('.',',')+'€</div>';
+          return '<td style="font-family:var(--font-mono);color:'+difColor+'">'+(difOp>=0?'+':'')+difOp.toFixed(2).replace('.',',')+'€'+breakdown+'</td>';
         })()
         +'<td style="font-family:var(--font-mono);color:'+ajColor+'">'+totalAjustes+'</td>'
         +'<td style="text-align:center">'+totalPens+'p</td>'
-        +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+'</td>'
+        +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+(typeof correctedBadge==='function'?correctedBadge(c):'')+'</td>'
         +'<td style="white-space:nowrap">'
         +'<div style="display:flex;flex-direction:column;gap:4px;">'
         +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
         +'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
         +(isAdmin?'<button class="btn btn-warn btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">✏️ Corregir</button>':'')
+        +((isAdmin||(typeof canCorrectCaja==='function'&&canCorrectCaja('Sala')))?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="corregirCajaSala(this.dataset.cid)">✎ Corregir en sitio</button>':'')
         +(isAdmin?'<button class="btn btn-danger btn-sm" data-cid="'+c.id+'" onclick="eliminarCierreCaja(this.dataset.cid)">🗑 Eliminar</button>':'')
         +'</div>'
         +'</td>'
@@ -834,12 +835,12 @@ async function renderValCajaRecepcion(deptArg) {
       + '<td>' + (r.turno || '—') + '</td>'
       + '<td>' + tipoBadge + '</td>'
       + '<td style="font-weight:600">' + (r.responsable_nombre || r.usuario_nombre || '—') + '</td>'
-      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_recibido)||0).toFixed(2) + '€</td>'
-      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.retiro_caja_fuerte)||0).toFixed(2) + '€</td>'
-      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_real_a_traspasar)||0).toFixed(2) + '€</td>'
-      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.tpv_real)||0).toFixed(2) + '€</td>'
-      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.cash_real)||0).toFixed(2) + '€</td>'
-      + '<td style="font-family:var(--font-mono);font-weight:700;color:' + difColor + '">' + (dif >= 0 ? '+' : '') + dif.toFixed(2) + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_recibido)||0).toFixed(2).replace('.',',') + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.retiro_caja_fuerte)||0).toFixed(2).replace('.',',') + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_real_a_traspasar)||0).toFixed(2).replace('.',',') + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.tpv_real)||0).toFixed(2).replace('.',',') + '€</td>'
+      + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.cash_real)||0).toFixed(2).replace('.',',') + '€</td>'
+      + '<td style="font-family:var(--font-mono);font-weight:700;color:' + difColor + '">' + (dif >= 0 ? '+' : '') + dif.toFixed(2).replace('.',',') + '€</td>'
       + '<td>' + estadoBadge + '</td>'
       + '<td style="white-space:nowrap">' + acciones + '</td>'
       + '</tr>';
@@ -892,8 +893,8 @@ async function renderValCajaLab(deptArg){
     var fondoTotal    = (parseFloat(r.fondo_recibido_nubimed||0)) + (parseFloat(r.fondo_recibido_virtugym||0));
     var efectivoTotal = (parseFloat(r.efectivo_nubimed_real||0))  + (parseFloat(r.efectivo_virtugym_real||0));
     var tarjetaTotal  = (parseFloat(r.tarjeta_nubimed_real||0))   + (parseFloat(r.tarjeta_virtugym_real||0));
-    function mc(v){ return '<td style="font-family:var(--font-mono)">'+v.toFixed(2)+'€</td>'; }
-    function dc(v){ return '<td style="font-family:var(--font-mono);color:'+(Math.abs(v)<0.01?'var(--green)':'var(--red)')+'">'+(v>=0?'+':'')+v.toFixed(2)+'€</td>'; }
+    function mc(v){ return '<td style="font-family:var(--font-mono)">'+v.toFixed(2).replace('.',',')+'€</td>'; }
+    function dc(v){ return '<td style="font-family:var(--font-mono);color:'+(Math.abs(v)<0.01?'var(--green)':'var(--red)')+'">'+(v>=0?'+':'')+v.toFixed(2).replace('.',',')+'€</td>'; }
     var esTraspaso = r.tipo === 'traspaso';
     var tipoBadge = esTraspaso
       ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
@@ -905,13 +906,14 @@ async function renderValCajaLab(deptArg){
       : est === 'corregido'  ? '<span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid #ef4444;">✔ Corregido</span>'
       : est === 'cerrado'    ? '<span class="badge b-gray">● Cerrado</span>'
       : '<span class="badge b-gray">● Pendiente</span>';
+    estBadge += (typeof correctedBadge==='function'?correctedBadge(r):'');
     // Cargos MEWS vinculados a este cierre/traspaso
     var cargosDelCierre = allCharges.filter(function(c){
       return c.syncrolab_cash_closure_id === r.id || c.cash_closure_id === r.id;
     });
     var totalCargos = cargosDelCierre.reduce(function(s,c){ return s + (parseFloat(c.importe)||0); }, 0);
     var cargosCell = cargosDelCierre.length
-      ? '<td style="font-family:var(--font-mono);font-size:11px;color:#f59e0b;" title="'+cargosDelCierre.length+' cargo(s) a habitación">'+totalCargos.toFixed(2)+'€ ('+cargosDelCierre.length+')</td>'
+      ? '<td style="font-family:var(--font-mono);font-size:11px;color:#f59e0b;" title="'+cargosDelCierre.length+' cargo(s) a habitación">'+totalCargos.toFixed(2).replace('.',',')+'€ ('+cargosDelCierre.length+')</td>'
       : '<td style="color:var(--text3);font-size:11px;">—</td>';
     var verFn = esTraspaso ? 'openLabTraspasoModal' : 'openLabCierreModal';
     var puedeValidar = isValidador && est !== 'validado';
@@ -919,6 +921,7 @@ async function renderValCajaLab(deptArg){
       + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
       + (puedeValidar ? '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="validarCajaLab(\''+r.id+'\')">✓ Validar</button>' : '')
       + (isAdminU && est !== 'validado' ? '<button class="btn btn-warn btn-sm" onclick="correccionCajaLab(\''+r.id+'\')">↩ Corrección</button>' : '')
+      + ((isAdminU || (typeof canCorrectCaja==='function' && canCorrectCaja('SYNCROLAB'))) && !esTraspaso ? '<button class="btn btn-secondary btn-sm" onclick="corregirCajaLab(\''+r.id+'\')">✎ Corregir en sitio</button>' : '')
       + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaLab(\''+r.id+'\')">🗑 Eliminar</button>' : '')
       + '</div>';
     html += '<tr>'
@@ -1014,30 +1017,30 @@ async function openCajaSummary(cajaId, showValidar) {
     + row('Turno', displayServicio(c.servicios||''), false)
     + row('Estado', c.estado, false)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">EFECTIVO</div>'
-    + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2)+'€', true)
-    + row('Fondo inicial', (c.fondo_inicial||0).toFixed(2)+'€', true)
-    + row('Cash POSMEWS', (c.efectivo_posmews||0).toFixed(2)+'€', true)
-    + row('Fondo final', (c.fondo_final||0).toFixed(2)+'€', true)
-    + row('Retiro caja fuerte', (c.retiro_caja_fuerte||0).toFixed(2)+'€', true)
-    + row('Δ Efectivo', (difEf>=0?'+':'')+difEf.toFixed(2)+'€', true, Math.abs(difEf)<0.01?'var(--green)':'var(--red)')
+    + row('Efectivo real contado', (c.efectivo_real||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Fondo inicial', (c.fondo_inicial||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Cash POSMEWS', (c.efectivo_posmews||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Fondo final', (c.fondo_final||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Retiro caja fuerte', (c.retiro_caja_fuerte||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Δ Efectivo', (difEf>=0?'+':'')+difEf.toFixed(2).replace('.',',')+'€', true, Math.abs(difEf)<0.01?'var(--green)':'var(--red)')
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TARJETA Y STRIPE</div>'
-    + row('Tarjeta POSMEWS', (c.tarjeta_posmews||0).toFixed(2)+'€', true)
-    + row('Tarjeta TPV físico', (c.tarjeta_tpv||0).toFixed(2)+'€', true)
-    + row('Propinas TPV', (c.propinas_tpv||0).toFixed(2)+'€', true)
-    + row('Propinas efectivo', (c.propinas||c.propinas_efectivo||0).toFixed(2)+'€', true)
+    + row('Tarjeta POSMEWS', (c.tarjeta_posmews||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Tarjeta TPV físico', (c.tarjeta_tpv||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Propinas TPV', (c.propinas_tpv||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Propinas efectivo', (c.propinas||c.propinas_efectivo||0).toFixed(2).replace('.',',')+'€', true)
     + (function(){
         var calcDifTar = (c.tarjeta_tpv||0) - (c.propinas_tpv||0) - (c.tarjeta_posmews||0);
         var nota = Math.abs(calcDifTar - difTar) > 0.01
-          ? ' ⚠ DB: '+(difTar>=0?'+':'')+difTar.toFixed(2)+'€'
+          ? ' ⚠ DB: '+(difTar>=0?'+':'')+difTar.toFixed(2).replace('.',',')+'€'
           : '';
-        return row('Δ Tarjeta (TPV - Propinas - POSMEWS)', (calcDifTar>=0?'+':'')+calcDifTar.toFixed(2)+'€'+nota, true, Math.abs(calcDifTar)<0.01?'var(--green)':'var(--red)');
+        return row('Δ Tarjeta (TPV - Propinas - POSMEWS)', (calcDifTar>=0?'+':'')+calcDifTar.toFixed(2).replace('.',',')+'€'+nota, true, Math.abs(calcDifTar)<0.01?'var(--green)':'var(--red)');
       })()
-    + row('Stripe POSMEWS', (c.stripe_posmews||0).toFixed(2)+'€', true)
-    + row('Stripe real', (c.stripe_real||0).toFixed(2)+'€', true)
-    + row('Δ Stripe', (difStr>=0?'+':'')+difStr.toFixed(2)+'€', true, Math.abs(difStr)<0.01?'var(--green)':'var(--red)')
+    + row('Stripe POSMEWS', (c.stripe_posmews||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Stripe real', (c.stripe_real||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Δ Stripe', (difStr>=0?'+':'')+difStr.toFixed(2).replace('.',',')+'€', true, Math.abs(difStr)<0.01?'var(--green)':'var(--red)')
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">TOTALES</div>'
-    + row('Total neto sin IVA', (c.subtotal_neto||0).toFixed(2)+'€', true)
-    + row('Total bruto con IVA', (c.total_bruto||0).toFixed(2)+'€', true)
+    + row('Total neto sin IVA', (c.subtotal_neto||0).toFixed(2).replace('.',',')+'€', true)
+    + row('Total bruto con IVA', (c.total_bruto||0).toFixed(2).replace('.',',')+'€', true)
     + row('Pensiones', ((parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0))+'p', true)
     + (function(){
         var calcDifTar2 = (c.tarjeta_tpv||0) - (c.propinas_tpv||0) - (c.tarjeta_posmews||0);
@@ -1047,8 +1050,8 @@ async function openCajaSummary(cajaId, showValidar) {
         var col = Math.abs(calcTotal)<0.01?'var(--green)':Math.abs(calcTotal)>5?'var(--red)':'var(--amber)';
         return '<div style="margin:12px 0 6px;padding:10px;border-radius:6px;background:var(--bg2);border:1px solid '+col+'">'
           + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:'+col+';letter-spacing:.1em;margin-bottom:4px">DIFERENCIA OPERATIVA (recalculada)</div>'
-          + '<div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:'+col+'">'+(calcTotal>=0?'+':'')+calcTotal.toFixed(2)+'€</div>'
-          + '<div style="font-size:11px;color:var(--text3);margin-top:4px">Ef:'+(calcDifEf>=0?'+':'')+calcDifEf.toFixed(2)+'€ · Tar:'+(calcDifTar2>=0?'+':'')+calcDifTar2.toFixed(2)+'€ · Str:'+(calcDifStr>=0?'+':'')+calcDifStr.toFixed(2)+'€</div>'
+          + '<div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:'+col+'">'+(calcTotal>=0?'+':'')+calcTotal.toFixed(2).replace('.',',')+'€</div>'
+          + '<div style="font-size:11px;color:var(--text3);margin-top:4px">Ef:'+(calcDifEf>=0?'+':'')+calcDifEf.toFixed(2).replace('.',',')+'€ · Tar:'+(calcDifTar2>=0?'+':'')+calcDifTar2.toFixed(2).replace('.',',')+'€ · Str:'+(calcDifStr>=0?'+':'')+calcDifStr.toFixed(2).replace('.',',')+'€</div>'
           + '</div>';
       })()
     + (c.comentario ? row('Comentario', c.comentario) : '')
@@ -1527,7 +1530,7 @@ async function renderValAjustes(deptArg){
       +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(r.fecha)+'</td>'
       +'<td style="font-weight:600">'+(r.nombre||'—')+'</td>'
       +'<td><span class="badge b-gray">'+(r.tipo||'—')+'</span></td>'
-      +'<td style="font-family:var(--font-mono);color:'+col+'">'+(imp>=0?'+':'')+imp.toFixed(2)+' €</td>'
+      +'<td style="font-family:var(--font-mono);color:'+col+'">'+(imp>=0?'+':'')+imp.toFixed(2).replace('.',',')+' €</td>'
       +'<td style="font-size:12px;color:var(--text3)">'+(r.motivo||'—').slice(0,60)+'</td>'
       +'</tr>';
   });
@@ -1783,7 +1786,7 @@ async function renderValMermaList(){
     var sinCoste    = all.filter(function(m){ return !m.coste_unitario || m.coste_unitario===0; }).length;
     kpiEl.innerHTML = '<div class="kpi-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
       +'<div class="kpi k-orange"><div class="kpi-lbl">Líneas</div><div class="kpi-val">'+totalLineas+'</div></div>'
-      +'<div class="kpi k-orange"><div class="kpi-lbl">Coste total</div><div class="kpi-val">'+totalCoste.toFixed(2)+'€</div></div>'
+      +'<div class="kpi k-orange"><div class="kpi-lbl">Coste total</div><div class="kpi-val">'+totalCoste.toFixed(2).replace('.',',')+'€</div></div>'
       +(sinCoste>0?'<div class="kpi k-red"><div class="kpi-lbl">Sin coste</div><div class="kpi-val">'+sinCoste+'</div><div class="kpi-sub">Pendiente valorar</div></div>':'')
       +'</div>';
   }
@@ -1810,7 +1813,7 @@ async function renderValMermaList(){
         +'<td style="font-size:12px">'+( m.causa||'—')+'</td>'
         +'<td style="font-size:11px;color:var(--text3)">'+( m.obs||'—')+'</td>'
         +'<td style="font-family:var(--font-mono);'+(sinC?'color:var(--amber)':'color:var(--orange)')+'">'
-          +(sinC?'⚠ Pendiente':(m.coste_total||0).toFixed(2)+'€')+'</td>'        +(canEdit          ?'<td><button class="vbtn vbtn-sec" onclick="valMermaEditCoste(\''+m.id+'\',\''+encodeURIComponent(m.producto||'')+'\',' +(m.cantidad||0)+',\''+( m.unidad||'g')+'\','+( m.coste_unitario||0)+')" title="Valorar">✏️</button></td>'          :'')        +'</tr>';
+          +(sinC?'⚠ Pendiente':(m.coste_total||0).toFixed(2).replace('.',',')+'€')+'</td>'        +(canEdit          ?'<td><button class="vbtn vbtn-sec" onclick="valMermaEditCoste(\''+m.id+'\',\''+encodeURIComponent(m.producto||'')+'\',' +(m.cantidad||0)+',\''+( m.unidad||'g')+'\','+( m.coste_unitario||0)+')" title="Valorar">✏️</button></td>'          :'')        +'</tr>';
     }).join('')
     +'</table>';
 }
@@ -1864,7 +1867,7 @@ function valMermaEditCoste(id, productoEnc, cantidad, unidad, costeActual) {
       var total = cu * cantidad;
       var prev = document.getElementById('vmc-preview');
       var tot  = document.getElementById('vmc-total');
-      if (cu > 0) { if(tot) tot.textContent = total.toFixed(2) + '€'; if(prev) prev.style.display = 'block'; }
+      if (cu > 0) { if(tot) tot.textContent = total.toFixed(2).replace('.',',') + '€'; if(prev) prev.style.display = 'block'; }
       else { if(prev) prev.style.display = 'none'; }
     });
   }
@@ -1904,7 +1907,7 @@ async function valMermaSaveCoste() {
 
     invalidateCache('merma');
     _valMermaCloseModal();
-    toast('Coste guardado — ' + costeTotal.toFixed(2) + '€', 'ok');
+    toast('Coste guardado — ' + costeTotal.toFixed(2).replace('.',',') + '€', 'ok');
     renderValMermaList();
   } catch(e) {
     toast('Error: ' + (e.message || e), 'err');

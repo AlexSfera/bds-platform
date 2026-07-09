@@ -5225,3 +5225,35 @@ document.addEventListener('DOMContentLoaded', function() {
   if(ls) ls.style.display='none';
   if(ap) ap.style.display='none';
 });
+
+
+/* ===== Bug 6 (corrección de caja en sitio) + Bug 7 (formato €) — helpers globales ===== */
+window._cajaCorrectMode = false;
+window._cajaCorrectNote = '';
+window._recCorrectPrevEstado = '';
+function fmtEur(v){
+  var n = (typeof v === 'number') ? v : parseFloat(v);
+  if(!isFinite(n)) n = 0;
+  return n.toFixed(2).replace('.', ',') + ' €';
+}
+function canCorrectCaja(dept){
+  if(!currentUser) return false;
+  if(typeof canActAsAdmin === 'function' && canActAsAdmin()) return true;
+  if(currentUser.rol === 'admin') return true;
+  var d = (dept || '').toString();
+  if(currentUser.rol === 'jefe_recepcion') return d === 'Recepción' || d === 'Recepcion' || d === 'Recepción SFERA';
+  if(currentUser.rol === 'coord_recepcion_syncrolab') return d === 'SYNCROLAB' || d === 'SyncroLab' || d === 'Recepción SYNCROLAB';
+  if(currentUser.rol === 'jefe' && currentUser.area === 'Sala') return d === 'Sala';
+  return false;
+}
+function correctedBadge(row){
+  if(!row || !row.corregida) return '';
+  var by = row.corrected_by || '';
+  var at = '';
+  try { if(row.corrected_at) at = new Date(row.corrected_at).toLocaleString('es-ES',{timeZone:'Europe/Madrid'}); } catch(e){ at = row.corrected_at || ''; }
+  var note = row.correction_note ? (' — ' + row.correction_note) : '';
+  return ' <span class="badge b-blue" title="Corregida por ' + by + ' · ' + at + note + '">✎ Corregida</span>';
+}
+window.fmtEur = fmtEur;
+window.canCorrectCaja = canCorrectCaja;
+window.correctedBadge = correctedBadge;
