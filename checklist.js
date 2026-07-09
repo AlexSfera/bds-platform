@@ -397,16 +397,53 @@ async function loadStaffImplicado(){
   var container=document.getElementById('staff-implicado-list');
   if(!container) return;
   var employees=await getDB('employees');
-  var staff=employees.filter(function(e){
-    return e.estado==='Activo'&&(e.area==='Cocina'||e.area==='Sala'||e.area==='Friegue');
+  var staff=employees.filter(function(e){ return e.estado==='Activo'; });
+  if(!staff.length){container.innerHTML='<div style="font-size:12px;color:var(--text3);">Sin empleados activos</div>';return;}
+  // Agrupar por departamento efectivo
+  var groups={};
+  staff.forEach(function(e){
+    var dept=(typeof _deptCatalogo==='function') ? _deptCatalogo(e) : (e.area||'Otros');
+    if(!groups[dept]) groups[dept]=[];
+    groups[dept].push(e);
   });
-  if(!staff.length){container.innerHTML='<div style="font-size:12px;color:var(--text3);">Sin empleados activos en Cocina/Sala</div>';return;}
-  container.innerHTML=staff.map(function(e){
-    return '<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;">'
-      +'<input type="checkbox" value="'+e.id+'" data-nombre="'+e.nombre+'" style="width:16px;height:16px;accent-color:#2ec4b6;flex-shrink:0;">'
-      +'<span><strong>'+e.nombre+'</strong> <span style="font-size:11px;color:var(--text3);">'+e.puesto+'</span></span>'
-      +'</label>';
-  }).join('');
+  // Orden fijo de departamentos
+  var deptOrder=['Cocina','Sala','Friegue','Recepción','Housekeeping','Mantenimiento',
+    'Recepción SYNCROLAB','Entrenadores','Fisioterapeutas','Economato','F&B',
+    'Administración','RRHH'];
+  var keys=deptOrder.filter(function(d){return groups[d];});
+  // Añadir departamentos no listados
+  Object.keys(groups).forEach(function(d){if(keys.indexOf(d)===-1) keys.push(d);});
+  var html='';
+  keys.forEach(function(dept){
+    html+='<div class="staff-dept-group" style="margin-top:8px;"><div style="font-size:11px;font-weight:600;color:var(--text2);padding:4px 4px 2px;text-transform:uppercase;letter-spacing:.5px;">'+dept+'</div>';
+    groups[dept].sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'');});
+    groups[dept].forEach(function(e){
+      html+='<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;">'
+        +'<input type="checkbox" value="'+e.id+'" data-nombre="'+e.nombre+'" style="width:16px;height:16px;accent-color:#2ec4b6;flex-shrink:0;">'
+        +'<span><strong>'+e.nombre+'</strong> <span style="font-size:11px;color:var(--text3);">'+e.puesto+'</span></span>'
+        +'</label>';
+    });
+    html+='</div>';
+  });
+  container.innerHTML=html;
+}
+
+// Filtro de búsqueda para staff-implicado-list (corrige filterStaffList que apuntaba a otro elemento)
+function filterStaffImplicado(query){
+  var container=document.getElementById('staff-implicado-list');
+  if(!container) return;
+  var q=(query||'').toLowerCase().trim();
+  var labels=container.querySelectorAll('label');
+  var groups=container.querySelectorAll('.staff-dept-group');
+  labels.forEach(function(lbl){
+    var text=lbl.textContent.toLowerCase();
+    lbl.style.display=(!q||text.indexOf(q)!==-1)?'flex':'none';
+  });
+  // Ocultar cabecera de grupo si no tiene labels visibles
+  groups.forEach(function(g){
+    var vis=g.querySelectorAll('label[style*="flex"]');
+    g.style.display=(vis.length||!q)?'':'none';
+  });
 }
 
 function getStaffImplicado(){
