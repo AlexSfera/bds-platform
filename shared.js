@@ -209,10 +209,6 @@ window._esEntrenador = _esEntrenador;
 window._esFisio      = _esFisio;
 window._deptCatalogo = _deptCatalogo;
 
-var _DEPTS_NOMBRE_CLIENTE = ['Recepción','Recepción SYNCROLAB','Entrenadores','Fisioterapeutas'];
-function _showNombreCliente(dept){ return _DEPTS_NOMBRE_CLIENTE.indexOf(dept) !== -1; }
-window._showNombreCliente = _showNombreCliente;
-
 // ═══════════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 let currentUser = null;
@@ -934,11 +930,6 @@ function setT(name,val){
     if(val==='si' && typeof poblarSelectorHabitacion==='function'){
       poblarSelectorHabitacion(document.getElementById('g-habitacion'), '');
     }
-    var _fgNc = document.getElementById('fg-nombre-cliente');
-    if(_fgNc){
-      var _dNc = (typeof _deptCatalogo === 'function') ? _deptCatalogo(currentUser) : (currentUser ? currentUser.area : '');
-      _fgNc.style.display = _showNombreCliente(_dNc) ? '' : 'none';
-    }
   }
   if(name==='incidencia'){
     const blk=document.getElementById('block-incidencia');
@@ -1386,6 +1377,7 @@ async function loadForCorrection(shiftId){
 // ═══════════════════════════════════════════════════════════════════════
 // SAVE TURNO
 async function _doSaveTurno(){
+  // ── Horas: campo eliminado del formulario. Pendiente integración Bitrix24 fichaje ──
   // ── Read all form values (already validated by saveTurno) ──
   // Fix Jun 2026: si fecha llega vacía (input borrado por jefe/coord, navegador
   // que ignora readonly, etc.) se usa today() como defensa.
@@ -1401,9 +1393,9 @@ async function _doSaveTurno(){
   }
   var _isRecSave = currentUser && currentUser.area === 'Recepción';
   const servicio = _isRecSave ? getRecTurnoValue() : getServicioValue();
-  const horas    = parseFloat((document.getElementById('t-horas')||{value:''}).value)||null;
+  const horas    = parseFloat((document.getElementById('t-horas')||{value:''}).value)||null; // Pending Bitrix24 fichaje
   const resp     = _isRecSave ? null : document.getElementById('t-responsable').value;
-  const obs      = (document.getElementById('t-obs')||{value:''}).value.trim() || null;
+  const obs      = (document.getElementById('t-obs')||{value:''}).value.trim() || null; // campo eliminado
   const ts       = localTs();
   const shiftId  = editingShiftId || genId();
 
@@ -1416,7 +1408,6 @@ async function _doSaveTurno(){
   // ── Build shift object ──
   // Sala data now collected via ajustes popup (_ajustesLines)
   var salaData = {};
-  const gNomCli = (document.getElementById('g-nombre-cliente')||{value:''}).value.trim();
 
   const shift = {
     id: shiftId,
@@ -1430,7 +1421,6 @@ async function _doSaveTurno(){
     merma_declarada: sinMermaFlag ? 'no' : 'si',
     incidencia_declarada: toggleState.incidencia||'no',
     observacion: obs,
-    nombre_cliente: gNomCli || null,
     checklist_items: JSON.stringify(_chkSavedState),
     kpi_entrenador: (typeof window._entrKpiState !== 'undefined' && window._entrKpiState) ? JSON.stringify(window._entrKpiState) : null,
     ajustes_sala: JSON.stringify(_ajustesLines||[]),
@@ -1659,7 +1649,6 @@ async function _doSaveTurno(){
     const gPrio   = (document.getElementById('g-prioridad')||{}).value || 'media';
     const gHab    = ((document.getElementById('g-habitacion')||{}).value || '').trim();
     const gRes    = ((document.getElementById('g-reserva')||{}).value || '').trim();
-    const gNomCliG = ((document.getElementById('g-nombre-cliente')||{}).value || '').trim();
     if(gDesc){
       const gRecord = {
         id:           genId(),
@@ -1675,7 +1664,6 @@ async function _doSaveTurno(){
         prioridad:    gPrio,
         habitacion:   gHab || null,
         num_reserva:  gRes || null,
-        nombre_cliente: gNomCliG || null,
         leido_por:    [],
         accion_tomada: '',
         estado:       INCIDENT_STATES.ABIERTA,
@@ -1835,7 +1823,7 @@ function saveTurno(){
     return;
   }
   const servicio=getServicioValue();
-  const horas=parseFloat((document.getElementById('t-horas')||{value:''}).value)||null;
+  // Horas: campo eliminado — pendiente integración Bitrix24 fichaje
   const resp=_isRecepcion ? 'ok' : document.getElementById('t-responsable').value;
   if(!fecha) errs.push('Fecha obligatoria');
   // Servicio/Turno validation — Recepción uses rec-turno radio, not servicio
@@ -2882,7 +2870,6 @@ async function openValidarModal(shiftId){
       if(g.tipo_gestion) info += '<div><span style="color:var(--text3)">Tipo: </span><span class="badge b-yellow">'+formatDisplayValue(g.tipo_gestion)+'</span></div>';
       info += '<div><span style="color:var(--text3)">Estado: </span>'+bGestionEstado(gState)+'</div>';
       info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Descripción: </span><strong>'+formatDisplayValue(g.descripcion)+'</strong></div>';
-      if(g.nombre_cliente) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Cliente: </span>👤 '+formatDisplayValue(g.nombre_cliente)+'</div>';
       if(g.accion_tomada) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Acción tomada: </span>'+formatDisplayValue(g.accion_tomada)+'</div>';
       info += '</div>';
       var isClosed = gState==='Cerrada';
@@ -4082,7 +4069,6 @@ function _gestionExtraRows(rec){
   var out = '<div><b>Prioridad:</b><br>'+prio+'</div>';
   if(rec.habitacion) out += '<div><b>Habitación:</b><br>🛏 '+formatDisplayValue(rec.habitacion)+'</div>';
   if(rec.num_reserva) out += '<div><b>Nº reserva:</b><br><span style="font-family:var(--font-mono);font-size:11px;">'+formatDisplayValue(rec.num_reserva)+'</span></div>';
-  if(rec.nombre_cliente) out += '<div><b>Cliente:</b><br>👤 '+formatDisplayValue(rec.nombre_cliente)+'</div>';
   var leido = Array.isArray(rec.leido_por) ? rec.leido_por : [];
   if(leido.length){
     var nombres = leido.map(function(l){ return (l && l.nombre) ? l.nombre : (typeof l==='string'?l:''); }).filter(Boolean).join(', ');
@@ -4478,7 +4464,6 @@ async function renderGestionesScreen(){
         +     bGestionEstadoClick(st, g.id)
         +   '</div>'
         +   '<div class="task-title">'+formatDisplayValue(g.descripcion)+'</div>'
-        +   (g.nombre_cliente ? '<div style="font-size:11px;color:var(--text2);margin-top:2px;">👤 '+formatDisplayValue(g.nombre_cliente)+'</div>' : '')
         +   '<div class="task-footer">'
         +     '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
         +       '📅 '+fechaStr+' &nbsp;·&nbsp; creada por '+formatDisplayValue(g.creado_por||g.nombre)
@@ -4514,7 +4499,6 @@ function openNewGestionStandalone(){
       + '<div class="fg"><label>Prioridad</label><select id="ng-prioridad"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select></div>'
       + '<div class="fg"><label>Habitación</label><select id="ng-habitacion"><option value="">— Sin habitación —</option></select></div>'
       + '<div class="fg"><label>Nº reserva (opcional)</label><input id="ng-reserva" type="text" placeholder="Ej. 123456"></div>'
-      + '<div class="fg" id="fg-ng-nombre-cliente" style="display:none;"><label>Nombre del cliente</label><input id="ng-nombre-cliente" type="text" placeholder="Nombre del cliente o huésped" autocomplete="off"></div>'
       + '<div class="fg"><label>Descripción</label><textarea id="ng-desc" rows="3" placeholder="Detalle de la gestión..."></textarea></div>'
       + '</div>'
       + '<div class="modal-f">'
@@ -4538,9 +4522,6 @@ function openNewGestionStandalone(){
   ov.querySelector('#ng-desc').value = '';
   var pr = ov.querySelector('#ng-prioridad'); if(pr) pr.value = 'media';
   var rs = ov.querySelector('#ng-reserva'); if(rs) rs.value = '';
-  var ncEl = ov.querySelector('#ng-nombre-cliente'); if(ncEl) ncEl.value = '';
-  var fgNc = ov.querySelector('#fg-ng-nombre-cliente');
-  if(fgNc) fgNc.style.display = _showNombreCliente(dept) ? '' : 'none';
   poblarSelectorHabitacion(ov.querySelector('#ng-habitacion'), '');
   ov.classList.add('open');
 }
@@ -4553,7 +4534,6 @@ async function saveNewGestionStandalone(){
   var prio = (document.getElementById('ng-prioridad')||{}).value || 'media';
   var hab  = ((document.getElementById('ng-habitacion')||{}).value || '').trim();
   var res  = ((document.getElementById('ng-reserva')||{}).value || '').trim();
-  var nomCli = ((document.getElementById('ng-nombre-cliente')||{}).value || '').trim();
   var rec = {
     id: genId(),
     employee_id: currentUser.id,
@@ -4566,7 +4546,6 @@ async function saveNewGestionStandalone(){
     prioridad: prio,
     habitacion: hab || null,
     num_reserva: res || null,
-    nombre_cliente: nomCli || null,
     leido_por: [],
     accion_tomada: '',
     estado: 'Abierta',

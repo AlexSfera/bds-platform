@@ -1211,7 +1211,8 @@ tr:hover td{background:rgba(96,165,250,.06);}
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Tarde" style="width:16px;height:16px;accent-color:#a855f7;"> 🌆 Tarde</label>
               </div>
             </div></div>
-          <div class="fg" style="grid-column:1/-1"><label>Responsable de turno <span class="req">*</span></label><select id="t-responsable" style="color:#111827;background:#ffffff;border:1px solid #d1d5db;"><option value="">— Seleccionar —</option></select></div>
+          <!-- Horas: eliminado — pendiente integración Bitrix24 fichaje -->
+          <div class="fg"><label>Responsable de turno <span class="req">*</span></label><select id="t-responsable" style="color:#111827;background:#ffffff;border:1px solid #d1d5db;"><option value="">— Seleccionar —</option></select></div>
         </div>
 
         
@@ -1248,9 +1249,6 @@ tr:hover td{background:rgba(96,165,250,.06);}
               </div>
               <div class="fg"><label>Nº reserva (opcional)</label>
                 <input id="g-reserva" type="text" placeholder="Ej. 123456">
-              </div>
-              <div class="fg" id="fg-nombre-cliente" style="display:none;"><label>Nombre del cliente</label>
-                <input id="g-nombre-cliente" type="text" placeholder="Nombre del cliente o huésped" autocomplete="off">
               </div>
               <div class="fg"><label>Descripción <span class="req">*</span></label>
                 <textarea id="g-desc" rows="3" placeholder="Qué queda pendiente, para quién y qué hay que hacer..."></textarea>
@@ -1290,8 +1288,8 @@ tr:hover td{background:rgba(96,165,250,.06);}
                 <div class="fg">
                   <label>Personas involucradas <span style="color:var(--text3);font-weight:400;">(opcional)</span></label>
                   <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Personas que participaron o estuvieron presentes</div>
-                  <input type="search" id="staff-search" placeholder="Buscar por nombre, puesto, área..." autocomplete="off" oninput="filterStaffImplicado(this.value)" style="margin-bottom:6px;border-radius:6px 6px 0 0;">
-                  <div id="staff-implicado-list" style="background:var(--bg);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:10px;max-height:260px;overflow-y:auto;">
+                  <input type="search" id="staff-search" placeholder="Buscar por nombre, puesto, área..." autocomplete="off" oninput="filterStaffList(this.value)" style="margin-bottom:6px;border-radius:6px 6px 0 0;">
+                  <div id="staff-implicado-list" style="background:var(--bg);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:10px;max-height:180px;overflow-y:auto;">
                     <div style="font-size:12px;color:var(--text3);">Cargando...</div>
                   </div>
                 </div>
