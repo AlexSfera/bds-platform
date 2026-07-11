@@ -1,14 +1,22 @@
 // ═══════════════════════════════════════════════════════════════════════
-// ADJUNTOS — módulo de archivos adjuntos · SYNCRO SHIFT
+// ADJUNTOS + VISIBILIDAD INCIDENCIAS — SYNCRO SHIFT
 // Carga ÚLTIMO en index.html (después de todos los módulos).
 // No modifica archivos existentes — se engancha via wrapping.
 //
-// Depende de (shared.js): SUPABASE_URL, SUPABASE_KEY, getDB, dbUpdate,
-//   invalidateCache, auditLog, toast, localTs, currentUser, genId
+// PARTE 1: Adjuntos (upload/delete/render archivos)
+// PARTE 2: Visibilidad incidencias (dept creación + dept staff implicado)
 //
-// Requiere: bucket 'adjuntos' en Supabase Storage (ver SQL migration)
-// Columna 'adjuntos' jsonb DEFAULT '[]' en gestiones, incidencias, tareas
+// Depende de (shared.js): SUPABASE_URL, SUPABASE_KEY, getDB, dbUpdate,
+//   invalidateCache, auditLog, toast, localTs, currentUser, genId,
+//   isAdmin, isSupervisor, canViewDepartment, getSupervisorDepartments,
+//   normalizeDeptName, getRecordDepartment, formatDisplayValue,
+//   INCIDENT_STATES, normalizeIncidentState, isIncidentOpen,
+//   TASK_STATES, normalizeTaskState, isTaskOpen, isOverdue
 // ═══════════════════════════════════════════════════════════════════════
+
+// ╔═══════════════════════════════════════════════════════════════════╗
+// ║  PARTE 1 — ADJUNTOS                                             ║
+// ╚═══════════════════════════════════════════════════════════════════╝
 
 // ── CONFIG ────────────────────────────────────────────────────────────
 var ADJ_BUCKET   = 'adjuntos';
@@ -46,22 +54,16 @@ var ADJ_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB por archivo
     '  font-size:11px;color:var(--text2);}',
     '.adj-pending-item .adj-item-del{color:var(--text3);}',
     '.adj-uploading{opacity:.6;pointer-events:none;}',
-    '.adj-progress{height:3px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden;}',
-    '.adj-progress-bar{height:100%;background:var(--blue);transition:width .3s;}',
   ].join('\n');
   document.head.appendChild(s);
 })();
 
 // ── SUPABASE STORAGE API ──────────────────────────────────────────────
 
-// Upload un archivo al bucket. Retorna {name, path, size, type, uploaded_by, uploaded_at}
 async function adjuntoUpload(file, table, recordId){
-  // Sanitizar nombre: quitar caracteres problemáticos
   var safeName = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_');
-  // Añadir timestamp para evitar colisiones
   var ts = Date.now();
   var path = table + '/' + recordId + '/' + ts + '_' + safeName;
-
   var res = await fetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
     method: 'POST',
     headers: {
@@ -78,28 +80,21 @@ async function adjuntoUpload(file, table, recordId){
     throw new Error('Upload failed: ' + res.status + ' ' + errText);
   }
   return {
-    name: file.name,
-    path: path,
-    size: file.size,
+    name: file.name, path: path, size: file.size,
     type: file.type || 'application/octet-stream',
     uploaded_by: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.nombre : 'Sistema',
     uploaded_at: localTs()
   };
 }
 
-// Eliminar archivo del bucket
 async function adjuntoRemove(path){
   var res = await fetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
     method: 'DELETE',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY
-    }
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
   return res.ok;
 }
 
-// URL pública de un archivo
 function adjuntoPublicUrl(path){
   return SUPABASE_URL + '/storage/v1/object/public/' + ADJ_BUCKET + '/' + path;
 }
@@ -123,35 +118,21 @@ async function adjuntoSaveToRecord(table, recordId, adjuntosArray){
 
 // ── UPLOAD BATCH ──────────────────────────────────────────────────────
 
-// Sube un array de File objects, actualiza el registro en DB.
-// Retorna el array actualizado de adjuntos (existentes + nuevos).
 async function adjuntoUploadBatch(files, table, recordId){
   if(!files || !files.length) return [];
-
-  // Leer adjuntos existentes
   var existing = await adjuntoGetFromRecord(table, recordId);
-  var total = existing.length + files.length;
-  if(total > ADJ_MAX_FILES){
-    toast('Máximo ' + ADJ_MAX_FILES + ' archivos por registro. Ya hay ' + existing.length + '.', 'err');
+  if(existing.length + files.length > ADJ_MAX_FILES){
+    toast('Máximo ' + ADJ_MAX_FILES + ' archivos. Ya hay ' + existing.length + '.', 'err');
     return existing;
   }
-
   var newAdj = [];
   for(var i = 0; i < files.length; i++){
     var f = files[i];
-    if(f.size > ADJ_MAX_SIZE){
-      toast(f.name + ': excede 10 MB', 'err');
-      continue;
-    }
-    try {
-      var meta = await adjuntoUpload(f, table, recordId);
-      newAdj.push(meta);
-    } catch(e){
-      toast('Error subiendo ' + f.name + ': ' + e.message, 'err');
-    }
+    if(f.size > ADJ_MAX_SIZE){ toast(f.name + ': excede 10 MB', 'err'); continue; }
+    try { newAdj.push(await adjuntoUpload(f, table, recordId)); }
+    catch(e){ toast('Error subiendo ' + f.name + ': ' + e.message, 'err'); }
   }
   if(!newAdj.length) return existing;
-
   var merged = existing.concat(newAdj);
   await adjuntoSaveToRecord(table, recordId, merged);
   auditLog('ADJUNTO_UPLOAD', table + '/' + recordId + ' — ' + newAdj.map(function(a){ return a.name; }).join(', '));
@@ -159,7 +140,6 @@ async function adjuntoUploadBatch(files, table, recordId){
   return merged;
 }
 
-// Eliminar un adjunto de un registro
 async function adjuntoRemoveFromRecord(table, recordId, path){
   var existing = await adjuntoGetFromRecord(table, recordId);
   var filtered = existing.filter(function(a){ return a.path !== path; });
@@ -172,14 +152,9 @@ async function adjuntoRemoveFromRecord(table, recordId, path){
 
 // ── UI: INPUT DE ARCHIVOS ─────────────────────────────────────────────
 
-// Renderiza una zona de drop + input de archivos.
-// containerId = id del div contenedor (ya existente o se crea)
-// inputId     = id único para el <input type="file">
-// Retorna el elemento contenedor.
 function adjuntoRenderInput(containerId, inputId){
   var container = document.getElementById(containerId);
   if(!container) return null;
-
   container.innerHTML =
     '<div class="adj-zone" id="' + inputId + '-zone">'
     + '<label class="adj-zone-label" for="' + inputId + '">'
@@ -189,18 +164,14 @@ function adjuntoRenderInput(containerId, inputId){
     + ' style="display:none;" onchange="adjuntoOnSelect(this,\'' + inputId + '\')">'
     + '<div class="adj-pending" id="' + inputId + '-pending"></div>'
     + '</div>';
-
-  // Drag & drop
   var zone = document.getElementById(inputId + '-zone');
   if(zone){
     zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
     zone.addEventListener('drop', function(e){
-      e.preventDefault();
-      zone.classList.remove('drag-over');
+      e.preventDefault(); zone.classList.remove('drag-over');
       var input = document.getElementById(inputId);
       if(input && e.dataTransfer.files.length){
-        // Merge with existing files
         var dt = new DataTransfer();
         var prev = input.files || [];
         for(var i = 0; i < prev.length; i++) dt.items.add(prev[i]);
@@ -213,52 +184,35 @@ function adjuntoRenderInput(containerId, inputId){
   return container;
 }
 
-// Callback cuando el usuario selecciona archivos (muestra preview de pendientes)
 function adjuntoOnSelect(input, inputId){
   var pendEl = document.getElementById(inputId + '-pending');
   if(!pendEl) return;
   var files = input.files;
   if(!files || !files.length){ pendEl.innerHTML = ''; return; }
-
-  // Validar cantidad
-  if(files.length > ADJ_MAX_FILES){
-    toast('Máximo ' + ADJ_MAX_FILES + ' archivos', 'err');
-    input.value = '';
-    pendEl.innerHTML = '';
-    return;
-  }
-
+  if(files.length > ADJ_MAX_FILES){ toast('Máximo ' + ADJ_MAX_FILES + ' archivos', 'err'); input.value = ''; pendEl.innerHTML = ''; return; }
   var html = '';
   for(var i = 0; i < files.length; i++){
     var f = files[i];
-    var sizeStr = f.size < 1024 ? f.size + ' B'
-               : f.size < 1048576 ? Math.round(f.size / 1024) + ' KB'
-               : (f.size / 1048576).toFixed(1) + ' MB';
+    var sizeStr = f.size < 1024 ? f.size + ' B' : f.size < 1048576 ? Math.round(f.size / 1024) + ' KB' : (f.size / 1048576).toFixed(1) + ' MB';
     var icon = _adjFileIcon(f.type, f.name);
     var oversize = f.size > ADJ_MAX_SIZE ? ' style="color:var(--red);text-decoration:line-through;"' : '';
-    html += '<div class="adj-pending-item">'
-      + icon
+    html += '<div class="adj-pending-item">' + icon
       + '<span class="adj-item-name"' + oversize + '>' + _adjEsc(f.name) + '</span>'
       + '<span class="adj-item-size"' + (f.size > ADJ_MAX_SIZE ? ' style="color:var(--red)"' : '') + '>' + sizeStr + '</span>'
-      + '<button class="adj-item-del" onclick="adjuntoRemovePending(\'' + inputId + '\',' + i + ')" title="Quitar">✕</button>'
-      + '</div>';
+      + '<button class="adj-item-del" onclick="adjuntoRemovePending(\'' + inputId + '\',' + i + ')" title="Quitar">✕</button></div>';
   }
   pendEl.innerHTML = html;
 }
 
-// Quitar un archivo pendiente (aún no subido)
 function adjuntoRemovePending(inputId, index){
   var input = document.getElementById(inputId);
   if(!input) return;
   var dt = new DataTransfer();
-  for(var i = 0; i < input.files.length; i++){
-    if(i !== index) dt.items.add(input.files[i]);
-  }
+  for(var i = 0; i < input.files.length; i++){ if(i !== index) dt.items.add(input.files[i]); }
   input.files = dt.files;
   adjuntoOnSelect(input, inputId);
 }
 
-// Recoger los File objects del input (antes de limpiar el form)
 function adjuntoCollectFiles(inputId){
   var input = document.getElementById(inputId);
   if(!input || !input.files || !input.files.length) return [];
@@ -267,133 +221,86 @@ function adjuntoCollectFiles(inputId){
   return arr;
 }
 
-// ── UI: VISOR DE ADJUNTOS (registros existentes) ──────────────────────
+// ── UI: VISOR DE ADJUNTOS ─────────────────────────────────────────────
 
-// Renderiza lista de adjuntos existentes + zona de upload (si editable).
-// Retorna HTML string.
 function adjuntoRenderViewer(adjuntos, table, recordId, editable){
   if(!adjuntos) adjuntos = [];
   if(typeof adjuntos === 'string'){ try { adjuntos = JSON.parse(adjuntos); } catch(e){ adjuntos = []; } }
-
   var html = '<div style="margin-top:10px;">';
   html += '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📎 Adjuntos (' + adjuntos.length + '/' + ADJ_MAX_FILES + ')</div>';
-
   if(adjuntos.length){
     html += '<div class="adj-list">';
     for(var i = 0; i < adjuntos.length; i++){
       var a = adjuntos[i];
       var url = adjuntoPublicUrl(a.path);
-      var sizeStr = a.size < 1024 ? a.size + ' B'
-                 : a.size < 1048576 ? Math.round(a.size / 1024) + ' KB'
-                 : (a.size / 1048576).toFixed(1) + ' MB';
-      var icon = _adjFileIcon(a.type, a.name);
+      var sizeStr = a.size < 1024 ? a.size + ' B' : a.size < 1048576 ? Math.round(a.size / 1024) + ' KB' : (a.size / 1048576).toFixed(1) + ' MB';
       var isImg = a.type && a.type.indexOf('image/') === 0;
-
       html += '<div class="adj-item">';
       if(isImg) html += '<img class="adj-thumb" src="' + url + '" alt="" loading="lazy">';
-      else html += icon;
+      else html += _adjFileIcon(a.type, a.name);
       html += '<span class="adj-item-name"><a href="' + url + '" target="_blank" rel="noopener">' + _adjEsc(a.name) + '</a></span>';
       html += '<span class="adj-item-size">' + sizeStr + '</span>';
-      if(editable){
-        html += '<button class="adj-item-del" onclick="adjuntoDeleteFromViewer(\'' + table + '\',\'' + recordId + '\',\'' + _adjEsc(a.path) + '\')" title="Eliminar">🗑</button>';
-      }
+      if(editable) html += '<button class="adj-item-del" onclick="adjuntoDeleteFromViewer(\'' + table + '\',\'' + recordId + '\',\'' + _adjEsc(a.path) + '\')" title="Eliminar">🗑</button>';
       html += '</div>';
     }
     html += '</div>';
   } else {
     html += '<div style="font-size:12px;color:var(--text3);padding:4px 0;">Sin adjuntos</div>';
   }
-
-  // Upload zone (si editable y no lleno)
   if(editable && adjuntos.length < ADJ_MAX_FILES){
     var uid = 'adj-viewer-' + table + '-' + recordId;
-    html += '<div style="margin-top:8px;">'
-      + '<div class="adj-zone" id="' + uid + '-zone">'
-      + '<label class="adj-zone-label" for="' + uid + '">'
-      + '＋ Añadir archivo'
-      + '</label>'
+    html += '<div style="margin-top:8px;"><div class="adj-zone" id="' + uid + '-zone">'
+      + '<label class="adj-zone-label" for="' + uid + '">＋ Añadir archivo</label>'
       + '<input type="file" id="' + uid + '" multiple style="display:none;"'
       + ' onchange="adjuntoUploadFromViewer(\'' + table + '\',\'' + recordId + '\',this)">'
       + '</div></div>';
   }
-
   html += '</div>';
   return html;
 }
 
-// Callback: subir archivo directamente desde el visor
 async function adjuntoUploadFromViewer(table, recordId, input){
   if(!input.files || !input.files.length) return;
   var files = [];
   for(var i = 0; i < input.files.length; i++) files.push(input.files[i]);
-
-  // Deshabilitar zona mientras sube
   var zone = input.closest('.adj-zone');
   if(zone) zone.classList.add('adj-uploading');
-
-  try {
-    await adjuntoUploadBatch(files, table, recordId);
-  } catch(e){
-    toast('Error: ' + e.message, 'err');
-  }
-
+  try { await adjuntoUploadBatch(files, table, recordId); } catch(e){ toast('Error: ' + e.message, 'err'); }
   if(zone) zone.classList.remove('adj-uploading');
   input.value = '';
-
-  // Re-render el visor (buscar el contenedor padre)
   _adjRefreshViewer(table, recordId);
 }
 
-// Callback: eliminar adjunto desde el visor
 async function adjuntoDeleteFromViewer(table, recordId, path){
   if(!confirm('¿Eliminar este archivo?')) return;
-  try {
-    await adjuntoRemoveFromRecord(table, recordId, path);
-    _adjRefreshViewer(table, recordId);
-  } catch(e){
-    toast('Error: ' + e.message, 'err');
-  }
+  try { await adjuntoRemoveFromRecord(table, recordId, path); _adjRefreshViewer(table, recordId); }
+  catch(e){ toast('Error: ' + e.message, 'err'); }
 }
 
-// Re-renderizar el visor tras upload/delete
 async function _adjRefreshViewer(table, recordId){
   var adjuntos = await adjuntoGetFromRecord(table, recordId);
-  // Buscar contenedor del visor por data attribute
   var containers = document.querySelectorAll('[data-adj-viewer="' + table + '-' + recordId + '"]');
   containers.forEach(function(c){
     var editable = c.getAttribute('data-adj-editable') === 'true';
     c.innerHTML = adjuntoRenderViewer(adjuntos, table, recordId, editable);
     _adjSetupDragDrop(c, table, recordId);
   });
-
-  // Si estamos en el modal detail del dashboard, re-renderizar
-  var detBody = document.querySelector('.dash-detail-body [data-adj-viewer="' + table + '-' + recordId + '"]');
-  if(detBody){
-    detBody.innerHTML = adjuntoRenderViewer(adjuntos, table, recordId, true);
-    _adjSetupDragDrop(detBody, table, recordId);
-  }
 }
 
-// Setup drag&drop en un visor ya renderizado
 function _adjSetupDragDrop(container, table, recordId){
   var zones = container.querySelectorAll('.adj-zone');
   zones.forEach(function(zone){
     zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
     zone.addEventListener('drop', function(e){
-      e.preventDefault();
-      zone.classList.remove('drag-over');
+      e.preventDefault(); zone.classList.remove('drag-over');
       if(e.dataTransfer.files.length){
         var files = [];
         for(var i = 0; i < e.dataTransfer.files.length; i++) files.push(e.dataTransfer.files[i]);
         zone.classList.add('adj-uploading');
         adjuntoUploadBatch(files, table, recordId).then(function(){
-          zone.classList.remove('adj-uploading');
-          _adjRefreshViewer(table, recordId);
-        }).catch(function(err){
-          zone.classList.remove('adj-uploading');
-          toast('Error: ' + err.message, 'err');
-        });
+          zone.classList.remove('adj-uploading'); _adjRefreshViewer(table, recordId);
+        }).catch(function(err){ zone.classList.remove('adj-uploading'); toast('Error: ' + err.message, 'err'); });
       }
     });
   });
@@ -407,24 +314,20 @@ function _adjEsc(s){
 }
 
 function _adjFileIcon(mimeType, name){
-  mimeType = mimeType || '';
-  name = (name || '').toLowerCase();
+  mimeType = mimeType || ''; name = (name || '').toLowerCase();
   if(mimeType.indexOf('image/') === 0) return '🖼️ ';
   if(mimeType.indexOf('video/') === 0) return '🎬 ';
   if(mimeType === 'application/pdf' || name.endsWith('.pdf')) return '📄 ';
-  if(mimeType.indexOf('spreadsheet') >= 0 || name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) return '📊 ';
-  if(mimeType.indexOf('word') >= 0 || name.endsWith('.docx') || name.endsWith('.doc')) return '📝 ';
-  if(mimeType.indexOf('text/') === 0) return '📃 ';
+  if(mimeType.indexOf('spreadsheet') >= 0 || name.endsWith('.xlsx') || name.endsWith('.csv')) return '📊 ';
+  if(mimeType.indexOf('word') >= 0 || name.endsWith('.docx')) return '📝 ';
   return '📎 ';
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// HOOKS — se engancha a las funciones existentes sin modificar archivos
+// HOOKS — ADJUNTOS (wrapping de funciones existentes)
 // ═══════════════════════════════════════════════════════════════════════
 
-// ── 1. INTERCEPTOR de dbInsert ────────────────────────────────────────
-// Captura el ID del último registro insertado en gestiones/incidencias/tareas
-// para que los wrappers de save puedan subir adjuntos al registro correcto.
+// ── Interceptor de dbInsert ───────────────────────────────────────────
 (function(){
   window._adjLastInserted = null;
   var _origDbInsert = window.dbInsert;
@@ -437,72 +340,56 @@ function _adjFileIcon(mimeType, name){
   };
 })();
 
-// ── 2. INYECCIÓN DE FILE INPUTS EN FORMULARIOS ────────────────────────
-// Se ejecuta cuando el DOM está listo y también vía MutationObserver
-// para modales generados dinámicamente.
-
+// ── Inyección de file inputs en formularios ───────────────────────────
 function _adjInjectInputs(){
-  // -- block-gestion (turno form)
+  // block-gestion (turno form)
   var gBlock = document.getElementById('block-gestion');
   if(gBlock && !document.getElementById('adj-gestion-container')){
-    var gDiv = document.createElement('div');
-    gDiv.id = 'adj-gestion-container';
-    gDiv.className = 'fg';
+    var gDiv = document.createElement('div'); gDiv.id = 'adj-gestion-container'; gDiv.className = 'fg';
     gDiv.innerHTML = '<label>Adjuntos</label>';
-    gBlock.querySelector('.grid1').appendChild(gDiv);
+    var gGrid = gBlock.querySelector('.grid1');
+    if(gGrid) gGrid.appendChild(gDiv);
     adjuntoRenderInput('adj-gestion-container', 'adj-gestion-input');
   }
-
-  // -- block-incidencia (turno form)
+  // block-incidencia (turno form)
   var iBlock = document.getElementById('block-incidencia');
   if(iBlock && !document.getElementById('adj-incidencia-container')){
     var iGrid = iBlock.querySelector('.grid1');
     if(iGrid){
-      var iDiv = document.createElement('div');
-      iDiv.id = 'adj-incidencia-container';
-      iDiv.className = 'fg';
+      var iDiv = document.createElement('div'); iDiv.id = 'adj-incidencia-container'; iDiv.className = 'fg';
       iDiv.innerHTML = '<label>Adjuntos</label>';
       iGrid.appendChild(iDiv);
       adjuntoRenderInput('adj-incidencia-container', 'adj-incidencia-input');
     }
   }
-
-  // -- modal-tarea
+  // modal-tarea
   var tModal = document.getElementById('modal-tarea');
   if(tModal && !document.getElementById('adj-tarea-container')){
     var tGrid = tModal.querySelector('.grid2');
     if(tGrid){
-      var tDiv = document.createElement('div');
-      tDiv.id = 'adj-tarea-container';
-      tDiv.className = 'fg sp2';
+      var tDiv = document.createElement('div'); tDiv.id = 'adj-tarea-container'; tDiv.className = 'fg sp2';
       tDiv.innerHTML = '<label>Adjuntos</label>';
       tGrid.appendChild(tDiv);
       adjuntoRenderInput('adj-tarea-container', 'adj-tarea-input');
     }
   }
-
-  // -- modal-new-gestion (standalone, generado dinámicamente por shared.js)
+  // modal-new-gestion (standalone, dinámico)
   var ngModal = document.getElementById('modal-new-gestion');
   if(ngModal && !document.getElementById('adj-new-gestion-container')){
     var ngGrid = ngModal.querySelector('.grid1, .grid2');
     if(ngGrid){
-      var ngDiv = document.createElement('div');
-      ngDiv.id = 'adj-new-gestion-container';
-      ngDiv.className = 'fg sp2';
+      var ngDiv = document.createElement('div'); ngDiv.id = 'adj-new-gestion-container'; ngDiv.className = 'fg sp2';
       ngDiv.innerHTML = '<label>Adjuntos</label>';
       ngGrid.appendChild(ngDiv);
       adjuntoRenderInput('adj-new-gestion-container', 'adj-new-gestion-input');
     }
   }
-
-  // -- modal-new-inci (standalone, generado dinámicamente por shared.js)
+  // modal-new-inci (standalone, dinámico)
   var niModal = document.getElementById('modal-new-inci');
   if(niModal && !document.getElementById('adj-new-inci-container')){
     var niGrid = niModal.querySelector('.grid1, .grid2');
     if(niGrid){
-      var niDiv = document.createElement('div');
-      niDiv.id = 'adj-new-inci-container';
-      niDiv.className = 'fg sp2';
+      var niDiv = document.createElement('div'); niDiv.id = 'adj-new-inci-container'; niDiv.className = 'fg sp2';
       niDiv.innerHTML = '<label>Adjuntos</label>';
       niGrid.appendChild(niDiv);
       adjuntoRenderInput('adj-new-inci-container', 'adj-new-inci-input');
@@ -510,190 +397,131 @@ function _adjInjectInputs(){
   }
 }
 
-// Inyectar al cargar y observar modales dinámicos
 document.addEventListener('DOMContentLoaded', function(){
   _adjInjectInputs();
-  // MutationObserver para modales generados dinámicamente
-  var obs = new MutationObserver(function(mutations){
-    for(var i = 0; i < mutations.length; i++){
-      if(mutations[i].addedNodes.length) { _adjInjectInputs(); break; }
-    }
+  var obs = new MutationObserver(function(muts){
+    for(var i = 0; i < muts.length; i++){ if(muts[i].addedNodes.length){ _adjInjectInputs(); break; } }
   });
   obs.observe(document.body, { childList: true, subtree: true });
 });
-// Fallback: también inyectar cuando se abre la app (login carga pantallas)
 if(document.readyState === 'complete' || document.readyState === 'interactive'){
   setTimeout(_adjInjectInputs, 500);
   setTimeout(_adjInjectInputs, 2000);
 }
 
-// ── 3. WRAPPER de _doSaveTurno ────────────────────────────────────────
-// Captura archivos ANTES del save, sube DESPUÉS al registro correcto.
+// ── Wrapper _doSaveTurno ──────────────────────────────────────────────
 (function(){
   if(typeof window._doSaveTurno !== 'function') return;
   var _origDoSaveTurno = window._doSaveTurno;
-
   window._doSaveTurno = async function(){
-    // Stash archivos antes de que el form se limpie
     var gFiles = adjuntoCollectFiles('adj-gestion-input');
     var iFiles = adjuntoCollectFiles('adj-incidencia-input');
     var prevShiftId = window._lastSavedShiftId;
-
-    // Ejecutar el save original
     await _origDoSaveTurno.apply(this, arguments);
-
     var newShiftId = window._lastSavedShiftId;
-    // Si no cambió el shiftId, el save falló o fue cancelado
     if(!newShiftId || newShiftId === prevShiftId) return;
-
-    // Subir adjuntos de gestión
     if(gFiles.length){
       try {
         invalidateCache('gestiones');
         var gg = await getDB('gestiones');
         var gRec = null;
-        for(var g = 0; g < gg.length; g++){
-          if(gg[g].shift_id === newShiftId){ gRec = gg[g]; break; }
-        }
+        for(var g = 0; g < gg.length; g++){ if(gg[g].shift_id === newShiftId){ gRec = gg[g]; break; } }
         if(gRec) await adjuntoUploadBatch(gFiles, 'gestiones', gRec.id);
       } catch(e){ console.error('Adjuntos gestión error:', e); }
     }
-
-    // Subir adjuntos de incidencia
     if(iFiles.length){
       try {
         invalidateCache('incidencias');
         var ii = await getDB('incidencias');
         var iRec = null;
-        for(var k = ii.length - 1; k >= 0; k--){
-          if(ii[k].shift_id === newShiftId){ iRec = ii[k]; break; }
-        }
+        for(var k = ii.length - 1; k >= 0; k--){ if(ii[k].shift_id === newShiftId){ iRec = ii[k]; break; } }
         if(iRec) await adjuntoUploadBatch(iFiles, 'incidencias', iRec.id);
       } catch(e){ console.error('Adjuntos incidencia error:', e); }
     }
   };
 })();
 
-// ── 4. WRAPPER de saveTask ────────────────────────────────────────────
+// ── Wrapper saveTask ──────────────────────────────────────────────────
 (function(){
   if(typeof window.saveTask !== 'function') return;
   var _origSaveTask = window.saveTask;
-
   window.saveTask = async function(){
     var tFiles = adjuntoCollectFiles('adj-tarea-input');
     window._adjLastInserted = null;
-
     await _origSaveTask.apply(this, arguments);
-
-    // Si se insertó una tarea, subir adjuntos
     var last = window._adjLastInserted;
     if(tFiles.length && last && last.table === 'tareas'){
-      try {
-        await adjuntoUploadBatch(tFiles, 'tareas', last.id);
-      } catch(e){ console.error('Adjuntos tarea error:', e); }
+      try { await adjuntoUploadBatch(tFiles, 'tareas', last.id); } catch(e){ console.error('Adjuntos tarea error:', e); }
     }
   };
 })();
 
-// ── 5. WRAPPER de saveNewGestionStandalone ─────────────────────────────
+// ── Wrapper saveNewGestionStandalone ───────────────────────────────────
 (function(){
   if(typeof window.saveNewGestionStandalone !== 'function') return;
-  var _origSaveNewGestion = window.saveNewGestionStandalone;
-
+  var _orig = window.saveNewGestionStandalone;
   window.saveNewGestionStandalone = async function(){
     var files = adjuntoCollectFiles('adj-new-gestion-input');
     window._adjLastInserted = null;
-
-    await _origSaveNewGestion.apply(this, arguments);
-
+    await _orig.apply(this, arguments);
     var last = window._adjLastInserted;
     if(files.length && last && last.table === 'gestiones'){
-      try {
-        await adjuntoUploadBatch(files, 'gestiones', last.id);
-      } catch(e){ console.error('Adjuntos gestión standalone error:', e); }
+      try { await adjuntoUploadBatch(files, 'gestiones', last.id); } catch(e){ console.error(e); }
     }
   };
 })();
 
-// ── 6. WRAPPER de saveNewIncidenciaStandalone ──────────────────────────
+// ── Wrapper saveNewIncidenciaStandalone ────────────────────────────────
 (function(){
   if(typeof window.saveNewIncidenciaStandalone !== 'function') return;
-  var _origSaveNewInci = window.saveNewIncidenciaStandalone;
-
+  var _orig = window.saveNewIncidenciaStandalone;
   window.saveNewIncidenciaStandalone = async function(){
     var files = adjuntoCollectFiles('adj-new-inci-input');
     window._adjLastInserted = null;
-
-    await _origSaveNewInci.apply(this, arguments);
-
+    await _orig.apply(this, arguments);
     var last = window._adjLastInserted;
     if(files.length && last && last.table === 'incidencias'){
-      try {
-        await adjuntoUploadBatch(files, 'incidencias', last.id);
-      } catch(e){ console.error('Adjuntos incidencia standalone error:', e); }
+      try { await adjuntoUploadBatch(files, 'incidencias', last.id); } catch(e){ console.error(e); }
     }
   };
 })();
 
-// ── 7. WRAPPER de _dashShowDetail — añade visor de adjuntos ───────────
+// ── Wrapper _dashShowDetail — añade visor de adjuntos ─────────────────
 (function(){
   if(typeof window._dashShowDetail !== 'function') return;
-  var _origDashShowDetail = window._dashShowDetail;
-
+  var _orig = window._dashShowDetail;
   window._dashShowDetail = async function(id, table){
-    // Ejecutar el original
-    await _origDashShowDetail.apply(this, arguments);
-
-    // Solo para tablas con adjuntos
+    await _orig.apply(this, arguments);
     if(table !== 'gestiones' && table !== 'incidencias' && table !== 'tareas') return;
-
-    // Buscar el body del modal detail
     var overlay = document.getElementById('dash-detail-overlay');
     if(!overlay) return;
     var body = overlay.querySelector('.dash-detail-body');
     if(!body) return;
-
-    // Leer adjuntos del registro
     var adjuntos = await adjuntoGetFromRecord(table, id);
-
-    // Determinar si el usuario puede editar (admin/supervisor/adjunto)
     var editable = false;
     if(typeof canActAsAdmin === 'function') editable = canActAsAdmin(currentUser);
     if(!editable && typeof isSupervisor === 'function') editable = isSupervisor(currentUser);
-
-    // Crear contenedor para adjuntos
     var adjContainer = document.createElement('div');
     adjContainer.setAttribute('data-adj-viewer', table + '-' + id);
     adjContainer.setAttribute('data-adj-editable', editable ? 'true' : 'false');
     adjContainer.innerHTML = adjuntoRenderViewer(adjuntos, table, id, editable);
     body.appendChild(adjContainer);
-
-    // Setup drag&drop
     _adjSetupDragDrop(adjContainer, table, id);
   };
 })();
 
-// ── 8. ENHANCER de renderTareas — muestra adjuntos en tarjetas ────────
+// ── Wrapper renderTareas — indicador de adjuntos en tarjetas ──────────
 (function(){
   if(typeof window.renderTareas !== 'function') return;
-  var _origRenderTareas = window.renderTareas;
-
+  var _orig = window.renderTareas;
   window.renderTareas = async function(){
-    // Ejecutar el original
-    await _origRenderTareas.apply(this, arguments);
-
-    // Buscar todas las task-card y añadir indicador de adjuntos
+    await _orig.apply(this, arguments);
     var listEl = document.getElementById('tareas-list');
     if(!listEl) return;
-
     var cards = listEl.querySelectorAll('.task-card');
     if(!cards.length) return;
-
-    // Obtener todas las tareas para mapear IDs
     var tareas = await getDB('tareas');
-
     cards.forEach(function(card){
-      // Extraer taskId del onclick del botón de acción
       var btns = card.querySelectorAll('button[onclick]');
       var taskId = null;
       btns.forEach(function(btn){
@@ -701,34 +529,27 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
         if(m) taskId = m[1];
       });
       if(!taskId) return;
-
       var tarea = tareas.find(function(t){ return t.id === taskId; });
       if(!tarea) return;
-
       var adj = tarea.adjuntos;
       if(typeof adj === 'string'){ try { adj = JSON.parse(adj); } catch(e){ adj = []; } }
       if(!adj || !adj.length) adj = [];
-
-      // Añadir indicador de adjuntos en el meta
       var meta = card.querySelector('.task-meta');
-      if(meta && !meta.querySelector('.adj-badge')){
-        if(adj.length > 0){
-          var badge = document.createElement('span');
-          badge.className = 'badge b-gray adj-badge';
-          badge.style.cssText = 'cursor:pointer;font-size:10px;';
-          badge.textContent = '📎 ' + adj.length;
-          badge.title = 'Ver adjuntos';
-          badge.onclick = function(){ _adjToggleTaskFiles(taskId, card); };
-          meta.appendChild(badge);
-        }
+      if(meta && !meta.querySelector('.adj-badge') && adj.length > 0){
+        var badge = document.createElement('span');
+        badge.className = 'badge b-gray adj-badge';
+        badge.style.cssText = 'cursor:pointer;font-size:10px;';
+        badge.textContent = '📎 ' + adj.length;
+        badge.title = 'Ver adjuntos';
+        badge.onclick = function(){ _adjToggleTaskFiles(taskId, card); };
+        meta.appendChild(badge);
       }
-
-      // Añadir botón para gestionar adjuntos en el footer
       var footer = card.querySelector('.task-actions');
       if(footer && !footer.querySelector('.adj-task-btn')){
         var adjBtn = document.createElement('button');
         adjBtn.className = 'btn btn-secondary btn-sm adj-task-btn';
-        adjBtn.textContent = '📎 Adjuntos';
+        adjBtn.textContent = '📎';
+        adjBtn.title = 'Adjuntos';
         adjBtn.style.cssText = 'font-size:11px;';
         adjBtn.onclick = function(){ _adjToggleTaskFiles(taskId, card); };
         footer.insertBefore(adjBtn, footer.firstChild);
@@ -737,14 +558,9 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
   };
 })();
 
-// Toggle panel de adjuntos en una tarjeta de tarea
 async function _adjToggleTaskFiles(taskId, card){
   var existing = card.querySelector('.adj-task-panel');
-  if(existing){
-    existing.remove();
-    return;
-  }
-
+  if(existing){ existing.remove(); return; }
   var adjuntos = await adjuntoGetFromRecord('tareas', taskId);
   var editable = false;
   if(typeof canActAsAdmin === 'function') editable = canActAsAdmin(currentUser);
@@ -753,7 +569,6 @@ async function _adjToggleTaskFiles(taskId, card){
     var t = tareas.find(function(x){ return x.id === taskId; });
     if(t) editable = canProgressTask(t);
   }
-
   var panel = document.createElement('div');
   panel.className = 'adj-task-panel';
   panel.setAttribute('data-adj-viewer', 'tareas-' + taskId);
@@ -764,30 +579,378 @@ async function _adjToggleTaskFiles(taskId, card){
   _adjSetupDragDrop(panel, 'tareas', taskId);
 }
 
-// ── 9. ENHANCER de renderGestionesScreen — adjuntos en pantalla standalone
+// ── Wrapper renderGestionesScreen — re-inyectar inputs ────────────────
 (function(){
   if(typeof window.renderGestionesScreen !== 'function') return;
-  var _origRenderGestionesScreen = window.renderGestionesScreen;
-
+  var _orig = window.renderGestionesScreen;
   window.renderGestionesScreen = async function(){
-    await _origRenderGestionesScreen.apply(this, arguments);
-    // Re-inyectar inputs en modal si se regeneró
+    await _orig.apply(this, arguments);
     setTimeout(_adjInjectInputs, 100);
   };
 })();
 
-// ── 10. ENHANCER de renderIncidenciasScreen ────────────────────────────
+// ── Wrapper renderIncidenciasScreen — re-inyectar inputs ──────────────
+// NOTA: esta función se REEMPLAZA completamente más abajo (PARTE 2)
+// para fix de visibilidad. La re-inyección se hace allí.
+
+
+// ╔═══════════════════════════════════════════════════════════════════╗
+// ║  PARTE 2 — VISIBILIDAD INCIDENCIAS                              ║
+// ║  Jefe ve incidencias de su dept + donde staff_implicado es de    ║
+// ║  su dept. Corrige 2 bugs:                                       ║
+// ║  1) renderIncidenciasScreen usaba === en vez de canViewDepartment║
+// ║  2) Nadie revisaba staff_implicado_ids para visibilidad          ║
+// ╚═══════════════════════════════════════════════════════════════════╝
+
+// ── CACHE DE EMPLEADOS (por ID → {area, nombre, ...}) ─────────────────
+var _adjEmpCache = null;
+var _adjEmpCacheTs = 0;
+
+async function _adjGetEmployeeMap(){
+  var now = Date.now();
+  if(_adjEmpCache && (now - _adjEmpCacheTs) < 30000) return _adjEmpCache;
+  var emps = [];
+  try { emps = await getDB('employees'); } catch(e){}
+  var map = {};
+  emps.forEach(function(e){ if(e.id) map[e.id] = e; });
+  _adjEmpCache = map;
+  _adjEmpCacheTs = now;
+  return map;
+}
+
+// ── HELPER: ¿el supervisor puede ver esta incidencia? ─────────────────
+// true si:
+//   1) dept de la incidencia está en los departamentos del supervisor, O
+//   2) algún employee_id en staff_implicado_ids pertenece a un dept del supervisor
+function canViewIncidencia(user, inci, empMap){
+  if(isAdmin(user)) return true;
+  // Check 1: departamento directo
+  var iDept = inci.departamento || inci.area || '';
+  if(canViewDepartment(user, iDept)) return true;
+  // Check 2: departamentos del staff implicado
+  if(!empMap) return false;
+  var staffIds = [];
+  try { staffIds = JSON.parse(inci.staff_implicado_ids || '[]'); } catch(e){}
+  for(var i = 0; i < staffIds.length; i++){
+    var emp = empMap[staffIds[i]];
+    if(emp && emp.area && canViewDepartment(user, emp.area)) return true;
+  }
+  return false;
+}
+
+// ── REEMPLAZO: renderIncidenciasScreen ────────────────────────────────
+// Fix: usa canViewDepartment + canViewIncidencia en vez de === directo
 (function(){
-  if(typeof window.renderIncidenciasScreen !== 'function') return;
-  var _origRenderIncidenciasScreen = window.renderIncidenciasScreen;
-
   window.renderIncidenciasScreen = async function(){
-    await _origRenderIncidenciasScreen.apply(this, arguments);
+    var el = document.getElementById('screen-incidencias');
+    if(!el) return;
+    var dept = currentUser ? (currentUser.area||'—') : '—';
+    var isAdminU = isAdmin(currentUser);
+    var isSup    = typeof isSupervisor === 'function' && isSupervisor(currentUser);
+    var canSeeList = isAdminU || isSup;
+
+    // Empleado: solo crear, sin lista
+    if(!canSeeList){
+      el.innerHTML = '<div class="page-header"><div class="page-title">⚠ Incidencias</div>'
+        + '<div class="page-sub">Reporta una incidencia del turno. Tu jefe la revisará.</div></div>'
+        + '<div class="card" style="text-align:center;padding:32px;">'
+        + '<p style="color:var(--text2);font-size:13px;margin-bottom:18px;">'
+        + 'Las incidencias que reportes serán visibles solo por tu jefe de departamento.</p>'
+        + '<button class="btn btn-primary" style="font-size:14px;padding:12px 24px;" onclick="openNewIncidenciaStandalone()">+ Nueva incidencia</button>'
+        + '</div>';
+      return;
+    }
+
+    // Jefe / Admin: lista con visibilidad expandida
+    var verTodos = isAdminU;
+    var all = [];
+    try { all = await getDB('incidencias'); } catch(e){}
+    var empMap = await _adjGetEmployeeMap();
+
+    // FIX: usar canViewIncidencia (dept + staff_implicado) en vez de === directo
+    var list = verTodos ? all : all.filter(function(i){
+      return canViewIncidencia(currentUser, i, empMap);
+    });
+
+    list = list.filter(function(i){
+      var s = normalizeIncidentState(i.estado);
+      return s !== INCIDENT_STATES.CERRADA;
+    });
+    list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+
+    var cards;
+    if(!list.length){
+      cards = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-text">Sin incidencias pendientes</div></div>';
+    } else {
+      cards = list.map(function(i){
+        var fecha = i.created_at ? new Date(i.created_at) : null;
+        var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+        // Mostrar dept del staff implicado si la incidencia no es del dept del jefe
+        var deptLabel = formatDisplayValue(i.departamento||i.area);
+        var staffDepts = _adjGetStaffDeptsSync(i, empMap);
+        if(staffDepts.length) deptLabel += ' <span style="font-size:10px;color:var(--text3);">(implicados: '+staffDepts.join(', ')+')</span>';
+        return '<div class="task-card">'
+          + '<div class="task-meta">'
+          +   '<span class="dept-badge">'+deptLabel+'</span>'
+          +   '<span class="task-origin">tipo: '+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</span>'
+          +   bIncidentEstadoClick(i.estado, i.id)
+          + '</div>'
+          + '<div class="task-title">'+formatDisplayValue(i.descripcion)+'</div>'
+          + '<div class="task-footer">'
+          +   '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'
+          +     '📅 '+fechaStr+' &nbsp;·&nbsp; reportada por '+formatDisplayValue(i.nombre)
+          +   '</div>'
+          + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    // Mostrar depts supervisados en el subtítulo
+    var deptLabel = verTodos ? 'Todos los departamentos' : 'Departamentos: ' + (getSupervisorDepartments(currentUser)||[dept]).join(', ');
+
+    el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
+      + '<div><div class="page-title">⚠ Incidencias pendientes</div>'
+      + '<div class="page-sub">' + deptLabel + ' · ' + list.length + ' activas</div></div>'
+      + '<button class="btn btn-primary" onclick="openNewIncidenciaStandalone()">+ Nueva incidencia</button>'
+      + '</div>'
+      + '<div>'+cards+'</div>';
+
+    // Re-inyectar inputs de adjuntos
     setTimeout(_adjInjectInputs, 100);
   };
 })();
 
+// Helper sync para extraer departamentos del staff implicado (usa cache)
+function _adjGetStaffDeptsSync(inci, empMap){
+  if(!empMap) return [];
+  var staffIds = [];
+  try { staffIds = JSON.parse(inci.staff_implicado_ids || '[]'); } catch(e){}
+  var depts = {};
+  for(var i = 0; i < staffIds.length; i++){
+    var emp = empMap[staffIds[i]];
+    if(emp && emp.area) depts[emp.area] = true;
+  }
+  return Object.keys(depts);
+}
+
+// ── REEMPLAZO: renderFollowupList ─────────────────────────────────────
+// Fix: incidencias visibles por dept + staff_implicado para supervisores
+(function(){
+  window.renderFollowupList = async function(){
+    if(!currentUser) return;
+    var el        = document.getElementById('followup-incidencias-list');
+    var countEl   = document.getElementById('followup-count');
+    var btnNew    = document.getElementById('btn-new-followup');
+    var subtitleEl= document.getElementById('followup-subtitle');
+    if(!el) return;
+
+    var isSupervisorUser = isAdmin(currentUser) || isSupervisor(currentUser);
+    var isAdminUser      = isAdmin(currentUser);
+    var dept             = currentUser ? (currentUser.area || '') : '';
+
+    if(btnNew)     btnNew.style.display   = isSupervisorUser ? '' : 'none';
+    if(subtitleEl) subtitleEl.textContent  = isSupervisorUser
+      ? 'Gestiones pendientes, tareas e incidencias operativas del departamento.'
+      : 'Gestiones pendientes y tareas visibles para tu departamento.';
+
+    var allIncis = [], allTareas = [], allShifts = [], allGestiones = [], allAjustes = [];
+    try { allIncis     = await getDB('incidencias'); } catch(e){}
+    try { allTareas    = await getDB('tareas');      } catch(e){}
+    try { allShifts    = await getDB('shifts');      } catch(e){}
+    try { allGestiones = await getDB('gestiones');   } catch(e){}
+    try { allAjustes   = await getDB('ajustes');     } catch(e){}
+
+    // Cache de empleados para check de staff implicado
+    var empMap = await _adjGetEmployeeMap();
+
+    var shiftMap = {};
+    allShifts.forEach(function(s){ if(s.id) shiftMap[s.id] = s; });
+
+    function sameDept(record){
+      if(isAdminUser) return true;
+      var rDept = getRecordDepartment(record, shiftMap);
+      if(isSupervisorUser) return canViewDepartment(currentUser, rDept);
+      return normalizeDeptName(rDept) === normalizeDeptName(dept)
+        || record.employee_id === currentUser.id
+        || record.creado_por  === currentUser.nombre;
+    }
+
+    // FIX: sameDept expandido para incidencias — incluye staff_implicado
+    function sameDeptInci(record){
+      if(sameDept(record)) return true;
+      if(!isSupervisorUser) return false;
+      // Check staff_implicado_ids
+      return canViewIncidencia(currentUser, record, empMap);
+    }
+
+    // GESTIONES
+    var gestiones = allGestiones.filter(function(g){
+      if(isAdmin(currentUser) || isSupervisorUser) return sameDept(g);
+      return normalizeDeptName(g.departamento||g.area||'') === normalizeDeptName(dept) && g.estado !== 'Cerrada';
+    }).filter(function(g){ return g.estado !== 'Cerrada'; });
+
+    // TAREAS
+    var tareas = allTareas.filter(function(t){
+      if(!isTaskOpen(t)) return false;
+      if(isAdmin(currentUser) || isSupervisorUser) return sameDept(t);
+      var esDeptDestino = normalizeDeptName(t.dept_destino||'') === normalizeDeptName(dept);
+      var esCreador = t.creado_por === currentUser.nombre || t.employee_id === currentUser.id;
+      return esDeptDestino || esCreador;
+    });
+
+    // INCIDENCIAS — FIX: usa sameDeptInci que incluye staff_implicado
+    var incidencias;
+    if(isAdmin(currentUser) || isSupervisorUser){
+      incidencias = allIncis.filter(function(i){
+        return isIncidentOpen(i) && sameDeptInci(i);
+      });
+    } else {
+      incidencias = allIncis.filter(function(i){
+        var esSuya = i.employee_id === currentUser.id || i.nombre === currentUser.nombre;
+        var abierta = normalizeIncidentState(i.estado) === INCIDENT_STATES.ABIERTA
+                   || normalizeIncidentState(i.estado) === INCIDENT_STATES.EN_PROCESO;
+        return esSuya && abierta;
+      });
+    }
+
+    var total = gestiones.length + tareas.length + incidencias.length;
+    if(countEl) countEl.textContent = total ? '('+total+' activas)' : '(sin activas)';
+
+    if(!total){
+      el.innerHTML = '<div class="empty"><div class="empty-text">Sin gestiones, tareas ni incidencias activas</div></div>';
+      return;
+    }
+
+    function buildTaskRows(list){
+      if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
+      return '<table><tr><th>Deadline</th><th>Estado</th><th>Descripción</th><th>Destino</th><th>Creado por</th><th>Acciones</th></tr>'
+        + list.map(function(row){
+          var acciones = '';
+          var st = normalizeTaskState(row.estado);
+          var esDeptDestino = normalizeDeptName(row.dept_destino||'') === normalizeDeptName(dept);
+          var puedeAvanzar = isAdmin(currentUser) || isSupervisorUser || esDeptDestino;
+          if(puedeAvanzar && st === TASK_STATES.ABIERTA)
+            acciones += '<button class="btn btn-secondary btn-sm" onclick="advanceTask(\''+row.id+'\',\'En proceso\')">▶ En proceso</button> ';
+          if((isAdmin(currentUser) || isSupervisorUser || (esDeptDestino && st === TASK_STATES.EN_PROCESO)) && st === TASK_STATES.EN_PROCESO)
+            acciones += '<button class="btn btn-secondary btn-sm" onclick="advanceTask(\''+row.id+'\',\'Cerrada\')">✓ Cerrar</button>';
+          return '<tr>'
+            + '<td style="font-family:var(--font-mono);font-size:11px;'+(isOverdue(row.deadline)?'color:var(--red);font-weight:700':'')+'">'
+            + fmtDate(row.deadline) + (isOverdue(row.deadline)?' ⚠':'') + '</td>'
+            + '<td>'+bTaskEstado(row.estado)+'</td>'
+            + '<td style="font-size:12px;max-width:220px;">'+formatDisplayValue(row.descripcion||row.titulo)+'</td>'
+            + '<td>'+deptBadge(row.dept_destino)+'</td>'
+            + '<td style="font-size:12px;">'+formatDisplayValue(row.creado_por)+'</td>'
+            + '<td>'+(acciones||'—')+'</td>'
+            + '</tr>';
+        }).join('') + '</table>';
+    }
+
+    function buildIncidentRows(list){
+      if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
+      return '<table><tr><th>Tipo</th><th>Descripción</th><th>Empleado</th><th>Dept</th><th>Fecha</th><th>Estado</th><th>Acción tomada</th></tr>'
+        + list.map(function(i){
+          var fechaObj = i.created_at ? new Date(i.created_at) : null;
+          var fechaStr = fechaObj ? fechaObj.toLocaleDateString('es-ES')+' '+fechaObj.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+          var accion = formatDisplayValue(i.accion_inmediata) || '—';
+          var staffDepts = _adjGetStaffDeptsSync(i, empMap);
+          var deptInfo = deptBadge(i.departamento||i.area||'—');
+          if(staffDepts.length) deptInfo += '<span style="font-size:9px;color:var(--text3);display:block;">impl: '+staffDepts.join(', ')+'</span>';
+          return '<tr>'
+            + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</td>'
+            + '<td style="font-size:12px;max-width:200px;">'+formatDisplayValue(i.descripcion).slice(0,70)+(i.descripcion&&i.descripcion.length>70?'...':'')+'</td>'
+            + '<td style="font-size:12px;">'+formatDisplayValue(i.nombre)+'</td>'
+            + '<td>'+deptInfo+'</td>'
+            + '<td style="font-size:11px;color:var(--text3);">'+fechaStr+'</td>'
+            + '<td>'+(typeof bIncidentEstadoClick==='function'?bIncidentEstadoClick(i.estado,i.id):bIncidentEstado(i.estado))+'</td>'
+            + '<td style="font-size:12px;max-width:160px;color:var(--text3);">'+accion+'</td>'
+            + '</tr>';
+        }).join('') + '</table>';
+    }
+
+    function buildGestionRows(list){
+      if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
+      return '<table><tr><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Acción tomada</th></tr>'
+        + list.map(function(g){
+          var gState = g.estado || 'Abierta';
+          var accion = formatDisplayValue(g.accion_tomada) || '—';
+          return '<tr>'
+            + '<td style="font-size:12px;">'+formatDisplayValue(g.tipo_gestion)+'</td>'
+            + '<td style="font-size:12px;max-width:220px;">'+formatDisplayValue(g.descripcion)+'</td>'
+            + '<td>'+(typeof bGestionEstadoClick==='function'?bGestionEstadoClick(gState,g.id):bGestionEstado(gState))+'</td>'
+            + '<td style="font-size:12px;max-width:160px;color:var(--text3);">'+accion+'</td>'
+            + '</tr>';
+        }).join('') + '</table>';
+    }
+
+    var html = '<div style="margin-bottom:10px;">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--amber);letter-spacing:.12em;margin-bottom:6px;">GESTIONES PENDIENTES ('+gestiones.length+')</div>'
+      + buildGestionRows(gestiones) + '</div>';
+
+    html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">'
+      + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--purple);letter-spacing:.12em;margin-bottom:6px;">TAREAS ('+tareas.length+')</div>'
+      + buildTaskRows(tareas) + '</div>';
+
+    // AJUSTES DEL DÍA
+    var showAjustes = (dept === 'Sala' || dept === 'Recepción' || isAdminUser);
+    if(showAjustes){
+      var todayStr = today();
+      var ajustesHoy = (allAjustes||[]).filter(function(a){
+        return a.employee_id === currentUser.id && (a.fecha||'').slice(0,10) === todayStr;
+      });
+      ajustesHoy.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
+      var totalAj = 0;
+      ajustesHoy.forEach(function(a){ totalAj += parseFloat(a.importe)||0; });
+      var ajustesHtml;
+      if(ajustesHoy.length === 0){
+        ajustesHtml = '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguno hoy. Usa el botón <b>⚙ Ajustes</b> del menú para añadir.</div>';
+      } else {
+        ajustesHtml = '<table><tr><th>Hora</th><th>Tipo</th><th>Importe</th><th>Motivo</th></tr>'
+          + ajustesHoy.map(function(a){
+            var hora = a.created_at ? new Date(a.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
+            var imp = parseFloat(a.importe)||0;
+            var col = imp < 0 ? 'var(--red)' : 'var(--green)';
+            return '<tr>'
+              + '<td style="font-size:11px;color:var(--text3);">'+hora+'</td>'
+              + '<td style="font-size:12px;">'+formatDisplayValue(a.tipo)+'</td>'
+              + '<td style="font-size:12px;color:'+col+';font-weight:600;font-family:var(--font-mono);">'+imp.toFixed(2)+' €</td>'
+              + '<td style="font-size:12px;color:var(--text3);">'+formatDisplayValue(a.motivo||a.obs||'—')+'</td>'
+              + '</tr>';
+          }).join('') + '</table>';
+      }
+      html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">'
+        + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.12em;margin-bottom:6px;">AJUSTES DEL DÍA ('+ajustesHoy.length+') · TOTAL '+totalAj.toFixed(2)+' €</div>'
+        + ajustesHtml + '</div>';
+    }
+
+    if(isSupervisorUser){
+      html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">'
+        + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--red);letter-spacing:.12em;margin-bottom:6px;">INCIDENCIAS OPERATIVAS ('+incidencias.length+') — Solo supervisores</div>'
+        + buildIncidentRows(incidencias) + '</div>';
+    }
+
+    el.innerHTML = html;
+  };
+})();
+
+// ── REEMPLAZO: canCloseIncident — añade check staff_implicado ─────────
+(function(){
+  window.canCloseIncident = function(user, incident){
+    if(typeof canActAsAdmin === 'function' && canActAsAdmin(user)) return true;
+    if(!isSupervisor(user)) return false;
+    // Check 1: dept directo
+    if(canViewDepartment(user, getRecordDepartment(incident))) return true;
+    // Check 2: staff implicado (usa cache sync — puede ser null al primer render)
+    if(_adjEmpCache){
+      var staffIds = [];
+      try { staffIds = JSON.parse(incident.staff_implicado_ids || '[]'); } catch(e){}
+      for(var i = 0; i < staffIds.length; i++){
+        var emp = _adjEmpCache[staffIds[i]];
+        if(emp && emp.area && canViewDepartment(user, emp.area)) return true;
+      }
+    }
+    return false;
+  };
+})();
+
 // ═══════════════════════════════════════════════════════════════════════
-// FIN — adjuntos.js cargado
-// ═══════════════════════════════════════════════════════════════════════
-console.log('SYNCRO SHIFT — adjuntos.js cargado');
+console.log('SYNCRO SHIFT — adjuntos.js + visibilidad incidencias cargado');
