@@ -14,6 +14,11 @@ const STATIC_ALLOWED_IPS = [
   '45.153.97.24',   // [POR DEFINIR] — revisar: muy similar a 45.153.97.234, posible typo
 ];
 
+// Rutas API que se autentican por Bearer token (no por IP)
+const BEARER_AUTH_PATHS = [
+  '/api/bitrix-sync',
+];
+
 const SUPABASE_URL = 'https://tsfhrpdpbkciofvejrao.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3GWGNkIs6byRG1F1BIxlkg_qhiRUgBt';
 const CACHE_TTL_MS = 60000; // 60s
@@ -52,6 +57,18 @@ async function getDynamicIPs() {
 }
 
 export default async function middleware(req) {
+  // ── Bypass IP para rutas API autenticadas por Bearer token ──
+  // Permite que cron externos (cron-job.org, Vercel Cron) accedan
+  // sin estar en la whitelist de IP, siempre que el token sea correcto.
+  // La validación real del token se hace dentro del propio endpoint.
+  const pathname = req.nextUrl?.pathname || new URL(req.url).pathname;
+  if (BEARER_AUTH_PATHS.some(p => pathname === p)) {
+    const auth = req.headers.get('authorization') || '';
+    if (auth.startsWith('Bearer ') && auth.length > 20) {
+      return; // dejar pasar — el endpoint valida el token
+    }
+  }
+
   const forwarded = req.headers.get('x-forwarded-for') || '';
   const ip = forwarded.split(',')[0].trim();
 
