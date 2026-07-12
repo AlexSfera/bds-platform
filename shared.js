@@ -1432,6 +1432,7 @@ async function _doSaveTurno(){
     observacion: obs,
     checklist_items: JSON.stringify(_chkSavedState),
     kpi_entrenador: (typeof window._entrKpiState !== 'undefined' && window._entrKpiState) ? JSON.stringify(window._entrKpiState) : null,
+    kpi_recepcion: (typeof window._recepKpiState !== 'undefined' && window._recepKpiState) ? JSON.stringify(window._recepKpiState) : null,
     ajustes_sala: JSON.stringify(_ajustesLines||[]),
     // Sala fields
     descuentos_si: salaData.descuentos_si||false,
@@ -1469,6 +1470,7 @@ async function _doSaveTurno(){
       observacion: obs,
       checklist_items: JSON.stringify(_chkSavedState),
       kpi_entrenador: (typeof window._entrKpiState !== 'undefined' && window._entrKpiState) ? JSON.stringify(window._entrKpiState) : undefined,
+      kpi_recepcion: (typeof window._recepKpiState !== 'undefined' && window._recepKpiState) ? JSON.stringify(window._recepKpiState) : undefined,
       estado: 'Pendiente',
       validado_por: null, validado_ts: null,
       comentario_validador: null,
@@ -2628,7 +2630,7 @@ async function openValidarModal(shiftId){
     return (g.shift_id===shiftId || g.employee_id===s.employee_id)
       && g.estado !== 'Cerrada';  // BUG-47b: no mostrar cerradas
   });
-  // Cargar KPI Recepción desde recepcion_cash (tabla separada)
+  // Legacy: carga recepcion_cash (ya no se usa para KPIs — ahora en shifts.kpi_recepcion)
   var recKpiRow = null;
   if(s.area === 'Recepción'){
     try {
@@ -2702,47 +2704,53 @@ async function openValidarModal(shiftId){
         +kpiHtml+'</div>';
     }
 
-    // ── RECEPCIÓN: datos de recepcion_cash (checkins, checkouts, reservas, ventas, lead) ──
+    // ── RECEPCIÓN: KPIs operativos desde shifts.kpi_recepcion (JSON) ──
     if(_area === 'Recepción'){
-      var r = recKpiRow;
-      if(r){
+      var _kpiRec = null;
+      if(s.kpi_recepcion){
+        try{ _kpiRec = typeof s.kpi_recepcion === 'string' ? JSON.parse(s.kpi_recepcion) : s.kpi_recepcion; }catch(e){ _kpiRec = null; }
+      }
+      if(_kpiRec){
         var kRow = function(lbl, val, mono, col){
-          if(val === null || val === undefined || val === '' || val === 0) return '';
+          if(val === null || val === undefined || val === '') return '';
           return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;">'
             +'<span style="color:var(--text3);">'+lbl+'</span>'
             +'<span style="'+(mono?'font-family:var(--font-mono);':'')+' '+(col?'color:'+col+';font-weight:600;':'')+'">'+(typeof val==='number'?(val%1===0?val:val.toFixed(2)):val)+'</span>'
             +'</div>';
         };
-        var checkins  = parseInt(r.checkins)||0;
-        var checkouts = parseInt(r.checkouts)||0;
-        var reservas  = parseInt(r.reservas)||0;
-        var clientes  = parseInt(r.clientes_num)||0;
-        var leadPend  = r.lead_pendiente === 'si';
-        // Ventas SYNCROLAB si existen
-        var syncroVentas = 0;
-        try { (JSON.parse(r.syncrolab_ventas_data||'[]')||[]).forEach(function(v){ syncroVentas += parseFloat(v.importe)||0; }); } catch(e){}
-        var desayVentas = 0;
-        try { (JSON.parse(r.desayuno_ventas_data||'[]')||[]).forEach(function(v){ desayVentas += parseFloat(v.importe)||0; }); } catch(e){}
-        var cenaVentas = 0;
-        try { (JSON.parse(r.cena_ventas_data||'[]')||[]).forEach(function(v){ cenaVentas += parseFloat(v.importe)||0; }); } catch(e){}
-
-        kpiHtml  = kRow('Check-ins', checkins||'—', true);
-        kpiHtml += kRow('Check-outs', checkouts||'—', true);
-        kpiHtml += kRow('Reservas gestionadas', reservas||'—', true);
-        kpiHtml += kRow('Clientes insatisfechos', clientes||'—', true, clientes>0?'var(--amber)':null);
-        if(leadPend) kpiHtml += kRow('Lead pendiente', r.lead_desc||'Sí', false, 'var(--amber)');
-        if(syncroVentas>0) kpiHtml += kRow('Ventas SYNCROLAB', syncroVentas.toFixed(2)+' €', true, 'var(--green)');
-        if(desayVentas>0)  kpiHtml += kRow('Ventas desayuno', desayVentas.toFixed(2)+' €', true, 'var(--green)');
-        if(cenaVentas>0)   kpiHtml += kRow('Ventas cena', cenaVentas.toFixed(2)+' €', true, 'var(--green)');
-
-        if(kpiHtml){
-          info += '<div style="background:var(--bg);border:1px solid #8b5cf6;border-radius:8px;padding:12px;margin-bottom:10px;">'
-            +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:8px;">KPI · DATOS OPERATIVOS RECEPCIÓN</div>'
-            +kpiHtml+'</div>';
+        // Operación
+        kpiHtml  = kRow('Check-ins', parseInt(_kpiRec.checkins)||0, true);
+        kpiHtml += kRow('Check-outs', parseInt(_kpiRec.checkouts)||0, true);
+        kpiHtml += kRow('Reservas gestionadas', parseInt(_kpiRec.reservas)||0, true);
+        // Upsell desayuno
+        var _upsDes = (_kpiRec.upsell_desayuno||'na').toLowerCase();
+        if(_upsDes === 'si'){
+          kpiHtml += kRow('Desayunos ofertados', parseInt(_kpiRec.desal_ofertados)||0, true);
+          kpiHtml += kRow('Desayunos vendidos', parseInt(_kpiRec.desal_vendidos)||0, true, 'var(--green)');
+        } else if(_upsDes === 'no'){
+          kpiHtml += kRow('Upsell desayuno', 'No ofertó', false);
         }
+        // Clientes insatisfechos
+        var _cliInsat = (_kpiRec.clientes_insatisfechos||'no').toLowerCase();
+        if(_cliInsat === 'si'){
+          kpiHtml += kRow('Clientes insatisfechos', parseInt(_kpiRec.clientes_num)||0, true, 'var(--amber)');
+        } else {
+          kpiHtml += kRow('Clientes insatisfechos', 'No', false);
+        }
+        // Lead Bitrix24
+        var _leadPR = (_kpiRec.lead_pendiente||'no').toLowerCase();
+        if(_leadPR === 'si'){
+          kpiHtml += kRow('Lead pendiente', _kpiRec.lead_desc||'Sí', false, 'var(--amber)');
+          if(_kpiRec.lead_resp) kpiHtml += kRow('Lead responsable', _kpiRec.lead_resp, false);
+          if(_kpiRec.lead_fecha) kpiHtml += kRow('Lead seguimiento', _kpiRec.lead_fecha, false);
+        } else {
+          kpiHtml += kRow('Lead Bitrix24', 'No', false);
+        }
+        info += '<div style="background:var(--bg);border:1px solid #0ea5e9;border-radius:8px;padding:12px;margin-bottom:10px;">'
+          +'<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#0ea5e9;letter-spacing:.15em;margin-bottom:8px;">KPI · DATOS OPERATIVOS RECEPCIÓN</div>'
+          +kpiHtml+'</div>';
       } else {
-        // No se encontró cierre recepcion_cash para este turno
-        info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">KPI Recepción: sin cierre de caja registrado para este turno</div>';
+        info += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text3);">KPI Recepción: el empleado no declaró KPIs operativos en este turno</div>';
       }
     }
 

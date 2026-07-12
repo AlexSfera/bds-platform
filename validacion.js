@@ -2226,16 +2226,72 @@ function _renderKpisTurno(s){
 
   // ── RECEPCIÓN HOTEL ─────────────────────────────────────────
   if(isRecep){
-    // Nota honesta: cross-selling ya se muestra en bloque 5B.
-    // Los KPIs simples (check-in/out, leads, clientes) NO están hoy en shifts.
-    bodyHtml += '<div style="color:var(--text3);font-size:12px;line-height:1.5;">'
-              + 'Los KPIs de check-in, check-out, número de reservas, upsell desayuno, leads Bitrix24 y clientes insatisfechos '
-              + '<strong style="color:var(--amber);">se rellenan al cerrar turno pero no se persisten actualmente</strong>. '
-              + 'Se guardan solo las ventas cross-selling (visibles en el bloque 5B) y el cuadre de caja.<br><br>'
-              + '<em>Fase 2 pendiente:</em> añadir columnas a <code>shifts</code> y persistirlas en <code>submitRecKpi</code>. '
-              + 'Hasta entonces, para trazar KPIs de Recepción usa Bitrix24 + POSMEWS + MEWS.'
-              + '</div>';
-    return _kpiBlockWrap('1B · KPI RECEPCIÓN HOTEL · pendiente Fase 2', bodyHtml, '#f59e0b');
+    var kpiRec = null;
+    if(s.kpi_recepcion){
+      try{ kpiRec = typeof s.kpi_recepcion === 'string' ? JSON.parse(s.kpi_recepcion) : s.kpi_recepcion; }catch(e){ kpiRec = null; }
+    }
+    if(kpiRec){
+      // ── OPERACIÓN ──
+      bodyHtml += '<div style="font-family:var(--font-mono);font-size:9px;color:var(--text3);letter-spacing:.15em;margin-bottom:6px;">OPERACIÓN</div>';
+      bodyHtml += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 12px;margin-bottom:14px;">';
+      var _rvPill = function(lbl,val){
+        var v = parseInt(val)||0;
+        var c = v > 0 ? 'var(--text)' : 'var(--text3)';
+        return '<div style="background:var(--bg);border-radius:6px;padding:8px 10px;text-align:center;">'
+             + '<div style="font-size:11px;color:var(--text3);">'+lbl+'</div>'
+             + '<div style="font-size:20px;font-weight:700;font-family:var(--font-mono);color:'+c+';">'+v+'</div>'
+             + '</div>';
+      };
+      bodyHtml += _rvPill('Check-ins', kpiRec.checkins);
+      bodyHtml += _rvPill('Check-outs', kpiRec.checkouts);
+      bodyHtml += _rvPill('Reservas', kpiRec.reservas);
+      bodyHtml += '</div>';
+
+      // ── UPSELL DESAYUNO ──
+      var upsell = (kpiRec.upsell_desayuno||'na').toLowerCase();
+      if(upsell === 'si'){
+        bodyHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:14px;">';
+        bodyHtml += '<div style="font-size:13px;"><span style="color:var(--text3);">Desayunos ofertados:</span> <strong style="font-family:var(--font-mono);">'+(parseInt(kpiRec.desal_ofertados)||0)+'</strong></div>';
+        bodyHtml += '<div style="font-size:13px;"><span style="color:var(--text3);">Desayunos vendidos:</span> <strong style="font-family:var(--font-mono);">'+(parseInt(kpiRec.desal_vendidos)||0)+'</strong></div>';
+        bodyHtml += '</div>';
+      } else if(upsell === 'no'){
+        bodyHtml += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Upsell desayuno: <strong>No ofertó</strong></div>';
+      } else {
+        bodyHtml += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Upsell desayuno: <em>No aplica</em></div>';
+      }
+
+      // ── CLIENTES INSATISFECHOS ──
+      var cliInsat = (kpiRec.clientes_insatisfechos||'no').toLowerCase();
+      if(cliInsat === 'si'){
+        bodyHtml += '<div style="font-size:13px;margin-bottom:10px;">'
+                  + '<span style="color:var(--amber);">⚠ Clientes insatisfechos:</span> <strong style="font-family:var(--font-mono);">'+(parseInt(kpiRec.clientes_num)||0)+'</strong>'
+                  + '</div>';
+      } else {
+        bodyHtml += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Clientes insatisfechos: <strong>No</strong></div>';
+      }
+
+      // ── LEAD BITRIX24 ──
+      var leadPend = (kpiRec.lead_pendiente||'no').toLowerCase();
+      if(leadPend === 'si'){
+        bodyHtml += '<div style="font-size:13px;margin-bottom:10px;padding:8px;background:var(--bg);border-radius:6px;">'
+                  + '<div style="font-size:11px;color:var(--text3);margin-bottom:4px;">LEAD PENDIENTE EN BITRIX24</div>'
+                  + '<div>'+(kpiRec.lead_desc||'—')+'</div>';
+        if(kpiRec.lead_resp) bodyHtml += '<div style="font-size:12px;color:var(--text3);margin-top:4px;">Responsable: '+kpiRec.lead_resp+'</div>';
+        if(kpiRec.lead_fecha) bodyHtml += '<div style="font-size:12px;color:var(--text3);">Fecha seguimiento: '+kpiRec.lead_fecha+'</div>';
+        bodyHtml += '</div>';
+      } else {
+        bodyHtml += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">Lead Bitrix24: <strong>No</strong></div>';
+      }
+
+      bodyHtml += '<div style="font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px;margin-top:6px;">'
+                + 'Ventas cross-selling → ver bloque 5B · Cuadre de caja → pestaña Caja'
+                + '</div>';
+    } else {
+      bodyHtml += '<div style="color:var(--text3);font-size:12px;">'
+                + 'El empleado no rellenó el cuestionario KPI de recepción (turno cerrado sin declarar KPIs operativos).'
+                + '</div>';
+    }
+    return _kpiBlockWrap('1B · KPI RECEPCIÓN HOTEL · control operativo', bodyHtml, '#0ea5e9');
   }
 
   // ── RECEPCIÓN SYNCROLAB ─────────────────────────────────────

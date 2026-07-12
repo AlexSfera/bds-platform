@@ -341,61 +341,87 @@ function _adjFileIcon(mimeType, name){
 })();
 
 // ── Inyección de file inputs en formularios ───────────────────────────
+
+// Helper: inyectar drop zone en un contenedor padre
+function _adjInjectInto(parentEl, containerId, inputId, spanClass){
+  if(!parentEl || document.getElementById(containerId)) return;
+  var div = document.createElement('div');
+  div.id = containerId;
+  div.className = 'fg' + (spanClass ? ' ' + spanClass : '');
+  parentEl.appendChild(div);
+  adjuntoRenderInput(containerId, inputId);
+  console.log('ADJ: inyectado', containerId);
+}
+
 function _adjInjectInputs(){
-  // block-gestion (turno form)
+  // block-gestion (turno form) — .grid1 dentro del dyn-block estático
   var gBlock = document.getElementById('block-gestion');
-  if(gBlock && !document.getElementById('adj-gestion-container')){
-    var gDiv = document.createElement('div'); gDiv.id = 'adj-gestion-container'; gDiv.className = 'fg';
-    gDiv.innerHTML = '<label>Adjuntos</label>';
+  if(gBlock){
     var gGrid = gBlock.querySelector('.grid1');
-    if(gGrid) gGrid.appendChild(gDiv);
-    adjuntoRenderInput('adj-gestion-container', 'adj-gestion-input');
+    _adjInjectInto(gGrid, 'adj-gestion-container', 'adj-gestion-input', '');
   }
-  // block-incidencia (turno form)
+  // block-incidencia (turno form) — .grid1 dentro del dyn-block estático
   var iBlock = document.getElementById('block-incidencia');
-  if(iBlock && !document.getElementById('adj-incidencia-container')){
+  if(iBlock){
     var iGrid = iBlock.querySelector('.grid1');
-    if(iGrid){
-      var iDiv = document.createElement('div'); iDiv.id = 'adj-incidencia-container'; iDiv.className = 'fg';
-      iDiv.innerHTML = '<label>Adjuntos</label>';
-      iGrid.appendChild(iDiv);
-      adjuntoRenderInput('adj-incidencia-container', 'adj-incidencia-input');
-    }
+    _adjInjectInto(iGrid, 'adj-incidencia-container', 'adj-incidencia-input', '');
   }
-  // modal-tarea
+  // modal-tarea (estático en HTML) — .grid2 dentro del modal
   var tModal = document.getElementById('modal-tarea');
-  if(tModal && !document.getElementById('adj-tarea-container')){
+  if(tModal){
     var tGrid = tModal.querySelector('.grid2');
-    if(tGrid){
-      var tDiv = document.createElement('div'); tDiv.id = 'adj-tarea-container'; tDiv.className = 'fg sp2';
-      tDiv.innerHTML = '<label>Adjuntos</label>';
-      tGrid.appendChild(tDiv);
-      adjuntoRenderInput('adj-tarea-container', 'adj-tarea-input');
-    }
+    _adjInjectInto(tGrid, 'adj-tarea-container', 'adj-tarea-input', 'sp2');
   }
-  // modal-new-gestion (standalone, dinámico)
+  // modal-new-gestion (dinámico, creado por openNewGestionStandalone)
+  // Estructura: .modal-b > .fg (NO hay .grid1/.grid2)
   var ngModal = document.getElementById('modal-new-gestion');
-  if(ngModal && !document.getElementById('adj-new-gestion-container')){
-    var ngGrid = ngModal.querySelector('.grid1, .grid2');
-    if(ngGrid){
-      var ngDiv = document.createElement('div'); ngDiv.id = 'adj-new-gestion-container'; ngDiv.className = 'fg sp2';
-      ngDiv.innerHTML = '<label>Adjuntos</label>';
-      ngGrid.appendChild(ngDiv);
-      adjuntoRenderInput('adj-new-gestion-container', 'adj-new-gestion-input');
-    }
+  if(ngModal){
+    var ngBody = ngModal.querySelector('.modal-b');
+    _adjInjectInto(ngBody, 'adj-new-gestion-container', 'adj-new-gestion-input', '');
   }
-  // modal-new-inci (standalone, dinámico)
+  // modal-new-inci (dinámico, creado por openNewIncidenciaStandalone)
+  // Estructura: .modal-b > .fg (NO hay .grid1/.grid2)
   var niModal = document.getElementById('modal-new-inci');
-  if(niModal && !document.getElementById('adj-new-inci-container')){
-    var niGrid = niModal.querySelector('.grid1, .grid2');
-    if(niGrid){
-      var niDiv = document.createElement('div'); niDiv.id = 'adj-new-inci-container'; niDiv.className = 'fg sp2';
-      niDiv.innerHTML = '<label>Adjuntos</label>';
-      niGrid.appendChild(niDiv);
-      adjuntoRenderInput('adj-new-inci-container', 'adj-new-inci-input');
-    }
+  if(niModal){
+    var niBody = niModal.querySelector('.modal-b');
+    _adjInjectInto(niBody, 'adj-new-inci-container', 'adj-new-inci-input', '');
   }
 }
+
+// ── Wrappers de open* para inyectar DESPUÉS de crear modales dinámicos ──
+(function(){
+  if(typeof window.openNewGestionStandalone !== 'function') return;
+  var _origOpen = window.openNewGestionStandalone;
+  window.openNewGestionStandalone = function(){
+    _origOpen.apply(this, arguments);
+    setTimeout(function(){
+      var m = document.getElementById('modal-new-gestion');
+      if(m){ _adjInjectInto(m.querySelector('.modal-b'), 'adj-new-gestion-container', 'adj-new-gestion-input', ''); }
+    }, 50);
+  };
+})();
+(function(){
+  if(typeof window.openNewIncidenciaStandalone !== 'function') return;
+  var _origOpen = window.openNewIncidenciaStandalone;
+  window.openNewIncidenciaStandalone = function(){
+    _origOpen.apply(this, arguments);
+    setTimeout(function(){
+      var m = document.getElementById('modal-new-inci');
+      if(m){ _adjInjectInto(m.querySelector('.modal-b'), 'adj-new-inci-container', 'adj-new-inci-input', ''); }
+    }, 50);
+  };
+})();
+(function(){
+  if(typeof window.openTaskModal !== 'function') return;
+  var _origOpen = window.openTaskModal;
+  window.openTaskModal = function(){
+    _origOpen.apply(this, arguments);
+    setTimeout(function(){
+      var m = document.getElementById('modal-tarea');
+      if(m){ _adjInjectInto(m.querySelector('.grid2'), 'adj-tarea-container', 'adj-tarea-input', 'sp2'); }
+    }, 50);
+  };
+})();
 
 document.addEventListener('DOMContentLoaded', function(){
   _adjInjectInputs();
@@ -404,7 +430,9 @@ document.addEventListener('DOMContentLoaded', function(){
   });
   obs.observe(document.body, { childList: true, subtree: true });
 });
+// Fallback: si DOMContentLoaded ya disparó (scripts al final de body)
 if(document.readyState === 'complete' || document.readyState === 'interactive'){
+  setTimeout(_adjInjectInputs, 100);
   setTimeout(_adjInjectInputs, 500);
   setTimeout(_adjInjectInputs, 2000);
 }
