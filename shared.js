@@ -350,7 +350,9 @@ function recordMatchesShift(record, shift){
   if(!record || !shift) return false;
   if(record.shift_id) return String(record.shift_id) === String(shift.id);
   if(record.fecha && shift.fecha && record.fecha !== shift.fecha) return false;
-  var sameEmployee = record.employee_id && shift.employee_id && record.employee_id === shift.employee_id;
+  // FIX-MERMA-MATCH: merma usa empleado_id, no employee_id. Aceptar ambos.
+  var recEmpId = record.employee_id || record.empleado_id;
+  var sameEmployee = recEmpId && shift.employee_id && recEmpId === shift.employee_id;
   var sameName = record.nombre && shift.nombre && record.nombre === shift.nombre;
   if(!sameEmployee && !sameName) return false;
   if(record.servicio && shift.servicio && formatServiceOrTurn(record.servicio) !== formatServiceOrTurn(shift.servicio)) return false;
@@ -1018,7 +1020,8 @@ async function initTurnoForm(){
   var _fechaTurnoInit = today();
   var _hNowInit = (new Date()).getHours();
   var _areaNowInit = currentUser ? String(currentUser.area||'') : '';
-  if((_areaNowInit === 'Sala' && _hNowInit < 2) || (_areaNowInit === 'Recepción' && _hNowInit < 7)){
+  // FIX-NOCHE-CUTOFF: unificado a <8 para Recepción (coincide con recepcion.js _recFechaOperativa)
+  if((_areaNowInit === 'Sala' && _hNowInit < 2) || (_areaNowInit === 'Recepción' && _hNowInit < 8)){
     var _ayerDInit = getDateOnly(new Date()); _ayerDInit.setDate(_ayerDInit.getDate()-1);
     _fechaTurnoInit = toYMD(_ayerDInit);
   }
@@ -1316,7 +1319,8 @@ function clearTurnoForm(){
   var _fechaTurno = today();
   var _hNow = (new Date()).getHours();
   var _areaNow = currentUser ? String(currentUser.area||'') : '';
-  if((_areaNow === 'Sala' && _hNow < 2) || (_areaNow === 'Recepción' && _hNow < 7)){
+  // FIX-NOCHE-CUTOFF: unificado a <8 para Recepción
+  if((_areaNow === 'Sala' && _hNow < 2) || (_areaNow === 'Recepción' && _hNow < 8)){
     var _ayerD = getDateOnly(new Date()); _ayerD.setDate(_ayerD.getDate()-1);
     _fechaTurno = toYMD(_ayerD);
   }
@@ -1392,11 +1396,11 @@ async function _doSaveTurno(){
   // que ignora readonly, etc.) se usa today() como defensa.
   var fecha    = document.getElementById('t-fecha').value;
   if(!fecha){
-    // FIX-CENA-MEDIANOCHE: fallback nocturno — Sala < 2h, Recepción < 7h
+    // FIX-CENA-MEDIANOCHE: fallback nocturno — Sala < 2h, Recepción < 8h (FIX-NOCHE-CUTOFF)
     fecha = today();
     var _hF = (new Date()).getHours();
     var _aF = currentUser ? String(currentUser.area||'') : '';
-    if((_aF === 'Sala' && _hF < 2) || (_aF === 'Recepción' && _hF < 7)){
+    if((_aF === 'Sala' && _hF < 2) || (_aF === 'Recepción' && _hF < 8)){
       var _fd = getDateOnly(new Date()); _fd.setDate(_fd.getDate()-1); fecha = toYMD(_fd);
     }
   }
@@ -1829,7 +1833,7 @@ function saveTurno(){
   const fecha=document.getElementById('t-fecha').value;
   var _isRecepcion = currentUser && currentUser.area === 'Recepción';
   // Date lock: employees can only register today (unless correcting)
-  var _fechaOpSave = today(); var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 7)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); }
+  var _fechaOpSave = today(); var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 8)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); }
   if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave){
     alertArea.innerHTML='<div class="alert a-err">⚠ Solo puedes registrar el turno de hoy.</div>';
     return;
@@ -2499,7 +2503,13 @@ async function renderValidacion(){
     if(s.area==='Recepción') return s.servicio===serv;
     try{ var arr=Array.isArray(s.servicio)?s.servicio:JSON.parse(s.servicio); return Array.isArray(arr)?arr.includes(serv):s.servicio===serv; }catch(e){ return s.servicio===serv; }
   });
-  shifts.sort((a,b)=>b.created_at.localeCompare(a.created_at));
+  // FIX-SORT-FECHA: ordenar por fecha operativa desc, desempate por created_at desc
+  shifts.sort(function(a,b){
+    var fa = a.fecha_operativa || a.fecha || '';
+    var fb = b.fecha_operativa || b.fecha || '';
+    if(fa !== fb) return fb.localeCompare(fa);
+    return (b.created_at||'').localeCompare(a.created_at||'');
+  });
   const pend=shifts.filter(s=>s.estado==='Pendiente').length;
   var ajustesAll = []; try { ajustesAll = await getDB('ajustes'); } catch(e){}
   const _shiftIds = shifts.map(function(s){ return s.id; });
