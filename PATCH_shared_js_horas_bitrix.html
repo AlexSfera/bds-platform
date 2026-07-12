@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>PATCH shared.js — Columna H. Bitrix</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'JetBrains Mono', 'Fira Code', monospace; background: #0B1F33; color: #e2e8f0; padding: 24px; line-height: 1.6; }
+  h1 { font-size: 18px; color: #2ec4b6; margin-bottom: 8px; letter-spacing: .15em; text-transform: uppercase; }
+  .desc { font-size: 13px; color: #94a3b8; margin-bottom: 32px; font-family: system-ui, sans-serif; }
+  .patch { background: #0f2035; border: 1px solid #1e3a5f; border-radius: 10px; padding: 20px; margin-bottom: 28px; }
+  .patch-title { font-size: 13px; color: #f59e0b; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 4px; }
+  .patch-file { font-size: 11px; color: #64748b; margin-bottom: 16px; }
+  .label { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .15em; padding: 3px 10px; border-radius: 4px; margin-bottom: 8px; }
+  .label-find { background: rgba(239,68,68,.15); color: #ef4444; border: 1px solid #ef444466; }
+  .label-replace { background: rgba(16,185,129,.15); color: #10b981; border: 1px solid #10b98166; }
+  .label-insert { background: rgba(59,130,246,.15); color: #3b82f6; border: 1px solid #3b82f666; }
+  pre { background: #0a1929; border: 1px solid #1e3a5f; border-radius: 6px; padding: 14px; overflow-x: auto; font-size: 12px; line-height: 1.7; white-space: pre; tab-size: 2; }
+  pre .add { color: #10b981; }
+  pre .del { color: #ef4444; text-decoration: line-through; opacity: .7; }
+  pre .ctx { color: #64748b; }
+  .warning { background: rgba(245,158,11,.1); border: 1px solid #f59e0b44; border-radius: 8px; padding: 14px; margin-bottom: 20px; font-size: 12px; color: #f59e0b; font-family: system-ui, sans-serif; }
+  .step { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 13px; color: #cbd5e1; font-family: system-ui, sans-serif; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: #2ec4b633; border: 2px solid #2ec4b6; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #2ec4b6; flex-shrink: 0; }
+  .note { font-size: 11px; color: #64748b; margin-top: 8px; font-family: system-ui, sans-serif; }
+  hr { border: none; border-top: 1px solid #1e3a5f; margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<h1>PATCH — Columna "H. Bitrix" en Validación de Turnos</h1>
+<p class="desc">
+  3 cambios quirúrgicos en <strong>shared.js</strong> (función <code>renderValidacion</code> + modal <code>openValidarModal</code>).<br>
+  Abre shared.js en GitHub web editor → Ctrl+H para buscar y reemplazar cada bloque.
+</p>
+
+<div class="warning">
+  ⚠ <strong>Tabla requerida:</strong> <code>bitrix_time_records</code> con columnas:
+  <code>employee_id</code>, <code>fecha_operativa</code>, <code>duration_seconds</code>, <code>start_ts</code>, <code>end_ts</code>.<br>
+  Matching: <code>employee_id</code> + <code>fecha_operativa</code> = <code>shifts.fecha</code>.
+  Turnos nocturnos: <code>fecha_operativa</code> = día de INICIO del turno (ya gestionado por la migración).
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PARCHE 1: Cargar bitrix_time_records           -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="patch">
+  <div class="patch-title">Parche 1 de 4 — Cargar datos Bitrix</div>
+  <div class="patch-file">shared.js → renderValidacion() → después del bloque fiosByShift</div>
+
+  <div class="step"><div class="step-num">1</div> Busca (Ctrl+H) este texto exacto:</div>
+
+  <span class="label label-find">BUSCAR</span>
+  <pre><span class="ctx">  });
+  const el=document.getElementById('validacion-table');</span></pre>
+
+  <span class="label label-replace">REEMPLAZAR POR</span>
+  <pre><span class="ctx">  });</span>
+<span class="add">  // ── Horas Bitrix (bitrix_time_records) ──────────────────────────</span>
+<span class="add">  // Matching: employee_id + fecha_operativa = shift.fecha</span>
+<span class="add">  // fecha_operativa ya gestiona turnos nocturnos (día de inicio).</span>
+<span class="add">  var _allBitrixTime = [];</span>
+<span class="add">  try { _allBitrixTime = await getDB('bitrix_time_records'); } catch(e){ _allBitrixTime = []; }</span>
+<span class="add">  var _btMap = {};</span>
+<span class="add">  _allBitrixTime.forEach(function(bt){</span>
+<span class="add">    var k = (bt.employee_id||'') + '|' + (bt.fecha_operativa||'');</span>
+<span class="add">    if(!_btMap[k]) _btMap[k] = { sec: 0, count: 0 };</span>
+<span class="add">    _btMap[k].sec += (parseInt(bt.duration_seconds)||0);</span>
+<span class="add">    _btMap[k].count++;</span>
+<span class="add">  });</span>
+<span class="ctx">  const el=document.getElementById('validacion-table');</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PARCHE 2: Celda H. Bitrix en cada fila         -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="patch">
+  <div class="patch-title">Parche 2 de 4 — Celda en cada fila de la tabla</div>
+  <div class="patch-file">shared.js → renderValidacion() → valRows forEach</div>
+
+  <div class="step"><div class="step-num">2</div> Busca este texto exacto:</div>
+
+  <span class="label label-find">BUSCAR</span>
+  <pre><span class="ctx">      +'&lt;td>'+displayServicio(s.servicio)+'&lt;/td>&lt;td style="font-family:var(--font-mono)">'+s.horas+'h&lt;/td>'
+      +'&lt;td>'+mCell+'&lt;/td>&lt;td>'+iCell+'&lt;/td>'</span></pre>
+
+  <span class="label label-replace">REEMPLAZAR POR</span>
+  <pre><span class="ctx">      +'&lt;td>'+displayServicio(s.servicio)+'&lt;/td>&lt;td style="font-family:var(--font-mono)">'+s.horas+'h&lt;/td>'</span>
+<span class="add">      +(function(){</span>
+<span class="add">        var _btK=(s.employee_id||'')+'|'+(s.fecha||'');</span>
+<span class="add">        var _btD=_btMap[_btK];</span>
+<span class="add">        if(!_btD||_btD.sec===0) return '&lt;td style="color:var(--text3);text-align:center;font-size:11px;">—&lt;/td>';</span>
+<span class="add">        var _btH=_btD.sec/3600;</span>
+<span class="add">        var _decl=parseFloat(s.horas)||0;</span>
+<span class="add">        var _dif=Math.abs(_btH-_decl);</span>
+<span class="add">        var _btCol=_dif&lt;=0.25?'var(--green)':_dif&lt;=1?'var(--amber)':'var(--red)';</span>
+<span class="add">        return '&lt;td style="font-family:var(--font-mono);color:'+_btCol+';text-align:center;" title="'+_btD.count+' fichaje(s) Bitrix · Δ '+(_btH-_decl&gt;=0?'+':'')+(_btH-_decl).toFixed(1)+'h">'+_btH.toFixed(1)+'h&lt;/td>';</span>
+<span class="add">      })()</span>
+<span class="ctx">      +'&lt;td>'+mCell+'&lt;/td>&lt;td>'+iCell+'&lt;/td>'</span></pre>
+
+  <div class="note">
+    Color: verde (±15 min) · ámbar (±1h) · rojo (&gt;1h). Hover muestra nº fichajes y delta.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PARCHE 3: Header de la tabla                   -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="patch">
+  <div class="patch-title">Parche 3 de 4 — Cabecera de tabla</div>
+  <div class="patch-file">shared.js → renderValidacion() → el.innerHTML</div>
+
+  <div class="step"><div class="step-num">3</div> Busca este texto exacto:</div>
+
+  <span class="label label-find">BUSCAR</span>
+  <pre><span class="ctx">&lt;th>Horas&lt;/th>&lt;th>Ajustes de Caja&lt;/th></span></pre>
+
+  <span class="label label-replace">REEMPLAZAR POR</span>
+  <pre><span class="ctx">&lt;th>Horas&lt;/th></span><span class="add">&lt;th>H. Bitrix&lt;/th></span><span class="ctx">&lt;th>Ajustes de Caja&lt;/th></span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PARCHE 4: Horas Bitrix en modal detalle        -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="patch">
+  <div class="patch-title">Parche 4 de 4 — Horas Bitrix en modal "Revisar"</div>
+  <div class="patch-file">shared.js → openValidarModal() → bloque "DATOS DEL TURNO"</div>
+
+  <div class="step"><div class="step-num">4</div> Busca este texto exacto:</div>
+
+  <span class="label label-find">BUSCAR</span>
+  <pre><span class="ctx">  info += '&lt;div>&lt;span style="color:var(--text3)">Horas: &lt;/span>&lt;strong>'+s.horas+'h&lt;/strong>&lt;/div>';
+  if(s.area!=='Recepción') info += '&lt;div>&lt;span style="color:var(--text3)">Responsable: &lt;/span>'+formatDisplayValue(s.responsable_nombre)+'&lt;/div>';</span></pre>
+
+  <span class="label label-replace">REEMPLAZAR POR</span>
+  <pre><span class="ctx">  info += '&lt;div>&lt;span style="color:var(--text3)">Horas: &lt;/span>&lt;strong>'+s.horas+'h&lt;/strong>&lt;/div>';</span>
+<span class="add">  // Horas Bitrix en modal detalle</span>
+<span class="add">  (function(){</span>
+<span class="add">    var _btAllM=[]; try{_btAllM=_cache['bitrix_time_records']||[];}catch(e){}</span>
+<span class="add">    var _btSecM=0;</span>
+<span class="add">    _btAllM.forEach(function(bt){</span>
+<span class="add">      if(bt.employee_id===s.employee_id && bt.fecha_operativa===s.fecha)</span>
+<span class="add">        _btSecM+=(parseInt(bt.duration_seconds)||0);</span>
+<span class="add">    });</span>
+<span class="add">    if(_btSecM>0){</span>
+<span class="add">      var _btHM=_btSecM/3600;</span>
+<span class="add">      var _difM=Math.abs(_btHM-parseFloat(s.horas||0));</span>
+<span class="add">      var _colM=_difM&lt;=0.25?'#10b981':_difM&lt;=1?'#f59e0b':'#ef4444';</span>
+<span class="add">      info+='&lt;div>&lt;span style="color:var(--text3)">H. Bitrix: &lt;/span>&lt;strong style="color:'+_colM+'">'+_btHM.toFixed(1)+'h&lt;/strong>&lt;span style="font-size:11px;color:var(--text3);margin-left:6px;">(Δ '+(_btHM-parseFloat(s.horas||0)&gt;=0?'+':'')+(_btHM-parseFloat(s.horas||0)).toFixed(1)+'h)&lt;/span>&lt;/div>';</span>
+<span class="add">    } else {</span>
+<span class="add">      info+='&lt;div>&lt;span style="color:var(--text3)">H. Bitrix: &lt;/span>&lt;span style="color:var(--text3)">— sin fichaje&lt;/span>&lt;/div>';</span>
+<span class="add">    }</span>
+<span class="add">  })();</span>
+<span class="ctx">  if(s.area!=='Recepción') info += '&lt;div>&lt;span style="color:var(--text3)">Responsable: &lt;/span>'+formatDisplayValue(s.responsable_nombre)+'&lt;/div>';</span></pre>
+
+  <div class="note">
+    Usa el caché interno de <code>getDB</code> (ya cargado en renderValidacion). Si el modal se abre
+    directamente (sin pasar por la tabla), el caché puede estar vacío — muestra "sin fichaje".
+  </div>
+</div>
+
+<hr>
+
+<h1 style="font-size:14px; margin-bottom:12px;">RESUMEN TÉCNICO</h1>
+<pre style="font-size:11px; color: #94a3b8; border-color: #2ec4b666;">
+LÓGICA DE MATCHING
+─────────────────
+shift.employee_id  +  shift.fecha
+        ↕                 ↕
+bt.employee_id     +  bt.fecha_operativa
+
+Turno de NOCHE (ej. empieza 22:00 del 10/jul, termina 07:00 del 11/jul):
+  → shift.fecha         = 2026-07-10  (día de inicio)
+  → bt.fecha_operativa  = 2026-07-10  (asignado por migración al día de inicio)
+  → MATCH correcto ✓
+
+Si un empleado tiene 2 turnos el mismo día (split shift):
+  → Ambos turnos mostrarán la SUMA total de horas Bitrix del día.
+  → El supervisor ve el delta y evalúa. Fase 2: match por servicio.
+
+COLORES
+───────
+Verde  (#10b981)  →  diferencia ≤ 15 min
+Ámbar  (#f59e0b)  →  diferencia ≤ 1h
+Rojo   (#ef4444)  →  diferencia > 1h
+— (gris)          →  sin fichaje en bitrix_time_records
+
+RENDIMIENTO
+───────────
+getDB('bitrix_time_records') usa el caché de 30s igual que el resto.
+El mapa _btMap se construye en O(n) por render. No impacta.
+</pre>
+
+</body>
+</html>
