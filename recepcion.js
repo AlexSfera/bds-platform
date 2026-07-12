@@ -229,11 +229,12 @@
 var REC_TABLE = 'recepcion_cash';
 
 // ── FECHA OPERATIVA RECEPCIÓN ─────────────────────────────────────────────
-// Turno de Noche empieza a las 23:00, termina a las 07:00 del día siguiente.
-// Si hora actual < 08:00, la fecha operativa es "ayer" (turno del día anterior).
+// Turno de Noche empieza a las 23:00, termina por la mañana siguiente.
+// El recepcionista puede registrar/cerrar caja hasta las 09:00 como día anterior.
+// FIX-NOCHE-CUTOFF: unificado a < 9 (shared.js + recepcion.js).
 function _recFechaOperativa(){
   var now = new Date();
-  if(now.getHours() < 8){
+  if(now.getHours() < 9){
     var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     return toYMD(ayer);
   }

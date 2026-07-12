@@ -1020,8 +1020,8 @@ async function initTurnoForm(){
   var _fechaTurnoInit = today();
   var _hNowInit = (new Date()).getHours();
   var _areaNowInit = currentUser ? String(currentUser.area||'') : '';
-  // FIX-NOCHE-CUTOFF: unificado a <8 para Recepción (coincide con recepcion.js _recFechaOperativa)
-  if((_areaNowInit === 'Sala' && _hNowInit < 2) || (_areaNowInit === 'Recepción' && _hNowInit < 8)){
+  // FIX-NOCHE-CUTOFF: Recepción noche puede registrar hasta las 9:00 como día anterior
+  if((_areaNowInit === 'Sala' && _hNowInit < 2) || (_areaNowInit === 'Recepción' && _hNowInit < 9)){
     var _ayerDInit = getDateOnly(new Date()); _ayerDInit.setDate(_ayerDInit.getDate()-1);
     _fechaTurnoInit = toYMD(_ayerDInit);
   }
@@ -1319,8 +1319,8 @@ function clearTurnoForm(){
   var _fechaTurno = today();
   var _hNow = (new Date()).getHours();
   var _areaNow = currentUser ? String(currentUser.area||'') : '';
-  // FIX-NOCHE-CUTOFF: unificado a <8 para Recepción
-  if((_areaNow === 'Sala' && _hNow < 2) || (_areaNow === 'Recepción' && _hNow < 8)){
+  // FIX-NOCHE-CUTOFF
+  if((_areaNow === 'Sala' && _hNow < 2) || (_areaNow === 'Recepción' && _hNow < 9)){
     var _ayerD = getDateOnly(new Date()); _ayerD.setDate(_ayerD.getDate()-1);
     _fechaTurno = toYMD(_ayerD);
   }
@@ -1396,11 +1396,11 @@ async function _doSaveTurno(){
   // que ignora readonly, etc.) se usa today() como defensa.
   var fecha    = document.getElementById('t-fecha').value;
   if(!fecha){
-    // FIX-CENA-MEDIANOCHE: fallback nocturno — Sala < 2h, Recepción < 8h (FIX-NOCHE-CUTOFF)
+    // FIX-CENA-MEDIANOCHE + FIX-NOCHE-CUTOFF: Sala < 2h, Recepción < 9h
     fecha = today();
     var _hF = (new Date()).getHours();
     var _aF = currentUser ? String(currentUser.area||'') : '';
-    if((_aF === 'Sala' && _hF < 2) || (_aF === 'Recepción' && _hF < 8)){
+    if((_aF === 'Sala' && _hF < 2) || (_aF === 'Recepción' && _hF < 9)){
       var _fd = getDateOnly(new Date()); _fd.setDate(_fd.getDate()-1); fecha = toYMD(_fd);
     }
   }
@@ -1833,7 +1833,7 @@ function saveTurno(){
   const fecha=document.getElementById('t-fecha').value;
   var _isRecepcion = currentUser && currentUser.area === 'Recepción';
   // Date lock: employees can only register today (unless correcting)
-  var _fechaOpSave = today(); var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 8)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); }
+  var _fechaOpSave = today(); var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 9)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); }
   if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave){
     alertArea.innerHTML='<div class="alert a-err">⚠ Solo puedes registrar el turno de hoy.</div>';
     return;
