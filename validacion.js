@@ -1430,7 +1430,24 @@ async function pGo(){
          fecha_alta:localTs().slice(0,10)};
     }
   } else {
-    u=emps.find(function(e){return e.pin===pin&&e.estado==='Activo';});
+    // BUG-PIN-01 (Jul 2026): PIN compartido por 2+ empleados activos →
+    // antes entraba en silencio el más reciente (identidad equivocada).
+    // Ahora: bloquea el acceso y lo registra en audit_log.
+    var _pinMatches=emps.filter(function(e){return e.pin===pin&&e.estado==='Activo';});
+    if(_pinMatches.length>1){
+      try{ auditLog('PIN_DUPLICADO','PIN compartido por: '+_pinMatches.map(function(e){return e.nombre+' ('+e.id+')';}).join(', ')); }catch(_e){}
+      var boxD=document.getElementById('p-pin-box');
+      var errD=document.getElementById('p-err');
+      if(boxD){boxD.className='p-pin-box p-err';boxD.textContent='PIN duplicado';boxD.style.borderColor='#ef4444';boxD.style.color='#ef4444';}
+      if(errD){errD.textContent='Este PIN está asignado a más de un empleado. Avisa a administración.';errD.style.display='block';}
+      setTimeout(function(){
+        _pP=''; _pGoBusy=false;
+        if(boxD){boxD.className='p-pin-box';boxD.textContent='* * * *';boxD.style.borderColor='rgba(46,196,182,.3)';boxD.style.color='#2ec4b6';}
+        if(errD){errD.style.display='none';errD.textContent='';}
+      },2500);
+      return;
+    }
+    u=_pinMatches[0]||null;
   }
   if(!u){
     var box=document.getElementById('p-pin-box');

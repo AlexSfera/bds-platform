@@ -71,7 +71,18 @@ async function getDB(table) {
   if (_cache[table] && (now - (_cacheTs[table]||0)) < CACHE_TTL) {
     return _cache[table];
   }
-  const data = await dbGetAll(table);
+  let data = await dbGetAll(table);
+  // MERGE-BX-01 (Jul 2026): los turnos técnicos de Bitrix NO son turnos
+  // operativos. Se excluyen de TODA la app (dashboard, validación, KPIs,
+  // recuentos, sumas de horas y guard de 2 turnos/día):
+  //   · estado 'Sin declarar'  → esqueletos BXSH_ autogenerados (legacy)
+  //   · sync_status 'merged_into_manual' → ya fusionados en un turno manual
+  // Trazabilidad: los registros siguen en Supabase (solo SQL).
+  if (table === 'shifts' && Array.isArray(data)) {
+    data = data.filter(function(s){
+      return s.estado !== 'Sin declarar' && s.sync_status !== 'merged_into_manual';
+    });
+  }
   _cache[table] = data;
   _cacheTs[table] = now;
   return data;
@@ -391,9 +402,22 @@ async function pinOk(){
   let found=null;
   if(ROLE_PINS[currentPin]){
     const rol=ROLE_PINS[currentPin];
-    found=employees.find(e=>e.pin===currentPin&&e.estado==='Activo')||employees.find(e=>e.rol===rol&&e.estado==='Activo')||{id:'SYS_'+rol,nombre:rol==='admin'?'Administrador':rol==='fb'?'F&B Manager':rol==='jefe_recepcion'?'Jefe Recepción':'Chef',rol,estado:'Activo',pin:currentPin,responsable:1,validador:1,area:rol==='jefe_recepcion'?'Recepción':rol==='fb'?'Sala':'Cocina',puesto:rol};
+    found=employees.find(e=>e.rol===rol&&e.estado==='Activo')||{id:'SYS_'+rol,nombre:rol==='admin'?'Administrador':rol==='fb'?'F&B Manager':rol==='jefe_recepcion'?'Jefe Recepción':'Chef',rol,estado:'Activo',pin:currentPin,responsable:1,validador:1,area:rol==='jefe_recepcion'?'Recepción':rol==='fb'?'Sala':'Cocina',puesto:rol};
   } else {
-    found=employees.find(e=>e.pin===currentPin&&e.estado==='Activo');
+    // BUG-PIN-01 (Jul 2026): si dos empleados activos comparten PIN, se
+    // entraba en silencio como el más reciente (getDB ordena created_at.desc)
+    // → sesión con identidad equivocada. Ahora: bloquea y registra en audit.
+    const _pinMatches=employees.filter(e=>e.pin===currentPin&&e.estado==='Activo');
+    if(_pinMatches.length>1){
+      try{ auditLog('PIN_DUPLICADO','PIN compartido por: '+_pinMatches.map(e=>e.nombre+' ('+e.id+')').join(', ')); }catch(_e){}
+      const elD=document.getElementById('pin-display');
+      if(elD){ elD.classList.add('error'); elD.textContent='PIN DUPLICADO'; }
+      const leD=document.getElementById('login-error');
+      if(leD){ leD.style.display='block'; }
+      setTimeout(()=>{ currentPin=''; updPin(); if(elD) elD.classList.remove('error'); if(leD) leD.style.display='none'; },2000);
+      return;
+    }
+    found=_pinMatches[0]||null;
   }
   if(!found){
     const el=document.getElementById('pin-display');
@@ -1385,6 +1409,65 @@ async function loadForCorrection(shiftId){
 
 // ═══════════════════════════════════════════════════════════════════════
 // SAVE TURNO
+// MERGE-BX-02 (Jul 2026): re-intento de asociación Bitrix → turno manual
+// al guardar. Si existen registros de fichaje Bitrix pendientes
+// (bitrix_time_records.sync_status='pending_manual_shift') del mismo
+// empleado en fecha ±1 día, y su hora de cierre está a ≤1h del guardado
+// del turno, se vuelcan las horas al turno manual recién creado.
+// El turno MANUAL es la fuente de verdad operativa; Bitrix solo aporta horas.
+// Best-effort: nunca bloquea ni revierte el guardado del turno.
+async function _bxTryAttachToShift(shift){
+  try{
+    if(!shift || !shift.id || String(shift.id).indexOf('BXSH_')===0) return;
+    var f=(shift.fecha||'').slice(0,10);
+    if(!f || !shift.employee_id) return;
+    var base=new Date(f+'T12:00:00');
+    if(isNaN(base.getTime())) return;
+    function _ymd(dt){ var y=dt.getFullYear(),m=('0'+(dt.getMonth()+1)).slice(-2),d=('0'+dt.getDate()).slice(-2); return y+'-'+m+'-'+d; }
+    var prev=new Date(base); prev.setDate(prev.getDate()-1);
+    var next=new Date(base); next.setDate(next.getDate()+1);
+    var params='employee_id=eq.'+encodeURIComponent(shift.employee_id)
+      +'&sync_status=eq.pending_manual_shift'
+      +'&fecha_operativa=gte.'+_ymd(prev)
+      +'&fecha_operativa=lte.'+_ymd(next)
+      +'&order=start_ts.asc';
+    var recs=await sbRequest('GET','bitrix_time_records',null,params);
+    if(!recs || !Array.isArray(recs) || !recs.length) return;
+    // Tolerancia ±1h entre cierre Bitrix y guardado del turno (= ahora)
+    var nowMs=Date.now();
+    var matches=recs.filter(function(r){
+      if(!r.end_ts) return false;
+      var t=new Date(r.end_ts).getTime();
+      return !isNaN(t) && Math.abs(t-nowMs) <= 3600000;
+    });
+    if(!matches.length) return;
+    var totalSeg=matches.reduce(function(a,r){ return a+(parseFloat(r.duration_seconds)||0); },0);
+    if(totalSeg<=0) return;
+    var horasBx=Math.round(totalSeg/36)/100;
+    var upd={
+      horas: horasBx,
+      horas_bitrix: horasBx,
+      horas_source: 'bitrix',
+      bitrix_shift_id: matches.map(function(r){ return r.bitrix_record_id; }).join(','),
+      bitrix_started_at: matches[0].start_ts,
+      bitrix_closed_at: matches[matches.length-1].end_ts,
+      bitrix_duration_minutes: Math.round(totalSeg/60),
+      bitrix_synced_at: localTs(),
+      updated_at: localTs()
+    };
+    var ok=await dbUpdate('shifts', shift.id, upd);
+    if(ok){
+      for(var i=0;i<matches.length;i++){
+        await sbRequest('PATCH','bitrix_time_records',
+          { sync_status:'matched', matched_shift_id: shift.id, matched_ts: localTs() },
+          'id=eq.'+encodeURIComponent(matches[i].id));
+      }
+      invalidateCache('shifts');
+      try{ auditLog('BITRIX_ATTACH','Horas Bitrix ('+horasBx+'h) asociadas al turno '+shift.id+' de '+(shift.nombre||'')); }catch(_e){}
+    }
+  }catch(e){ console.warn('MERGE-BX-02 attach omitido:', e); }
+}
+
 async function _doSaveTurno(){
   // ── Horas: campo eliminado del formulario. Pendiente integración Bitrix24 fichaje ──
   // ── Read all form values (already validated by saveTurno) ──
@@ -1555,6 +1638,7 @@ async function _doSaveTurno(){
     invalidateCache('shifts');
     auditLog('SAVE_SHIFT', currentUser.nombre+' — '+fecha+' — '+servicio);
     toast('Turno guardado','ok');
+    _bxTryAttachToShift(shift); // MERGE-BX-02: best-effort, sin await
     if(_avisoPendientes > 0){
       var _aaPend = document.getElementById('turno-alert-area');
       if(_aaPend){
