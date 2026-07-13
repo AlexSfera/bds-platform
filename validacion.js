@@ -1416,7 +1416,28 @@ async function pGo(){
   var RP={'300415':'admin','0101':'chef','1010':'fb'};
   var emps=await getDB('employees');
   var u=null;
-  if(RP[pin]){
+  // FIX-PIN-BOSS (Jul 2026): el PIN PERSONAL siempre tiene prioridad sobre
+  // los PIN de rol. El PIN de BOSS (300415) coincide con RP['admin'] y el
+  // sistema entraba como el admin activo más reciente (Carles, alta 06/07).
+  // Orden nuevo: 1º empleado con ese PIN exacto → 2º fallback a PIN de rol.
+  // BUG-PIN-01: si el PIN está duplicado entre empleados activos, bloquea.
+  var _pinMatches=emps.filter(function(e){return e.pin===pin&&e.estado==='Activo';});
+  if(_pinMatches.length>1){
+    try{ auditLog('PIN_DUPLICADO','PIN compartido por: '+_pinMatches.map(function(e){return e.nombre+' ('+e.id+')';}).join(', ')); }catch(_e){}
+    var boxD=document.getElementById('p-pin-box');
+    var errD=document.getElementById('p-err');
+    if(boxD){boxD.className='p-pin-box p-err';boxD.textContent='PIN duplicado';boxD.style.borderColor='#ef4444';boxD.style.color='#ef4444';}
+    if(errD){errD.textContent='Este PIN está asignado a más de un empleado. Avisa a administración.';errD.style.display='block';}
+    setTimeout(function(){
+      _pP=''; _pGoBusy=false;
+      if(boxD){boxD.className='p-pin-box';boxD.textContent='* * * *';boxD.style.borderColor='rgba(46,196,182,.3)';boxD.style.color='#2ec4b6';}
+      if(errD){errD.style.display='none';errD.textContent='';}
+    },2500);
+    return;
+  }
+  if(_pinMatches.length===1){
+    u=_pinMatches[0];
+  } else if(RP[pin]){
     var r=RP[pin];
     u=emps.find(function(e){return e.rol===r&&e.estado==='Activo';});
     if(!u){
@@ -1429,25 +1450,6 @@ async function pGo(){
          coste:0,obs:'',
          fecha_alta:localTs().slice(0,10)};
     }
-  } else {
-    // BUG-PIN-01 (Jul 2026): PIN compartido por 2+ empleados activos →
-    // antes entraba en silencio el más reciente (identidad equivocada).
-    // Ahora: bloquea el acceso y lo registra en audit_log.
-    var _pinMatches=emps.filter(function(e){return e.pin===pin&&e.estado==='Activo';});
-    if(_pinMatches.length>1){
-      try{ auditLog('PIN_DUPLICADO','PIN compartido por: '+_pinMatches.map(function(e){return e.nombre+' ('+e.id+')';}).join(', ')); }catch(_e){}
-      var boxD=document.getElementById('p-pin-box');
-      var errD=document.getElementById('p-err');
-      if(boxD){boxD.className='p-pin-box p-err';boxD.textContent='PIN duplicado';boxD.style.borderColor='#ef4444';boxD.style.color='#ef4444';}
-      if(errD){errD.textContent='Este PIN está asignado a más de un empleado. Avisa a administración.';errD.style.display='block';}
-      setTimeout(function(){
-        _pP=''; _pGoBusy=false;
-        if(boxD){boxD.className='p-pin-box';boxD.textContent='* * * *';boxD.style.borderColor='rgba(46,196,182,.3)';boxD.style.color='#2ec4b6';}
-        if(errD){errD.style.display='none';errD.textContent='';}
-      },2500);
-      return;
-    }
-    u=_pinMatches[0]||null;
   }
   if(!u){
     var box=document.getElementById('p-pin-box');

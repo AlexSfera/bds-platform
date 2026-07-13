@@ -400,24 +400,26 @@ async function seedEmployees(){
 async function pinOk(){
   const employees=await getDB('employees');
   let found=null;
-  if(ROLE_PINS[currentPin]){
+  // FIX-PIN-BOSS (Jul 2026): el PIN PERSONAL siempre tiene prioridad sobre
+  // los PIN de rol. El PIN de BOSS (300415) coincide con ROLE_PINS['admin'],
+  // y el sistema entraba como el admin activo más reciente (Carles).
+  // Orden nuevo: 1º empleado con ese PIN exacto → 2º fallback a PIN de rol.
+  // BUG-PIN-01: si el PIN está duplicado entre empleados activos, bloquea.
+  const _pinMatches=employees.filter(e=>e.pin===currentPin&&e.estado==='Activo');
+  if(_pinMatches.length>1){
+    try{ auditLog('PIN_DUPLICADO','PIN compartido por: '+_pinMatches.map(e=>e.nombre+' ('+e.id+')').join(', ')); }catch(_e){}
+    const elD=document.getElementById('pin-display');
+    if(elD){ elD.classList.add('error'); elD.textContent='PIN DUPLICADO'; }
+    const leD=document.getElementById('login-error');
+    if(leD){ leD.style.display='block'; }
+    setTimeout(()=>{ currentPin=''; updPin(); if(elD) elD.classList.remove('error'); if(leD) leD.style.display='none'; },2000);
+    return;
+  }
+  if(_pinMatches.length===1){
+    found=_pinMatches[0];
+  } else if(ROLE_PINS[currentPin]){
     const rol=ROLE_PINS[currentPin];
     found=employees.find(e=>e.rol===rol&&e.estado==='Activo')||{id:'SYS_'+rol,nombre:rol==='admin'?'Administrador':rol==='fb'?'F&B Manager':rol==='jefe_recepcion'?'Jefe Recepción':'Chef',rol,estado:'Activo',pin:currentPin,responsable:1,validador:1,area:rol==='jefe_recepcion'?'Recepción':rol==='fb'?'Sala':'Cocina',puesto:rol};
-  } else {
-    // BUG-PIN-01 (Jul 2026): si dos empleados activos comparten PIN, se
-    // entraba en silencio como el más reciente (getDB ordena created_at.desc)
-    // → sesión con identidad equivocada. Ahora: bloquea y registra en audit.
-    const _pinMatches=employees.filter(e=>e.pin===currentPin&&e.estado==='Activo');
-    if(_pinMatches.length>1){
-      try{ auditLog('PIN_DUPLICADO','PIN compartido por: '+_pinMatches.map(e=>e.nombre+' ('+e.id+')').join(', ')); }catch(_e){}
-      const elD=document.getElementById('pin-display');
-      if(elD){ elD.classList.add('error'); elD.textContent='PIN DUPLICADO'; }
-      const leD=document.getElementById('login-error');
-      if(leD){ leD.style.display='block'; }
-      setTimeout(()=>{ currentPin=''; updPin(); if(elD) elD.classList.remove('error'); if(leD) leD.style.display='none'; },2000);
-      return;
-    }
-    found=_pinMatches[0]||null;
   }
   if(!found){
     const el=document.getElementById('pin-display');

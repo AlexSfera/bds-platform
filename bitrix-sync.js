@@ -50,6 +50,15 @@ const MADRID_TZ   = 'Europe/Madrid';
 const TOLERANCIA_MS = 60 * 60 * 1000; // ±1 hora (decisión CEO)
 const RETRY_DAYS    = 7;              // reintento de pendientes
 
+// ─── VÍNCULOS EXPLÍCITOS SYNCRO SHIFT ↔ BITRIX (decisión CEO Jul 2026) ──
+// El empleado 'BOSS' de SYNCRO SHIFT es 'Alexander Kolobnev' en Bitrix24.
+// En cada ejecución, si el empleado existe y aún no tiene bitrix_user_id,
+// se busca su usuario en Bitrix (user.get) y se escribe el vínculo en
+// employees.bitrix_user_id automáticamente (sin SQL manual).
+const EMPLOYEE_BITRIX_LINKS = [
+  { syncro_nombre: 'BOSS', bitrix_name: 'Alexander', bitrix_last_name: 'Kolobnev' }
+];
+
 // ─── HELPERS TIMEZONE MADRID ──────────────────────────────────────────
 function nowMadridTs() {
   const d = new Date();
@@ -157,6 +166,71 @@ async function bitrixV3(metodo, params) {
     if (page > 40) break; // safety cap
   }
   return results;
+}
+
+// ─── BITRIX REST CLÁSICO (webhook v2: user.get, etc.) ─────────────────
+async function bitrixV2(metodo, params) {
+  const base = BITRIX_WEBHOOK.replace(/\/+$/, '');
+  const r = await fetch(base + '/' + metodo, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params || {})
+  });
+  if (!r.ok) {
+    const txt = await r.text();
+    throw new Error(`Bitrix ${metodo} HTTP ${r.status}: ${txt.slice(0, 300)}`);
+  }
+  const data = await r.json();
+  if (data.error) throw new Error(`Bitrix ${metodo} error: ${JSON.stringify(data.error)}`);
+  return data.result;
+}
+
+// ─── AUTO-VÍNCULO employees.bitrix_user_id ────────────────────────────
+// Para cada entrada de EMPLOYEE_BITRIX_LINKS: si el empleado existe en
+// SYNCRO SHIFT y no tiene bitrix_user_id, localiza el usuario en Bitrix
+// por nombre+apellido (user.get) y escribe el vínculo. Idempotente.
+// Falla en silencio controlado (se reporta en 'errores', no bloquea el sync).
+async function autoLinkEmployees(DRY_RUN, errores) {
+  let linked = 0;
+  for (const link of EMPLOYEE_BITRIX_LINKS) {
+    try {
+      const emps = await sb('GET',
+        'employees?nombre=eq.' + encodeURIComponent(link.syncro_nombre)
+        + '&select=id,nombre,bitrix_user_id,estado'
+      );
+      const emp = (emps || []).find(e => e.estado !== 'Baja');
+      if (!emp) { errores.push({ link: link.syncro_nombre, error: 'empleado no encontrado en SYNCRO SHIFT' }); continue; }
+      if (emp.bitrix_user_id != null && emp.bitrix_user_id !== '') continue; // ya vinculado
+
+      const users = await bitrixV2('user.get', {
+        FILTER: { NAME: link.bitrix_name, LAST_NAME: link.bitrix_last_name, ACTIVE: true }
+      });
+      const arr = Array.isArray(users) ? users : [];
+      if (arr.length !== 1) {
+        errores.push({ link: link.syncro_nombre, error: 'user.get devolvió ' + arr.length + ' usuarios para ' + link.bitrix_name + ' ' + link.bitrix_last_name + ' (se requiere exactamente 1)' });
+        continue;
+      }
+      if (!DRY_RUN) {
+        await sb('PATCH', 'employees?id=eq.' + encodeURIComponent(emp.id),
+          { bitrix_user_id: arr[0].ID },
+          { 'Prefer': 'return=minimal' });
+        try {
+          await sb('POST', 'audit_log', {
+            id: 'AL_BXLINK_' + Date.now(),
+            ts: nowMadridTs(),
+            usuario: 'system_bitrix_sync',
+            rol: 'system',
+            action: 'BITRIX_LINK',
+            detail: emp.nombre + ' (' + emp.id + ') vinculado a Bitrix user ' + arr[0].ID + ' (' + link.bitrix_name + ' ' + link.bitrix_last_name + ')'
+          }, { 'Prefer': 'return=minimal' });
+        } catch (_) {}
+      }
+      linked++;
+    } catch (e) {
+      errores.push({ link: link.syncro_nombre, error: String(e.message || e).slice(0, 200) });
+    }
+  }
+  return linked;
 }
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────
@@ -312,13 +386,17 @@ export default async function handler(req, res) {
   const startedAt = Date.now();
 
   try {
+    const errores = [];
+
+    // 2b) Auto-vínculo de empleados declarados en EMPLOYEE_BITRIX_LINKS
+    const autoLinked = await autoLinkEmployees(DRY_RUN, errores);
+
     // 3) Empleados con bitrix_user_id — correspondencia estable por ID, nunca por nombre
     const employees = await sb('GET',
       'employees?select=id,nombre,area,puesto,bitrix_user_id&bitrix_user_id=not.is.null&estado=eq.Activo'
     );
 
     let totalIntervals = 0;
-    const errores = [];
 
     // 4) Importar intervalos raw del día objetivo (idempotente)
     if (employees && employees.length) {
@@ -386,7 +464,7 @@ export default async function handler(req, res) {
     const durMs = Date.now() - startedAt;
     const resumen = `v2 fecha=${fechaObjetivo} emps=${(employees||[]).length} intervals=${totalIntervals} `
                   + `matched=${aso.matched} ambiguous=${aso.ambiguous} pending=${aso.stillPending} `
-                  + `errs=${errores.length} dur=${durMs}ms`;
+                  + `autolinked=${autoLinked} errs=${errores.length} dur=${durMs}ms`;
     if (!DRY_RUN) {
       try {
         await sb('POST', 'audit_log', {
@@ -406,6 +484,7 @@ export default async function handler(req, res) {
       dry_run: DRY_RUN,
       fecha: fechaObjetivo,
       empleados_procesados: (employees||[]).length,
+      empleados_autovinculados: autoLinked,
       intervalos_bitrix: totalIntervals,
       turnos_asociados: aso.matched,
       conflictos_ambiguous: aso.ambiguous,

@@ -65,11 +65,32 @@ function normalizarNombre(n) {
   }).join(' ');
 }
 
+// ── ALIAS DE NOMBRES BITRIX → SYNCRO SHIFT ──────────────────────────────
+// FIX-ALIAS (Jul 2026): nombres que en Bitrix son distintos al perfil de
+// SYNCRO SHIFT. Sin esto, el importador creaba perfiles AUTO duplicados
+// (p.ej. 'Alexander Kolobnev' AUTO en vez de asociar a BOSS).
+// Clave: nombre Bitrix en minúsculas · Valor: nombre SYNCRO SHIFT en minúsculas.
+var FICHAJE_NAME_ALIASES = {
+  'alexander kolobnev': 'boss'
+};
+
 // ── MATCHING EMPLEADO ────────────────────────────────────────────────────
 // Devuelve { emp, tipo } o null
 // tipo: 'exact' | 'fuzzy'
 function fichajeMatchEmpleado(alertaNombre, employees) {
   var a = alertaNombre.toLowerCase().trim();
+
+  // FIX-ALIAS: resolución explícita ANTES de exact/fuzzy (el fuzzy podría
+  // casar con un perfil AUTO duplicado que tenga el mismo nombre Bitrix)
+  if (FICHAJE_NAME_ALIASES[a]) {
+    var _aliasTarget = FICHAJE_NAME_ALIASES[a];
+    var _aliasEmp = null;
+    employees.forEach(function(e) {
+      if (!_aliasEmp && (e.nombre || '').toLowerCase().trim() === _aliasTarget
+          && e.estado !== 'Baja') _aliasEmp = e;
+    });
+    if (_aliasEmp) return { emp: _aliasEmp, tipo: 'exact' };
+  }
   var tokA = a.split(/\s+/).filter(function(t){ return t.length > 2; });
 
   var exactMatch = null;
