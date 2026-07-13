@@ -204,6 +204,10 @@ export default async function handler(req, res) {
   // dry_run=1 → ejecuta lógica pero NO escribe en Supabase (solo lecturas + POST Bitrix).
   //           Devuelve JSON con acciones "would_*" para auditar antes de activar en real.
   const DRY_RUN = String(q.dry_run || (q.get && q.get('dry_run')) || '') === '1';
+  // include_open=1 → captura también fichajes en curso (endTime null), calculando
+  //           duration = ahora - startTime. Útil para "actualizar ahora" bajo demanda.
+  //           NO se usa en el cron nocturno (dato estable) — solo en llamada manual.
+  const INCLUDE_OPEN = String(q.include_open || (q.get && q.get('include_open')) || '') === '1';
   let fechaObjetivo;
   if (modo === 'range' && (q.fecha || (q.get && q.get('fecha')))) {
     fechaObjetivo = (q.fecha || q.get('fecha'));
@@ -259,16 +263,32 @@ export default async function handler(req, res) {
           const agrupado = {};
           const rawRows = [];
           const importedTs = new Date().toISOString();
+          const nowEpoch = Date.now();
           for (const r of registros) {
-            if (!r.endTime || !r.duration) continue; // fichaje en curso: ignorar
             const st = (typeof r.startTime === 'string') ? r.startTime : (r.startTime && r.startTime.date);
             if (!st) continue;
+
+            let endTs;
+            let duration;
+            const isOpen = !r.endTime || !r.duration;
+            if (isOpen) {
+              if (!INCLUDE_OPEN) continue; // cron nocturno: ignora fichajes abiertos
+              // Calcular duración en vivo = ahora - startTime (segundos)
+              duration = Math.floor((nowEpoch - new Date(st).getTime()) / 1000);
+              if (duration <= 0) continue; // sanity: fichaje en el futuro o corrupto
+              endTs = null;
+            } else {
+              endTs = (typeof r.endTime === 'string') ? r.endTime : (r.endTime && r.endTime.date);
+              duration = r.duration;
+            }
+
             const { servicio, fecha } = deducirServicioYFecha(st);
             if (fecha !== fechaObjetivo) continue;
 
             const key = fecha + '|' + servicio;
-            if (!agrupado[key]) agrupado[key] = { fecha, servicio, totalSeg: 0 };
-            agrupado[key].totalSeg += r.duration;
+            if (!agrupado[key]) agrupado[key] = { fecha, servicio, totalSeg: 0, hasOpen: false };
+            agrupado[key].totalSeg += duration;
+            if (isOpen) agrupado[key].hasOpen = true;
 
             rawRows.push({
               id:                'BX_' + r.id,
@@ -276,8 +296,8 @@ export default async function handler(req, res) {
               bitrix_user_id:    emp.bitrix_user_id,
               employee_id:       emp.id,
               start_ts:          st,
-              end_ts:            (typeof r.endTime === 'string') ? r.endTime : (r.endTime && r.endTime.date),
-              duration_seconds:  r.duration,
+              end_ts:            endTs,
+              duration_seconds:  duration,
               break_length:      r.breakLength || null,
               is_approved:       !!r.isApproved,
               fecha_operativa:   fecha,
@@ -287,11 +307,17 @@ export default async function handler(req, res) {
             totalIntervals++;
           }
 
-          // 4b) Insertar raw en bitrix_time_records (idempotente por bitrix_record_id UNIQUE)
+          // 4b) Insertar raw en bitrix_time_records
+          //     · cron nocturno (INCLUDE_OPEN=false) → ignore-duplicates (dato estable)
+          //     · bajo demanda (INCLUDE_OPEN=true) → merge-duplicates (upsert por bitrix_record_id UNIQUE)
           if (rawRows.length && !DRY_RUN) {
-            await sb('POST', 'bitrix_time_records', rawRows, {
-              'Prefer': 'resolution=ignore-duplicates,return=minimal'
-            });
+            const path = INCLUDE_OPEN
+              ? 'bitrix_time_records?on_conflict=bitrix_record_id'
+              : 'bitrix_time_records';
+            const prefer = INCLUDE_OPEN
+              ? 'resolution=merge-duplicates,return=minimal'
+              : 'resolution=ignore-duplicates,return=minimal';
+            await sb('POST', path, rawRows, { 'Prefer': prefer });
           }
 
           // 4c) Por cada grupo: buscar shift → update / skip / create
@@ -309,8 +335,14 @@ export default async function handler(req, res) {
 
             if (matches.length > 0) {
               const s = matches[0];
-              if (s.horas != null && parseFloat(s.horas) > 0) {
-                shiftsSkipped++; // manual histórico — no tocar
+              // Un shift creado por Bitrix (estado 'Sin declarar') siempre se actualiza
+              // en re-syncs, aunque ya tenga horas — porque su fuente es Bitrix.
+              // Un shift con horas > 0 y estado distinto = manual histórico (respetar).
+              const esShiftBitrix = s.estado === 'Sin declarar';
+              const esManualConHoras = s.horas != null && parseFloat(s.horas) > 0 && !esShiftBitrix;
+
+              if (esManualConHoras) {
+                shiftsSkipped++;
               } else {
                 if (!DRY_RUN) {
                   await sb('PATCH',
@@ -379,6 +411,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       dry_run: DRY_RUN,
+      include_open: INCLUDE_OPEN,
       fecha: fechaObjetivo,
       empleados_procesados: employees.length,
       intervalos_bitrix: totalIntervals,

@@ -860,12 +860,11 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <div class="ps-dc-meta">Administración · Recursos</div>
           <span class="ps-dc-status">Activo</span>
         </button>
-        <!-- PRÓXIMAMENTE -->
-        <div class="ps-dept-card soon" aria-disabled="true">
+        <button class="ps-dept-card" onclick="pSel('entrenadores','Entrenadores','#10b981')">
           <div class="ps-dc-name">Entrenadores</div>
           <div class="ps-dc-meta">Sesiones · Seguimiento</div>
-          <span class="ps-dc-status">Próximamente</span>
-        </div>
+          <span class="ps-dc-status">Activo</span>
+        </button>
         <button class="ps-dept-card" onclick="pSel('mantenimiento','Mantenimiento','#ef4444')">
           <div class="ps-dc-name">Mantenimiento</div>
           <div class="ps-dc-meta">Reparaciones · Tareas</div>
@@ -1123,7 +1122,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="screen" id="screen-informes">
       <div class="page-header">
         <div class="page-title">📊 Informes</div>
-        <div class="page-sub">Producción · Incentivos · KPIs por departamento</div>
+        <div class="page-sub">Entrada de datos por departamento</div>
       </div>
       <div id="informes-content"></div>
     </div>
@@ -1135,6 +1134,15 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <div class="page-sub">Incentivos · Producción · Evolución mensual</div>
       </div>
       <div id="mi-rendimiento-content"></div>
+    </div>
+
+    <!-- ══ LIQUIDACIÓN ENTRENADORES (solo admin) ══ -->
+    <div class="screen" id="screen-liquidacion-entr">
+      <div class="page-header">
+        <div class="page-title">💳 Liquidación Entrenadores</div>
+        <div class="page-sub">Marcar incentivos como pagados · Solo Administrador</div>
+      </div>
+      <div id="liquidacion-entr-content"></div>
     </div>
 
     <!-- ══ INSTRUCCIONES ══ -->
@@ -1203,10 +1211,8 @@ tr:hover td{background:rgba(96,165,250,.06);}
                 <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:6px;border-radius:6px;transition:background .1s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''"><input type="radio" name="servicio-adm" value="Tarde" style="width:16px;height:16px;accent-color:#a855f7;"> 🌆 Tarde</label>
               </div>
             </div></div>
-          <div class="fg"><label>Horas trabajadas <span class="req">*</span></label><input type="number" id="t-horas" min="0.5" max="16" step="0.5" placeholder="8"></div>
+          <!-- Horas: eliminado — pendiente integración Bitrix24 fichaje -->
           <div class="fg"><label>Responsable de turno <span class="req">*</span></label><select id="t-responsable" style="color:#111827;background:#ffffff;border:1px solid #d1d5db;"><option value="">— Seleccionar —</option></select></div>
-
-          <div class="fg"><label>Observación</label><input type="text" id="t-obs" placeholder="Nota breve del servicio"></div>
         </div>
 
         
@@ -1383,6 +1389,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <button id="val-tab-caja" onclick="switchValTab('caja')" style="padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">CIERRE CAJA</button>
         <button id="val-tab-merma" onclick="switchValTab('merma')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">🍋 MERMA</button>
         <button id="val-tab-notas" onclick="switchValTab('notas')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">💬 NOTAS</button>
+        <button id="val-tab-fio" onclick="switchValTab('fio')" style="display:none;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--text3);font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.1em;">⚖ FIO</button>
       </div>
       </div>
       <div class="filter-bar">
@@ -1433,6 +1440,13 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <div id="val-op-tar-kpis" style="margin-bottom:10px;"></div>
           <div class="card"><div class="tbl-wrap" id="val-tareas-table"></div></div>
         </div>
+        <!-- Notas (C7) -->
+        <div id="val-followup-notas" style="margin-top:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;">💬 NOTAS</div>
+          </div>
+          <div id="val-op-notas-list"></div>
+        </div>
       </div>
 
       <!-- CIERRE CAJA TAB -->
@@ -1481,6 +1495,13 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#8b5cf6;letter-spacing:.15em;margin-bottom:12px;">💬 NOTAS Y SUGERENCIAS</div>
         <div id="val-notas-kpis" style="margin-bottom:10px;"></div>
         <div class="card"><div class="tbl-wrap" id="val-notas-table"></div></div>
+      </div>
+
+      <!-- FIO TAB -->
+      <div id="val-content-fio" style="display:none;">
+        <div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#ef4444;letter-spacing:.15em;margin-bottom:12px;">⚖ FIO · FALLOS INDIVIDUALES OPERATIVOS</div>
+        <div id="val-fio-kpis" style="margin-bottom:10px;"></div>
+        <div class="card"><div class="tbl-wrap" id="val-fio-table"></div></div>
       </div>
 
     <!-- ══ DASHBOARD ══ -->
@@ -1594,6 +1615,16 @@ tr:hover td{background:rgba(96,165,250,.06);}
                   <option value="Cocina">Cocina</option>
                   <option value="Sala">Sala</option>
                   <option value="Friegue">Friegue</option>
+                  <option value="Recepción">Recepción</option>
+                  <option value="Housekeeping">Housekeeping</option>
+                  <option value="Mantenimiento">Mantenimiento</option>
+                  <option value="SYNCROLAB">SYNCROLAB</option>
+                  <option value="Recepción SYNCROLAB">Recepción SYNCROLAB</option>
+                  <option value="Entrenadores">Entrenadores</option>
+                  <option value="Fisioterapeutas">Fisioterapeutas</option>
+                  <option value="Administración">Administración</option>
+                  <option value="Economato">Economato</option>
+                  <option value="RRHH">RRHH</option>
                 </select>
               </div>
               <div><label style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:4px;">Periodo</label>
@@ -1621,10 +1652,10 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
     <!-- ══ MAESTRO ══ -->
     <div class="screen" id="screen-maestro">
-      <div class="page-header"><div class="page-title">👥 Maestro Cocina</div><div class="page-sub">Solo Administrador</div></div>
+      <div class="page-header"><div class="page-title" id="maestro-title">👥 Maestro</div><div class="page-sub" id="maestro-sub">Gestión de empleados</div></div>
       <div class="btn-row" style="margin-bottom:14px;">
         <button class="btn btn-primary" onclick="openEmpModal()">+ Nuevo Empleado</button>
-        <button class="btn btn-secondary" onclick="exportCSV('employees')">⬇ CSV</button>
+        <button class="btn btn-secondary" id="maestro-csv-btn" onclick="exportCSV('employees')">⬇ CSV</button>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
         <input type="search" id="maestro-search" placeholder="Buscar por nombre, área, puesto, rol..." autocomplete="off" oninput="filterMaestro()" style="flex:1;min-width:200px;max-width:420px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;">
@@ -1753,7 +1784,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
     <!-- ══ MANTENIMIENTO (módulo Kanban) ══ -->
     <div class="screen" id="screen-mant-mod">
-      <div class="page-header"><div class="page-title">🔧 Mantenimiento</div><div class="page-sub">Cargando...</div></div>
+      <div class="page-header"><div class="page-title">🗂 Kanban Tareas</div><div class="page-sub">Cargando...</div></div>
       <div id="mant-kanban" style="padding:0 16px 80px;"></div>
     </div>
 
@@ -2341,6 +2372,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <div class="modal-title" id="me-title">Empleado</div>
     <div class="grid2" style="gap:12px;">
       <div class="fg sp2"><label>Nombre <span class="req">*</span></label><input type="text" id="emp-nombre"></div>
+      <div class="fg sp2"><label>Correo electrónico <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— opcional · si se añade, se envía invitación automáticamente</span></label><input type="email" id="emp-email" autocomplete="off" placeholder="nombre@ejemplo.com"></div>
       <!-- Área: oculta — se deriva automáticamente del puesto vía _syncAreaFromPuesto() -->
       <select id="emp-area" style="display:none;" aria-hidden="true">
         <option>Sala</option><option>Cocina</option><option>Recepción</option>
@@ -2348,6 +2380,9 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <option>Administración</option><option>Friegue</option>
       </select>
       <div class="fg sp2"><label>Puesto <span class="req">*</span> <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">— el área se asigna automáticamente</span></label><select id="emp-puesto" onchange="_syncAreaFromPuesto()">
+  <optgroup label="F&amp;B (superior de Cocina y Sala)">
+    <option>F&amp;B Manager</option>
+  </optgroup>
   <optgroup label="Cocina">
     <option>Jefe de Cocina</option>
     <option>Segundo Jefe de Cocina</option>
@@ -2393,13 +2428,30 @@ tr:hover td{background:rgba(96,165,250,.06);}
     <option>Entrenador(a)</option>
     <option>Fisioterapeuta</option>
   </optgroup>
-  <optgroup label="Dirección / F&amp;B">
-    <option>F&amp;B Manager</option>
+  <optgroup label="Dirección">
     <option>Administrador</option>
-    <option>Responsable</option>
+    <option>Adjunto Directivo</option>
+    <option>Contable</option>
   </optgroup>
 </select></div>
-      <div class="fg" id="emp-pin-row"><label>PIN (4-6 dígitos) <span class="req">*</span></label><input type="text" id="emp-pin" maxlength="6" autocomplete="new-password"></div>
+      <!-- Sección acceso: modo creación (PIN nuevo) o modo edición (estado PIN) -->
+      <div class="fg sp2" id="emp-pin-row">
+        <!-- En creación -->
+        <div id="emp-pin-create">
+          <label>PIN de acceso (4-6 dígitos) <span class="req">*</span></label>
+          <input type="password" id="emp-pin" maxlength="6" autocomplete="new-password" placeholder="····">
+          <span style="font-size:11px;color:var(--text3);display:block;margin-top:4px;">El empleado recibirá un correo indicando que su acceso ha sido configurado.</span>
+        </div>
+        <!-- En edición -->
+        <div id="emp-pin-status" style="display:none;">
+          <label>Acceso al sistema</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+            <span id="emp-pin-badge" class="badge b-green">PIN configurado</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="emp-pin-reset-btn" onclick="openResetPinModal()" style="font-size:11px;">🔑 Restablecer PIN</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="emp-reinvite-btn" onclick="reenviarInvitacion()" style="font-size:11px;display:none;">📧 Reenviar invitación</button>
+          </div>
+        </div>
+      </div>
       <div class="fg"><label>Coste €/hora</label><input type="number" id="emp-coste" step="0.01" min="0"></div>
       <div class="fg"><label>Estado</label><select id="emp-estado"><option>Activo</option><option>Baja</option><option>Vacaciones</option></select></div>
       <div class="fg"><label>Responsable de turno</label><select id="emp-resp"><option value="1">Sí</option><option value="0">No</option></select></div>
@@ -2409,12 +2461,39 @@ tr:hover td{background:rgba(96,165,250,.06);}
         <option value="jefe">Jefe / Coordinador</option>
         <option value="adjunto">Adjunto Directivo / RRHH</option>
         <option value="admin">Administrador</option>
+        <option value="contable">Contable</option>
       </select></div>
       <div class="fg sp2"><label>Observaciones</label><textarea id="emp-obs" rows="2"></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-empleado')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveEmpleado()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL RESET PIN ══ -->
+<div class="modal-overlay" id="modal-reset-pin">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">🔑 Restablecer PIN</div>
+    <p id="reset-pin-emp-nombre" style="color:var(--text2);font-size:13px;margin:0 0 12px;"></p>
+    <div class="fg" style="margin-bottom:12px;">
+      <label>Nuevo PIN (4-6 dígitos) <span class="req">*</span></label>
+      <input type="password" id="reset-pin-value" maxlength="6" autocomplete="new-password" placeholder="····" style="letter-spacing:4px;font-size:18px;text-align:center;">
+    </div>
+    <div class="fg" style="margin-bottom:16px;">
+      <label>Confirmar PIN</label>
+      <input type="password" id="reset-pin-confirm" maxlength="6" autocomplete="new-password" placeholder="····" style="letter-spacing:4px;font-size:18px;text-align:center;">
+    </div>
+    <div id="reset-pin-email-row" style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--text2);display:none;">
+      <strong>📧 Notificación:</strong> Se enviará un correo a <span id="reset-pin-email-addr" style="color:var(--accent1);"></span> informando del cambio de PIN.
+    </div>
+    <div id="reset-pin-noemail-row" style="background:#7f1d1d22;border:1px solid #991b1b;border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:#fca5a5;display:none;">
+      ⚠️ Este empleado no tiene correo registrado. El nuevo PIN deberá comunicarse de forma presencial y segura.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-reset-pin')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarResetPin()">💾 Guardar nuevo PIN</button>
     </div>
   </div>
 </div>
@@ -2444,5 +2523,6 @@ tr:hover td{background:rgba(96,165,250,.06);}
 <script src="mi_rendimiento.js"></script>
 <script src="fichaje.js"></script>
 <script src="merma.js"></script>
+<script src="adjuntos.js"></script>
 </body>
 </html>

@@ -1111,7 +1111,10 @@ async function renderCostTable() {
   // Filtrar shifts por periodo
   var filtShifts = shifts.filter(function(s) { return s.fecha >= fromD && s.fecha <= t; });
 
-  // Filtrar por departamento activo en dashboard
+  // Filtrar por departamento
+  //   · Si el usuario ha seleccionado un dept en el filtro manual → ese TIENE PRIORIDAD
+  //     (permite ver costes cross-dept desde cualquier dashboard).
+  //   · Si no hay filtro manual → usa el dept del dashboard actual (comportamiento por defecto).
   var areaMapCost = {
     'Cocina': ['Cocina'],
     'Sala': ['Sala'],
@@ -1126,18 +1129,20 @@ async function renderCostTable() {
     'Economato': ['Economato'],
     'RRHH': ['RRHH', 'Recursos Humanos']
   };
-  if (_dashCurrentDept) {
-    var validAreasCost = areaMapCost[_dashCurrentDept] || [_dashCurrentDept];
-    filtShifts = filtShifts.filter(function(s) { return validAreasCost.indexOf(s.area) !== -1; });
-  }
 
-  // También respetar el filtro manual del selector de coste si existe
   var manualDeptF = (document.getElementById('cost-dept-filter') || {}).value || '';
+  var effectiveAreas = null;   // null = todas las áreas (vista global)
   if (manualDeptF) {
-    filtShifts = filtShifts.filter(function(s) { return s.area === manualDeptF; });
+    effectiveAreas = [manualDeptF];
+  } else if (_dashCurrentDept) {
+    effectiveAreas = areaMapCost[_dashCurrentDept] || [_dashCurrentDept];
   }
 
-  var costDeptAreas = _dashCurrentDept ? (areaMapCost[_dashCurrentDept] || [_dashCurrentDept]) : [];
+  if (effectiveAreas) {
+    filtShifts = filtShifts.filter(function(s) { return effectiveAreas.indexOf(s.area) !== -1; });
+  }
+
+  var costDeptAreas = effectiveAreas || [];
   var costMap = {};
   employees.filter(function(e) {
     var inDept = !costDeptAreas.length || costDeptAreas.indexOf(e.area) !== -1;
