@@ -32,6 +32,7 @@
       <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.15em;margin-bottom:10px;">1 · EFECTIVO</div>
       <div class="grid2">
         <div class="fg"><label>Fecha <span class="req">*</span></label><input type="date" id="caja-fecha"></div>
+        <div class="fg" id="caja-admin-created-at-wrap" style="display:none"><label>Fecha/Hora cierre (admin override)</label><input type="datetime-local" id="caja-admin-created-at" step="60"></div>
         <div class="fg"><label>Fondo inicial — recibido del turno anterior (€)</label>
           <input type="text" inputmode="decimal" id="caja-fondo-ini" placeholder="0.00" readonly style="opacity:0.65;cursor:not-allowed;"></div>
         <div class="fg"><label>Cash POSMEWS (€) <span style="color:var(--text3);font-weight:400">— acumulado del día</span></label>
@@ -350,10 +351,24 @@ function openCajaForm(existingId) {
       setV('caja-eur-pension-comidacena', row.eur_pension_comidacena);
       calcCajaDifs();
       // Bloquear si el usuario no puede editar este cierre
-      var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb';
+      var isJefeDept = typeof canCorrectCaja==='function' && canCorrectCaja('Sala');
+      var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb' || isJefeDept;
       var isPendiente = row.estado === 'Pendiente validación';
       var esPropio    = row.responsable_id === currentUser.id;
-      var canEdit     = canEditCaja || (isPendiente && esPropio) || (window._cajaCorrectMode && typeof canCorrectCaja==='function' && canCorrectCaja('Sala'));
+      var canEdit     = canEditCaja || (isPendiente && esPropio) || (window._cajaCorrectMode && isJefeDept);
+      // Admin: mostrar campo override fecha/hora cierre
+      var adminCreatedAtWrap = document.getElementById('caja-admin-created-at-wrap');
+      if(adminCreatedAtWrap){
+        if(currentUser.rol === 'admin'){
+          adminCreatedAtWrap.style.display = '';
+          var adminCAEl = document.getElementById('caja-admin-created-at');
+          if(adminCAEl && row.created_at){
+            try { var d=new Date(row.created_at); adminCAEl.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); } catch(e){}
+          }
+        } else { adminCreatedAtWrap.style.display = 'none'; }
+      }
+      // Guardar responsable original para detectar redacción por jefe
+      window._cajaOriginalResponsableId = row.responsable_id || null;
       if(!canEdit){
         document.querySelectorAll('#modal-caja input, #modal-caja textarea, #modal-caja select').forEach(function(el){ el.readOnly=true; el.style.pointerEvents='none'; });
         var btnGuardar = document.getElementById('caja-btn-guardar');
@@ -588,9 +603,24 @@ async function saveCajaForm() {
     total_ajustes: ajustes,
     comentario: comentario,
     estado: (_editingCajaId && (window._cajaPrevEstado==='A revisar' || window._cajaPrevEstado==='En corrección')) ? 'corregido' : 'Pendiente validación',
-    created_at: localTs(),
     updated_at: localTs()
   };
+  // FIX: created_at solo en alta nueva (antes se sobreescribía en cada edición)
+  if(!_editingCajaId){
+    closure.created_at = localTs();
+  } else if(currentUser.rol === 'admin'){
+    // Admin puede override de created_at desde el campo datetime-local
+    var adminCAVal = (document.getElementById('caja-admin-created-at')||{}).value;
+    if(adminCAVal){
+      try { var _d=new Date(adminCAVal); closure.created_at=_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0')+'T'+String(_d.getHours()).padStart(2,'0')+':'+String(_d.getMinutes()).padStart(2,'0')+':00+02:00'; } catch(e){}
+    }
+  }
+  // Redactado por jefe: jefe edita cierre de otro empleado (no admin)
+  if(_editingCajaId && currentUser.rol !== 'admin' && window._cajaOriginalResponsableId && currentUser.id !== window._cajaOriginalResponsableId){
+    closure.redactado_por_jefe = true;
+    closure.redactado_por = currentUser.nombre;
+    closure.redactado_ts = localTs();
+  }
 
   if(_isCorrection){
     closure.corregida = true; closure.corrected_by = currentUser.nombre;
@@ -674,7 +704,8 @@ async function renderCajaList() {
       var esTraspaso = c.tipo === 'traspaso';
       var tipoBadge = esTraspaso
         ? '<span class="badge" style="background:rgba(8,145,178,.15);color:#0891b2;border:1px solid #0891b2;">🔁 Traspaso</span>'
-        : '<span class="badge" style="background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid #3b82f6;">💰 Cierre</span>';
+        : '<span class="badge" style="background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid #3b82f6;">💰 Cierre</span>'
+        + (c.redactado_por_jefe ? '<span class="badge" style="background:rgba(234,179,8,.15);color:#eab308;border:1px solid #eab308;margin-left:4px;" title="Redactado por '+(c.redactado_por||'jefe')+'">⚠</span>' : '');
       var verFn = esTraspaso ? 'openSalaTraspasoModal' : 'openCajaForm';
       return '<tr>'
         +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?(function(ts){try{return new Date(ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Madrid'});}catch(e){return ts.slice(11,16);}})(c.created_at):'—')+'</span></td>'
@@ -918,8 +949,9 @@ async function renderValCajaList() {
       var difColor = Math.abs(difOp)<0.01?'var(--green)':Math.abs(difOp)>5?'var(--red)':'var(--amber)';
       var isPendiente = c.estado!=='Validado final';
       var isAdmin = currentUser.rol==='admin';
-      var canEdit = isAdmin||currentUser.rol==='fb';
-      var canValidar = canEdit;
+      var isJefe = typeof canCorrectCaja==='function' && canCorrectCaja('Sala');
+      var canEdit = isAdmin||currentUser.rol==='fb'||isJefe;
+      var canValidar = isAdmin||currentUser.rol==='fb';
       var totalPens = (parseInt(c.pension_desayuno)||0)+(parseInt(c.media_pension)||0)+(parseInt(c.pension_completa)||0);
       // BUG-CAJ-04: Total ajustes (desc+anulaciones+invitaciones) — nuevo campo guardado
       var totalAjustes = c.total_ajustes != null ? c.total_ajustes.toFixed(2).replace('.',',')+'€' : '—';
@@ -943,7 +975,7 @@ async function renderValCajaList() {
         })()
         +'<td style="font-family:var(--font-mono);color:'+ajColor+'">'+totalAjustes+'</td>'
         +'<td style="text-align:center">'+totalPens+'p</td>'
-        +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+(typeof correctedBadge==='function'?correctedBadge(c):'')+'</td>'
+        +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+(c.redactado_por_jefe?'<span class="badge" style="background:rgba(234,179,8,.15);color:#eab308;border:1px solid #eab308;margin-left:4px;" title="Redactado por '+(c.redactado_por||'jefe')+' · '+(c.redactado_ts?new Date(c.redactado_ts).toLocaleString('es-ES',{timeZone:'Europe/Madrid'}):'')+'">⚠</span>':'')+(typeof correctedBadge==='function'?correctedBadge(c):'')+'</td>'
         +'<td style="white-space:nowrap">'
         +'<div style="display:flex;flex-direction:column;gap:4px;">'
         +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')

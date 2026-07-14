@@ -80,6 +80,7 @@ function _labInputFilter(el, mode, idx, key, containerId){
     el.value = el.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/g,'');
   }
   if(mode === 'decimal'){
+    el.value = el.value.replace(',', '.');  // FIX: coma española → punto decimal
     el.value = el.value.replace(/[^0-9.]/g,'');
     var p = el.value.split('.');
     if(p.length > 2) el.value = p[0]+'.'+p.slice(1).join('');
