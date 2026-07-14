@@ -821,12 +821,19 @@ async function renderValCajaRecepcion(deptArg) {
     var estado = r.estado || 'cerrado';
     var estadoBadge = estado === 'validado'  ? '<span class="badge b-green">✓ Validado</span>'
                     : estado === 'reabierto' ? '<span class="badge b-orange">↩ Reabierto</span>'
+                    : estado === 'correccion' ? '<span class="badge b-orange">↩ Corrección</span>'
+                    : estado === 'corregido'  ? '<span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid #ef4444;">✔ Corregido</span>'
                     : '<span class="badge b-gray">● '+estado+'</span>';
+    estadoBadge += (typeof correctedBadge==='function'?correctedBadge(r):'');
     var verFn = esTraspaso ? 'openRecTraspasoModal' : 'openRecCajaModal';
+    var isPendienteRec = estado !== 'validado';
+    var canValidarRec = canValRec || isAdminU;
 
     var acciones = '<div style="display:flex;flex-direction:column;gap:4px;">'
+      + (isPendienteRec && canValidarRec ? '<button class="btn btn-success btn-sm" onclick="validarCajaRec(\''+r.id+'\')">✓ Validar</button>' : '')
       + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
-      + (estado !== 'reabierto' && !_esContable ? '<button class="btn btn-warn btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">↩ Reabrir</button>' : '')
+      + (isAdminU && estado !== 'validado' ? '<button class="btn btn-warn btn-sm" onclick="correccionCajaRec(\''+r.id+'\')">↩ Corrección</button>' : '')
+      + ((isAdminU || (typeof canCorrectCaja==='function' && canCorrectCaja('Recepción'))) && !esTraspaso ? '<button class="btn btn-secondary btn-sm" onclick="corregirCajaRec(\''+r.id+'\')">✎ Corregir en sitio</button>' : '')
       + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaRec(\''+r.id+'\')">🗑 Eliminar</button>' : '')
       + '</div>';
 
@@ -850,6 +857,46 @@ async function renderValCajaRecepcion(deptArg) {
 }
 window.renderValCajaRecepcion = renderValCajaRecepcion;
 
+// ── CAJA-V2 · ACCIONES VALIDACIÓN RECEPCIÓN ─────────────────────────────
+async function validarCajaRec(id){
+  try{
+    await fetch(SUPABASE_URL+'/rest/v1/recepcion_cash?id=eq.'+encodeURIComponent(id), {
+      method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify({ estado:'validado', validado_por:currentUser.nombre, validado_ts:localTs(), updated_at:localTs() })
+    });
+    invalidateCache('recepcion_cash');
+    if(typeof auditLog==='function') auditLog('REC_CAJA_VALIDAR', currentUser.nombre+' validó caja Recepción '+id);
+    toast('Caja Recepción validada','ok');
+    renderValCajaRecepcion();
+  }catch(e){ toast('Error al validar: '+e.message,'err'); }
+}
+async function correccionCajaRec(id){
+  var motivo = prompt('Motivo de la corrección (se enviará al responsable):');
+  if(motivo === null) return;
+  try{
+    await fetch(SUPABASE_URL+'/rest/v1/recepcion_cash?id=eq.'+encodeURIComponent(id), {
+      method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify({ estado:'correccion', comentario_validador:motivo||null, updated_at:localTs() })
+    });
+    invalidateCache('recepcion_cash');
+    if(typeof auditLog==='function') auditLog('REC_CAJA_CORRECCION', currentUser.nombre+' envió a corrección caja Recepción '+id+' · '+(motivo||''));
+    toast('Enviado a corrección','ok');
+    renderValCajaRecepcion();
+  }catch(e){ toast('Error: '+e.message,'err'); }
+}
+async function corregirCajaRec(id){
+  if(typeof canCorrectCaja!=='function' || (!canCorrectCaja('Recepción') && currentUser.rol!=='admin')){ toast('Sin permiso para corregir esta caja','err'); return; }
+  var nota = prompt('Nota de corrección (obligatoria):');
+  if(nota===null) return;
+  if(!nota.trim()){ toast('La nota de corrección es obligatoria','err'); return; }
+  if(typeof openRecCajaModal === 'function') openRecCajaModal(id);
+  window._cajaCorrectMode = true; window._cajaCorrectNote = nota.trim();
+  toast('Modo corrección: edita los importes y guarda. La caja seguirá validada.','ok');
+}
+window.validarCajaRec = validarCajaRec;
+window.correccionCajaRec = correccionCajaRec;
+window.corregirCajaRec = corregirCajaRec;
+
 // ── CAJA-V2 · VALIDACIÓN CAJAS SYNCROLAB (Nubimed + VirtuGym) ───────────
 // Visible: admin + jefe_recepcion (validador) · Acciones: Ver / Validar / Corrección / Eliminar(admin)
 async function renderValCajaLab(deptArg){
@@ -860,9 +907,9 @@ async function renderValCajaLab(deptArg){
   var isValidador = (typeof canValidateDepartment==='function') && canValidateDepartment(currentUser,'SYNCROLAB');
   var _esContableLab = typeof isContable==='function' && isContable(currentUser);
   if(!isAdminU && !isValidador && !_esContableLab){ block.style.display = 'none'; return; }
-  // Regla dept: admin ve siempre; coordinadora solo en contexto SYNCROLAB
+  // Regla dept: mostrar SYNCROLAB cuando dept=vacío(Todos), SYNCROLAB, o Recepción SYNCROLAB
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value || '');
-  if(!isAdminU && dept && dept.indexOf('SYNCROLAB') === -1 && dept !== 'Recepción SYNCROLAB'){ block.style.display = 'none'; return; }
+  if(dept && dept.indexOf('SYNCROLAB') === -1 && dept !== 'Recepción SYNCROLAB'){ block.style.display = 'none'; return; }
   block.style.display = 'block';
   el.innerHTML = '<div class="empty"><div class="empty-text">Cargando...</div></div>';
 
