@@ -136,7 +136,7 @@ const DEPT_ICONS = {
 };
 
 // Pins for role-level access
-const ROLE_PINS = {'300415':'admin','0101':'chef','1010':'fb'};
+const ROLE_PINS = {'300415':'admin','0101':'chef'};
 
 const TASK_STATES = {
   ABIERTA: 'Abierta',
@@ -419,7 +419,7 @@ async function pinOk(){
     found=_pinMatches[0];
   } else if(ROLE_PINS[currentPin]){
     const rol=ROLE_PINS[currentPin];
-    found=employees.find(e=>e.rol===rol&&e.estado==='Activo')||{id:'SYS_'+rol,nombre:rol==='admin'?'Administrador':rol==='fb'?'F&B Manager':rol==='jefe_recepcion'?'Jefe Recepción':'Chef',rol,estado:'Activo',pin:currentPin,responsable:1,validador:1,area:rol==='jefe_recepcion'?'Recepción':rol==='fb'?'Sala':'Cocina',puesto:rol};
+    found=employees.find(e=>e.rol===rol&&e.estado==='Activo')||{id:'SYS_'+rol,nombre:rol==='admin'?'Administrador':rol==='jefe_recepcion'?'Jefe Recepción':'Chef',rol,estado:'Activo',pin:currentPin,responsable:1,validador:1,area:rol==='jefe_recepcion'?'Recepción':'Cocina',puesto:rol};
   }
   if(!found){
     const el=document.getElementById('pin-display');
