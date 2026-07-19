@@ -232,8 +232,12 @@ var REC_TABLE = 'recepcion_cash';
 // Turno de Noche empieza a las 23:00, termina por la mañana siguiente.
 // El recepcionista puede registrar/cerrar caja hasta las 09:00 como día anterior.
 // FIX-NOCHE-CUTOFF: unificado a < 9 (shared.js + recepcion.js).
-function _recFechaOperativa(){
+function _recFechaOperativa(turno){
   var now = new Date();
+  // FIX-REC-FECHA: Mañana y Tarde SIEMPRE operan sobre hoy.
+  // Solo Noche (o sin turno especificado) usa ayer si hora < 9,
+  // porque el recepcionista de noche trabaja pasada la medianoche.
+  if(turno === 'Mañana' || turno === 'Tarde') return today();
   if(now.getHours() < 9){
     var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     return toYMD(ayer);
@@ -645,7 +649,7 @@ async function submitRecCaja() {
   }
 
   var ts    = localTs();
-  var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : _recFechaOperativa();
+  var fecha = document.getElementById('t-fecha') ? document.getElementById('t-fecha').value : _recFechaOperativa(turno);
 
   // BUG-16 FIX: nombres de columnas reales de recepcion_cash
   var record = {
@@ -960,7 +964,8 @@ async function _saveRecepcionVentas(shiftId) {
   // importe (bruto con IVA), reserva_mews, servicio_detalle,
   // departamento_relacionado, created_at, comentario
   if(!currentUser || !shiftId){ console.warn('[REC_VENTAS] abortado — currentUser:',!!currentUser,'shiftId:',shiftId); return; }
-  var fecha = (document.getElementById('t-fecha')||{}).value || _recFechaOperativa();
+  var _turnoVentas = getRecTurnoValue() || _recTipoTurno || null;
+  var fecha = (document.getElementById('t-fecha')||{}).value || _recFechaOperativa(_turnoVentas);
   var ts    = localTs();
   var filas = [];
 
@@ -1256,11 +1261,31 @@ async function lockRecTurnoIfCajaToday() {
   if(!currentUser) return;
   var rows = [];
   try { rows = await getDB(REC_TABLE); } catch(e){ return; }
-  var t = _recFechaOperativa();
+
+  // FIX-REC-LOCK: buscar operación del usuario en la fecha operativa de CADA turno,
+  // no solo la genérica. Así si hizo Noche (fecha=ayer) y ahora es Mañana (fecha=hoy),
+  // no se bloquea cruzado.
+  var now = new Date();
+  var tNoche = _recFechaOperativa('Noche');
+  var tDia   = today();  // Mañana/Tarde siempre hoy
+
+  // Buscar operación del usuario: primero en fecha de hoy, luego en fecha Noche
   var mine = rows.find(function(r){
-    return r.fecha === t && (r.responsable_id === currentUser.id || r.usuario_id === currentUser.id);
+    return r.fecha === tDia && (r.responsable_id === currentUser.id || r.usuario_id === currentUser.id);
   });
+  if(!mine && tNoche !== tDia){
+    mine = rows.find(function(r){
+      return r.fecha === tNoche && r.turno === 'Noche'
+        && (r.responsable_id === currentUser.id || r.usuario_id === currentUser.id);
+    });
+  }
   if(!mine || !mine.turno) return;
+
+  // FIX-REC-LOCK: Si la operación existente es Noche y ahora es horario de Mañana
+  // (hora >= 6), no bloquear — el usuario puede empezar turno Mañana sobre fecha de hoy.
+  if(mine.turno === 'Noche' && now.getHours() >= 6 && now.getHours() < 15){
+    return;
+  }
 
   var map = { 'Mañana':'manana', 'Tarde':'tarde', 'Noche':'noche' };
   var key = map[mine.turno];
@@ -1285,7 +1310,7 @@ async function lockRecTurnoIfCajaToday() {
 async function getRecOpToday(turno) {
   var rows = [];
   try { rows = await getDB(REC_TABLE); } catch(e){ rows = []; }
-  var t = _recFechaOperativa();
+  var t = _recFechaOperativa(turno);
   return rows.find(function(r){ return r.fecha === t && r.turno === turno; }) || null;
 }
 
@@ -1646,7 +1671,7 @@ async function submitRecTraspaso() {
 
   var ts    = localTs();
   var fecha = document.getElementById('t-fecha') && document.getElementById('t-fecha').value
-            ? document.getElementById('t-fecha').value : _recFechaOperativa();
+            ? document.getElementById('t-fecha').value : _recFechaOperativa(turno);
 
   var record = {
     id:                      _recTraspasoEditId || genId(),
