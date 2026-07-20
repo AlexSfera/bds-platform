@@ -2514,6 +2514,120 @@ tr:hover td{background:rgba(96,165,250,.06);}
 <script src="fichaje.js"></script>
 <script src="merma.js"></script>
 <script src="adjuntos.js"></script>
-<script src="adjuntos.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// PORTAL PIN SYSTEM — teclado PIN + selección departamento
+// Valida contra employees (Supabase) + ROLE_PINS (shared.js).
+// NO tiene mapeos PIN→rol propios.
+// ═══════════════════════════════════════════════════════════════════════
+var _pPin = '';
+
+function pSel(dept, label, color) {
+  _pPin = '';
+  var modal = document.getElementById('portal-pin-modal');
+  var lbl   = document.getElementById('pdept-lbl');
+  var box   = document.getElementById('p-pin-box');
+  var err   = document.getElementById('p-err');
+  if (lbl) { lbl.textContent = label; lbl.style.color = color || '#2ec4b6'; }
+  if (box) { box.textContent = '· · · ·'; box.style.borderColor = ''; box.style.color = ''; }
+  if (err) err.textContent = '';
+  if (modal) modal.style.display = 'flex';
+}
+
+function pK(d) {
+  if (_pPin.length >= 6) return;
+  _pPin += d;
+  var box = document.getElementById('p-pin-box');
+  if (box) box.textContent = _pPin.split('').map(function(){ return '●'; }).join(' ');
+}
+
+function pBk() {
+  _pPin = _pPin.slice(0, -1);
+  var box = document.getElementById('p-pin-box');
+  if (box) box.textContent = _pPin.length
+    ? _pPin.split('').map(function(){ return '●'; }).join(' ')
+    : '· · · ·';
+}
+
+function pClose() {
+  _pPin = '';
+  var modal = document.getElementById('portal-pin-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function pGo() {
+  if (!_pPin) return;
+  var err = document.getElementById('p-err');
+  var box = document.getElementById('p-pin-box');
+
+  var employees = await getDB('employees');
+  var matches = employees.filter(function(e){ return e.pin === _pPin && e.estado === 'Activo'; });
+
+  if (matches.length > 1) {
+    _pErr('PIN DUPLICADO');
+    try { auditLog('PIN_DUPLICADO','Portal: '+matches.map(function(e){return e.nombre+' ('+e.id+')';}).join(', ')); } catch(_){}
+    return;
+  }
+
+  var found = null;
+  if (matches.length === 1) {
+    found = matches[0];
+  } else if (ROLE_PINS[_pPin]) {
+    var rol = ROLE_PINS[_pPin];
+    found = employees.find(function(e){ return e.rol === rol && e.estado === 'Activo'; })
+      || { id:'SYS_'+rol,
+           nombre: rol==='admin'?'Administrador':rol==='jefe_recepcion'?'Jefe Recepción':'Chef',
+           rol:rol, estado:'Activo', pin:_pPin, responsable:1, validador:1,
+           area: rol==='jefe_recepcion'?'Recepción':'Cocina', puesto:rol };
+  }
+
+  if (!found) {
+    _pErr('PIN NO VÁLIDO');
+    return;
+  }
+
+  currentUser = found;
+  currentPin  = '';
+  _pPin       = '';
+  var modal = document.getElementById('portal-pin-modal');
+  if (modal) modal.style.display = 'none';
+  startApp();
+}
+
+function _pErr(msg) {
+  var err = document.getElementById('p-err');
+  var box = document.getElementById('p-pin-box');
+  if (err) err.textContent = msg;
+  if (box) { box.style.borderColor = '#ef4444'; box.style.color = '#ef4444'; }
+  setTimeout(function(){
+    _pPin = '';
+    if (box) { box.textContent = '· · · ·'; box.style.borderColor = ''; box.style.color = ''; }
+    if (err) err.textContent = '';
+  }, 1500);
+}
+
+function updPin() {
+  var box = document.getElementById('p-pin-box');
+  if (!box) return;
+  box.textContent = currentPin.length
+    ? currentPin.split('').map(function(){ return '●'; }).join(' ')
+    : '· · · ·';
+  box.style.borderColor = '';
+  box.style.color = '';
+}
+function pinPress(d) { pK(d); }
+function pinDel()    { pBk(); }
+
+document.addEventListener('keydown', function(e) {
+  var modal = document.getElementById('portal-pin-modal');
+  if (!modal || modal.style.display === 'none') return;
+  if (e.key >= '0' && e.key <= '9') { pK(e.key); e.preventDefault(); }
+  else if (e.key === 'Backspace')    { pBk();     e.preventDefault(); }
+  else if (e.key === 'Enter')        { pGo();     e.preventDefault(); }
+  else if (e.key === 'Escape')       { pClose();  e.preventDefault(); }
+});
+</script>
+
 </body>
 </html>
