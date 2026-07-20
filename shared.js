@@ -1466,6 +1466,247 @@ function saveTurno(){
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════
+// _doSaveTurno — CORE: guarda el turno en Supabase + registros hijo
+// Reconstruida Jul 2026 — la original se perdió por Ctrl+A overwrite.
+// ═══════════════════════════════════════════════════════════════════════
+async function _doSaveTurno() {
+  var ts = localTs();
+  var isEditing = !!editingShiftId;
+  var shiftId = editingShiftId || genId();
+
+  // ── Recoger datos del formulario ────────────────────────────────────
+  var fecha    = document.getElementById('t-fecha').value || today();
+  var servicio = getServicioValue();
+  var isRecepcion = currentUser && currentUser.area === 'Recepción';
+  var resp     = isRecepcion ? '' : (document.getElementById('t-responsable').value || '');
+  var obsEl    = document.getElementById('t-obs');
+  var obs      = obsEl ? obsEl.value.trim() : '';
+
+  // Resolver nombre del responsable
+  var respNombre = '';
+  if (resp) {
+    try {
+      var emps = await getDB('employees');
+      var respEmp = emps.find(function(e) { return e.id === resp; });
+      if (respEmp) respNombre = respEmp.nombre || '';
+    } catch (e) { /* silenciar */ }
+  }
+
+  // ── Construir registro de turno ─────────────────────────────────────
+  var shift = {
+    id:                   shiftId,
+    employee_id:          currentUser.id,
+    nombre:               currentUser.nombre,
+    puesto:               currentUser.puesto || '',
+    area:                 currentUser.area || '',
+    fecha:                fecha,
+    servicio:             servicio,
+    horas:                0,
+    responsable_id:       resp || null,
+    responsable_nombre:   respNombre,
+    follow_up:            toggleState.gestion || 'no',
+    merma_declarada:      sinMermaFlag ? 'no' : (mermaRows.length > 0 ? 'si' : 'no'),
+    incidencia_declarada: toggleState.incidencia || 'no',
+    observacion:          obs,
+    estado:               'Pendiente'
+  };
+
+  // KPI (JSON)
+  if (typeof _ajustesLines !== 'undefined' && _ajustesLines && _ajustesLines.length > 0) {
+    shift.ajustes_sala = JSON.stringify(_ajustesLines);
+  }
+  if (window._recepKpiState) {
+    shift.kpi_recepcion = JSON.stringify(window._recepKpiState);
+  }
+  if (window._entrKpiState) {
+    shift.kpi_entrenador = JSON.stringify(window._entrKpiState);
+  }
+
+  // Checklist
+  if (typeof _chkSavedState !== 'undefined' && Array.isArray(_chkSavedState) && _chkSavedState.length > 0) {
+    shift.checklist = JSON.stringify(_chkSavedState);
+    var done = _chkSavedState.filter(Boolean).length;
+    shift.checklist_pct = Math.round((done / _chkSavedState.length) * 100);
+  }
+
+  // ── Guardar turno (INSERT o UPDATE) ─────────────────────────────────
+  if (isEditing) {
+    var upd = {};
+    for (var k in shift) { if (k !== 'id') upd[k] = shift[k]; }
+    await dbUpdate('shifts', editingShiftId, upd);
+  } else {
+    shift.created_at = ts;
+    await dbInsert('shifts', shift);
+  }
+
+  window._lastSavedShiftId = shiftId;
+  invalidateCache('shifts');
+
+  // ── Merma ───────────────────────────────────────────────────────────
+  if (!sinMermaFlag && mermaRows.length > 0) {
+    var mermaData = collectMerma();
+    for (var mi = 0; mi < mermaData.length; mi++) {
+      var mRec = mermaData[mi];
+      if (!mRec.producto) continue;
+      await dbInsert('merma', {
+        id:          genId(),
+        shift_id:    shiftId,
+        employee_id: currentUser.id,
+        nombre:      currentUser.nombre,
+        area:        currentUser.area || '',
+        fecha:       fecha,
+        producto:    mRec.producto,
+        cantidad:    mRec.cantidad,
+        unidad:      mRec.unidad || 'uds',
+        causa:       mRec.causa,
+        obs:         mRec.obs || '',
+        created_at:  ts
+      });
+    }
+    invalidateCache('merma');
+  }
+
+  // ── Gestión pendiente ───────────────────────────────────────────────
+  if (toggleState.gestion === 'si') {
+    var gDesc = ((document.getElementById('g-desc') || {}).value || '').trim();
+    var gTipo = (document.getElementById('g-tipo') || {}).value || 'Otro';
+    var gPrio = (document.getElementById('g-prioridad') || {}).value || 'media';
+    var gHab  = ((document.getElementById('g-habitacion') || {}).value || '').trim();
+    var gRes  = ((document.getElementById('g-reserva') || {}).value || '').trim();
+
+    await dbInsert('gestiones', {
+      id:                    genId(),
+      shift_id:              shiftId,
+      employee_id:           currentUser.id,
+      nombre:                currentUser.nombre,
+      area:                  currentUser.area || '',
+      departamento:          currentUser.area || '',
+      fecha:                 fecha,
+      tipo_gestion:          gTipo,
+      descripcion:           gDesc,
+      prioridad:             gPrio,
+      habitacion:            gHab || null,
+      num_reserva:           gRes || null,
+      leido_por:             [],
+      accion_tomada:         '',
+      estado:                'Abierta',
+      informado_responsable: 'no',
+      created_at:            ts
+    });
+    invalidateCache('gestiones');
+  }
+
+  // ── Incidencia ──────────────────────────────────────────────────────
+  if (toggleState.incidencia === 'si') {
+    var inciObj = buildInciObj(shiftId, fecha, servicio, ts);
+    await dbInsert('incidencias', inciObj);
+    invalidateCache('incidencias');
+  }
+
+  // ── Tareas (incidencia / merma) ─────────────────────────────────────
+  if (toggleState.inci_task === 'si') {
+    await createTask({
+      titulo:      (document.getElementById('it-titulo') || {}).value || 'Tarea de incidencia',
+      dept_destino:(document.getElementById('it-dept') || {}).value || currentUser.area || '',
+      dept_origen: currentUser.area || '',
+      prioridad:   (document.getElementById('it-prio') || {}).value || 'media',
+      deadline:    (document.getElementById('it-deadline') || {}).value || '',
+      descripcion: (document.getElementById('it-desc') || {}).value || '',
+      origen:      'incidencia',
+      shift_id:    shiftId,
+      creado_por:  currentUser.nombre
+    });
+    invalidateCache('tareas');
+  }
+  if (toggleState.merma_task === 'si') {
+    await createTask({
+      titulo:      (document.getElementById('mt-titulo') || {}).value || 'Tarea de merma',
+      dept_destino:(document.getElementById('mt-dept') || {}).value || currentUser.area || '',
+      dept_origen: currentUser.area || '',
+      prioridad:   (document.getElementById('mt-prio') || {}).value || 'media',
+      deadline:    (document.getElementById('mt-deadline') || {}).value || '',
+      descripcion: (document.getElementById('mt-desc') || {}).value || '',
+      origen:      'merma',
+      shift_id:    shiftId,
+      creado_por:  currentUser.nombre
+    });
+    invalidateCache('tareas');
+  }
+
+  // ── Ajustes de Sala (tabla individual) ──────────────────────────────
+  if (typeof _ajustesLines !== 'undefined' && _ajustesLines && _ajustesLines.length > 0) {
+    for (var ai = 0; ai < _ajustesLines.length; ai++) {
+      var aj = _ajustesLines[ai];
+      var ajImporte = parseFloat(aj.importe) || 0;
+      if (typeof AJUSTE_TIPOS_NEGATIVOS !== 'undefined' && AJUSTE_TIPOS_NEGATIVOS.indexOf(aj.tipo) >= 0) {
+        ajImporte = -Math.abs(ajImporte);
+      }
+      await dbInsert('ajustes', {
+        id:          genId(),
+        shift_id:    shiftId,
+        employee_id: currentUser.id,
+        nombre:      currentUser.nombre,
+        area:        currentUser.area || '',
+        fecha:       fecha,
+        tipo:        aj.tipo || '',
+        importe:     ajImporte,
+        motivo:      aj.motivo || '',
+        obs:         '',
+        created_at:  ts
+      });
+    }
+    invalidateCache('ajustes');
+    _ajustesLines = [];
+  }
+
+  // ── MERGE-BX-02: Asociación Bitrix time records ─────────────────────
+  try {
+    var btPending = await sbRequest('GET', 'bitrix_time_records', null,
+      'sync_status=eq.pending_manual_shift&employee_id=eq.' + currentUser.id);
+    if (btPending && btPending.length > 0) {
+      var shiftDate = new Date(fecha + 'T12:00:00');
+      var matched = btPending.filter(function(bt) {
+        var btDate = new Date((bt.fecha_operativa || '') + 'T12:00:00');
+        return Math.abs((shiftDate - btDate) / 86400000) <= 1;
+      });
+      if (matched.length > 0) {
+        var totalSec = 0;
+        var matchedIds = [];
+        matched.forEach(function(bt) {
+          totalSec += parseInt(bt.duration_seconds) || 0;
+          matchedIds.push(bt.id);
+        });
+        var btHoras = Math.round(totalSec / 36) / 100;
+        await dbUpdate('shifts', shiftId, { horas: btHoras });
+        for (var bi = 0; bi < matchedIds.length; bi++) {
+          await dbUpdate('bitrix_time_records', matchedIds[bi], {
+            sync_status: 'matched',
+            shift_id:    shiftId,
+            matched_at:  ts
+          });
+        }
+        invalidateCache('bitrix_time_records');
+        invalidateCache('shifts');
+      }
+    }
+  } catch (e) {
+    console.warn('[MERGE-BX-02] Bitrix association skipped:', e.message || e);
+  }
+
+  // ── Limpieza ────────────────────────────────────────────────────────
+  if (typeof clearChkLocalStorage === 'function') clearChkLocalStorage();
+  auditLog('TURNO_SAVE', (isEditing ? 'CORRECCIÓN ' : '') + shiftId + ' | ' + fecha + ' | ' + servicio);
+  var _wasEditing = isEditing;
+  clearTurnoForm();
+  renderMisTurnos();
+  if (typeof renderFollowupList === 'function') renderFollowupList();
+  if (typeof renderCorrectionsPend === 'function') renderCorrectionsPend();
+  toast(_wasEditing ? 'Turno corregido y reenviado ✓' : 'Turno guardado ✓', 'ok');
+}
+window._doSaveTurno = _doSaveTurno;
+
 // ── FOLLOW-UP EXTRAS: Incidencias abiertas · Gestiones pendientes · Tareas pendientes ─
 // ── Validación · incidencias: filtro por contador + estado clicable que guarda (vía openItemModal) ──
 var _valInciCache = [];
