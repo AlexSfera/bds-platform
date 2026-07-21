@@ -1405,10 +1405,14 @@ function saveTurno(){
   const errs=[];
   const fecha=document.getElementById('t-fecha').value;
   var _isRecepcion = currentUser && currentUser.area === 'Recepción';
-  // Date lock: employees can only register today (unless correcting)
+  // Date lock: employees can only register today or yesterday (grace window 1d)
+  // _fechaOpSave: Sala before 2am / Recepción before 7am → yesterday (turnos nocturnos)
   var _fechaOpSave = today(); var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 7)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); }
-  if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave){
-    alertArea.innerHTML='<div class="alert a-err">⚠ Solo puedes registrar el turno de hoy.</div>';
+  // _ayerGrace: ventana de gracia 1 día — cualquier empleado puede completar turno de ayer
+  // (cubre turnos auto-creados por bitrix-sync que necesitan checklist/gestión/incidencia)
+  var _ayerGraceDate = getDateOnly(new Date()); _ayerGraceDate.setDate(_ayerGraceDate.getDate()-1); var _ayerGrace = toYMD(_ayerGraceDate);
+  if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave && fecha !== _ayerGrace){
+    alertArea.innerHTML='<div class="alert a-err">⚠ Solo puedes registrar el turno de hoy o ayer.</div>';
     return;
   }
   const servicio=getServicioValue();
