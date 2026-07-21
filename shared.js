@@ -1143,7 +1143,7 @@ async function initTurnoForm(){
     document.querySelectorAll('input[name="rec-turno"]').forEach(function(r){ r.checked=false; r.disabled=false; });
     updateRecTurnoStyle();
     // CAJA-V2 · Turno único por persona/día: si ya hizo caja hoy, fijar y bloquear
-    if(typeof lockRecTurnoIfCajaToday === 'function') lockRecTurnoIfCajaToday();
+    if(typeof lockRecTurnoIfCajaToday === 'function') await lockRecTurnoIfCajaToday();
     // Hide responsable selector
     var tResp = document.getElementById('t-responsable');
     if(tResp && tResp.closest('.fg')) tResp.closest('.fg').style.display='none';
@@ -1172,7 +1172,7 @@ async function initTurnoForm(){
     document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){ cb.checked=false; cb.disabled=false; });
   document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
     // CAJA-V2 Sala · servicio fijado si ya hizo caja hoy
-    if(typeof lockSalaServIfCajaToday === 'function') lockSalaServIfCajaToday();
+    if(typeof lockSalaServIfCajaToday === 'function') await lockSalaServIfCajaToday();
     // Default gestion/incidencia to 'no' for clean start
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
@@ -1205,7 +1205,7 @@ async function initTurnoForm(){
     var tRespLab = document.getElementById('t-responsable');
     if(tRespLab && tRespLab.closest('.fg')) tRespLab.closest('.fg').style.display = 'block';
     // CAJA-V2 SYNCROLAB · turno fijado si ya hizo caja hoy
-    if(typeof lockLabTurnoIfCajaToday === 'function') lockLabTurnoIfCajaToday();
+    if(typeof lockLabTurnoIfCajaToday === 'function') await lockLabTurnoIfCajaToday();
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   } else if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')) {
