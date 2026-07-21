@@ -1,11 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════
 // /api/bitrix-sync.js — Sincronización Bitrix24 Timeman → SYNCRO SHIFT
-// v2 (Jul 2026) — MODO ASOCIACIÓN: NUNCA crea turnos.
+// v3 (Jul 2026) — ASOCIACIÓN + AUTO-CREACIÓN de turnos mínimos.
 //
 // PRINCIPIO (decisión CEO Jul 2026):
 //   · El turno MANUAL de SYNCRO SHIFT es la fuente de verdad operativa.
 //   · Bitrix24 es la fuente de verdad de horas trabajadas.
-//   · La integración SOLO asocia horas a un turno manual existente.
+//   · La integración PRIMERO asocia horas a un turno manual existente.
+//   · Si NO hay turno manual → CREA un turno mínimo (id=BXAUTO_*, estado
+//     Pendiente) para que las horas Bitrix no se pierdan. El empleado
+//     completa los datos operativos (checklist, gestión, incidencia) vía
+//     la ventana de gracia de 1 día en la app.
 //   · El turno es la unidad operativa central: cero duplicados.
 //
 // LÓGICA:
@@ -17,14 +21,15 @@
 //   5. PASE DE ASOCIACIÓN (también re-intenta pendientes de los últimos
 //      RETRY_DAYS días): agrupa pendientes por (employee_id, fecha_operativa) y
 //        · busca turnos MANUALES del empleado con fecha en ±1 día
-//          (excluye id 'BXSH_%' y estado 'Sin declarar')
+//          (excluye id 'BXSH_%', 'BXAUTO_%' y estado 'Sin declarar')
 //        · coincidencia válida: |cierre Bitrix − hora_registro del turno| ≤ 1h
 //        · 1 candidato  → PATCH turno: horas + referencia Bitrix
 //                          (NUNCA toca checklist, KPIs, estado, declaraciones)
 //                          y marca registros sync_status='matched'
 //        · >1 candidato → sync_status='ambiguous' (revisión Admin)
-//        · 0 candidatos → queda 'pending_manual_shift' (se reintenta a diario
-//                          y también al guardar el turno manual en la app)
+//        · 0 candidatos → AUTO-CREA turno mínimo (BXAUTO_*) con horas
+//                          Bitrix, marca registros sync_status='matched'.
+//                          El empleado lo completa desde la app con gracia 1d.
 //   6. Escribe audit_log
 //
 // TRIGGERS:
@@ -268,7 +273,7 @@ async function paseAsociacion(fechaObjetivo, DRY_RUN) {
     + '&order=start_ts.asc'
   ) || [];
 
-  let matched = 0, ambiguous = 0, stillPending = 0;
+  let matched = 0, ambiguous = 0, stillPending = 0, autoCreated = 0;
   const detalles = [];
 
   // Agrupar por empleado + fecha_operativa (unidad = jornada Bitrix cerrada)
@@ -297,12 +302,15 @@ async function paseAsociacion(fechaObjetivo, DRY_RUN) {
         `shifts?employee_id=eq.${encodeURIComponent(g.employee_id)}`
         + `&fecha=gte.${fDesde}&fecha=lte.${fHasta}`
         + '&id=not.like.BXSH_*'
+        + '&id=not.like.BXAUTO_*'
         + '&estado=neq.Sin%20declarar'
         + '&select=id,fecha,servicio,estado,horas,hora_registro,created_at,bitrix_shift_id,nombre'
       ) || [];
 
       // Coincidencia: |cierre Bitrix − hora_registro (o created_at)| ≤ 1h
+      // Excluir auto-creados (BXAUTO_) por seguridad en JS también
       const candidatos = shifts.filter(s => {
+        if (s.id && (s.id.startsWith('BXAUTO_') || s.id.startsWith('BXSH_'))) return false;
         const ref = s.hora_registro || s.created_at;
         if (!ref) return false;
         const t = new Date(ref).getTime();
@@ -343,16 +351,74 @@ async function paseAsociacion(fechaObjetivo, DRY_RUN) {
         ambiguous++;
         detalles.push(`ambiguous ${g.employee_id} ${g.fecha} (${candidatos.length} candidatos)`);
       } else {
-        // 0 candidatos → sigue pendiente; se reintenta a diario y al guardar
-        // el turno manual desde la app (MERGE-BX-02 en shared.js).
-        stillPending += g.recs.length;
+        // 0 candidatos → AUTO-CREAR turno mínimo (v3 Jul 2026)
+        // El empleado completa datos operativos vía la ventana de gracia 1d.
+        try {
+          const empData = await sb('GET',
+            'employees?id=eq.' + encodeURIComponent(g.employee_id)
+            + '&select=id,nombre,area,puesto&limit=1'
+          );
+          const emp = (empData && empData.length) ? empData[0] : null;
+          if (emp && totalSeg > 0) {
+            // ID determinista: mismo employee+fecha siempre genera mismo ID → idempotente
+            const autoId = 'BXAUTO_' + g.employee_id.replace(/[^a-zA-Z0-9]/g, '_')
+                         + '_' + g.fecha.replace(/-/g, '');
+            const servDeducido = (g.recs[0] && g.recs[0].servicio) || 'Mañana';
+
+            if (!DRY_RUN) {
+              await sb('POST', 'shifts', {
+                id:                    autoId,
+                employee_id:           emp.id,
+                nombre:                emp.nombre || '',
+                puesto:                emp.puesto || '',
+                area:                  emp.area || '',
+                fecha:                 g.fecha,
+                servicio:              servDeducido,
+                horas:                 horasBx,
+                horas_bitrix:          horasBx,
+                horas_source:          'bitrix',
+                estado:                'Pendiente',
+                responsable_id:        null,
+                responsable_nombre:    '',
+                follow_up:             'no',
+                merma_declarada:       'no',
+                incidencia_declarada:  'no',
+                observacion:           'Turno auto-creado por bitrix-sync (sin turno manual registrado)',
+                bitrix_shift_id:       g.recs.map(r => r.bitrix_record_id).join(','),
+                bitrix_started_at:     g.recs[0].start_ts,
+                bitrix_closed_at:      g.recs[g.recs.length - 1].end_ts,
+                bitrix_duration_minutes: Math.round(totalSeg / 60),
+                bitrix_synced_at:      nowMadridTs(),
+                created_at:            nowMadridTs()
+              }, { 'Prefer': 'resolution=ignore-duplicates,return=minimal' });
+
+              // Marcar bitrix_time_records como matched contra el turno auto-creado
+              await sb('PATCH',
+                'bitrix_time_records?id=in.(' + g.recs.map(r => r.id).join(',') + ')', {
+                sync_status:      'matched',
+                matched_shift_id: autoId,
+                matched_ts:       nowMadridTs(),
+                sync_error:       null
+              }, { 'Prefer': 'return=minimal' });
+            }
+            autoCreated++;
+            detalles.push('auto-created ' + g.employee_id + ' ' + g.fecha
+                        + ' → ' + autoId + ' (' + horasBx + 'h)');
+          } else {
+            stillPending += g.recs.length;
+          }
+        } catch (eAuto) {
+          detalles.push('auto-create-error ' + g.employee_id + ' ' + g.fecha
+                      + ': ' + String(eAuto.message || eAuto).slice(0, 150));
+          stillPending += g.recs.length;
+        }
       }
     } catch (e) {
       detalles.push(`error ${g.employee_id} ${g.fecha}: ${String(e.message || e).slice(0, 150)}`);
     }
   }
 
-  return { matched, ambiguous, stillPending, detalles };
+  return { matched, ambiguous, stillPending, autoCreated, detalles };
 }
 
 // ─── HANDLER PRINCIPAL ────────────────────────────────────────────────
@@ -462,9 +528,9 @@ export default async function handler(req, res) {
 
     // 6) Audit log (solo en modo real)
     const durMs = Date.now() - startedAt;
-    const resumen = `v2 fecha=${fechaObjetivo} emps=${(employees||[]).length} intervals=${totalIntervals} `
-                  + `matched=${aso.matched} ambiguous=${aso.ambiguous} pending=${aso.stillPending} `
-                  + `autolinked=${autoLinked} errs=${errores.length} dur=${durMs}ms`;
+    const resumen = `v3 fecha=${fechaObjetivo} emps=${(employees||[]).length} intervals=${totalIntervals} `
+                  + `matched=${aso.matched} auto_created=${aso.autoCreated} ambiguous=${aso.ambiguous} `
+                  + `pending=${aso.stillPending} autolinked=${autoLinked} errs=${errores.length} dur=${durMs}ms`;
     if (!DRY_RUN) {
       try {
         await sb('POST', 'audit_log', {
@@ -480,7 +546,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      version: 'v2-asociacion',
+      version: 'v3-asociacion-autocreate',
       dry_run: DRY_RUN,
       fecha: fechaObjetivo,
       empleados_procesados: (employees||[]).length,
@@ -489,7 +555,7 @@ export default async function handler(req, res) {
       turnos_asociados: aso.matched,
       conflictos_ambiguous: aso.ambiguous,
       registros_pendientes: aso.stillPending,
-      shifts_creados: 0, // v2: por diseño, siempre 0
+      shifts_auto_creados: aso.autoCreated,
       detalles: aso.detalles.slice(0, 50),
       duracion_ms: durMs,
       errores
