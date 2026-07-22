@@ -146,6 +146,14 @@ const SUPERVISOR_DEPT_MAP = {
   adjunto: ['*']             // alias legacy
 };
 
+// ── DEPTS_CON_RESPONSABLE — departamentos que usan "Responsable de turno" ──
+// Solo Housekeeping, Sala y Cocina (incluye Friegue) requieren este campo.
+var DEPTS_CON_RESPONSABLE = ['Sala','Cocina','Friegue','Housekeeping','Limpieza','HK'];
+function _deptUsaResponsable(area) {
+  if(!area) return false;
+  return DEPTS_CON_RESPONSABLE.indexOf(area) !== -1;
+}
+
 // Grupos de área para el rol 'jefe': su `area` expande a los departamentos que cubre.
 // Si el area no es clave aquí, cubre solo su propio nombre.
 const AREA_GROUPS = {
@@ -1143,7 +1151,7 @@ async function initTurnoForm(){
     document.querySelectorAll('input[name="rec-turno"]').forEach(function(r){ r.checked=false; r.disabled=false; });
     updateRecTurnoStyle();
     // CAJA-V2 · Turno único por persona/día: si ya hizo caja hoy, fijar y bloquear
-    if(typeof lockRecTurnoIfCajaToday === 'function') await lockRecTurnoIfCajaToday();
+    if(typeof lockRecTurnoIfCajaToday === 'function') lockRecTurnoIfCajaToday();
     // Hide responsable selector
     var tResp = document.getElementById('t-responsable');
     if(tResp && tResp.closest('.fg')) tResp.closest('.fg').style.display='none';
@@ -1172,7 +1180,7 @@ async function initTurnoForm(){
     document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){ cb.checked=false; cb.disabled=false; });
   document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
     // CAJA-V2 Sala · servicio fijado si ya hizo caja hoy
-    if(typeof lockSalaServIfCajaToday === 'function') await lockSalaServIfCajaToday();
+    if(typeof lockSalaServIfCajaToday === 'function') lockSalaServIfCajaToday();
     // Default gestion/incidencia to 'no' for clean start
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
@@ -1201,11 +1209,11 @@ async function initTurnoForm(){
     var _oldLabLock = document.getElementById('lab-turno-locked-msg');
     if(_oldLabLock) _oldLabLock.remove();
     document.querySelectorAll('input[name="servicio-lab"]').forEach(function(r){ r.checked=false; r.disabled=false; });
-    // Mostrar responsable
+    // Ocultar responsable — SYNCROLAB no usa responsable de turno
     var tRespLab = document.getElementById('t-responsable');
-    if(tRespLab && tRespLab.closest('.fg')) tRespLab.closest('.fg').style.display = 'block';
+    if(tRespLab && tRespLab.closest('.fg')) tRespLab.closest('.fg').style.display = 'none';
     // CAJA-V2 SYNCROLAB · turno fijado si ya hizo caja hoy
-    if(typeof lockLabTurnoIfCajaToday === 'function') await lockLabTurnoIfCajaToday();
+    if(typeof lockLabTurnoIfCajaToday === 'function') lockLabTurnoIfCajaToday();
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   } else if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')) {
@@ -1266,9 +1274,9 @@ async function initTurnoForm(){
     if(servBlockAdm) servBlockAdm.style.display = 'block';
     // Reset radios
     document.querySelectorAll('input[name="servicio-adm"]').forEach(function(r){ r.checked = false; });
-    // Mostrar responsable
+    // Ocultar responsable — Administración no usa responsable de turno
     var tRespAdm = document.getElementById('t-responsable');
-    if(tRespAdm && tRespAdm.closest('.fg')) tRespAdm.closest('.fg').style.display = 'block';
+    if(tRespAdm && tRespAdm.closest('.fg')) tRespAdm.closest('.fg').style.display = 'none';
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   } else {
@@ -1405,19 +1413,16 @@ function saveTurno(){
   const errs=[];
   const fecha=document.getElementById('t-fecha').value;
   var _isRecepcion = currentUser && currentUser.area === 'Recepción';
-  // Date lock: employees can only register today or yesterday (grace window 1d)
-  // _fechaOpSave: Sala before 2am / Recepción before 7am → yesterday (turnos nocturnos)
+  // Date lock: employees can only register today (unless correcting)
   var _fechaOpSave = today(); var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 7)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); }
-  // _ayerGrace: ventana de gracia 1 día — cualquier empleado puede completar turno de ayer
-  // (cubre turnos auto-creados por bitrix-sync que necesitan checklist/gestión/incidencia)
-  var _ayerGraceDate = getDateOnly(new Date()); _ayerGraceDate.setDate(_ayerGraceDate.getDate()-1); var _ayerGrace = toYMD(_ayerGraceDate);
-  if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave && fecha !== _ayerGrace){
-    alertArea.innerHTML='<div class="alert a-err">⚠ Solo puedes registrar el turno de hoy o ayer.</div>';
+  if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave){
+    alertArea.innerHTML='<div class="alert a-err">⚠ Solo puedes registrar el turno de hoy.</div>';
     return;
   }
   const servicio=getServicioValue();
   // Horas: campo eliminado — pendiente integración Bitrix24 fichaje
-  const resp=_isRecepcion ? 'ok' : document.getElementById('t-responsable').value;
+  var _usaResp = _deptUsaResponsable(currentUser && currentUser.area);
+  const resp = _usaResp ? document.getElementById('t-responsable').value : 'ok';
   if(!fecha) errs.push('Fecha obligatoria');
   // Servicio/Turno validation — Recepción uses rec-turno radio, not servicio
   if(_isRecepcion){
@@ -1425,10 +1430,9 @@ function saveTurno(){
   } else {
     if(!servicio||servicio==='[]'||servicio==='') errs.push('Turno obligatorio');
   }
-  // Responsable: only required for Sala and Cocina, NOT Recepción
-  if(!_isRecepcion && !resp){
-    var _isSala2 = currentUser && currentUser.area === 'Sala';
-    errs.push(_isSala2 ? 'Responsable de turno obligatorio — configura responsables de Sala en Maestro' : 'Responsable obligatorio');
+  // Responsable: solo obligatorio para Sala, Cocina, Housekeeping
+  if(_usaResp && !resp){
+    errs.push('Responsable de turno obligatorio');
   }
   if(!toggleState.gestion) errs.push('Indica si queda alguna gestión pendiente');
   if(!toggleState.incidencia) errs.push('Indica si hubo incidencia operativa');
@@ -1484,7 +1488,8 @@ async function _doSaveTurno() {
   var fecha    = document.getElementById('t-fecha').value || today();
   var servicio = getServicioValue();
   var isRecepcion = currentUser && currentUser.area === 'Recepción';
-  var resp     = isRecepcion ? '' : (document.getElementById('t-responsable').value || '');
+  var _usaRespSave = _deptUsaResponsable(currentUser && currentUser.area);
+  var resp     = _usaRespSave ? (document.getElementById('t-responsable').value || '') : '';
   var obsEl    = document.getElementById('t-obs');
   var obs      = obsEl ? obsEl.value.trim() : '';
 
@@ -2481,7 +2486,7 @@ async function openValidarModal(shiftId){
   info += '<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(s.fecha)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">'+(s.area==='Recepción'?'Turno':'Servicio')+': </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+s.horas+'h</strong></div>';
-  if(s.area!=='Recepción') info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
+  if(_deptUsaResponsable(s.area)) info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   if(s.observacion) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+formatDisplayValue(s.observacion)+'</div>';
   info += '</div></div>';
 
@@ -3309,6 +3314,15 @@ async function openEmpModal(empId){
   }
   _syncAreaFromPuesto();
 
+  // ── Responsable de turno: solo visible si ficha guardada + depto HK/Sala/Cocina ──
+  var empRespFg = document.getElementById('emp-resp');
+  if(empRespFg && empRespFg.closest('.fg')){
+    var _empArea = isEdit ? document.getElementById('emp-area').value : '';
+    var _showResp = isEdit && _deptUsaResponsable(_empArea);
+    empRespFg.closest('.fg').style.display = _showResp ? '' : 'none';
+    if(!_showResp) empRespFg.value = '0'; // forzar 0 si no aplica
+  }
+
   // ── Restricciones UI según rol del usuario actual ─────────────────────
   // Para jefes/supervisores: filtrar puestos por su departamento, ocultar
   // roles superiores, y bloquear "Puede validar"
@@ -3689,7 +3703,7 @@ async function saveEmpleado(){
     puesto: document.getElementById('emp-puesto').value,
     coste: isNaN(costeVal)?0:parseFloat(costeVal)||0,
     estado: document.getElementById('emp-estado').value,
-    responsable: parseInt(document.getElementById('emp-resp').value)||0,
+    responsable: _deptUsaResponsable(document.getElementById('emp-area').value) ? (parseInt(document.getElementById('emp-resp').value)||0) : 0,
     validador: parseInt(document.getElementById('emp-val').value)||0,
     rol: document.getElementById('emp-rol').value,
     obs: (document.getElementById('emp-obs')||{value:''}).value.trim(),
