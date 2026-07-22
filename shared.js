@@ -1322,7 +1322,7 @@ function clearTurnoForm(){
   editingShiftId=null;
   const modeEl=document.getElementById('turno-form-mode'); if(modeEl) modeEl.textContent='NUEVO';
   const saveBtn=document.getElementById('btn-save-turno'); if(saveBtn) saveBtn.textContent='💾 Guardar Turno';
-  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
+  ['t-fecha','t-servicio','t-obs','i-desc','i-accion','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
     const el=document.getElementById(id); if(!el) return;
     if(el.tagName==='SELECT') el.value=''; else el.value=el.type==='date'?today():'';
   });
@@ -1384,7 +1384,7 @@ async function loadForCorrection(shiftId){
   // autocompleta con hoy para que el empleado pueda corregir.
   document.getElementById('t-fecha').value = s.fecha || today();
   document.getElementById('t-servicio').value=s.servicio;
-  var _elHoras = document.getElementById('t-horas'); if(_elHoras) _elHoras.value=s.horas;
+  // t-horas eliminado — horas vienen de Bitrix24
   document.getElementById('t-responsable').value=s.responsable_id||'';
   var _elObs = document.getElementById('t-obs'); if(_elObs) _elObs.value=s.observacion||'';
   setT('incidencia',s.incidencia_declarada);
@@ -1512,7 +1512,7 @@ async function _doSaveTurno() {
     area:                 currentUser.area || '',
     fecha:                fecha,
     servicio:             servicio,
-    horas:                0,
+    horas:                null, // Fuente única = Bitrix24 (MERGE-BX-02 o sync nocturno)
     responsable_id:       resp || null,
     responsable_nombre:   respNombre,
     follow_up:            toggleState.gestion || 'no',
@@ -1688,7 +1688,13 @@ async function _doSaveTurno() {
           matchedIds.push(bt.id);
         });
         var btHoras = Math.round(totalSec / 36) / 100;
-        await dbUpdate('shifts', shiftId, { horas: btHoras });
+        await dbUpdate('shifts', shiftId, {
+          horas: btHoras,
+          horas_bitrix: btHoras,
+          horas_source: 'bitrix',
+          bitrix_synced_at: localTs(),
+          sync_status: 'matched_at_save'
+        });
         for (var bi = 0; bi < matchedIds.length; bi++) {
           await dbUpdate('bitrix_time_records', matchedIds[bi], {
             sync_status: 'matched',
@@ -1696,6 +1702,22 @@ async function _doSaveTurno() {
             matched_at:  ts
           });
         }
+        // Marcar skeletons BXSH_ del mismo empleado/fecha como fusionados
+        try {
+          var bxSkeletons = await sbRequest('GET', 'shifts', null,
+            'employee_id=eq.' + encodeURIComponent(currentUser.id)
+            + '&fecha=eq.' + encodeURIComponent(fecha)
+            + '&estado=eq.Sin declarar&select=id');
+          if (bxSkeletons && bxSkeletons.length > 0) {
+            for (var bsi = 0; bsi < bxSkeletons.length; bsi++) {
+              await dbUpdate('shifts', bxSkeletons[bsi].id, {
+                sync_status: 'merged_into_manual',
+                merged_into_shift_id: shiftId,
+                updated_at: localTs()
+              });
+            }
+          }
+        } catch(_bxSkErr) { console.warn('MERGE-BX-02 skeleton cleanup:', _bxSkErr); }
         invalidateCache('bitrix_time_records');
         invalidateCache('shifts');
       }
@@ -2164,7 +2186,7 @@ async function renderMisTurnos(){
     return '<tr>'
       +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(s.fecha)+'</td>'
       +'<td style="font-size:13px;">'+displayServicio(s.servicio)+'</td>'
-      +'<td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
+      +'<td style="font-family:var(--font-mono)">'+(s.horas!=null?parseFloat(s.horas).toFixed(1)+'h':'<span style="color:var(--accent2);font-size:.85em">—</span>')+'</td>'
       +'<td style="text-align:center">'+(isSalaDept?ajustesCell:(mc>0?'<span class="badge b-yellow">'+mc+'</span>':'—'))+'</td>'
       +'<td style="text-align:center">'+(gestionMap[s.id]?'<span class="badge b-yellow">Sí</span>':'—')+'</td>'
       +'<td style="text-align:center">'+(inciMap[s.id]?'<span class="badge b-red">Sí</span>':'—')+'</td>'
@@ -2408,7 +2430,7 @@ async function renderValidacion(){
     aCell = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">'+btnRevisar+btnVer+btnArevisar+btnReabrir+btnDel+'</div>';
     valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
-      +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
+      +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+(s.horas!=null?parseFloat(s.horas).toFixed(1)+'h':'—')+'</td>'
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
       +'<td style="text-align:center;">'+mermaCell+'</td>'
       +'<td style="text-align:center;">'+(function(){
@@ -2485,7 +2507,7 @@ async function openValidarModal(shiftId){
   info += '<div><span style="color:var(--text3)">Puesto: </span>'+formatDisplayValue(s.puesto)+'</div>';
   info += '<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(s.fecha)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">'+(s.area==='Recepción'?'Turno':'Servicio')+': </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
-  info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+s.horas+'h</strong></div>';
+  info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+(s.horas!=null&&s.horas!==''?parseFloat(s.horas).toFixed(1)+'h':'<span style="color:var(--accent2);font-size:.85em">Pendiente sync</span>')+'</strong></div>';
   if(_deptUsaResponsable(s.area)) info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   if(s.observacion) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+formatDisplayValue(s.observacion)+'</div>';
   info += '</div></div>';
