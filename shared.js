@@ -1322,7 +1322,7 @@ function clearTurnoForm(){
   editingShiftId=null;
   const modeEl=document.getElementById('turno-form-mode'); if(modeEl) modeEl.textContent='NUEVO';
   const saveBtn=document.getElementById('btn-save-turno'); if(saveBtn) saveBtn.textContent='💾 Guardar Turno';
-  ['t-fecha','t-servicio','t-obs','i-desc','i-accion','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
+  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
     const el=document.getElementById(id); if(!el) return;
     if(el.tagName==='SELECT') el.value=''; else el.value=el.type==='date'?today():'';
   });
@@ -1384,7 +1384,7 @@ async function loadForCorrection(shiftId){
   // autocompleta con hoy para que el empleado pueda corregir.
   document.getElementById('t-fecha').value = s.fecha || today();
   document.getElementById('t-servicio').value=s.servicio;
-  // t-horas eliminado — horas vienen de Bitrix24
+  var _elHoras = document.getElementById('t-horas'); if(_elHoras) _elHoras.value=s.horas;
   document.getElementById('t-responsable').value=s.responsable_id||'';
   var _elObs = document.getElementById('t-obs'); if(_elObs) _elObs.value=s.observacion||'';
   setT('incidencia',s.incidencia_declarada);
@@ -1512,7 +1512,7 @@ async function _doSaveTurno() {
     area:                 currentUser.area || '',
     fecha:                fecha,
     servicio:             servicio,
-    horas:                null, // Fuente única = Bitrix24 (MERGE-BX-02 o sync nocturno)
+    horas:                0,
     responsable_id:       resp || null,
     responsable_nombre:   respNombre,
     follow_up:            toggleState.gestion || 'no',
@@ -1688,36 +1688,15 @@ async function _doSaveTurno() {
           matchedIds.push(bt.id);
         });
         var btHoras = Math.round(totalSec / 36) / 100;
-        await dbUpdate('shifts', shiftId, {
-          horas: btHoras,
-          horas_bitrix: btHoras,
-          horas_source: 'bitrix',
-          bitrix_synced_at: localTs(),
-          sync_status: 'matched_at_save'
-        });
+        await dbUpdate('shifts', shiftId, { horas: btHoras });
         for (var bi = 0; bi < matchedIds.length; bi++) {
           await dbUpdate('bitrix_time_records', matchedIds[bi], {
-            sync_status: 'matched',
-            shift_id:    shiftId,
-            matched_at:  ts
+            sync_status:      'matched',
+            matched_shift_id: shiftId,
+            matched_ts:       ts,
+            sync_error:       null
           });
         }
-        // Marcar skeletons BXSH_ del mismo empleado/fecha como fusionados
-        try {
-          var bxSkeletons = await sbRequest('GET', 'shifts', null,
-            'employee_id=eq.' + encodeURIComponent(currentUser.id)
-            + '&fecha=eq.' + encodeURIComponent(fecha)
-            + '&estado=eq.Sin declarar&select=id');
-          if (bxSkeletons && bxSkeletons.length > 0) {
-            for (var bsi = 0; bsi < bxSkeletons.length; bsi++) {
-              await dbUpdate('shifts', bxSkeletons[bsi].id, {
-                sync_status: 'merged_into_manual',
-                merged_into_shift_id: shiftId,
-                updated_at: localTs()
-              });
-            }
-          }
-        } catch(_bxSkErr) { console.warn('MERGE-BX-02 skeleton cleanup:', _bxSkErr); }
         invalidateCache('bitrix_time_records');
         invalidateCache('shifts');
       }
@@ -2186,7 +2165,7 @@ async function renderMisTurnos(){
     return '<tr>'
       +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(s.fecha)+'</td>'
       +'<td style="font-size:13px;">'+displayServicio(s.servicio)+'</td>'
-      +'<td style="font-family:var(--font-mono)">'+(s.horas!=null?parseFloat(s.horas).toFixed(1)+'h':'<span style="color:var(--accent2);font-size:.85em">—</span>')+'</td>'
+      +'<td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
       +'<td style="text-align:center">'+(isSalaDept?ajustesCell:(mc>0?'<span class="badge b-yellow">'+mc+'</span>':'—'))+'</td>'
       +'<td style="text-align:center">'+(gestionMap[s.id]?'<span class="badge b-yellow">Sí</span>':'—')+'</td>'
       +'<td style="text-align:center">'+(inciMap[s.id]?'<span class="badge b-red">Sí</span>':'—')+'</td>'
@@ -2371,6 +2350,16 @@ async function renderValidacion(){
       fiosByShift[f.shift_id].push(f);
     }
   });
+  // ── Horas Bitrix (bitrix_time_records) ──────────────────────────
+  var _allBitrixTime = [];
+  try { _allBitrixTime = await getDB('bitrix_time_records'); } catch(e){ _allBitrixTime = []; }
+  var _btMap = {};
+  _allBitrixTime.forEach(function(bt){
+    var k = (bt.employee_id||'') + '|' + (bt.fecha_operativa||'');
+    if(!_btMap[k]) _btMap[k] = { sec: 0, count: 0 };
+    _btMap[k].sec += (parseInt(bt.duration_seconds)||0);
+    _btMap[k].count++;
+  });
   const el=document.getElementById('validacion-table');
   if(!shifts.length){
     el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin registros</div></div>';
@@ -2430,7 +2419,17 @@ async function renderValidacion(){
     aCell = '<div style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">'+btnRevisar+btnVer+btnArevisar+btnReabrir+btnDel+'</div>';
     valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
-      +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+(s.horas!=null?parseFloat(s.horas).toFixed(1)+'h':'—')+'</td>'
+      +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
+      +(function(){
+        var _btK=(s.employee_id||'')+'|'+(s.fecha||'');
+        var _btD=_btMap[_btK];
+        if(!_btD||_btD.sec===0) return '<td style="color:var(--text3);text-align:center;font-size:11px;">—</td>';
+        var _btH=_btD.sec/3600;
+        var _decl=parseFloat(s.horas)||0;
+        var _dif=Math.abs(_btH-_decl);
+        var _btCol=_dif<=0.25?'var(--green)':_dif<=1?'var(--amber)':'var(--red)';
+        return '<td style="font-family:var(--font-mono);color:'+_btCol+';text-align:center;" title="'+_btD.count+' fichaje(s) Bitrix · Δ '+(_btH-_decl>=0?'+':'')+(_btH-_decl).toFixed(1)+'h">'+_btH.toFixed(1)+'h</td>';
+      })()
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
       +'<td style="text-align:center;">'+mermaCell+'</td>'
       +'<td style="text-align:center;">'+(function(){
@@ -2443,7 +2442,7 @@ async function renderValidacion(){
       })()+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>H. Bitrix</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
   if(typeof renderTurnosKpis==='function') renderTurnosKpis(shifts);
   // Sync tab visibility after every render (dept filter may have changed)
   if(typeof _updateMermaTabVisibility==='function') _updateMermaTabVisibility();
@@ -2507,7 +2506,24 @@ async function openValidarModal(shiftId){
   info += '<div><span style="color:var(--text3)">Puesto: </span>'+formatDisplayValue(s.puesto)+'</div>';
   info += '<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(s.fecha)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">'+(s.area==='Recepción'?'Turno':'Servicio')+': </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
-  info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+(s.horas!=null&&s.horas!==''?parseFloat(s.horas).toFixed(1)+'h':'<span style="color:var(--accent2);font-size:.85em">Pendiente sync</span>')+'</strong></div>';
+  info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+s.horas+'h</strong></div>';
+  // Horas Bitrix en modal detalle
+  (function(){
+    var _btAllM=[]; try{_btAllM=_cache['bitrix_time_records']||[];}catch(e){}
+    var _btSecM=0;
+    _btAllM.forEach(function(bt){
+      if(bt.employee_id===s.employee_id && bt.fecha_operativa===s.fecha)
+        _btSecM+=(parseInt(bt.duration_seconds)||0);
+    });
+    if(_btSecM>0){
+      var _btHM=_btSecM/3600;
+      var _difM=Math.abs(_btHM-parseFloat(s.horas||0));
+      var _colM=_difM<=0.25?'#10b981':_difM<=1?'#f59e0b':'#ef4444';
+      info+='<div><span style="color:var(--text3)">H. Bitrix: </span><strong style="color:'+_colM+'">'+_btHM.toFixed(1)+'h</strong><span style="font-size:11px;color:var(--text3);margin-left:6px;">(Δ '+(_btHM-parseFloat(s.horas||0)>=0?'+':'')+(_btHM-parseFloat(s.horas||0)).toFixed(1)+'h)</span></div>';
+    } else {
+      info+='<div><span style="color:var(--text3)">H. Bitrix: </span><span style="color:var(--text3)">— sin fichaje</span></div>';
+    }
+  })();
   if(_deptUsaResponsable(s.area)) info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   if(s.observacion) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+formatDisplayValue(s.observacion)+'</div>';
   info += '</div></div>';
