@@ -1458,7 +1458,7 @@ async function pGo(){
   var pin=_pP;
   runMigrations();
   seedEmployees();
-  var RP={'300415':'admin','0101':'chef','1010':'fb'};
+  var RP={'300415':'admin'};
   var emps=await getDB('employees');
   var u=null;
   // FIX-PIN-BOSS (Jul 2026): el PIN PERSONAL siempre tiene prioridad sobre
