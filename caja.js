@@ -6,7 +6,7 @@
   root.innerHTML = `<div class="screen" id="screen-caja">
   <div class="page-header">
     <div class="page-title">💰 Cierre Caja</div>
-    <div class="page-sub">Responsable de turno / Jefe de Sala / F&amp;B / Admin</div>
+    <div class="page-sub">Jefe de Sala / F&amp;B / Admin</div>
   </div>
   <div id="caja-alert-area"></div>
   <div class="filter-bar" style="margin-bottom:16px;">
@@ -178,7 +178,7 @@
   <div style="background:var(--bg2);border:2px solid #3b82f6;border-radius:14px;padding:24px;width:100%;max-width:440px;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#3b82f6;letter-spacing:.15em;margin-bottom:8px;">SALA · TURNO COMPLETADO</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">¿Realizar cierre de caja ahora?</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">Como responsable de turno, puedes hacer el cierre de caja o dejarlo para más tarde.</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">Puedes hacer el cierre de caja ahora o dejarlo para más tarde.</div>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button onclick="acceptCajaOffer()" style="width:100%;padding:14px;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Sí, realizar cierre de caja</button>
       <button onclick="declineCajaOffer()" style="width:100%;padding:14px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">No, solo guardar follow-up</button>
@@ -350,12 +350,10 @@ function openCajaForm(existingId) {
       setV('caja-eur-pension-desayuno', row.eur_pension_desayuno);
       setV('caja-eur-pension-comidacena', row.eur_pension_comidacena);
       calcCajaDifs();
-      // Bloquear si el usuario no puede editar este cierre
+      // Bloquear si el usuario no puede editar este cierre — solo jefe depto / admin
       var isJefeDept = typeof canCorrectCaja==='function' && canCorrectCaja('Sala');
       var canEditCaja = currentUser.rol === 'admin' || currentUser.rol === 'fb' || isJefeDept;
-      var isPendiente = row.estado === 'Pendiente validación';
-      var esPropio    = row.responsable_id === currentUser.id;
-      var canEdit     = canEditCaja || (isPendiente && esPropio) || (window._cajaCorrectMode && isJefeDept);
+      var canEdit     = canEditCaja || (window._cajaCorrectMode && isJefeDept);
       // Admin: mostrar campo override fecha/hora cierre
       var adminCreatedAtWrap = document.getElementById('caja-admin-created-at-wrap');
       if(adminCreatedAtWrap){

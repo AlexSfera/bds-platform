@@ -610,9 +610,6 @@ function buildInfoContent(area){
       + '<b>'+_req('Horas trabajadas')+'</b><br>'
       + 'Las horas reales del día, no las del contrato.<br><br>'
 
-      + '<b>'+_req('Responsable de turno')+'</b><br>'
-      + 'El nombre de quien estuvo al mando.<br><br>'
-
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
       + 'Algo de Recepción que queda abierto para el siguiente turno.<br>'
       + '<i>Ejemplos: "Cliente 304 pide factura mañana" · "Esperar respuesta de reserva de grupo" · "Confirmar llegada tardía hab. 112"</i><br>'
@@ -982,7 +979,7 @@ function buildInfoContent(area){
         '#ef4444')
 
     + _infoCard('📝 Mi Turno — Campo a campo',
-        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
+        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b><br><br>'
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Trabajo del propio dpto que continúa tu compañero o siguiente turno. Ej: "Terminar pintura sala mañana", "Comprobar boiler tras nueva pieza". <i>Si esperas pieza del proveedor → eso también es gestión interna.</i><br><br>'
       + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo grave detectado que requiere <b>decisión del jefe de Mantenimiento</b>: riesgo de seguridad, daño estructural, fallo crítico de instalación, accidente. Tú la abres, <b>el jefe la cierra</b>.',
         '#ef4444')
@@ -1105,8 +1102,6 @@ function buildInfoContent(area){
       + 'Mañana · Tarde · Sábado. Solo uno.<br><br>'
       + '<b>'+_req('Horas trabajadas')+'</b><br>'
       + 'Las horas reales del día, no las del contrato.<br><br>'
-      + '<b>'+_req('Responsable de turno')+'</b><br>'
-      + 'El nombre de quien estuvo al mando.<br><br>'
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
       + 'Algo que queda para el siguiente turno o para un compañero.<br>'
       + '<i>Ejemplos: "Atender cliente — Juan Pérez vuelve mañana para 2ª valoración" · "Arreglar área — Queenax con anclaje suelto"</i><br>'
@@ -1182,9 +1177,6 @@ function buildInfoContent(area){
       + '<b>'+_req('Horas trabajadas')+'</b><br>'
       + 'Las horas reales del día, no las del contrato.<br><br>'
 
-      + '<b>'+_req('Responsable de turno')+'</b><br>'
-      + 'El nombre de quien estuvo al mando.<br><br>'
-
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
       + 'Algo de SYNCROLAB que queda para el siguiente turno.<br>'
       + '<i>Ejemplos: "Cliente vuelve mañana para 2ª sesión" · "Cerrar informe del test de hoy" · "Revisar programa de recovery del 302"</i><br>'
@@ -1254,7 +1246,7 @@ function buildInfoContent(area){
         '#06b6d4')
 
     + _infoCard('📝 Mi Turno — Campo a campo',
-        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b> · <b>'+_req('Responsable de turno')+'</b><br><br>'
+        '<b>'+_req('Fecha')+'</b> · <b>'+_req('Horas trabajadas')+'</b><br><br>'
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>Algo del propio dpto de Economato. Ej: "Pedido por confirmar al proveedor", "Reposición urgente para mañana", "Esperar entrega del lunes". <i>Si tienes que avisar a Cocina/Sala → TAREA, no gestión.</i><br><br>'
       + '<b>'+_req('¿Incidencia? SÍ/NO')+'</b><br>Algo que requiere <b>decisión del jefe</b>: producto caducado en masa, mercancía dañada, cantidad muy inferior a la pedida, proveedor que falla sistemáticamente. Tú la abres, <b>el jefe la cierra</b>.',
         '#06b6d4')
@@ -1293,7 +1285,6 @@ function buildInfoContent(area){
         '<b>'+_req('Fecha')+'</b><br>Día de la jornada que estás cerrando. Por defecto hoy.<br><br>'
       + '<b>'+_req('Turno')+'</b><br>Mañana (hasta ~14:00) o Tarde (14:00+). Solo uno por registro.<br><br>'
       + '<b>'+_req('Horas trabajadas')+'</b><br>Horas reales de la jornada.<br><br>'
-      + '<b>'+_req('Responsable de turno')+'</b><br>Quién cubrió la jornada. Normalmente tú mismo.<br><br>'
       + '<b>'+_req('¿Gestión pendiente? SÍ/NO')+'</b><br>'
       + '<u>SÍ</u> si queda algo abierto que debe continuar en la próxima jornada administrativa. '
       + 'Ej: "Contrato de Nombre pendiente de firma", "Factura proveedor X por confirmar", "Fichaje de Nombre por revisar". '
@@ -1346,7 +1337,6 @@ function buildInfoContent(area){
     + _infoCard('📝 Campos obligatorios',
         '• '+_req('Fecha')+'<br>'
       + '• '+_req('Horas trabajadas')+'<br>'
-      + '• '+_req('Responsable de turno')+'<br>'
       + '• '+_req('¿Gestión pendiente? SÍ/NO')+'<br>'
       + '• '+_req('¿Incidencia? SÍ/NO'),
         '#a855f7')

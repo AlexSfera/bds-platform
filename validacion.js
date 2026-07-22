@@ -76,7 +76,7 @@ async function openShiftDetail(shiftId){
   html += '<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(s.fecha)+'</strong></div>';
   html += '<div><span style="color:var(--text3)">Turno: </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
   html += '<div><span style="color:var(--text3)">Horas: </span><strong>'+s.horas+'h</strong></div>';
-  if(s.area!=='Recepción') html += '<div><span style="color:var(--text3)">Responsable turno: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
+  if(typeof _deptUsaResponsable==='function' && _deptUsaResponsable(s.area)) html += '<div><span style="color:var(--text3)">Responsable turno: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   html += '<div><span style="color:var(--text3)">Estado: </span>'+bEstado(s.estado)+'</div>';
   html += '<div><span style="color:var(--text3)">Validado por: </span>'+(s.validado_por||'—')+'</div>';
   if(s.observacion) html += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+s.observacion+'</div>';
@@ -732,7 +732,6 @@ async function renderValCajaList() {
       return '<tr>'
         +'<td style="font-family:var(--font-mono);font-size:11px">'+fmtDate(c.fecha)+'<br><span style="color:var(--text3)">'+(c.created_at?c.created_at.slice(11,16):'—')+'</span></td>'
         +'<td>'+servs+'</td>'
-        +'<td style="font-weight:600">'+c.responsable_nombre+'</td>'
         +'<td style="font-family:var(--font-mono)">'+(c.efectivo_real||0).toFixed(2).replace('.',',')+'€</td>'
         +'<td style="font-family:var(--font-mono)">'+(c.retiro_caja_fuerte||0).toFixed(2).replace('.',',')+'€</td>'
         +'<td style="font-family:var(--font-mono)">'+(c.tarjeta_tpv||0).toFixed(2).replace('.',',')+'€</td>'
@@ -760,7 +759,7 @@ async function renderValCajaList() {
         +'</td>'
         +'</tr>';
     }).join('');
-    el.innerHTML='<table><tr><th>Fecha</th><th>Turno</th><th>Responsable</th><th>Efectivo</th><th>Retiro</th><th>Tarjeta</th><th>Stripe</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Total ajustes</th><th>Pensiones</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
+    el.innerHTML='<table><tr><th>Fecha</th><th>Turno</th><th>Efectivo</th><th>Retiro</th><th>Tarjeta</th><th>Stripe</th><th>Neto</th><th>Bruto</th><th>Diferencia</th><th>Total ajustes</th><th>Pensiones</th><th>Estado</th><th>Acción</th></tr>'+rows+'</table>';
   } catch(e) {
     el.innerHTML='<div class="alert a-warn">No se puede cargar — ejecuta primero el SQL de Sala Phase 1.</div>';
   }
@@ -841,7 +840,7 @@ async function renderValCajaRecepcion(deptArg) {
       + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
       + '<td>' + (r.turno || '—') + '</td>'
       + '<td>' + tipoBadge + '</td>'
-      + '<td style="font-weight:600">' + (r.responsable_nombre || r.usuario_nombre || '—') + '</td>'
+      + '<td style="font-weight:600">' + (r.usuario_nombre || '—') + '</td>'
       + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_recibido)||0).toFixed(2).replace('.',',') + '€</td>'
       + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.retiro_caja_fuerte)||0).toFixed(2).replace('.',',') + '€</td>'
       + '<td style="font-family:var(--font-mono)">' + (parseFloat(r.fondo_real_a_traspasar)||0).toFixed(2).replace('.',',') + '€</td>'
@@ -931,7 +930,7 @@ async function renderValCajaLab(deptArg){
   var allCharges = [];
   try { allCharges = await getDB('syncrolab_room_charges'); } catch(e){ allCharges = []; }
 
-  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Responsable</th><th>Fondo</th><th>Efectivo</th><th>Tarjeta</th><th>Cargos MEWS</th><th>Δ Nubimed</th><th>Δ VirtuGym</th><th>Δ Total</th><th>Estado</th><th>Acción</th></tr>';
+  var html = '<table><tr><th>Fecha</th><th>Turno</th><th>Tipo</th><th>Fondo</th><th>Efectivo</th><th>Tarjeta</th><th>Cargos MEWS</th><th>Δ Nubimed</th><th>Δ VirtuGym</th><th>Δ Total</th><th>Estado</th><th>Acción</th></tr>';
   rows.forEach(function(r){
     var difN = parseFloat(r.diferencia_total_nubimed || 0);
     var difV = parseFloat(r.diferencia_total_virtugym || 0);
@@ -975,7 +974,6 @@ async function renderValCajaLab(deptArg){
       + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
       + '<td>' + (r.turno || '—') + '</td>'
       + '<td>' + tipoBadge + '</td>'
-      + '<td style="font-weight:600">' + (r.responsable_nombre || '—') + '</td>'
       + mc(fondoTotal) + mc(efectivoTotal) + mc(tarjetaTotal)
       + cargosCell
       + dc(difN) + dc(difV) + dc(difT)
@@ -1060,7 +1058,6 @@ async function openCajaSummary(cajaId, showValidar) {
 
   var html = '<div style="padding:4px 0">'
     + row('Fecha / Hora cierre', fmtDate(c.fecha) + (c.created_at ? ' · ' + c.created_at.slice(11,16) : ''))
-    + row('Responsable', c.responsable_nombre, false)
     + row('Turno', displayServicio(c.servicios||''), false)
     + row('Estado', c.estado, false)
     + '<div style="margin:12px 0 6px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em">EFECTIVO</div>'
@@ -1357,10 +1354,11 @@ async function pSel(dept, label, color){
     return false;
   });
 
-  // RESPONSABLES: responsable==1, rol empleado — no tiene sentido en administracion
-  var responsables = dept === 'administracion' ? [] : deptEmps.filter(function(e){
+  // RESPONSABLES: responsable==1, rol empleado — solo en HK/Sala/Cocina
+  var _deptConResp = ['sala','cocina','housekeeping'];
+  var responsables = _deptConResp.indexOf(dept) !== -1 ? deptEmps.filter(function(e){
     return e.responsable == 1 && e.rol !== 'jefe' && e.rol !== 'admin' && e.rol !== 'fb' && e.rol !== 'adjunto';
-  });
+  }) : [];
 
   // EQUIPO: empleados sin rol especial, sin duplicar
   var jefeIds = jefes.map(function(e){ return e.id; });

@@ -756,15 +756,13 @@ function _renderFIO(shifts) {
   fioShifts.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
 
   el.innerHTML = '<table>'
-    + '<tr><th>Fecha</th><th>Responsable FIO</th><th>Tipo error</th><th>Severidad</th><th>Estado</th><th>Comentario</th></tr>'
+    + '<tr><th>Fecha</th><th>Empleado</th><th>Tipo error</th><th>Severidad</th><th>Estado</th><th>Comentario</th></tr>'
     + fioShifts.map(function(s) {
       var sevColor = s.gravedad_error === 'Crítica' ? 'b-red' : s.gravedad_error === 'Alta' ? 'b-orange' : s.gravedad_error === 'Media' ? 'b-yellow' : 'b-gray';
       var estColor = s.validado_por ? 'b-green' : 'b-red';
-      var fioResp = s.error_employee_nombre;
-      if (!fioResp || fioResp.charAt(0) === '—' || fioResp.indexOf('Sin') !== -1) fioResp = s.nombre || '—';
       return '<tr>'
         + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(s.fecha) + '</td>'
-        + '<td style="font-weight:600">' + fioResp + '</td>'
+        + '<td style="font-weight:600">' + (s.nombre || '—') + '</td>'
         + '<td style="font-size:12px">' + (s.tipo_error || '—') + '</td>'
         + '<td><span class="badge ' + sevColor + '">' + (s.gravedad_error || '—') + '</span></td>'
         + '<td><span class="badge ' + estColor + '">' + (s.validado_por ? '✓ Validado' : 'Pendiente') + '</span></td>'
@@ -843,12 +841,11 @@ async function _renderKpiSala(shifts) {
     + '<div class="kpi k-blue"><div class="kpi-lbl">Cierres caja</div><div class="kpi-val">' + cierres.length + '</div><div class="kpi-sub">' + cierresPend + ' pendientes validación</div></div>'
     + '<div class="kpi ' + (Math.abs(difTotal) > 1 ? 'k-red' : 'k-green') + '"><div class="kpi-lbl">Diferencia total</div><div class="kpi-val">' + (difTotal >= 0 ? '+' : '') + difTotal.toFixed(2) + '€</div><div class="kpi-sub">Ef: ' + difEf.toFixed(2) + '€ · Tar: ' + difTar.toFixed(2) + '€</div></div>'
     + '</div>'
-    + (cierres.length ? '<table><tr><th>Fecha</th><th>Responsable</th><th>Diferencia</th><th>Estado</th></tr>'
+    + (cierres.length ? '<table><tr><th>Fecha</th><th>Diferencia</th><th>Estado</th></tr>'
       + cierres.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); }).slice(0, 10).map(function(c) {
         var difColor = Math.abs(c.diferencia_caja || 0) > 0.01 ? 'var(--red)' : 'var(--green)';
         return '<tr>'
           + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(c.fecha) + '</td>'
-          + '<td>' + (c.responsable_nombre || '—') + '</td>'
           + '<td style="font-family:var(--font-mono);color:' + difColor + '">' + ((c.diferencia_caja || 0) >= 0 ? '+' : '') + (c.diferencia_caja || 0).toFixed(2) + '€</td>'
           + '<td>' + bCajaEstado(c.estado || 'Pendiente Sala') + '</td>'
           + '</tr>';
@@ -935,12 +932,11 @@ async function _renderKpiRecepcion(shifts) {
     + '<div class="kpi k-red"><div class="kpi-lbl">Clientes no sat.</div><div class="kpi-val">' + clientesNoSat + '</div></div>'
     + '</div>'
     + '<div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.1em;margin-bottom:8px;">CUADRES DE CAJA RECEPCIÓN</div>'
-    + (cierresRec.length ? '<table><tr><th>Fecha</th><th>Turno</th><th>Responsable</th><th>Estado</th></tr>'
+    + (cierresRec.length ? '<table><tr><th>Fecha</th><th>Turno</th><th>Estado</th></tr>'
       + cierresRec.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); }).slice(0, 10).map(function(r) {
         return '<tr>'
           + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
           + '<td>' + formatDisplayValue(r.turno) + '</td>'
-          + '<td>' + formatDisplayValue(r.responsable_nombre || r.usuario_nombre) + '</td>'
           + '<td><span class="badge ' + (r.validado_ts ? 'b-green' : 'b-gray') + '">' + (r.validado_ts ? '✓ Validado' : 'Pendiente') + '</span></td>'
           + '</tr>';
       }).join('') + '</table>'
