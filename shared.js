@@ -24,7 +24,6 @@ async function sbRequest(method, table, body=null, params='') {
   if (!res.ok) {
     const err = await res.text();
     console.error('Supabase error:', method, table, err);
-    window._sbLastError = method + ' ' + table + ' → ' + String(err).slice(0, 200);
     return null;
   }
   if (method === 'DELETE') return true;
@@ -1536,24 +1535,17 @@ async function _doSaveTurno() {
 
   // Checklist
   if (typeof _chkSavedState !== 'undefined' && Array.isArray(_chkSavedState) && _chkSavedState.length > 0) {
-    shift.checklist = JSON.stringify(_chkSavedState);
-    var done = _chkSavedState.filter(Boolean).length;
-    shift.checklist_pct = Math.round((done / _chkSavedState.length) * 100);
+    shift.checklist_items = JSON.stringify(_chkSavedState);
   }
 
   // ── Guardar turno (INSERT o UPDATE) ─────────────────────────────────
-  // FIX-CIERRE-01: sbRequest devuelve null en error (400 silencioso).
-  // Antes el fallo se ignoraba y se mostraba "Turno guardado ✓" sin guardar nada.
-  window._sbLastError = null;
   if (isEditing) {
     var upd = {};
     for (var k in shift) { if (k !== 'id') upd[k] = shift[k]; }
-    var _updRes = await dbUpdate('shifts', editingShiftId, upd);
-    if (_updRes === null) throw new Error('Supabase rechazó la actualización del turno' + (window._sbLastError ? ' · ' + window._sbLastError : ''));
+    await dbUpdate('shifts', editingShiftId, upd);
   } else {
     shift.created_at = ts;
-    var _insRes = await dbInsert('shifts', shift);
-    if (_insRes === null) throw new Error('Supabase rechazó el guardado del turno' + (window._sbLastError ? ' · ' + window._sbLastError : ''));
+    await dbInsert('shifts', shift);
   }
 
   window._lastSavedShiftId = shiftId;
@@ -1711,19 +1703,13 @@ async function _doSaveTurno() {
   }
 
   // ── Limpieza ────────────────────────────────────────────────────────
-  // FIX-CIERRE-01: el turno YA está guardado. Un error de UI aquí no debe
-  // rechazar la promesa (los callers lo interpretaban como fallo de guardado).
+  if (typeof clearChkLocalStorage === 'function') clearChkLocalStorage();
+  auditLog('TURNO_SAVE', (isEditing ? 'CORRECCIÓN ' : '') + shiftId + ' | ' + fecha + ' | ' + servicio);
   var _wasEditing = isEditing;
-  try {
-    if (typeof clearChkLocalStorage === 'function') clearChkLocalStorage();
-    auditLog('TURNO_SAVE', (isEditing ? 'CORRECCIÓN ' : '') + shiftId + ' | ' + fecha + ' | ' + servicio);
-    clearTurnoForm();
-    renderMisTurnos();
-    if (typeof renderFollowupList === 'function') renderFollowupList();
-    if (typeof renderCorrectionsPend === 'function') renderCorrectionsPend();
-  } catch (eUi) {
-    console.warn('[TURNO] guardado OK; error de UI post-guardado:', eUi);
-  }
+  clearTurnoForm();
+  renderMisTurnos();
+  if (typeof renderFollowupList === 'function') renderFollowupList();
+  if (typeof renderCorrectionsPend === 'function') renderCorrectionsPend();
   toast(_wasEditing ? 'Turno corregido y reenviado ✓' : 'Turno guardado ✓', 'ok');
 }
 window._doSaveTurno = _doSaveTurno;
