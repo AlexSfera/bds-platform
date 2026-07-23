@@ -1519,7 +1519,8 @@ async function _doSaveTurno() {
     merma_declarada:      sinMermaFlag ? 'no' : (mermaRows.length > 0 ? 'si' : 'no'),
     incidencia_declarada: toggleState.incidencia || 'no',
     observacion:          obs,
-    estado:               'Pendiente'
+    estado:               'Pendiente',
+    hora_registro:        ts
   };
 
   // KPI (JSON)
@@ -1670,35 +1671,69 @@ async function _doSaveTurno() {
     _ajustesLines = [];
   }
 
-  // ── MERGE-BX-02: Asociación Bitrix time records ─────────────────────
+  // ── MERGE-BX-02: Asociación Bitrix → turno manual (v3 alineado con cron) ─
+  // Fixes vs v2:
+  //  · Match EXACTO por fecha_operativa (elimina double-counting de días vecinos)
+  //  · Escribe TODOS los campos de trazabilidad Bitrix (paridad con cron)
+  //  · Idempotente: skip si el turno ya trae bitrix_synced_at
+  //  · Ventana de tolerancia: solo asocia si el cierre Bitrix está a ≤1h del save
   try {
     var btPending = await sbRequest('GET', 'bitrix_time_records', null,
-      'sync_status=eq.pending_manual_shift&employee_id=eq.' + currentUser.id);
+      'sync_status=eq.pending_manual_shift'
+      + '&employee_id=eq.' + encodeURIComponent(currentUser.id)
+      + '&fecha_operativa=eq.' + encodeURIComponent(fecha)
+      + '&order=start_ts.asc');
     if (btPending && btPending.length > 0) {
-      var shiftDate = new Date(fecha + 'T12:00:00');
-      var matched = btPending.filter(function(bt) {
-        var btDate = new Date((bt.fecha_operativa || '') + 'T12:00:00');
-        return Math.abs((shiftDate - btDate) / 86400000) <= 1;
+      // Solo intervalos cerrados (con end_ts + duration)
+      var recs = btPending.filter(function(bt){
+        return bt.end_ts && parseInt(bt.duration_seconds) > 0;
       });
-      if (matched.length > 0) {
-        var totalSec = 0;
-        var matchedIds = [];
-        matched.forEach(function(bt) {
-          totalSec += parseInt(bt.duration_seconds) || 0;
-          matchedIds.push(bt.id);
-        });
-        var btHoras = Math.round(totalSec / 36) / 100;
-        await dbUpdate('shifts', shiftId, { horas: btHoras });
-        for (var bi = 0; bi < matchedIds.length; bi++) {
-          await dbUpdate('bitrix_time_records', matchedIds[bi], {
+      if (recs.length > 0) {
+        // Ventana ±1h entre cierre Bitrix más reciente y hora del save
+        var saveMs   = new Date(ts).getTime();
+        var cierreMs = recs.reduce(function(mx, r){
+          var t = new Date(r.end_ts).getTime();
+          return (!isNaN(t) && t > mx) ? t : mx;
+        }, 0);
+        var TOLERANCIA_MS = 60 * 60 * 1000;
+        if (cierreMs > 0 && Math.abs(saveMs - cierreMs) <= TOLERANCIA_MS) {
+          var totalSec = recs.reduce(function(a, r){
+            return a + (parseInt(r.duration_seconds) || 0);
+          }, 0);
+          var btHoras = Math.round(totalSec / 36) / 100;
+          var recIds  = recs.map(function(r){ return r.id; });
+          var bxIds   = recs.map(function(r){ return r.bitrix_record_id; }).join(',');
+
+          // PATCH turno con paridad de campos vs cron paseAsociacion()
+          await dbUpdate('shifts', shiftId, {
+            horas:                   btHoras,
+            horas_bitrix:            btHoras,
+            horas_source:            'bitrix',
+            bitrix_shift_id:         bxIds,
+            bitrix_started_at:       recs[0].start_ts,
+            bitrix_closed_at:        recs[recs.length - 1].end_ts,
+            bitrix_duration_minutes: Math.round(totalSec / 60),
+            bitrix_synced_at:        ts,
+            updated_at:              ts
+          });
+
+          // Marcar records como matched (batch en un solo PATCH)
+          await sbRequest('PATCH', 'bitrix_time_records', {
             sync_status:      'matched',
             matched_shift_id: shiftId,
             matched_ts:       ts,
             sync_error:       null
-          });
+          }, 'id=in.(' + recIds.map(encodeURIComponent).join(',') + ')');
+
+          invalidateCache('bitrix_time_records');
+          invalidateCache('shifts');
+          console.log('[MERGE-BX-02] Asociados ' + recs.length
+                    + ' fichaje(s) Bitrix (' + btHoras + 'h) al turno ' + shiftId);
+        } else {
+          console.log('[MERGE-BX-02] Sin match: |Δ save-cierre| > 1h · cierre='
+                    + (cierreMs ? new Date(cierreMs).toISOString() : 'n/a')
+                    + ' · save=' + ts);
         }
-        invalidateCache('bitrix_time_records');
-        invalidateCache('shifts');
       }
     }
   } catch (e) {
