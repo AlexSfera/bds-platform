@@ -433,6 +433,9 @@ async function submitLabTraspaso(){
     estado:(_labTraspasoEditId && _labPrevEstado==='correccion') ? 'corregido' : 'pendiente_validacion', updated_at:ts
   };
   if(!_labTraspasoEditId) record.created_at=ts;
+  // FIX-CIERRE-02: al editar, NO sobrescribir identidad del registro (fecha/turno/responsable).
+  // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
+  if(_labTraspasoEditId){ delete record.fecha; delete record.turno; delete record.shift_id; delete record.responsable_id; delete record.responsable_nombre; delete record.empleado_entrega_id; delete record.empleado_entrega_nombre; }
   try{
     await _labSave(record,_labTraspasoEditId);
     if(!_labTraspasoEditId) await _labSaveCharges(record.id, record.fecha);
@@ -586,6 +589,9 @@ async function submitLabCierre(){
     estado:(_labCierreEditId && _labPrevEstado==='correccion') ? 'corregido' : 'pendiente_validacion', updated_at:ts
   });
   if(!_labCierreEditId) rec.created_at=ts;
+  // FIX-CIERRE-02: al editar, NO sobrescribir identidad del registro (fecha/turno/responsable).
+  // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
+  if(_labCierreEditId){ delete rec.fecha; delete rec.turno; delete rec.shift_id; delete rec.responsable_id; delete rec.responsable_nombre; }
   if(_isCorrection){ rec.corregida=true; rec.corrected_by=currentUser.nombre; rec.corrected_at=ts; rec.correction_note=_corrNote||null; if(_labPrevEstado==='validado') rec.estado='validado'; }
   try{
     await _labSave(rec,_labCierreEditId);

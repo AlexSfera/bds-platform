@@ -713,6 +713,9 @@ async function submitRecCaja() {
   };
 
   if(!_recCajaEditId) record.created_at = ts;
+  // FIX-CIERRE-02: al editar, NO sobrescribir identidad del registro (fecha/turno/responsable).
+  // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
+  if(_recCajaEditId){ delete record.fecha; delete record.turno; delete record.shift_id; delete record.responsable_id; delete record.responsable_nombre; delete record.usuario_id; delete record.usuario_nombre; }
   if(_isCorrection){ record.corregida=true; record.corrected_by=currentUser.nombre; record.corrected_at=ts; record.correction_note=_corrNote||null; if(window._recCorrectPrevEstado==='validado') record.estado='validado'; }
 
   // Guardado con retry: si la tabla no tiene columnas opcionales (notas/imagen),
@@ -1715,6 +1718,9 @@ async function submitRecTraspaso() {
     updated_at:              ts
   };
   if(!_recTraspasoEditId) record.created_at = ts;
+  // FIX-CIERRE-02: al editar, NO sobrescribir identidad del registro (fecha/turno/responsable).
+  // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
+  if(_recTraspasoEditId){ delete record.fecha; delete record.turno; delete record.shift_id; delete record.responsable_id; delete record.responsable_nombre; delete record.usuario_id; delete record.usuario_nombre; }
 
   try {
     if(_recTraspasoEditId){

@@ -603,6 +603,9 @@ async function saveCajaForm() {
     estado: (_editingCajaId && (window._cajaPrevEstado==='A revisar' || window._cajaPrevEstado==='En corrección')) ? 'corregido' : 'Pendiente validación',
     updated_at: localTs()
   };
+  // FIX-CIERRE-02: al editar, NO sobrescribir identidad del registro (fecha/turno/responsable).
+  // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
+  if(_editingCajaId && currentUser.rol !== 'admin'){ delete closure.fecha; }
   // FIX: created_at solo en alta nueva (antes se sobreescribía en cada edición)
   if(!_editingCajaId){
     closure.created_at = localTs();
@@ -1514,6 +1517,9 @@ async function submitSalaTraspaso() {
     updated_at: ts
   };
   if(!_salaTraspasoEditId) record.created_at = ts;
+  // FIX-CIERRE-02: al editar, NO sobrescribir identidad del registro (fecha/turno/responsable).
+  // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
+  if(_salaTraspasoEditId){ delete record.fecha; delete record.servicios; delete record.responsable_id; delete record.responsable_nombre; }
 
   try {
     var url = SUPABASE_URL + '/rest/v1/sala_cash_closures';
