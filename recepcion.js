@@ -383,6 +383,10 @@ function submitRecKpi() {
     _saveRecepcionVentas(window._lastSavedShiftId).then(function(){
       openRecCajaChoice();
     });
+  }).catch(function(e){
+    // FIX-CIERRE-01: sin este catch, un fallo de guardado dejaba la pantalla muerta
+    console.error('[REC] guardado de turno falló', e);
+    toast('⛔ No se pudo guardar el turno: '+(e && e.message ? e.message : e), 'err');
   });
 }
 

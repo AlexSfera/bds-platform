@@ -1146,7 +1146,8 @@ function openCajaOfferModal() {
 async function acceptCajaOffer() {
   document.getElementById('modal-caja-offer').style.display = 'none';
   // Save follow-up shift
-  await _doSaveTurno();
+  try { await _doSaveTurno(); }
+  catch(e){ console.error('[SALA] guardado de turno falló', e); toast('⛔ No se pudo guardar el turno: '+(e && e.message ? e.message : e), 'err'); return; }
   // Navigate to caja and open form
   setTimeout(function(){
     // Click the caja nav button directly
@@ -1162,7 +1163,8 @@ async function acceptCajaOffer() {
 
 async function declineCajaOffer() {
   document.getElementById('modal-caja-offer').style.display = 'none';
-  await _doSaveTurno();
+  try { await _doSaveTurno(); }
+  catch(e){ console.error('[SALA] guardado de turno falló', e); toast('⛔ No se pudo guardar el turno: '+(e && e.message ? e.message : e), 'err'); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1349,7 +1351,9 @@ async function startSalaCierre() {
 async function skipSalaCajaOp() {
   var serv = _salaTipoServ || '—';
   closeSalaCajaChoice();
-  await _doSaveTurno();
+  // FIX-CIERRE-01: surfacear fallo de guardado (antes moría en silencio)
+  try { await _doSaveTurno(); }
+  catch(e){ console.error('[SALA] cierre de turno falló', e); toast('⛔ No se pudo cerrar el turno: '+(e && e.message ? e.message : e), 'err'); return; }
   var dup = await getSalaOpToday(serv);
   var dupEsMia = dup && (dup.responsable_id === currentUser.id);
   if(dupEsMia){

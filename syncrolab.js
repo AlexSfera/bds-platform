@@ -283,7 +283,9 @@ function startLabCierre(){
 async function skipLabCajaOp(){
   var turno = _labTipoTurno || _labCurrentTurno() || '—';
   closeLabCajaChoice();
-  await _doSaveTurno();
+  // FIX-CIERRE-01: antes un fallo aquí moría en silencio (sin toast, sin logout, turno sin cerrar)
+  try { await _doSaveTurno(); }
+  catch(e){ console.error('[LAB] cierre de turno falló', e); toast('⛔ No se pudo cerrar el turno: '+(e && e.message ? e.message : e), 'err'); return; }
   var dup = await getLabOpToday(turno);
   var dupEsMia = dup && (dup.responsable_id === currentUser.id);
   if(dupEsMia){ toast('Turno cerrado — caja ya registrada', 'ok'); }
