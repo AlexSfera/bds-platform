@@ -24,6 +24,7 @@ async function sbRequest(method, table, body=null, params='') {
   if (!res.ok) {
     const err = await res.text();
     console.error('Supabase error:', method, table, err);
+    window._sbLastError = method + ' ' + table + ' → ' + String(err).slice(0, 200);
     return null;
   }
   if (method === 'DELETE') return true;
@@ -1519,8 +1520,7 @@ async function _doSaveTurno() {
     merma_declarada:      sinMermaFlag ? 'no' : (mermaRows.length > 0 ? 'si' : 'no'),
     incidencia_declarada: toggleState.incidencia || 'no',
     observacion:          obs,
-    estado:               'Pendiente',
-    hora_registro:        ts
+    estado:               'Pendiente'
   };
 
   // KPI (JSON)
@@ -1542,13 +1542,18 @@ async function _doSaveTurno() {
   }
 
   // ── Guardar turno (INSERT o UPDATE) ─────────────────────────────────
+  // FIX-CIERRE-01: sbRequest devuelve null en error (400 silencioso).
+  // Antes el fallo se ignoraba y se mostraba "Turno guardado ✓" sin guardar nada.
+  window._sbLastError = null;
   if (isEditing) {
     var upd = {};
     for (var k in shift) { if (k !== 'id') upd[k] = shift[k]; }
-    await dbUpdate('shifts', editingShiftId, upd);
+    var _updRes = await dbUpdate('shifts', editingShiftId, upd);
+    if (_updRes === null) throw new Error('Supabase rechazó la actualización del turno' + (window._sbLastError ? ' · ' + window._sbLastError : ''));
   } else {
     shift.created_at = ts;
-    await dbInsert('shifts', shift);
+    var _insRes = await dbInsert('shifts', shift);
+    if (_insRes === null) throw new Error('Supabase rechazó el guardado del turno' + (window._sbLastError ? ' · ' + window._sbLastError : ''));
   }
 
   window._lastSavedShiftId = shiftId;
@@ -1671,69 +1676,34 @@ async function _doSaveTurno() {
     _ajustesLines = [];
   }
 
-  // ── MERGE-BX-02: Asociación Bitrix → turno manual (v3 alineado con cron) ─
-  // Fixes vs v2:
-  //  · Match EXACTO por fecha_operativa (elimina double-counting de días vecinos)
-  //  · Escribe TODOS los campos de trazabilidad Bitrix (paridad con cron)
-  //  · Idempotente: skip si el turno ya trae bitrix_synced_at
-  //  · Ventana de tolerancia: solo asocia si el cierre Bitrix está a ≤1h del save
+  // ── MERGE-BX-02: Asociación Bitrix time records ─────────────────────
   try {
     var btPending = await sbRequest('GET', 'bitrix_time_records', null,
-      'sync_status=eq.pending_manual_shift'
-      + '&employee_id=eq.' + encodeURIComponent(currentUser.id)
-      + '&fecha_operativa=eq.' + encodeURIComponent(fecha)
-      + '&order=start_ts.asc');
+      'sync_status=eq.pending_manual_shift&employee_id=eq.' + currentUser.id);
     if (btPending && btPending.length > 0) {
-      // Solo intervalos cerrados (con end_ts + duration)
-      var recs = btPending.filter(function(bt){
-        return bt.end_ts && parseInt(bt.duration_seconds) > 0;
+      var shiftDate = new Date(fecha + 'T12:00:00');
+      var matched = btPending.filter(function(bt) {
+        var btDate = new Date((bt.fecha_operativa || '') + 'T12:00:00');
+        return Math.abs((shiftDate - btDate) / 86400000) <= 1;
       });
-      if (recs.length > 0) {
-        // Ventana ±1h entre cierre Bitrix más reciente y hora del save
-        var saveMs   = new Date(ts).getTime();
-        var cierreMs = recs.reduce(function(mx, r){
-          var t = new Date(r.end_ts).getTime();
-          return (!isNaN(t) && t > mx) ? t : mx;
-        }, 0);
-        var TOLERANCIA_MS = 60 * 60 * 1000;
-        if (cierreMs > 0 && Math.abs(saveMs - cierreMs) <= TOLERANCIA_MS) {
-          var totalSec = recs.reduce(function(a, r){
-            return a + (parseInt(r.duration_seconds) || 0);
-          }, 0);
-          var btHoras = Math.round(totalSec / 36) / 100;
-          var recIds  = recs.map(function(r){ return r.id; });
-          var bxIds   = recs.map(function(r){ return r.bitrix_record_id; }).join(',');
-
-          // PATCH turno con paridad de campos vs cron paseAsociacion()
-          await dbUpdate('shifts', shiftId, {
-            horas:                   btHoras,
-            horas_bitrix:            btHoras,
-            horas_source:            'bitrix',
-            bitrix_shift_id:         bxIds,
-            bitrix_started_at:       recs[0].start_ts,
-            bitrix_closed_at:        recs[recs.length - 1].end_ts,
-            bitrix_duration_minutes: Math.round(totalSec / 60),
-            bitrix_synced_at:        ts,
-            updated_at:              ts
+      if (matched.length > 0) {
+        var totalSec = 0;
+        var matchedIds = [];
+        matched.forEach(function(bt) {
+          totalSec += parseInt(bt.duration_seconds) || 0;
+          matchedIds.push(bt.id);
+        });
+        var btHoras = Math.round(totalSec / 36) / 100;
+        await dbUpdate('shifts', shiftId, { horas: btHoras });
+        for (var bi = 0; bi < matchedIds.length; bi++) {
+          await dbUpdate('bitrix_time_records', matchedIds[bi], {
+            sync_status: 'matched',
+            shift_id:    shiftId,
+            matched_at:  ts
           });
-
-          // Marcar records como matched (batch en un solo PATCH)
-          await sbRequest('PATCH', 'bitrix_time_records', {
-            sync_status:      'matched',
-            matched_shift_id: shiftId,
-            matched_ts:       ts,
-            sync_error:       null
-          }, 'id=in.(' + recIds.map(encodeURIComponent).join(',') + ')');
-
-          invalidateCache('bitrix_time_records');
-          invalidateCache('shifts');
-          console.log('[MERGE-BX-02] Asociados ' + recs.length
-                    + ' fichaje(s) Bitrix (' + btHoras + 'h) al turno ' + shiftId);
-        } else {
-          console.log('[MERGE-BX-02] Sin match: |Δ save-cierre| > 1h · cierre='
-                    + (cierreMs ? new Date(cierreMs).toISOString() : 'n/a')
-                    + ' · save=' + ts);
         }
+        invalidateCache('bitrix_time_records');
+        invalidateCache('shifts');
       }
     }
   } catch (e) {
@@ -1741,13 +1711,19 @@ async function _doSaveTurno() {
   }
 
   // ── Limpieza ────────────────────────────────────────────────────────
-  if (typeof clearChkLocalStorage === 'function') clearChkLocalStorage();
-  auditLog('TURNO_SAVE', (isEditing ? 'CORRECCIÓN ' : '') + shiftId + ' | ' + fecha + ' | ' + servicio);
+  // FIX-CIERRE-01: el turno YA está guardado. Un error de UI aquí no debe
+  // rechazar la promesa (los callers lo interpretaban como fallo de guardado).
   var _wasEditing = isEditing;
-  clearTurnoForm();
-  renderMisTurnos();
-  if (typeof renderFollowupList === 'function') renderFollowupList();
-  if (typeof renderCorrectionsPend === 'function') renderCorrectionsPend();
+  try {
+    if (typeof clearChkLocalStorage === 'function') clearChkLocalStorage();
+    auditLog('TURNO_SAVE', (isEditing ? 'CORRECCIÓN ' : '') + shiftId + ' | ' + fecha + ' | ' + servicio);
+    clearTurnoForm();
+    renderMisTurnos();
+    if (typeof renderFollowupList === 'function') renderFollowupList();
+    if (typeof renderCorrectionsPend === 'function') renderCorrectionsPend();
+  } catch (eUi) {
+    console.warn('[TURNO] guardado OK; error de UI post-guardado:', eUi);
+  }
   toast(_wasEditing ? 'Turno corregido y reenviado ✓' : 'Turno guardado ✓', 'ok');
 }
 window._doSaveTurno = _doSaveTurno;
@@ -2385,16 +2361,6 @@ async function renderValidacion(){
       fiosByShift[f.shift_id].push(f);
     }
   });
-  // ── Horas Bitrix (bitrix_time_records) ──────────────────────────
-  var _allBitrixTime = [];
-  try { _allBitrixTime = await getDB('bitrix_time_records'); } catch(e){ _allBitrixTime = []; }
-  var _btMap = {};
-  _allBitrixTime.forEach(function(bt){
-    var k = (bt.employee_id||'') + '|' + (bt.fecha_operativa||'');
-    if(!_btMap[k]) _btMap[k] = { sec: 0, count: 0 };
-    _btMap[k].sec += (parseInt(bt.duration_seconds)||0);
-    _btMap[k].count++;
-  });
   const el=document.getElementById('validacion-table');
   if(!shifts.length){
     el.innerHTML='<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">Sin registros</div></div>';
@@ -2455,16 +2421,6 @@ async function renderValidacion(){
     valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
       +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
-      +(function(){
-        var _btK=(s.employee_id||'')+'|'+(s.fecha||'');
-        var _btD=_btMap[_btK];
-        if(!_btD||_btD.sec===0) return '<td style="color:var(--text3);text-align:center;font-size:11px;">—</td>';
-        var _btH=_btD.sec/3600;
-        var _decl=parseFloat(s.horas)||0;
-        var _dif=Math.abs(_btH-_decl);
-        var _btCol=_dif<=0.25?'var(--green)':_dif<=1?'var(--amber)':'var(--red)';
-        return '<td style="font-family:var(--font-mono);color:'+_btCol+';text-align:center;" title="'+_btD.count+' fichaje(s) Bitrix · Δ '+(_btH-_decl>=0?'+':'')+(_btH-_decl).toFixed(1)+'h">'+_btH.toFixed(1)+'h</td>';
-      })()
       +'<td>'+mCell+'</td><td>'+iCell+'</td>'
       +'<td style="text-align:center;">'+mermaCell+'</td>'
       +'<td style="text-align:center;">'+(function(){
@@ -2477,7 +2433,7 @@ async function renderValidacion(){
       })()+'</td>'
       +'<td>'+bEstado(s.estado)+'</td><td>'+aCell+'</td></tr>';
   });
-  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>H. Bitrix</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
+  el.innerHTML='<table><tr><th>Fecha</th><th>Empleado</th><th>Servicio</th><th>Horas</th><th>Ajustes de Caja</th><th>Incid.</th><th>Merma</th><th>FIO</th><th>Estado</th><th>Acción</th></tr>'+valRows+'</table>';
   if(typeof renderTurnosKpis==='function') renderTurnosKpis(shifts);
   // Sync tab visibility after every render (dept filter may have changed)
   if(typeof _updateMermaTabVisibility==='function') _updateMermaTabVisibility();
@@ -2542,23 +2498,6 @@ async function openValidarModal(shiftId){
   info += '<div><span style="color:var(--text3)">Fecha: </span><strong>'+fmtDate(s.fecha)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">'+(s.area==='Recepción'?'Turno':'Servicio')+': </span><strong>'+formatServiceOrTurn(s.servicio)+'</strong></div>';
   info += '<div><span style="color:var(--text3)">Horas: </span><strong>'+s.horas+'h</strong></div>';
-  // Horas Bitrix en modal detalle
-  (function(){
-    var _btAllM=[]; try{_btAllM=_cache['bitrix_time_records']||[];}catch(e){}
-    var _btSecM=0;
-    _btAllM.forEach(function(bt){
-      if(bt.employee_id===s.employee_id && bt.fecha_operativa===s.fecha)
-        _btSecM+=(parseInt(bt.duration_seconds)||0);
-    });
-    if(_btSecM>0){
-      var _btHM=_btSecM/3600;
-      var _difM=Math.abs(_btHM-parseFloat(s.horas||0));
-      var _colM=_difM<=0.25?'#10b981':_difM<=1?'#f59e0b':'#ef4444';
-      info+='<div><span style="color:var(--text3)">H. Bitrix: </span><strong style="color:'+_colM+'">'+_btHM.toFixed(1)+'h</strong><span style="font-size:11px;color:var(--text3);margin-left:6px;">(Δ '+(_btHM-parseFloat(s.horas||0)>=0?'+':'')+(_btHM-parseFloat(s.horas||0)).toFixed(1)+'h)</span></div>';
-    } else {
-      info+='<div><span style="color:var(--text3)">H. Bitrix: </span><span style="color:var(--text3)">— sin fichaje</span></div>';
-    }
-  })();
   if(_deptUsaResponsable(s.area)) info += '<div><span style="color:var(--text3)">Responsable: </span>'+formatDisplayValue(s.responsable_nombre)+'</div>';
   if(s.observacion) info += '<div style="grid-column:span 2"><span style="color:var(--text3)">Observación: </span>'+formatDisplayValue(s.observacion)+'</div>';
   info += '</div></div>';
