@@ -2332,9 +2332,6 @@ async function renderValidacion(){
   const _totAj = _ajF.reduce(function(acc,a){ return acc + (parseFloat(a.importe)||0); }, 0);
   var _alertsHtml = '';
   if(pend > 0) _alertsHtml += '<div class="alert a-warn">⚠ '+pend+' registro(s) pendiente(s)</div>';
-  _alertsHtml += '<div class="kpi-grid" style="margin-bottom:12px;">'
-    + '<div class="kpi k-blue"><div class="kpi-lbl">Total ajustes</div><div class="kpi-val">'+_totAj.toFixed(2)+' €</div><div class="kpi-sub">'+_ajF.length+' línea(s)</div></div>'
-    + '</div>';
   document.getElementById('val-alerts').innerHTML = _alertsHtml;
   const mermas=await getDB('merma'); const incis=await getDB('incidencias');
   // FIO nuevo: cargar y mapear por shift_id (Fase 2)
@@ -2407,7 +2404,7 @@ async function renderValidacion(){
     valRows+='<tr><td style="font-family:var(--font-mono);font-size:11px;white-space:nowrap">'+fmtDateTs(s.fecha,s.hora_registro||s.created_at)+'</td>'
       +'<td><div style="font-weight:600">'+s.nombre+'</div><div style="font-size:10px;color:var(--text3)">'+s.puesto+'</div></td>'
       +'<td>'+displayServicio(s.servicio)+'</td><td style="font-family:var(--font-mono)">'+s.horas+'h</td>'
-      +'<td>'+mCell+'</td><td>'+iCell+'</td>'
+      +'<td>'+iCell+'</td>'
       +'<td style="text-align:center;">'+mermaCell+'</td>'
       +'<td style="text-align:center;">'+(function(){
         var sfios = fiosByShift[s.id] || [];
