@@ -1572,7 +1572,7 @@ async function renderValAjustes(deptArg){
   if(!isAdminU && !isAdjDir && !isSalaJefe){ block.style.display='none'; return; }
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value||'');
   // Ajustes son de Sala: mostrar si Todos, Sala o admin/adjunto
-  if(dept && dept !== 'Sala' && !isAdminU && !isAdjDir){ block.style.display='none'; return; }
+  if(dept && dept !== 'Sala'){ block.style.display='none'; return; }
   block.style.display='block';
   el.innerHTML='<div class="empty"><div class="empty-text">Cargando...</div></div>';
   var periodo=(document.getElementById('val-caja-periodo')||{value:'semana'}).value||'semana';
