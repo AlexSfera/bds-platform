@@ -706,6 +706,7 @@ async function renderValCajaList() {
       if(periodo==='mes') return c.fecha>=startOfMonth();
       return true;
     });
+    data = _valTipoFilter(data);
     data.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||''); });
     if(!data.length){
       el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Sin cierres en el periodo</div>'
@@ -750,11 +751,11 @@ async function renderValCajaList() {
         +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+(typeof correctedBadge==='function'?correctedBadge(c):'')+'</td>'
         +'<td style="white-space:nowrap">'
         +'<div style="display:flex;flex-direction:column;gap:4px;">'
-        +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
-        +'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
-        +(isAdmin?'<button class="btn btn-warn btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">✏️ Corregir</button>':'')
-        +((isAdmin||(typeof canCorrectCaja==='function'&&canCorrectCaja('Sala')))?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="corregirCajaSala(this.dataset.cid)">✎ Corregir en sitio</button>':'')
-        +(isAdmin?'<button class="btn btn-danger btn-sm" data-cid="'+c.id+'" onclick="eliminarCierreCaja(this.dataset.cid)">🗑 Eliminar</button>':'')
+        +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" title="Revisar y validar este cierre" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
+        +'<button class="btn btn-secondary btn-sm" title="Ver detalle (solo lectura)" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
+        +(isAdmin?'<button class="btn btn-warn btn-sm" title="Reabrir y devolver al empleado para que lo corrija" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">✏️ Corregir</button>':'')
+        +((isAdmin||(typeof canCorrectCaja==='function'&&canCorrectCaja('Sala')))?'<button class="btn btn-secondary btn-sm" title="Editar los importes tú mismo, sin devolverlo al empleado. Nota obligatoria, queda auditado" data-cid="'+c.id+'" onclick="corregirCajaSala(this.dataset.cid)">✎ Corregir en sitio</button>':'')
+        +(isAdmin?'<button class="btn btn-danger btn-sm" title="Eliminar definitivamente (solo admin)" data-cid="'+c.id+'" onclick="eliminarCierreCaja(this.dataset.cid)">🗑 Eliminar</button>':'')
         +'</div>'
         +'</td>'
         +'</tr>';
@@ -797,6 +798,7 @@ async function renderValCajaRecepcion(deptArg) {
     if(periodo === 'mes')    return r.fecha >= startOfMonth();
     return true;
   });
+  rows = _valTipoFilter(rows);
   rows.sort(function(a,b){
     return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||'');
   });
@@ -829,11 +831,11 @@ async function renderValCajaRecepcion(deptArg) {
     var canValidarRec = canValRec || isAdminU;
 
     var acciones = '<div style="display:flex;flex-direction:column;gap:4px;">'
-      + (isPendienteRec && canValidarRec ? '<button class="btn btn-success btn-sm" onclick="validarCajaRec(\''+r.id+'\')">✓ Validar</button>' : '')
-      + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
-      + (isAdminU && estado !== 'validado' ? '<button class="btn btn-warn btn-sm" onclick="correccionCajaRec(\''+r.id+'\')">↩ Corrección</button>' : '')
-      + ((isAdminU || (typeof canCorrectCaja==='function' && canCorrectCaja('Recepción'))) && !esTraspaso ? '<button class="btn btn-secondary btn-sm" onclick="corregirCajaRec(\''+r.id+'\')">✎ Corregir en sitio</button>' : '')
-      + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaRec(\''+r.id+'\')">🗑 Eliminar</button>' : '')
+      + (isPendienteRec && canValidarRec ? '<button class="btn btn-success btn-sm" title="Revisar y validar este cierre" onclick="validarCajaRec(\''+r.id+'\')">✓ Validar</button>' : '')
+      + '<button class="btn btn-secondary btn-sm" title="Ver detalle (solo lectura)" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
+      + (isAdminU && estado !== 'validado' ? '<button class="btn btn-warn btn-sm" title="Reabrir y devolver al empleado para que lo corrija" onclick="correccionCajaRec(\''+r.id+'\')">↩ Corrección</button>' : '')
+      + ((isAdminU || (typeof canCorrectCaja==='function' && canCorrectCaja('Recepción'))) && !esTraspaso ? '<button class="btn btn-secondary btn-sm" title="Editar los importes tú mismo, sin devolverlo al empleado. Nota obligatoria, queda auditado" onclick="corregirCajaRec(\''+r.id+'\')">✎ Corregir en sitio</button>' : '')
+      + (isAdminU ? '<button class="btn btn-danger btn-sm" title="Eliminar definitivamente (solo admin)" onclick="eliminarCajaRec(\''+r.id+'\')">🗑 Eliminar</button>' : '')
       + '</div>';
 
     html += '<tr>'
@@ -922,6 +924,7 @@ async function renderValCajaLab(deptArg){
     if(periodo === 'mes')    return r.fecha >= startOfMonth();
     return true;
   });
+  rows = _valTipoFilter(rows);
   rows.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||''); });
 
   if(!rows.length){ el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin operaciones de caja SYNCROLAB en este periodo</div></div>'; return; }
@@ -964,11 +967,11 @@ async function renderValCajaLab(deptArg){
     var verFn = esTraspaso ? 'openLabTraspasoModal' : 'openLabCierreModal';
     var puedeValidar = isValidador && est !== 'validado';
     var acc = '<div style="display:flex;flex-direction:column;gap:4px;">'
-      + '<button class="btn btn-secondary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
-      + (puedeValidar ? '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="validarCajaLab(\''+r.id+'\')">✓ Validar</button>' : '')
-      + (isAdminU && est !== 'validado' ? '<button class="btn btn-warn btn-sm" onclick="correccionCajaLab(\''+r.id+'\')">↩ Corrección</button>' : '')
-      + ((isAdminU || (typeof canCorrectCaja==='function' && canCorrectCaja('SYNCROLAB'))) && !esTraspaso ? '<button class="btn btn-secondary btn-sm" onclick="corregirCajaLab(\''+r.id+'\')">✎ Corregir en sitio</button>' : '')
-      + (isAdminU ? '<button class="btn btn-danger btn-sm" onclick="eliminarCajaLab(\''+r.id+'\')">🗑 Eliminar</button>' : '')
+      + '<button class="btn btn-secondary btn-sm" title="Ver detalle (solo lectura)" onclick="'+verFn+'(\''+r.id+'\')">📋 Ver</button>'
+      + (puedeValidar ? '<button class="btn btn-sm" style="background:var(--green);color:#fff;" title="Revisar y validar este cierre" onclick="validarCajaLab(\''+r.id+'\')">✓ Validar</button>' : '')
+      + (isAdminU && est !== 'validado' ? '<button class="btn btn-warn btn-sm" title="Reabrir y devolver al empleado para que lo corrija" onclick="correccionCajaLab(\''+r.id+'\')">↩ Corrección</button>' : '')
+      + ((isAdminU || (typeof canCorrectCaja==='function' && canCorrectCaja('SYNCROLAB'))) && !esTraspaso ? '<button class="btn btn-secondary btn-sm" title="Editar los importes tú mismo, sin devolverlo al empleado. Nota obligatoria, queda auditado" onclick="corregirCajaLab(\''+r.id+'\')">✎ Corregir en sitio</button>' : '')
+      + (isAdminU ? '<button class="btn btn-danger btn-sm" title="Eliminar definitivamente (solo admin)" onclick="eliminarCajaLab(\''+r.id+'\')">🗑 Eliminar</button>' : '')
       + '</div>';
     html += '<tr>'
       + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(r.fecha) + '</td>'
@@ -1572,7 +1575,7 @@ async function renderValAjustes(deptArg){
   if(!isAdminU && !isAdjDir && !isSalaJefe){ block.style.display='none'; return; }
   var dept = (typeof deptArg === 'string') ? deptArg : ((document.getElementById('v-dept')||{}).value||'');
   // Ajustes son de Sala: mostrar si Todos, Sala o admin/adjunto
-  if(dept && dept !== 'Sala' && !isAdminU && !isAdjDir){ block.style.display='none'; return; }
+  if(dept && dept !== 'Sala'){ block.style.display='none'; return; }
   block.style.display='block';
   el.innerHTML='<div class="empty"><div class="empty-text">Cargando...</div></div>';
   var periodo=(document.getElementById('val-caja-periodo')||{value:'semana'}).value||'semana';
@@ -2414,3 +2417,20 @@ function _kpiBlockWrap(titulo, innerHtml, color){
 
 window._renderKpisTurno = _renderKpisTurno;
 window._kpiBlockWrap    = _kpiBlockWrap;
+
+// ── FILTRO TIPO (Cierres / Cierres+Traspasos) · tab Cierre Caja ─────────
+window._valCajaTipo = window._valCajaTipo || 'todos';
+function setValCajaTipo(t){
+  window._valCajaTipo = t;
+  var bT = document.getElementById('vct-todos'), bC = document.getElementById('vct-cierres');
+  if(bT && bC){
+    bT.className = 'btn btn-sm ' + (t==='todos'  ? 'btn-success' : 'btn-secondary');
+    bC.className = 'btn btn-sm ' + (t==='cierre' ? 'btn-success' : 'btn-secondary');
+  }
+  renderValCajaList();
+}
+window.setValCajaTipo = setValCajaTipo;
+function _valTipoFilter(arr){
+  return (window._valCajaTipo === 'cierre') ? arr.filter(function(r){ return r.tipo !== 'traspaso'; }) : arr;
+}
+window._valTipoFilter = _valTipoFilter;

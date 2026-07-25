@@ -812,7 +812,7 @@ async function renderRecepcionCajaList() {
     var acciones = '<button class="btn btn-secondary btn-sm" onclick="'+verViewFn+'(\''+r.id+'\')"  >Ver</button>';
     if(isAdminU || isJefeRec)
       acciones += ' <button class="btn btn-primary btn-sm" onclick="'+verFn+'(\''+r.id+'\')">✏ Editar</button>';
-    if(!esTraspaso && typeof canCorrectCaja==='function' && canCorrectCaja('Recepción')) acciones += ' <button class="btn btn-secondary btn-sm" onclick="corregirCajaRec(\''+r.id+'\')">✎ Corregir</button>';
+    if(!esTraspaso && typeof canCorrectCaja==='function' && canCorrectCaja('Recepción')) acciones += ' <button class="btn btn-secondary btn-sm" title="Editar los importes tú mismo, sin devolverlo al empleado. Nota obligatoria, queda auditado" onclick="corregirCajaRec(\''+r.id+'\')">✎ Corregir</button>';
     if(canReopen && estado !== 'reabierto')
       acciones += ' <button class="btn btn-secondary btn-sm" onclick="reabrirCajaRec(\''+r.id+'\')">Reabrir</button>';
     if(isAdminU)

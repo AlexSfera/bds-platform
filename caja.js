@@ -979,11 +979,11 @@ async function renderValCajaList() {
         +'<td>'+bCajaEstado(c.estado||'Pendiente Sala')+(c.redactado_por_jefe?'<span class="badge" style="background:rgba(234,179,8,.15);color:#eab308;border:1px solid #eab308;margin-left:4px;" title="Redactado por '+(c.redactado_por||'jefe')+' · '+(c.redactado_ts?new Date(c.redactado_ts).toLocaleString('es-ES',{timeZone:'Europe/Madrid'}):'')+'">⚠</span>':'')+(typeof correctedBadge==='function'?correctedBadge(c):'')+'</td>'
         +'<td style="white-space:nowrap">'
         +'<div style="display:flex;flex-direction:column;gap:4px;">'
-        +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
-        +'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
-        +(isAdmin?'<button class="btn btn-warn btn-sm" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">✏️ Corregir</button>':'')
-        +((isAdmin||(typeof canCorrectCaja==='function'&&canCorrectCaja('Sala')))?'<button class="btn btn-secondary btn-sm" data-cid="'+c.id+'" onclick="corregirCajaSala(this.dataset.cid)">✎ Corregir en sitio</button>':'')
-        +(isAdmin?'<button class="btn btn-danger btn-sm" data-cid="'+c.id+'" onclick="eliminarCierreCaja(this.dataset.cid)">🗑 Eliminar</button>':'')
+        +(isPendiente&&canValidar?'<button class="btn btn-success btn-sm" title="Revisar y validar este cierre" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid,true)">✓ Validar</button>':'')
+        +'<button class="btn btn-secondary btn-sm" title="Ver detalle (solo lectura)" data-cid="'+c.id+'" onclick="openCajaSummary(this.dataset.cid)">📋 Ver</button>'
+        +(isAdmin?'<button class="btn btn-warn btn-sm" title="Reabrir y devolver al empleado para que lo corrija" data-cid="'+c.id+'" onclick="reabrirCierre(this.dataset.cid)">✏️ Corregir</button>':'')
+        +((isAdmin||(typeof canCorrectCaja==='function'&&canCorrectCaja('Sala')))?'<button class="btn btn-secondary btn-sm" title="Editar los importes tú mismo, sin devolverlo al empleado. Nota obligatoria, queda auditado" data-cid="'+c.id+'" onclick="corregirCajaSala(this.dataset.cid)">✎ Corregir en sitio</button>':'')
+        +(isAdmin?'<button class="btn btn-danger btn-sm" title="Eliminar definitivamente (solo admin)" data-cid="'+c.id+'" onclick="eliminarCierreCaja(this.dataset.cid)">🗑 Eliminar</button>':'')
         +'</div>'
         +'</td>'
         +'</tr>';

@@ -1460,6 +1460,12 @@ tr:hover td{background:rgba(96,165,250,.06);}
               <option value="todo">Todos</option>
             </select>
           </div>
+          <div class="fg"><label>Tipo</label>
+            <div style="display:flex;gap:6px;">
+              <button id="vct-todos" class="btn btn-success btn-sm" onclick="setValCajaTipo('todos')" title="Mostrar cierres y traspasos">Cierres + traspasos</button>
+              <button id="vct-cierres" class="btn btn-secondary btn-sm" onclick="setValCajaTipo('cierre')" title="Mostrar solo cierres de caja">Solo cierres</button>
+            </div>
+          </div>
         </div>
         <div class="card"><div class="tbl-wrap" id="val-caja-table"></div></div>
 
