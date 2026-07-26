@@ -266,7 +266,9 @@ function _turnoAutoDeptKey(area, puesto){
 // usarse en renders/chips sin generar ruido.
 function autoAssignTurno(area, puesto, dateOpt){
   var key = _turnoAutoDeptKey(area, puesto);
-  if(!key || !TURNO_CIERRE_MAP[key]) return null;
+  // Dept excluido (Administración, etc.) → limpiar el resultado compartido
+  // para que no se filtre un cálculo viejo de otro departamento (doc 23).
+  if(!key || !TURNO_CIERRE_MAP[key]){ window._turnoAutoResult = null; return null; }
   var cfg = TURNO_CIERRE_MAP[key];
   var now = dateOpt ? new Date(dateOpt) : new Date();
   if(isNaN(now)) now = new Date();
@@ -280,16 +282,24 @@ function autoAssignTurno(area, puesto, dateOpt){
   // Fecha operativa (spec §4): cierre de madrugada de turno nocturno → ayer
   var baseD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if(best.ayerAntes != null && m < best.ayerAntes){ baseD.setDate(baseD.getDate()-1); }
-  return {
+  var _servGuardado = cfg.multi ? JSON.stringify([best.t]) : best.t;
+  var res = {
     turno: best.t,
     fechaOperativa: toYMD(baseD),
-    distanciaMin: bestDist,
+    servicio: _servGuardado,          // = turno tentativo; la conciliación Bitrix lo reemplaza (array en Cocina/Sala)
     atipico: bestDist > 90,
+    distanciaMin: bestDist,
+    areaEfectiva: key,                // área resuelta (trampa 7: puesto manda en SYNCROLAB)
     multi: !!cfg.multi,
     partido: !!cfg.partido,
-    servicioGuardado: cfg.multi ? JSON.stringify([best.t]) : best.t,
-    deptKey: key
+    servicioGuardado: _servGuardado,  // alias retro-compatible de .servicio
+    deptKey: key                      // alias retro-compatible de .areaEfectiva
   };
+  // Contrato doc 23: resultado compartido siempre disponible para los
+  // consumidores (getServicioValue, getRecTurnoValue, _labCurrentTurno,
+  // modales de caja). Se refresca en cada cálculo; saveTurno lo fija al guardar.
+  window._turnoAutoResult = res;
+  return res;
 }
 
 // computeServicios(horaInicio, horaFin) — spec §3, solo Cocina/Sala.
@@ -1578,8 +1588,11 @@ function saveTurno(){
   var _isRecepcion = currentUser && currentUser.area === 'Recepción';
   // Date lock: employees can only register today (unless correcting)
   // FEAT-TURNO-AUTO (spec 22 §4): fecha operativa delegada en autoAssignTurno.
+  // El cálculo queda fijado en window._turnoAutoResult (contrato doc 23) para
+  // _doSaveTurno y los consumidores de caja/checklist.
   var _fechaOpSave = today();
   var _autoOpSave = (typeof autoAssignTurno === 'function' && currentUser) ? autoAssignTurno(currentUser.area, currentUser.puesto) : null;
+  window._turnoAutoResult = _autoOpSave || window._turnoAutoResult || null;
   if(_autoOpSave){ _fechaOpSave = _autoOpSave.fechaOperativa; }
   else { var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 7)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); } }
   if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave){
@@ -1659,7 +1672,10 @@ async function _doSaveTurno() {
   // ── FEAT-TURNO-AUTO (spec 22 §4): doble declaración mismo día ─────────
   // Mismo turno → reutiliza el registro existente (no duplica).
   // Turno distinto → shift nuevo (turno partido: Cocina/Sala/Rec.LAB/Entren.).
-  var _autoTA = (typeof autoAssignTurno === 'function' && currentUser) ? autoAssignTurno(currentUser.area, currentUser.puesto) : null;
+  // Consume window._turnoAutoResult (contrato doc 23), recién refrescado por
+  // el getServicioValue() de arriba; fallback a cálculo directo.
+  var _autoTA = window._turnoAutoResult
+    || ((typeof autoAssignTurno === 'function' && currentUser) ? autoAssignTurno(currentUser.area, currentUser.puesto) : null);
   if (!isEditing) {
     try {
       var _prevShifts = await getDB('shifts');
