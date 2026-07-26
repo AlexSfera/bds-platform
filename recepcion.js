@@ -237,7 +237,17 @@ function _recFechaOperativa(turno){
   // FIX-REC-FECHA: Mañana y Tarde SIEMPRE operan sobre hoy.
   // Solo Noche (o sin turno especificado) usa ayer si hora < 9,
   // porque el recepcionista de noche trabaja pasada la medianoche.
-  if(turno === 'Mañana' || turno === 'Tarde') return today();
+  if(turno === 'Mañana') return today();
+  // FIX-TARDE-MIDNIGHT (spec 22): Tarde termina ~23:00; un registro entre
+  // 00:00 y 05:59 pertenece al día operativo anterior (evita fecha errónea
+  // y que quede ocupado el slot Tarde del día siguiente).
+  if(turno === 'Tarde'){
+    if(now.getHours() < 6){
+      var ayerT = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      return toYMD(ayerT);
+    }
+    return today();
+  }
   if(now.getHours() < 9){
     var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     return toYMD(ayer);
@@ -1667,6 +1677,20 @@ async function submitRecTraspaso() {
 
   // Una operación por turno y día (creación · admin exento)
   if(!_recTraspasoEditId && currentUser.rol !== 'admin'){
+    // FIX-TURNO-HORA (spec 22): coherencia turno ↔ hora real.
+    // Caso 24-jul: traspaso de Mañana registrado como Tarde a las 14:46
+    // ocupó el slot de Tarde y bloqueó la caja real del turno.
+    var _hNow = new Date().getHours();
+    var _horaOk = (turno === 'Mañana') ? (_hNow >= 11 && _hNow < 17)
+                : (turno === 'Tarde')  ? (_hNow >= 20 || _hNow < 6)
+                : true;
+    if(!_horaOk){
+      var msgH = 'Un traspaso del turno '+turno+' no puede registrarse a esta hora. Revisa el turno seleccionado en Mi Turno o avisa a un admin.';
+      if(errEl) errEl.textContent = msgH;
+      toast(msgH, 'err');
+      auditLog('REC_TRASPASO_HORA_KO', currentUser.nombre+' intentó traspaso turno '+turno+' a las '+String(_hNow).padStart(2,'0')+'h — bloqueado por incoherencia turno/hora');
+      return;
+    }
     var dup = await getRecOpToday(turno);
     if(dup){
       var msgD = 'El turno '+turno+' ya registró '+(dup.tipo === 'traspaso' ? 'un traspaso' : 'un cierre')+' hoy. Solo una operación por turno.';
