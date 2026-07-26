@@ -338,32 +338,74 @@ function _turnoAutoManualAllowed(u){
   return false;
 }
 
-// UI spec §4: el selector de turno desaparece para el empleado — chip
-// read-only «Turno: X (asignado automáticamente)». Admin/jefe conservan el
-// selector con nota. Se llama al final de la config del formulario Mi Turno.
+// UI spec §4 (rev. CEO 26-jul): el selector de turno/servicio desaparece para
+// TODOS los roles en todos los departamentos con config auto. Fecha y Turno se
+// muestran como chips read-only alineados en una fila. Única excepción: en
+// Sala/Cocina los jefes/admin ven las opciones Evento/Otro (spec §1.5 — nunca
+// se auto-asignan). Administración queda excluida (spec §5.3, sin cambios).
+// Se llama al final de la config del formulario Mi Turno.
 function _applyTurnoAutoUI(){
   var old = document.getElementById('turno-auto-chip'); if(old) old.remove();
   if(!currentUser) return;
   var auto = autoAssignTurno(currentUser.area, currentUser.puesto);
-  if(!auto) return; // dept excluido → selector manual como siempre
-  var manualAllowed = _turnoAutoManualAllowed(currentUser);
-  var isRec = currentUser.area === 'Recepción';
-  var host = isRec ? document.getElementById('rec-turno-block') : document.getElementById('servicio-fg-block');
-  if(!host || !host.parentNode) return;
-  var chip = document.createElement('div');
-  chip.id = 'turno-auto-chip';
-  chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #8b5cf6;border-radius:16px;background:rgba(139,92,246,.08);font-size:13px;font-weight:600;color:#8b5cf6;margin:4px 0 10px;';
-  if(!manualAllowed){
-    chip.innerHTML = '🕐 Turno: ' + auto.turno + ' <span style="font-weight:400;color:var(--text3);">(asignado automáticamente)</span>';
-    ['rec-turno-block','servicio-fg-block'].forEach(function(id){
-      var el = document.getElementById(id); if(el) el.style.display = 'none';
+  if(!auto) return; // dept excluido (Administración) → formulario sin cambios
+
+  // 1) Ocultar selectores de turno/servicio para todos los roles
+  var recB = document.getElementById('rec-turno-block'); if(recB) recB.style.display = 'none';
+  var servB = document.getElementById('servicio-fg-block');
+  var esSalaCocina = (auto.areaEfectiva === 'Sala' || auto.areaEfectiva === 'Cocina');
+  var muestraEvento = esSalaCocina && _turnoAutoManualAllowed(currentUser);
+  if(servB) servB.style.display = muestraEvento ? 'block' : 'none';
+  if(muestraEvento){
+    // Solo Evento/Otro visibles; los servicios normales los asigna el sistema
+    document.querySelectorAll('input[name="servicio-sala"], input[name="servicio-cocina"]').forEach(function(cb){
+      var esManual = (cb.value === 'Evento' || cb.value === 'Otro');
+      var lbl = cb.closest ? cb.closest('label') : null;
+      if(lbl) lbl.style.display = esManual ? '' : 'none';
+      if(!esManual) cb.checked = false;
     });
-  } else {
-    var esAdminU = (typeof isAdmin === 'function' && isAdmin(currentUser));
-    chip.innerHTML = '🕐 Turno auto: ' + auto.turno + ' <span style="font-weight:400;color:var(--text3);">(sin marcar nada se usa el automático'
-      + (esAdminU ? '' : ' · manual solo Evento/Otro') + ')</span>';
+    var tsSel = document.getElementById('t-servicio'); if(tsSel) tsSel.style.display = 'none';
+    var lblServ = document.getElementById('t-servicio-label');
+    if(lblServ) lblServ.innerHTML = 'Evento / Otro <span style="font-weight:400;color:var(--text3);font-size:12px;">(opcional — márcalo solo si no es un servicio normal)</span>';
   }
-  host.parentNode.insertBefore(chip, host);
+
+  // En corrección, el chip muestra el servicio original conservado del shift
+  var enCorreccion = (typeof editingShiftId !== 'undefined' && editingShiftId && window._editingShiftServicioOriginal);
+
+  // 2) Fecha → chip read-only con el mismo formato que el turno, en una fila.
+  // El input queda oculto pero vivo para la lógica de guardado; si está vacío
+  // (primera apertura) se fija a la fecha operativa auto — ya no lo rellena
+  // el empleado a mano.
+  var fInput = document.getElementById('t-fecha');
+  var fechaTxt = '';
+  if(fInput){
+    if(!fInput.value && !enCorreccion) fInput.value = auto.fechaOperativa;
+    fechaTxt = fInput.value ? fmtChipFecha(fInput.value) : '';
+    var fg = fInput.closest ? fInput.closest('.fg') : null;
+    if(fg) fg.style.display = 'none';
+  }
+  function fmtChipFecha(ymd){
+    try { var p = ymd.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; } catch(e){ return ymd; }
+  }
+  var turnoTxt = enCorreccion
+    ? (typeof formatServiceOrTurn === 'function' ? formatServiceOrTurn(window._editingShiftServicioOriginal) : window._editingShiftServicioOriginal)
+    : auto.turno;
+  var turnoNota = enCorreccion ? '(original del turno en corrección)' : '(asignado automáticamente)';
+
+  var CHIP_CSS = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid #8b5cf6;border-radius:16px;background:rgba(139,92,246,.08);font-size:13px;font-weight:600;color:#8b5cf6;';
+  var row = document.createElement('div');
+  row.id = 'turno-auto-chip';
+  row.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 0 14px;';
+  row.innerHTML =
+      (fechaTxt ? '<div style="' + CHIP_CSS + '">📅 Fecha: ' + fechaTxt + ' <span style="font-weight:400;color:var(--text3);">(operativa)</span></div>' : '')
+    + '<div style="' + CHIP_CSS + '">🕐 Turno: ' + turnoTxt + ' <span style="font-weight:400;color:var(--text3);">' + turnoNota + '</span></div>';
+
+  // Insertar la fila ANTES del .grid2 que contiene la fecha (ancho completo,
+  // chips alineados en una sola línea — no dentro de una columna del grid)
+  var fgFecha = (fInput && fInput.closest) ? fInput.closest('.fg') : null;
+  var anchor = fgFecha && fgFecha.parentNode ? fgFecha.parentNode : null; // .grid2
+  if(!anchor) anchor = document.getElementById('servicio-fg-block') || recB;
+  if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(row, anchor);
 }
 window.autoAssignTurno = autoAssignTurno;
 window.computeServicios = computeServicios;
@@ -1507,6 +1549,8 @@ function clearTurnoForm(){
     }
   }
   if(fechaInput) fechaInput.value=_fechaTurno;
+  // FEAT-TURNO-AUTO: reconstruir chips fecha/turno con los valores limpios
+  if(typeof _applyTurnoAutoUI === 'function') _applyTurnoAutoUI();
   // Fix Jun 2026: bloquear fecha para todos salvo admin (antes solo empleado).
   var _esAdminCF = currentUser && currentUser.rol === 'admin';
   if(fechaInput && !_esAdminCF && !editingShiftId){
@@ -1555,8 +1599,10 @@ async function loadForCorrection(shiftId){
   document.getElementById('t-fecha').value = s.fecha || today();
   document.getElementById('t-servicio').value=s.servicio;
   // FEAT-TURNO-AUTO: en corrección se conserva el servicio original del shift
-  // (getServicioValue lo usa si el selector está oculto/vacío)
+  // (getServicioValue lo usa si el selector está oculto/vacío) y los chips
+  // se reconstruyen con la fecha/servicio del turno cargado
   window._editingShiftServicioOriginal = s.servicio || '';
+  if(typeof _applyTurnoAutoUI === 'function') _applyTurnoAutoUI();
   var _elHoras = document.getElementById('t-horas'); if(_elHoras) _elHoras.value=s.horas;
   document.getElementById('t-responsable').value=s.responsable_id||'';
   var _elObs = document.getElementById('t-obs'); if(_elObs) _elObs.value=s.observacion||'';
