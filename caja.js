@@ -262,11 +262,11 @@
 })();
 
 // ── FECHA OPERATIVA SALA ──────────────────────────────────────────────────
-// Cena puede pasar de medianoche. Si hora actual < 02:00, la fecha operativa
-// es "ayer" (el servicio de Cena del día anterior). Margen: hasta las 2 AM.
+// Cena puede pasar de medianoche. FEAT-TURNO-AUTO (spec 22 §4): cualquier
+// cierre entre 00:00–05:59 de una jornada abierta ayer conserva la fecha de
+// apertura — la Cena termina hasta las 00:30–01:00 y el cutoff de 2h se
+// quedaba corto. Cutoff subido a <06:00, alineado con autoAssignTurno.
 function _salaFechaOperativa(){
-  // FEAT-TURNO-AUTO spec §4: cierre 00:00-05:59 de jornada Cena abierta ayer → fecha = ayer.
-  // Cutoff ampliado de <2h a <6h (Cena termina hasta 01:00; margen de seguridad).
   var now = new Date();
   if(now.getHours() < 6){
     var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
@@ -727,14 +727,10 @@ async function renderCajaList() {
   }
 }
 
-function getServicioValue() {
-  // FEAT-TURNO-AUTO: si hay turno auto-asignado, devolverlo directamente
-  if(window._turnoAutoResult && window._turnoAutoResult.turno && window._turnoAutoResult.areaEfectiva){
-    var _ae = window._turnoAutoResult.areaEfectiva;
-    // Para Cocina/Sala: turno tentativo como string (al cerrar será array de servicios)
-    return window._turnoAutoResult.servicio || window._turnoAutoResult.turno;
-  }
-  // ── Legacy: lectura de selectores manuales (Administración u override) ──
+// FEAT-TURNO-AUTO (spec 22): lectura cruda de los selectores manuales.
+// NO llamar directamente — usar getServicioValue(), que aplica la
+// asignación automática y las reglas de override (admin/jefe).
+function _getServicioManual() {
   // Recepción: return turno (Mañana/Tarde/Noche)
   if(currentUser && currentUser.area === 'Recepción') return getRecTurnoValue();
   // Housekeeping: return turno (Mañana/Tarde) desde radio
@@ -769,6 +765,28 @@ function getServicioValue() {
   if(checkedC.length > 0) return JSON.stringify(checkedC);
   // Fallback to single select
   return (document.getElementById('t-servicio')||{}).value||'';
+}
+
+// FEAT-TURNO-AUTO (spec 22): punto único de lectura del turno/servicio.
+// El empleado no elige — se asigna por hora de cierre (autoAssignTurno,
+// shared.js). Admin: override libre. Jefe/supervisor: solo Evento/Otro.
+// Administración y depts sin config → selector manual como siempre.
+// En corrección (editingShiftId) se conserva el servicio original del shift.
+function getServicioValue() {
+  var manual = _getServicioManual();
+  if(typeof autoAssignTurno !== 'function' || !currentUser) return manual;
+  // Corrección de un turno pasado: no reasignar por la hora actual
+  if(typeof editingShiftId !== 'undefined' && editingShiftId){
+    if(manual) return manual;
+    return window._editingShiftServicioOriginal || manual;
+  }
+  var auto = autoAssignTurno(currentUser.area, currentUser.puesto);
+  if(!auto) return manual; // dept excluido (Administración, etc.)
+  if(manual && typeof _turnoAutoManualAllowed === 'function' && _turnoAutoManualAllowed(currentUser)){
+    if(typeof isAdmin === 'function' && isAdmin(currentUser)) return manual;
+    if(/Evento|Otro/.test(manual)) return manual; // jefe: solo Evento/Otro (spec §1.5)
+  }
+  return auto.servicioGuardado;
 }
 
 function displayServicio(val) {
@@ -1221,7 +1239,28 @@ function getSalaTurnoServicio() {
   // Servicio marcado en Mi Turno Sala (radio servicio-sala = selección única)
   var checked = [];
   document.querySelectorAll('input[name="servicio-sala"]:checked').forEach(function(cb){ checked.push(cb.value); });
-  return checked; // array (0 o 1 elemento)
+  if(checked.length) return checked;
+  // FEAT-TURNO-AUTO (spec 22): radios ocultos para el empleado → la caja
+  // hereda el servicio automáticamente por proximidad al fin de ventana
+  // (SERVICE_WINDOWS §3). Fuera de margen (>150 min) → selección manual
+  // (casos Evento/Otro, que marca el jefe).
+  var autoServ = _salaCajaServicioAuto();
+  return autoServ ? [autoServ] : checked;
+}
+
+// Servicio de caja Sala por hora actual: fin de ventana más cercano.
+// Desayuno fin 11:00 · Comida fin 16:30 · Cena fin 23:30 (spec 22 §3).
+function _salaCajaServicioAuto(){
+  if(typeof SERVICE_WINDOWS === 'undefined' || !SERVICE_WINDOWS) return null;
+  var now = new Date(), m = now.getHours()*60 + now.getMinutes();
+  var best = null, bestD = Infinity;
+  Object.keys(SERVICE_WINDOWS).forEach(function(s){
+    var p = String(SERVICE_WINDOWS[s][1]).split(':');
+    var fin = (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0);
+    var d = Math.abs(m - fin); if(d > 720) d = 1440 - d;
+    if(d < bestD){ bestD = d; best = s; }
+  });
+  return bestD <= 150 ? best : null;
 }
 
 async function getSalaOpToday(servicio) {
@@ -1237,10 +1276,7 @@ async function getSalaOpToday(servicio) {
 }
 
 function openSalaCajaChoice() {
-  // FEAT-TURNO-AUTO: servicio heredado del turno auto-asignado
-  var autoServ = (window._turnoAutoResult && window._turnoAutoResult.areaEfectiva === 'Sala')
-    ? window._turnoAutoResult.turno : null;
-  var servs = autoServ ? [autoServ] : getSalaTurnoServicio();
+  var servs = getSalaTurnoServicio();
   // Si Mi Turno tiene exactamente 1 servicio → fijo; si 0 o varios → pedir
   _salaTipoServ = (servs.length === 1) ? servs[0] : null;
 

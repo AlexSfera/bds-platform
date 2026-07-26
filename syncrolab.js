@@ -158,14 +158,16 @@ function _labPuedeCerrar(turno, fecha){
 }
 
 function _labCurrentTurno(){
-  // FEAT-TURNO-AUTO: turno derivado de autoAssignTurno
-  if(typeof autoAssignTurno === 'function'){
-    var _autoLab = autoAssignTurno(currentUser ? currentUser.area : 'SYNCROLAB', currentUser ? currentUser.puesto : '');
-    if(_autoLab.turno && _autoLab.areaEfectiva === 'Recepción SYNCROLAB') return _autoLab.turno;
-  }
-  // Fallback: lectura de radio manual
   var sel = document.querySelector('input[name="servicio-lab"]:checked');
-  return sel ? sel.value : null;
+  if(sel) return sel.value;
+  // FEAT-TURNO-AUTO (spec 22): radios ocultos/sin marcar → turno automático
+  // por hora de cierre (Mañana fin 16:30 · Tarde fin 19:30/21:15).
+  // lockLabTurnoIfCajaToday sigue teniendo prioridad (marca el radio).
+  if(typeof autoAssignTurno === 'function' && currentUser){
+    var a = autoAssignTurno(currentUser.area, currentUser.puesto);
+    if(a) return a.turno;
+  }
+  return null;
 }
 
 async function getLabOpToday(turno){

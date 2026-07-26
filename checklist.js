@@ -18,14 +18,18 @@ function _chkLsKey(){
   // Turno/servicio actual (Recepción/SYNCROLAB tienen variantes mañana/tarde/noche)
   var srv = '';
   try {
+    // FEAT-TURNO-AUTO (spec 22): radios ocultos para el empleado → fallback
+    // al turno automático (autoAssignTurno, shared.js). Radio marcado manda.
     if(currentUser.area === 'Recepción' && typeof getRecTurnoValue === 'function') srv = getRecTurnoValue() || '';
     else if(typeof _esEntrenador === 'function' && _esEntrenador(currentUser)){
       var re = document.querySelector('input[name="turno-entr"]:checked');
       srv = re ? re.value : '';
+      if(!srv && typeof autoAssignTurno === 'function'){ var aE = autoAssignTurno(currentUser.area, currentUser.puesto); srv = aE ? aE.turno : ''; }
     }
     else if(/syncrolab/i.test(currentUser.area||'')){
       var r = document.querySelector('input[name="servicio-lab"]:checked');
       srv = r ? r.value : '';
+      if(!srv && typeof autoAssignTurno === 'function'){ var aL = autoAssignTurno(currentUser.area, currentUser.puesto); srv = aL ? aL.turno : ''; }
     }
   } catch(e){}
   return 'syncro.chk.' + currentUser.id + '.' + d + '.' + area + (srv ? '.' + srv : '');
@@ -332,9 +336,10 @@ function chkOpen(pendingData){
   var isRec=(currentUser&&(currentUser.area==='Recepción'||currentUser._activeDept==='Recepción'));
   var recTurno=isRec?getRecTurnoValue():'';
   var isLabRec=(currentUser&&/syncrolab/i.test(currentUser.area||''));
-  var labTurno=isLabRec?(function(){var r=document.querySelector('input[name="servicio-lab"]:checked');return r?r.value:'';})():'';
+  // FEAT-TURNO-AUTO (spec 22): radio marcado manda; sin radio → turno auto
+  var labTurno=isLabRec?(function(){var r=document.querySelector('input[name="servicio-lab"]:checked');if(r)return r.value;if(typeof autoAssignTurno==='function'){var a=autoAssignTurno(currentUser.area,currentUser.puesto);if(a)return a.turno;}return '';})():'';
   var isEntr=(typeof _esEntrenador==='function')&&_esEntrenador(currentUser);
-  var entrTurno=isEntr?(function(){var r=document.querySelector('input[name="turno-entr"]:checked');return r?r.value:'Mañana';})():'';
+  var entrTurno=isEntr?(function(){var r=document.querySelector('input[name="turno-entr"]:checked');if(r)return r.value;if(typeof autoAssignTurno==='function'){var a=autoAssignTurno(currentUser.area,currentUser.puesto);if(a)return a.turno;}return 'Mañana';})():'';
   var sections,items;
   if(isEntr){
     if(entrTurno==='Tarde'){sections=CHK_ENTR_TARDE_SECTIONS;items=CHK_ENTR_TARDE_ITEMS;}

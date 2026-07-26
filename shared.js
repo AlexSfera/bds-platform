@@ -211,297 +211,154 @@ window._esFisio      = _esFisio;
 window._deptCatalogo = _deptCatalogo;
 
 // ═══════════════════════════════════════════════════════════════════════
-// FEAT-TURNO-AUTO — Spec 22 (cerrada 2026-07-26)
-// Asignación automática de turno por hora de apertura + área/puesto.
-// El empleado NO elige turno — el sistema lo asigna.
+// FEAT-TURNO-AUTO (spec 22 · docs/context/22_auto_turno_assignment.md)
+// El empleado NO elige turno. Al guardar/cerrar en SYNCRO SHIFT el front
+// asigna un turno TENTATIVO por hora de cierre: fin nominal de turno más
+// cercano (cortes = punto medio automático). La conciliación Bitrix de la
+// 01:00 (api/bitrix-sync.js) es la fuente de verdad FINAL: reasigna
+// turno/servicio con la hora de inicio real de Bitrix (tablas §2 de la
+// spec + solape §3 en Cocina/Sala). Mantener ambos archivos coherentes.
+//   · Admin: override manual libre (con audit TURNO_MANUAL_OVERRIDE).
+//   · Jefe/supervisor: override manual solo Evento/Otro (spec §1.5).
+//   · Administración: excluida — selector manual sin cambios (spec §5.3).
+//   · Atípico: distancia >90 min al fin nominal → AUTO_TURNO_ATIPICO en
+//     audit_log, SIN bloqueo (spec §1.3/§4).
 // ═══════════════════════════════════════════════════════════════════════
+var SERVICE_WINDOWS = { 'Desayuno':['06:30','11:00'], 'Comida':['12:30','16:30'], 'Cena':['19:30','23:30'] };
 
-// Cada entrada: { inicio: 'HH:MM', turno: 'X' } ordenado asc.
-// autoAssignTurno busca el intervalo que contiene la hora actual.
-// ranges: array de [horaDesde, horaHasta, turno]. Horas en minutos (0-1439).
-// Recepción Noche cruza medianoche → se maneja con rango split.
-var TURNO_AUTO_MAP = {
-  'Recepción': [
-    // Mañana 07-15 · Tarde 15-23 · Noche 23-07
-    // Cortes: (07+15)/2=11, (15+23)/2=19, Noche envuelve medianoche
-    [180, 659, 'Mañana'],   // 03:00–10:59
-    [660, 1139, 'Tarde'],   // 11:00–18:59
-    [1140, 1439, 'Noche'],  // 19:00–23:59
-    [0, 179, 'Noche']       // 00:00–02:59  (→ fecha operativa = ayer)
-  ],
-  'Housekeeping': [
-    [0, 659, 'Mañana'],     // 00:00–10:59
-    [660, 1439, 'Tarde']    // 11:00–23:59
-  ],
-  'Mantenimiento': [
-    [0, 659, 'Mañana'],     // 00:00–10:59
-    [660, 1439, 'Tarde']    // 11:00–23:59
-  ],
-  'Recepción SYNCROLAB': [
-    [0, 629, 'Mañana'],     // 00:00–10:29
-    [630, 1439, 'Tarde']    // 10:30–23:59
-  ],
-  'Entrenadores': [
-    [0, 899, 'Mañana'],     // 00:00–14:59
-    [900, 1439, 'Tarde']    // 15:00–23:59
-  ],
-  'Clínica': [
-    [0, 659, 'Mañana'],     // 00:00–10:59
-    [660, 1439, 'Tarde']    // 11:00–23:59
-  ],
-  'Cocina': [
-    // Turno tentativo al abrir; al cerrar → computeServicios
-    [120, 659, 'Mañana'],   // 02:00–10:59
-    [660, 1019, 'Comida'],  // 11:00–16:59
-    [1020, 1439, 'Cena'],   // 17:00–23:59
-    [0, 119, 'Cena']        // 00:00–01:59  (→ fecha operativa = ayer)
-  ],
-  'Sala': [
-    // Turno tentativo al abrir; al cerrar → computeServicios
-    [120, 629, 'Mañana'],   // 02:00–10:29
-    [630, 899, 'Comida'],   // 10:30–14:59
-    [900, 1079, 'Tarde'],   // 15:00–17:59
-    [1080, 1439, 'Cena'],   // 18:00–23:59
-    [0, 119, 'Cena']        // 00:00–01:59  (→ fecha operativa = ayer)
-  ]
-};
-// Friegue usa mismas reglas que Cocina
-TURNO_AUTO_MAP['Friegue'] = TURNO_AUTO_MAP['Cocina'];
-// Alias de área para HK / Limpieza
-TURNO_AUTO_MAP['HK'] = TURNO_AUTO_MAP['Housekeeping'];
-TURNO_AUTO_MAP['Limpieza'] = TURNO_AUTO_MAP['Housekeeping'];
-// Fisioterapeutas = misma regla que Clínica
-TURNO_AUTO_MAP['Fisioterapeutas'] = TURNO_AUTO_MAP['Clínica'];
-
-// Ventanas de servicio confirmadas por CEO (spec 22 §3).
-// Solo aplican a Cocina/Friegue y Sala al CERRAR jornada.
-var SERVICE_WINDOWS = {
-  'Desayuno': [390, 660],   // 06:30–11:00
-  'Comida':   [750, 990],   // 12:30–16:30
-  'Cena':     [1170, 1410]  // 19:30–23:30
+// Fines nominales de turno por departamento (minutos desde 00:00).
+// ayerAntes: si el cierre ocurre antes de ese minuto → fecha operativa = ayer.
+// multi: el valor se guarda como array JSON (formato actual Cocina/Sala).
+// partido: admite dos jornadas el mismo día si el turno asignado difiere.
+var TURNO_CIERRE_MAP = {
+  'Recepción':            { fines: [ {t:'Mañana',fin:900}, {t:'Tarde',fin:1380,ayerAntes:360}, {t:'Noche',fin:420,ayerAntes:660} ] },
+  'Housekeeping':         { fines: [ {t:'Mañana',fin:840}, {t:'Mañana',fin:900}, {t:'Tarde',fin:1320} ] },
+  'Mantenimiento':        { fines: [ {t:'Mañana',fin:900}, {t:'Tarde',fin:1320} ] },
+  'Recepción SYNCROLAB':  { fines: [ {t:'Mañana',fin:990}, {t:'Tarde',fin:1170}, {t:'Tarde',fin:1275} ], partido:true },
+  'Entrenadores':         { fines: [ {t:'Mañana',fin:720}, {t:'Mañana',fin:1020}, {t:'Tarde',fin:1140}, {t:'Tarde',fin:1260} ], partido:true },
+  'Clínica':              { fines: [ {t:'Mañana',fin:720}, {t:'Tarde',fin:1200} ] },
+  'Cocina':               { fines: [ {t:'Mañana',fin:900}, {t:'Comida',fin:960}, {t:'Comida',fin:1020}, {t:'Cena',fin:0,ayerAntes:360}, {t:'Cena',fin:60,ayerAntes:360} ], multi:true, partido:true },
+  'Sala':                 { fines: [ {t:'Mañana',fin:840}, {t:'Comida',fin:900}, {t:'Tarde',fin:1320}, {t:'Tarde',fin:1380}, {t:'Cena',fin:0,ayerAntes:360} ], multi:true, partido:true }
 };
 
-// Departamentos que admiten turno partido (2 shifts/día con turno distinto)
-var TURNO_PARTIDO_DEPTS = ['Cocina', 'Friegue', 'Sala', 'Recepción SYNCROLAB', 'Entrenadores'];
-
-// Inicios nominales por turno para cálculo de atípico
-var TURNO_INICIO_NOMINAL = {
-  'Recepción':           { 'Mañana': 420, 'Tarde': 900, 'Noche': 1380 },
-  'Housekeeping':        { 'Mañana': 390, 'Tarde': 840 },
-  'Mantenimiento':       { 'Mañana': 420, 'Tarde': 840 },
-  'Recepción SYNCROLAB': { 'Mañana': 480, 'Tarde': 690 },
-  'Entrenadores':        { 'Mañana': 480, 'Tarde': 1080 },
-  'Clínica':             { 'Mañana': 480, 'Tarde': 720 },
-  'Cocina':              { 'Mañana': 360, 'Comida': 720, 'Cena': 1200 },
-  'Sala':                { 'Mañana': 390, 'Comida': 720, 'Tarde': 900, 'Cena': 1200 }
-};
-TURNO_INICIO_NOMINAL['Friegue']          = TURNO_INICIO_NOMINAL['Cocina'];
-TURNO_INICIO_NOMINAL['HK']              = TURNO_INICIO_NOMINAL['Housekeeping'];
-TURNO_INICIO_NOMINAL['Limpieza']        = TURNO_INICIO_NOMINAL['Housekeeping'];
-TURNO_INICIO_NOMINAL['Fisioterapeutas'] = TURNO_INICIO_NOMINAL['Clínica'];
-
-/**
- * _hhmm2min('14:30') → 870. Convierte HH:MM a minutos desde medianoche.
- */
-function _hhmm2min(s){
-  var p = String(s).split(':');
-  return (parseInt(p[0],10)||0) * 60 + (parseInt(p[1],10)||0);
+// Trampa 7: Entrenadores/Fisios y Recepción SYNCROLAB comparten area='SYNCROLAB'
+// → detección por puesto (_esEntrenador/_esFisio), nunca por area.
+function _turnoAutoDeptKey(area, puesto){
+  var a = String(area||''), u = { area: a, puesto: puesto||'' };
+  if(a === 'Recepción') return 'Recepción';
+  if(a === 'HK' || a === 'Housekeeping' || a === 'Limpieza') return 'Housekeeping';
+  if(a === 'Mantenimiento') return 'Mantenimiento';
+  if(a === 'Cocina' || a === 'Friegue') return 'Cocina';
+  if(a === 'Sala') return 'Sala';
+  if(/syncrolab|syncro lab/i.test(a)){
+    if(typeof _esEntrenador === 'function' && _esEntrenador(u)) return 'Entrenadores';
+    if(typeof _esFisio === 'function' && _esFisio(u)) return 'Clínica';
+    return 'Recepción SYNCROLAB';
+  }
+  if(/cl[ií]nica|fisio/i.test(a)) return 'Clínica';
+  return null; // Administración y resto → selector manual (excluidos)
 }
 
-/**
- * _toYMDLocal(date) → 'YYYY-MM-DD' sin depender de timezone del sistema.
- */
-function _toYMDLocal(d){
-  var y = d.getFullYear();
-  var m = ('0'+(d.getMonth()+1)).slice(-2);
-  var dd = ('0'+d.getDate()).slice(-2);
-  return y+'-'+m+'-'+dd;
-}
-
-/**
- * autoAssignTurno(area, puesto, dateOpt)
- * Spec 22 §2 — asigna turno + fecha operativa según hora + área/puesto.
- *
- * @param {string} area - area del empleado
- * @param {string} puesto - puesto del empleado (para resolver Entrenadores vs SYNCROLAB)
- * @param {Date}   [dateOpt] - fecha/hora de referencia (default = now)
- * @returns {{ turno: string, fechaOperativa: string, atipico: boolean, distanciaMin: number }}
- */
-function autoAssignTurno(area, puesto, dateOpt) {
-  var now = dateOpt || new Date();
-  var h = now.getHours();
-  var m = now.getMinutes();
-  var minutos = h * 60 + m; // 0-1439
-
-  // Resolver área efectiva (trampa 7: Entrenadores/Fisio/RecSYNCROLAB comparten area='SYNCROLAB')
-  var areaEfectiva = area || '';
-  var puestoStr = puesto || '';
-  if (/^syncrolab$/i.test(areaEfectiva.trim())) {
-    if (_esEntrenador({ area: areaEfectiva, puesto: puestoStr })) {
-      areaEfectiva = 'Entrenadores';
-    } else if (_esFisio({ area: areaEfectiva, puesto: puestoStr })) {
-      areaEfectiva = 'Fisioterapeutas';
-    } else {
-      areaEfectiva = 'Recepción SYNCROLAB';
-    }
-  }
-  // HK alias
-  if (areaEfectiva === 'HK' || areaEfectiva === 'Limpieza') areaEfectiva = 'Housekeeping';
-
-  var ranges = TURNO_AUTO_MAP[areaEfectiva];
-  if (!ranges) {
-    // Área no configurada (Administración, etc.) → sin asignación automática
-    return { turno: '', fechaOperativa: today(), atipico: false, distanciaMin: 0, areaEfectiva: areaEfectiva };
-  }
-
-  // Buscar rango que contiene minutos
-  var turno = '';
-  for (var i = 0; i < ranges.length; i++) {
-    if (minutos >= ranges[i][0] && minutos <= ranges[i][1]) {
-      turno = ranges[i][2];
-      break;
-    }
-  }
-  // Fallback: si no encajó (no debería), asignar el más cercano
-  if (!turno) {
-    var bestDist = 99999;
-    for (var j = 0; j < ranges.length; j++) {
-      var mid = Math.floor((ranges[j][0] + ranges[j][1]) / 2);
-      var dist = Math.abs(minutos - mid);
-      if (dist < bestDist) { bestDist = dist; turno = ranges[j][2]; }
-    }
-  }
-
-  // ── Fecha operativa ────────────────────────────────────────────
-  // Spec 22 §4: cierre 00:00–05:59 de turno abierto ayer → conserva fecha ayer.
-  var fechaOp = _toYMDLocal(now);
-  if (areaEfectiva === 'Recepción' && turno === 'Noche' && h < 3) {
-    // 00:00–02:59 → Noche de ayer
-    var ayerR = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    fechaOp = _toYMDLocal(ayerR);
-  } else if ((areaEfectiva === 'Cocina' || areaEfectiva === 'Friegue') && turno === 'Cena' && h < 2) {
-    var ayerC = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    fechaOp = _toYMDLocal(ayerC);
-  } else if (areaEfectiva === 'Sala' && turno === 'Cena' && h < 2) {
-    var ayerS = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    fechaOp = _toYMDLocal(ayerS);
-  } else if (h < 6 && (turno === 'Tarde' || turno === 'Noche')) {
-    // Regla general spec 22 §4: cualquier cierre 00-05:59 de turno nocturno/tarde → ayer
-    var ayerG = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    fechaOp = _toYMDLocal(ayerG);
-  }
-
-  // ── Atípico ────────────────────────────────────────────────────
-  var distanciaMin = 0;
-  var atipico = false;
-  var nominales = TURNO_INICIO_NOMINAL[areaEfectiva];
-  if (nominales && nominales[turno] !== undefined) {
-    var inicioNominal = nominales[turno];
-    distanciaMin = Math.abs(minutos - inicioNominal);
-    // Manejar wrap around medianoche (ej. Noche 23:00 inicio = 1380, hora actual 01:00 = 60)
-    var distWrap = 1440 - distanciaMin;
-    if (distWrap < distanciaMin) distanciaMin = distWrap;
-    if (distanciaMin > 90) atipico = true;
-  }
-
+// autoAssignTurno(area, puesto[, dateOpt]) →
+//   { turno, fechaOperativa, atipico, distanciaMin, multi, partido,
+//     servicioGuardado, deptKey } | null si el dept no tiene config.
+// NO escribe en audit_log (eso lo hace _doSaveTurno al guardar) para poder
+// usarse en renders/chips sin generar ruido.
+function autoAssignTurno(area, puesto, dateOpt){
+  var key = _turnoAutoDeptKey(area, puesto);
+  if(!key || !TURNO_CIERRE_MAP[key]) return null;
+  var cfg = TURNO_CIERRE_MAP[key];
+  var now = dateOpt ? new Date(dateOpt) : new Date();
+  if(isNaN(now)) now = new Date();
+  var m = now.getHours()*60 + now.getMinutes();
+  var best = null, bestDist = Infinity;
+  cfg.fines.forEach(function(f){
+    var d = Math.abs(m - f.fin); if(d > 720) d = 1440 - d;
+    if(d < bestDist){ bestDist = d; best = f; }
+  });
+  if(!best) return null;
+  // Fecha operativa (spec §4): cierre de madrugada de turno nocturno → ayer
+  var baseD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if(best.ayerAntes != null && m < best.ayerAntes){ baseD.setDate(baseD.getDate()-1); }
   return {
-    turno: turno,
-    fechaOperativa: fechaOp,
-    atipico: atipico,
-    distanciaMin: distanciaMin,
-    areaEfectiva: areaEfectiva
+    turno: best.t,
+    fechaOperativa: toYMD(baseD),
+    distanciaMin: bestDist,
+    atipico: bestDist > 90,
+    multi: !!cfg.multi,
+    partido: !!cfg.partido,
+    servicioGuardado: cfg.multi ? JSON.stringify([best.t]) : best.t,
+    deptKey: key
   };
 }
+
+// computeServicios(horaInicio, horaFin) — spec §3, solo Cocina/Sala.
+// Devuelve array de servicios cuya ventana solapa ≥60 min con el intervalo
+// trabajado (soporta cruce de medianoche), o null si ningún solape ≥60 min
+// (el llamador conserva el turno tentativo). Lo usa la conciliación; queda
+// disponible en el front para correcciones de admin.
+function computeServicios(horaInicio, horaFin){
+  var ini = new Date(horaInicio), fin = new Date(horaFin);
+  if(isNaN(ini) || isNaN(fin) || fin <= ini) return null;
+  function toMin(hm){ var p = String(hm).split(':'); return (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0); }
+  var dayStart = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate()).getTime();
+  var res = [];
+  Object.keys(SERVICE_WINDOWS).forEach(function(s){
+    var w = SERVICE_WINDOWS[s];
+    [0,1].forEach(function(dd){ // ventana en día de inicio y día siguiente
+      var ws = dayStart + (dd*1440 + toMin(w[0]))*60000;
+      var we = dayStart + (dd*1440 + toMin(w[1]))*60000;
+      var ov = Math.min(fin.getTime(), we) - Math.max(ini.getTime(), ws);
+      if(ov >= 3600000 && res.indexOf(s) === -1) res.push(s);
+    });
+  });
+  var order = ['Desayuno','Comida','Cena'];
+  res.sort(function(a,b){ return order.indexOf(a) - order.indexOf(b); });
+  return res.length ? res : null;
+}
+
+// ¿Puede este usuario fijar turno manualmente?
+// (la restricción jefe=solo Evento/Otro se aplica en getServicioValue, caja.js)
+function _turnoAutoManualAllowed(u){
+  u = u || (typeof currentUser !== 'undefined' ? currentUser : null);
+  if(!u) return false;
+  if(u.area === 'Administración') return true;
+  if(typeof isAdmin === 'function' && isAdmin(u)) return true;
+  if(typeof isSupervisor === 'function' && isSupervisor(u)) return true;
+  return false;
+}
+
+// UI spec §4: el selector de turno desaparece para el empleado — chip
+// read-only «Turno: X (asignado automáticamente)». Admin/jefe conservan el
+// selector con nota. Se llama al final de la config del formulario Mi Turno.
+function _applyTurnoAutoUI(){
+  var old = document.getElementById('turno-auto-chip'); if(old) old.remove();
+  if(!currentUser) return;
+  var auto = autoAssignTurno(currentUser.area, currentUser.puesto);
+  if(!auto) return; // dept excluido → selector manual como siempre
+  var manualAllowed = _turnoAutoManualAllowed(currentUser);
+  var isRec = currentUser.area === 'Recepción';
+  var host = isRec ? document.getElementById('rec-turno-block') : document.getElementById('servicio-fg-block');
+  if(!host || !host.parentNode) return;
+  var chip = document.createElement('div');
+  chip.id = 'turno-auto-chip';
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #8b5cf6;border-radius:16px;background:rgba(139,92,246,.08);font-size:13px;font-weight:600;color:#8b5cf6;margin:4px 0 10px;';
+  if(!manualAllowed){
+    chip.innerHTML = '🕐 Turno: ' + auto.turno + ' <span style="font-weight:400;color:var(--text3);">(asignado automáticamente)</span>';
+    ['rec-turno-block','servicio-fg-block'].forEach(function(id){
+      var el = document.getElementById(id); if(el) el.style.display = 'none';
+    });
+  } else {
+    var esAdminU = (typeof isAdmin === 'function' && isAdmin(currentUser));
+    chip.innerHTML = '🕐 Turno auto: ' + auto.turno + ' <span style="font-weight:400;color:var(--text3);">(sin marcar nada se usa el automático'
+      + (esAdminU ? '' : ' · manual solo Evento/Otro') + ')</span>';
+  }
+  host.parentNode.insertBefore(chip, host);
+}
 window.autoAssignTurno = autoAssignTurno;
-
-/**
- * computeServicios(horaInicioStr, horaFinStr)
- * Spec 22 §3 — calcula array de servicios por solape ≥60 min con ventanas.
- * Solo aplica a Cocina/Friegue y Sala.
- *
- * @param {string} horaInicioStr - 'HH:MM' o timestamp ISO
- * @param {string} horaFinStr   - 'HH:MM' o timestamp ISO
- * @returns {string[]} ej. ['Desayuno','Comida'] o ['Cena']
- */
-function computeServicios(horaInicioStr, horaFinStr) {
-  var ini, fin;
-  // Aceptar ISO timestamps o HH:MM
-  if (horaInicioStr && horaInicioStr.indexOf('T') >= 0) {
-    var d1 = new Date(horaInicioStr);
-    ini = d1.getHours() * 60 + d1.getMinutes();
-  } else {
-    ini = _hhmm2min(horaInicioStr);
-  }
-  if (horaFinStr && horaFinStr.indexOf('T') >= 0) {
-    var d2 = new Date(horaFinStr);
-    fin = d2.getHours() * 60 + d2.getMinutes();
-  } else {
-    fin = _hhmm2min(horaFinStr);
-  }
-  // Si cierre cruza medianoche (ej. 20:00-00:30 → fin=30, ini=1200)
-  if (fin <= ini) fin += 1440;
-
-  var result = [];
-  var keys = Object.keys(SERVICE_WINDOWS);
-  for (var i = 0; i < keys.length; i++) {
-    var svc = keys[i];
-    var wStart = SERVICE_WINDOWS[svc][0];
-    var wEnd   = SERVICE_WINDOWS[svc][1];
-    // Calcular solape
-    var oStart = Math.max(ini, wStart);
-    var oEnd   = Math.min(fin, wEnd);
-    if (oEnd - oStart >= 60) {
-      result.push(svc);
-    }
-    // Check también con ventana desplazada +1440 (para intervalos que cruzan medianoche)
-    if (fin > 1440) {
-      var oStart2 = Math.max(ini, wStart + 1440);
-      var oEnd2   = Math.min(fin, wEnd + 1440);
-      if (oEnd2 - oStart2 >= 60 && result.indexOf(svc) === -1) {
-        result.push(svc);
-      }
-    }
-  }
-  return result;
-}
 window.computeServicios = computeServicios;
-
-/**
- * _showTurnoOverrideUI(areaEfectiva)
- * Admin-only: muestra un prompt para cambiar el turno auto-asignado.
- */
-function _showTurnoOverrideUI(areaEfectiva){
-  var opts = [];
-  var ranges = TURNO_AUTO_MAP[areaEfectiva];
-  if(ranges){
-    var seen = {};
-    for(var i=0;i<ranges.length;i++){
-      var t = ranges[i][2];
-      if(!seen[t]){ opts.push(t); seen[t]=1; }
-    }
-  }
-  if(!opts.length) opts = ['Mañana','Tarde'];
-  // Añadir Evento y Otro (spec 22 §1.5)
-  opts.push('Evento','Otro');
-  var msg = 'Turnos disponibles para ' + areaEfectiva + ':\n';
-  opts.forEach(function(o,i){ msg += (i+1) + '. ' + o + '\n'; });
-  msg += '\nIntroduce el nombre del turno:';
-  var chosen = prompt(msg);
-  if(!chosen) return;
-  chosen = chosen.trim();
-  // Validar
-  var valid = false;
-  for(var j=0;j<opts.length;j++){
-    if(opts[j].toLowerCase() === chosen.toLowerCase()){ chosen = opts[j]; valid = true; break; }
-  }
-  if(!valid){ alert('Turno no válido. Opciones: ' + opts.join(', ')); return; }
-  var oi = document.getElementById('turno-auto-override');
-  if(oi) oi.value = chosen;
-  var chip = document.getElementById('turno-auto-chip');
-  if(chip) chip.innerHTML = '🕐 Turno: <strong>' + chosen + '</strong> <span style="font-weight:normal;opacity:.7;">(override admin)</span>';
-  auditLog('TURNO_OVERRIDE', 'admin cambió turno auto a ' + chosen + ' para area=' + areaEfectiva);
-}
-window._showTurnoOverrideUI = _showTurnoOverrideUI;
+window.SERVICE_WINDOWS = SERVICE_WINDOWS;
+window.TURNO_CIERRE_MAP = TURNO_CIERRE_MAP;
 
 // ═══════════════════════════════════════════════════════════════════════
 // GLOBAL STATE
@@ -1417,71 +1274,6 @@ async function initTurnoForm(){
   // Area-specific form config
   var salaBlock = document.getElementById('sala-fields-block');
   var sub = document.getElementById('turno-sub');
-
-  // ── FEAT-TURNO-AUTO: ocultar selectores manuales + mostrar chip read-only ──
-  var _autoInit = autoAssignTurno(currentUser ? currentUser.area : '', currentUser ? currentUser.puesto : '');
-  var _hasAutoTurno = !!_autoInit.turno && !!TURNO_AUTO_MAP[_autoInit.areaEfectiva];
-  // Ensure chip element exists (created once, reused)
-  var _chipTarget = document.getElementById('turno-auto-chip');
-  if(!_chipTarget){
-    var _servBlock = document.getElementById('servicio-fg-block') || document.getElementById('rec-turno-block');
-    if(_servBlock && _servBlock.parentElement){
-      _chipTarget = document.createElement('div');
-      _chipTarget.id = 'turno-auto-chip';
-      _chipTarget.style.cssText = 'display:none;padding:10px 14px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.25);border-radius:8px;font-size:14px;font-weight:500;color:#7c3aed;margin-bottom:12px;';
-      _servBlock.parentElement.insertBefore(_chipTarget, _servBlock);
-    }
-  }
-  // Admin override button
-  var _overrideBtn = document.getElementById('turno-auto-override-btn');
-  if(!_overrideBtn && _chipTarget && currentUser && currentUser.rol === 'admin'){
-    _overrideBtn = document.createElement('button');
-    _overrideBtn.id = 'turno-auto-override-btn';
-    _overrideBtn.className = 'btn btn-sm';
-    _overrideBtn.style.cssText = 'margin-left:8px;font-size:11px;padding:2px 8px;';
-    _overrideBtn.textContent = '✏ Cambiar turno';
-    _overrideBtn.onclick = function(){ _showTurnoOverrideUI(_autoInit.areaEfectiva); };
-    _chipTarget.appendChild(_overrideBtn);
-  }
-  // Hidden input for admin override
-  if(!document.getElementById('turno-auto-override')){
-    var _oi = document.createElement('input');
-    _oi.type = 'hidden'; _oi.id = 'turno-auto-override'; _oi.value = '';
-    document.body.appendChild(_oi);
-  }
-
-  if(_hasAutoTurno){
-    // Ocultar TODOS los selectores manuales
-    ['t-servicio','t-servicio-cocina','t-servicio-multi','t-servicio-hk','t-servicio-lab','t-servicio-adm'].forEach(function(id){
-      var el = document.getElementById(id); if(el) el.style.display = 'none';
-    });
-    var _recBlock = document.getElementById('rec-turno-block');
-    if(_recBlock) _recBlock.style.display = 'none';
-    var _servFgBlock = document.getElementById('servicio-fg-block');
-    if(_servFgBlock) _servFgBlock.style.display = 'none';
-    // Mostrar chip
-    if(_chipTarget){
-      var _turnoLabel = _autoInit.turno;
-      _chipTarget.innerHTML = '🕐 Turno: <strong>' + _turnoLabel + '</strong> <span style="font-weight:normal;opacity:.7;">(asignado automáticamente)</span>';
-      _chipTarget.style.display = 'block';
-      // Admin: re-add override button
-      if(currentUser && currentUser.rol === 'admin'){
-        var _ob2 = document.getElementById('turno-auto-override-btn');
-        if(!_ob2){
-          _ob2 = document.createElement('button');
-          _ob2.id = 'turno-auto-override-btn';
-          _ob2.className = 'btn btn-sm';
-          _ob2.style.cssText = 'margin-left:8px;font-size:11px;padding:2px 8px;';
-          _ob2.textContent = '✏ Cambiar turno';
-          _ob2.onclick = function(){ _showTurnoOverrideUI(_autoInit.areaEfectiva); };
-        }
-        _chipTarget.appendChild(_ob2);
-      }
-    }
-  } else if(_chipTarget){
-    _chipTarget.style.display = 'none';
-  }
-
   var isRecepcionUser = currentUser && currentUser.area === 'Recepción';
   if(isRecepcionUser) {
     if(sub) sub.textContent = 'Recepción Hotel · Balcón de la Sella';
@@ -1500,18 +1292,16 @@ async function initTurnoForm(){
     // Hide the servicio FG label wrapper
     var servLabel = document.querySelector('label[for="t-servicio"]');
     if(servLabel && servLabel.closest('.fg')) servLabel.closest('.fg').style.display='none';
-    // FEAT-TURNO-AUTO: turno selector solo si NO hay auto (fallback legacy / admin override)
+    // Show TURNO selector
     var recTurnoDiv = document.getElementById('rec-turno-block');
-    if(!_hasAutoTurno){
-      if(recTurnoDiv) { recTurnoDiv.style.display='block'; }
-      var _oldLock = document.getElementById('rec-turno-locked-msg');
-      if(_oldLock) _oldLock.remove();
-      document.querySelectorAll('input[name="rec-turno"]').forEach(function(r){ r.checked=false; r.disabled=false; });
-      updateRecTurnoStyle();
-      if(typeof lockRecTurnoIfCajaToday === 'function') lockRecTurnoIfCajaToday();
-    } else if(recTurnoDiv) {
-      recTurnoDiv.style.display='none';
-    }
+    if(recTurnoDiv) { recTurnoDiv.style.display='block'; }
+    // Reset turno radios + limpiar aviso de bloqueo previo
+    var _oldLock = document.getElementById('rec-turno-locked-msg');
+    if(_oldLock) _oldLock.remove();
+    document.querySelectorAll('input[name="rec-turno"]').forEach(function(r){ r.checked=false; r.disabled=false; });
+    updateRecTurnoStyle();
+    // CAJA-V2 · Turno único por persona/día: si ya hizo caja hoy, fijar y bloquear
+    if(typeof lockRecTurnoIfCajaToday === 'function') lockRecTurnoIfCajaToday();
     // Hide responsable selector
     var tResp = document.getElementById('t-responsable');
     if(tResp && tResp.closest('.fg')) tResp.closest('.fg').style.display='none';
@@ -1523,24 +1313,24 @@ async function initTurnoForm(){
     if(mermaSecEl) mermaSecEl.style.display = 'none';
     var sinMermaEl = document.getElementById('sin-merma-block');
     if(sinMermaEl) sinMermaEl.style.display = 'none';
-    // Sala: hide cocina/single select
+    // Sala: show sala multiselect, hide cocina multiselect and single select
     var tservSingleSala = document.getElementById('t-servicio');
     var tservCocinaMs = document.getElementById('t-servicio-cocina');
     if(tservSingleSala) tservSingleSala.style.display = 'none';
     if(tservCocinaMs) tservCocinaMs.style.display = 'none';
     if(sub) sub.textContent = 'Sala · Balcón de la Sella';
-    // FEAT-TURNO-AUTO: Sala manual selector solo si no hay auto
-    if(!_hasAutoTurno){
-      var tservSingle = document.getElementById('t-servicio');
-      var tservMulti = document.getElementById('t-servicio-multi');
-      if(tservSingle) tservSingle.style.display = 'none';
-      if(tservMulti){ tservMulti.style.display = 'flex'; tservMulti.style.flexWrap='wrap'; tservMulti.style.gap='4px'; }
-      var _oldSalaLock = document.getElementById('sala-serv-locked-msg');
-      if(_oldSalaLock) _oldSalaLock.remove();
-      document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){ cb.checked=false; cb.disabled=false; });
-      document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
-      if(typeof lockSalaServIfCajaToday === 'function') lockSalaServIfCajaToday();
-    }
+    // Show multiselect for Sala, hide single select
+    var tservSingle = document.getElementById('t-servicio');
+    var tservMulti = document.getElementById('t-servicio-multi');
+    if(tservSingle) tservSingle.style.display = 'none';
+    if(tservMulti){ tservMulti.style.display = 'flex'; tservMulti.style.flexWrap='wrap'; tservMulti.style.gap='4px'; }
+    // Uncheck all
+    var _oldSalaLock = document.getElementById('sala-serv-locked-msg');
+    if(_oldSalaLock) _oldSalaLock.remove();
+    document.querySelectorAll('input[name="servicio-sala"]').forEach(function(cb){ cb.checked=false; cb.disabled=false; });
+  document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
+    // CAJA-V2 Sala · servicio fijado si ya hizo caja hoy
+    if(typeof lockSalaServIfCajaToday === 'function') lockSalaServIfCajaToday();
     // Default gestion/incidencia to 'no' for clean start
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
@@ -1558,22 +1348,22 @@ async function initTurnoForm(){
     });
     var recTurnoLab = document.getElementById('rec-turno-block');
     if(recTurnoLab) recTurnoLab.style.display = 'none';
-    // FEAT-TURNO-AUTO: selector manual solo si no hay auto
-    if(!_hasAutoTurno){
-      var tservLab = document.getElementById('t-servicio-lab');
-      if(tservLab){ tservLab.style.display = 'flex'; tservLab.style.flexWrap = 'wrap'; }
-      var lblLab = document.getElementById('t-servicio-label');
-      if(lblLab) lblLab.innerHTML = 'Turno <span class="req">*</span>';
-      var servBlockLab = document.getElementById('servicio-fg-block');
-      if(servBlockLab) servBlockLab.style.display = 'block';
-      var _oldLabLock = document.getElementById('lab-turno-locked-msg');
-      if(_oldLabLock) _oldLabLock.remove();
-      document.querySelectorAll('input[name="servicio-lab"]').forEach(function(r){ r.checked=false; r.disabled=false; });
-      if(typeof lockLabTurnoIfCajaToday === 'function') lockLabTurnoIfCajaToday();
-    }
+    // Mostrar selector SYNCROLAB (Mañana/Tarde)
+    var tservLab = document.getElementById('t-servicio-lab');
+    if(tservLab){ tservLab.style.display = 'flex'; tservLab.style.flexWrap = 'wrap'; }
+    var lblLab = document.getElementById('t-servicio-label');
+    if(lblLab) lblLab.innerHTML = 'Turno <span class="req">*</span>';
+    var servBlockLab = document.getElementById('servicio-fg-block');
+    if(servBlockLab) servBlockLab.style.display = 'block';
+    // Reset + limpiar aviso de bloqueo previo
+    var _oldLabLock = document.getElementById('lab-turno-locked-msg');
+    if(_oldLabLock) _oldLabLock.remove();
+    document.querySelectorAll('input[name="servicio-lab"]').forEach(function(r){ r.checked=false; r.disabled=false; });
     // Ocultar responsable — SYNCROLAB no usa responsable de turno
     var tRespLab = document.getElementById('t-responsable');
     if(tRespLab && tRespLab.closest('.fg')) tRespLab.closest('.fg').style.display = 'none';
+    // CAJA-V2 SYNCROLAB · turno fijado si ya hizo caja hoy
+    if(typeof lockLabTurnoIfCajaToday === 'function') lockLabTurnoIfCajaToday();
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   } else if(currentUser && (currentUser.area === 'HK' || currentUser.area === 'Housekeeping' || currentUser.area === 'Limpieza')) {
@@ -1593,15 +1383,15 @@ async function initTurnoForm(){
     if(tservSingleHK) tservSingleHK.style.display = 'none';
     if(tservCocinaHK) tservCocinaHK.style.display = 'none';
     if(tservSalaHK) tservSalaHK.style.display = 'none';
-    // FEAT-TURNO-AUTO: manual HK selector solo si no hay auto
-    if(!_hasAutoTurno){
-      if(tservHK) { tservHK.style.display = 'flex'; tservHK.style.flexWrap = 'wrap'; }
-      var lblHK = document.getElementById('t-servicio-label');
-      if(lblHK) lblHK.innerHTML = 'Turno <span class="req">*</span>';
-      var servBlockHK = document.getElementById('servicio-fg-block');
-      if(servBlockHK) servBlockHK.style.display = 'block';
-      document.querySelectorAll('input[name="servicio-hk"]').forEach(function(r){ r.checked = false; });
-    }
+    if(tservHK) { tservHK.style.display = 'flex'; tservHK.style.flexWrap = 'wrap'; }
+    // Label "Turno" en lugar de "Servicio"
+    var lblHK = document.getElementById('t-servicio-label');
+    if(lblHK) lblHK.innerHTML = 'Turno <span class="req">*</span>';
+    // Mostrar servicio block
+    var servBlockHK = document.getElementById('servicio-fg-block');
+    if(servBlockHK) servBlockHK.style.display = 'block';
+    // Reset radios
+    document.querySelectorAll('input[name="servicio-hk"]').forEach(function(r){ r.checked = false; });
     // Mostrar responsable
     var tRespHK = document.getElementById('t-responsable');
     if(tRespHK && tRespHK.parentElement) tRespHK.parentElement.style.display = 'block';
@@ -1642,31 +1432,38 @@ async function initTurnoForm(){
   } else {
     if(salaBlock) salaBlock.style.display = 'none';
     if(sub) sub.textContent = 'Cocina · Balcón de la Sella';
+    // Show single select for Cocina
+    var tservSingle2 = document.getElementById('t-servicio');
+    var tservMulti2 = document.getElementById('t-servicio-multi');
+    if(tservSingle2) tservSingle2.style.display = 'block';
+    if(tservMulti2) tservMulti2.style.display = 'none';
     var mermaSecEl2 = document.getElementById('merma-section');
     if(mermaSecEl2) mermaSecEl2.style.display = 'block';
     var sinMermaEl2 = document.getElementById('sin-merma-block');
     if(sinMermaEl2) sinMermaEl2.style.display = 'block';
-    // FEAT-TURNO-AUTO: Cocina manual selector solo si no hay auto
-    if(!_hasAutoTurno){
-      var servFgBlockCoc = document.getElementById('servicio-fg-block');
-      if(servFgBlockCoc) servFgBlockCoc.style.display = 'block';
-      var tservSingleCoc = document.getElementById('t-servicio');
-      var cocinaMulti = document.getElementById('t-servicio-cocina');
-      var salaMultiHide = document.getElementById('t-servicio-multi');
-      if(tservSingleCoc) tservSingleCoc.style.display = 'none';
-      if(cocinaMulti){ cocinaMulti.style.display='flex'; }
-      if(salaMultiHide) salaMultiHide.style.display = 'none';
-      document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
-    }
+    // Show servicio block for Cocina
+    var servFgBlockCoc = document.getElementById('servicio-fg-block');
+    if(servFgBlockCoc) servFgBlockCoc.style.display = 'block';
+    // Cocina: show cocina multiselect, hide sala multiselect and single select
+    var tservSingleCoc = document.getElementById('t-servicio');
+    var cocinaMulti = document.getElementById('t-servicio-cocina');
+    var salaMultiHide = document.getElementById('t-servicio-multi');
+    if(tservSingleCoc) tservSingleCoc.style.display = 'none';
+    if(cocinaMulti){ cocinaMulti.style.display='flex'; }
+    if(salaMultiHide) salaMultiHide.style.display = 'none';
     // Show responsable
     var tResp2 = document.getElementById('t-responsable');
     if(tResp2 && tResp2.parentElement) tResp2.parentElement.style.display='block';
     // Hide rec-turno-block
     var recTurnoDivCoc = document.getElementById('rec-turno-block');
     if(recTurnoDivCoc) recTurnoDivCoc.style.display='none';
+    // Uncheck all
+    document.querySelectorAll('input[name="servicio-cocina"]').forEach(function(cb){ cb.checked=false; });
     if(!editingShiftId && !toggleState.gestion) setT('gestion','no');
     if(!editingShiftId && !toggleState.incidencia) setT('incidencia','no');
   }
+  // FEAT-TURNO-AUTO (spec 22 §4): oculta selector para empleados + chip auto
+  if(typeof _applyTurnoAutoUI === 'function') _applyTurnoAutoUI();
   renderCorrectionsPend();
   renderMisTurnos();
   updMermaStatus();
@@ -1675,6 +1472,7 @@ async function initTurnoForm(){
 function clearTurnoForm(){
   clearSalaFields();
   editingShiftId=null;
+  window._editingShiftServicioOriginal = ''; // FEAT-TURNO-AUTO
   const modeEl=document.getElementById('turno-form-mode'); if(modeEl) modeEl.textContent='NUEVO';
   const saveBtn=document.getElementById('btn-save-turno'); if(saveBtn) saveBtn.textContent='💾 Guardar Turno';
   ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
@@ -1682,18 +1480,23 @@ function clearTurnoForm(){
     if(el.tagName==='SELECT') el.value=''; else el.value=el.type==='date'?today():'';
   });
   const fechaInput = document.getElementById('t-fecha');
-  // FEAT-TURNO-AUTO: fecha operativa calculada por autoAssignTurno (centralizada)
-  var _autoFecha = autoAssignTurno(currentUser ? currentUser.area : '', currentUser ? currentUser.puesto : '');
-  var _fechaTurno = _autoFecha.fechaOperativa || today();
-  if(fechaInput) fechaInput.value=_fechaTurno;
-  // Mostrar chip de turno auto-asignado
-  var _chipEl = document.getElementById('turno-auto-chip');
-  if(_chipEl && _autoFecha.turno) {
-    _chipEl.textContent = 'Turno: ' + _autoFecha.turno + ' (asignado automáticamente)';
-    _chipEl.style.display = 'inline-block';
-  } else if(_chipEl && !_autoFecha.turno) {
-    _chipEl.style.display = 'none';
+  // FIX-CENA-MEDIANOCHE: turnos nocturnos que cruzan medianoche usan fecha = ayer
+  // Sala: Cena hasta las 2 AM · Recepción: Noche hasta las 7 AM
+  // FEAT-TURNO-AUTO (spec 22 §4): fecha operativa delegada en autoAssignTurno
+  // (una sola versión de la regla). Fallback = lógica previa si no hay config.
+  var _fechaTurno = today();
+  var _autoFT = (typeof autoAssignTurno === 'function' && currentUser) ? autoAssignTurno(currentUser.area, currentUser.puesto) : null;
+  if(_autoFT){
+    _fechaTurno = _autoFT.fechaOperativa;
+  } else {
+    var _hNow = (new Date()).getHours();
+    var _areaNow = currentUser ? String(currentUser.area||'') : '';
+    if((_areaNow === 'Sala' && _hNow < 2) || (_areaNow === 'Recepción' && _hNow < 7)){
+      var _ayerD = getDateOnly(new Date()); _ayerD.setDate(_ayerD.getDate()-1);
+      _fechaTurno = toYMD(_ayerD);
+    }
   }
+  if(fechaInput) fechaInput.value=_fechaTurno;
   // Fix Jun 2026: bloquear fecha para todos salvo admin (antes solo empleado).
   var _esAdminCF = currentUser && currentUser.rol === 'admin';
   if(fechaInput && !_esAdminCF && !editingShiftId){
@@ -1741,6 +1544,9 @@ async function loadForCorrection(shiftId){
   // autocompleta con hoy para que el empleado pueda corregir.
   document.getElementById('t-fecha').value = s.fecha || today();
   document.getElementById('t-servicio').value=s.servicio;
+  // FEAT-TURNO-AUTO: en corrección se conserva el servicio original del shift
+  // (getServicioValue lo usa si el selector está oculto/vacío)
+  window._editingShiftServicioOriginal = s.servicio || '';
   var _elHoras = document.getElementById('t-horas'); if(_elHoras) _elHoras.value=s.horas;
   document.getElementById('t-responsable').value=s.responsable_id||'';
   var _elObs = document.getElementById('t-obs'); if(_elObs) _elObs.value=s.observacion||'';
@@ -1765,57 +1571,32 @@ async function loadForCorrection(shiftId){
 // del turno, se vuelcan las horas al turno manual recién creado.
 
 function saveTurno(){
-  // Step 1: validate the form
+  // Step 1: validate the form first (reuse validation logic)
   const alertArea=document.getElementById('turno-alert-area'); alertArea.innerHTML='';
   const errs=[];
+  const fecha=document.getElementById('t-fecha').value;
   var _isRecepcion = currentUser && currentUser.area === 'Recepción';
-
-  // ── FEAT-TURNO-AUTO: turno + fecha operativa automáticos ──────────
-  var _autoResult = autoAssignTurno(currentUser.area, currentUser.puesto);
-  var _autoTurno = _autoResult.turno;
-  var _fechaOpSave = _autoResult.fechaOperativa;
-  // Admin puede editar turno manualmente → leer override si existe
-  var _adminOverride = document.getElementById('turno-auto-override');
-  if(_adminOverride && _adminOverride.value && currentUser.rol === 'admin'){
-    _autoTurno = _adminOverride.value;
-  }
-  // Para Cocina/Sala: al ABRIR guardamos turno tentativo; servicios se recalculan al cerrar
-  // Para el resto: turno definitivo
-  var servicio;
-  var _areaEf = _autoResult.areaEfectiva;
-  if(_areaEf === 'Cocina' || _areaEf === 'Friegue' || _areaEf === 'Sala'){
-    // Turno tentativo como string (será array de servicios al cerrar)
-    servicio = _autoTurno;
-  } else {
-    servicio = _autoTurno;
-  }
-  // Guardar resultado auto en window para que _doSaveTurno lo recoja
-  window._turnoAutoResult = { turno: _autoTurno, fechaOperativa: _fechaOpSave, servicio: servicio, atipico: _autoResult.atipico, distanciaMin: _autoResult.distanciaMin, areaEfectiva: _areaEf };
-
-  // Fecha: auto-asignada, no editable (admin usa el campo manual si lo tiene)
-  var fecha = _fechaOpSave;
-  var fechaInput = document.getElementById('t-fecha');
-  if(fechaInput) fecha = fechaInput.value || _fechaOpSave;
-
-  // Date lock: employees can only register today's operational date
+  // Date lock: employees can only register today (unless correcting)
+  // FEAT-TURNO-AUTO (spec 22 §4): fecha operativa delegada en autoAssignTurno.
+  var _fechaOpSave = today();
+  var _autoOpSave = (typeof autoAssignTurno === 'function' && currentUser) ? autoAssignTurno(currentUser.area, currentUser.puesto) : null;
+  if(_autoOpSave){ _fechaOpSave = _autoOpSave.fechaOperativa; }
+  else { var _hSave = (new Date()).getHours(); var _aSave = currentUser ? String(currentUser.area||'') : ''; if((_aSave === 'Sala' && _hSave < 2) || (_aSave === 'Recepción' && _hSave < 7)){ var _aySave = getDateOnly(new Date()); _aySave.setDate(_aySave.getDate()-1); _fechaOpSave = toYMD(_aySave); } }
   if(currentUser.rol==='empleado' && !editingShiftId && fecha !== today() && fecha !== _fechaOpSave){
     alertArea.innerHTML='<div class="alert a-err">⚠ Solo puedes registrar el turno de hoy.</div>';
     return;
   }
-
-  // Turno auto — validación de servicio solo si área no mapeada
-  if(!_autoTurno && !TURNO_AUTO_MAP[_areaEf]){
-    // Área sin auto-asignación (Administración): usar selector manual legacy
-    servicio = getServicioValue();
-    window._turnoAutoResult.servicio = servicio;
-    window._turnoAutoResult.turno = servicio;
-    if(!servicio||servicio==='[]'||servicio==='') errs.push('Turno obligatorio');
-  }
-
+  const servicio=getServicioValue();
   // Horas: campo eliminado — pendiente integración Bitrix24 fichaje
   var _usaResp = _deptUsaResponsable(currentUser && currentUser.area);
   const resp = _usaResp ? document.getElementById('t-responsable').value : 'ok';
   if(!fecha) errs.push('Fecha obligatoria');
+  // Servicio/Turno validation — Recepción uses rec-turno radio, not servicio
+  if(_isRecepcion){
+    if(!servicio) errs.push('Selecciona turno: Mañana, Tarde o Noche');
+  } else {
+    if(!servicio||servicio==='[]'||servicio==='') errs.push('Turno obligatorio');
+  }
   // Responsable: solo obligatorio para Sala, Cocina, Housekeeping
   if(_usaResp && !resp){
     errs.push('Responsable de turno obligatorio');
@@ -1852,12 +1633,6 @@ function saveTurno(){
     alertArea.innerHTML='<div class="alert a-err">⚠ '+errs.join(' · ')+'</div>';
     return;
   }
-
-  // ── FEAT-TURNO-AUTO: audit atípico ────────────────────────────────
-  if(_autoResult.atipico){
-    auditLog('AUTO_TURNO_ATIPICO', 'area=' + _areaEf + ' turno=' + _autoTurno + ' distancia=' + _autoResult.distanciaMin + 'min');
-  }
-
   // Step 2: for Sala open Ajustes first, for Cocina go straight to checklist
   if(currentUser && currentUser.area === 'Sala') {
     openAjustesModal();
@@ -1877,11 +1652,25 @@ async function _doSaveTurno() {
   var shiftId = editingShiftId || genId();
 
   // ── Recoger datos del formulario ────────────────────────────────────
-  // FEAT-TURNO-AUTO: usar resultado auto-asignado de saveTurno (o legacy para Administración)
-  var _autoR = window._turnoAutoResult || {};
-  var fecha    = _autoR.fechaOperativa || document.getElementById('t-fecha').value || today();
-  var servicio = _autoR.servicio || getServicioValue();
+  var fecha    = document.getElementById('t-fecha').value || today();
+  var servicio = getServicioValue();
   var isRecepcion = currentUser && currentUser.area === 'Recepción';
+
+  // ── FEAT-TURNO-AUTO (spec 22 §4): doble declaración mismo día ─────────
+  // Mismo turno → reutiliza el registro existente (no duplica).
+  // Turno distinto → shift nuevo (turno partido: Cocina/Sala/Rec.LAB/Entren.).
+  var _autoTA = (typeof autoAssignTurno === 'function' && currentUser) ? autoAssignTurno(currentUser.area, currentUser.puesto) : null;
+  if (!isEditing) {
+    try {
+      var _prevShifts = await getDB('shifts');
+      var _dup = _prevShifts.find(function(s){
+        return s && s.employee_id === currentUser.id && s.fecha === fecha
+          && String(s.servicio||'') === String(servicio||'')
+          && s.estado !== 'Validado';
+      });
+      if (_dup) { isEditing = true; shiftId = _dup.id; editingShiftId = _dup.id; }
+    } catch(e) { /* sin bloqueo */ }
+  }
   var _usaRespSave = _deptUsaResponsable(currentUser && currentUser.area);
   var resp     = _usaRespSave ? (document.getElementById('t-responsable').value || '') : '';
   var obsEl    = document.getElementById('t-obs');
@@ -1944,6 +1733,17 @@ async function _doSaveTurno() {
 
   window._lastSavedShiftId = shiftId;
   invalidateCache('shifts');
+
+  // ── FEAT-TURNO-AUTO: auditoría (spec 22 §4) ─────────────────────────
+  if (_autoTA && typeof auditLog === 'function') {
+    var _hSaveStr = new Date().toTimeString().slice(0,5);
+    if (String(servicio||'') !== String(_autoTA.servicioGuardado||'')) {
+      // Solo posible para admin/jefe/Administración — el empleado siempre guarda el auto
+      auditLog('TURNO_MANUAL_OVERRIDE', currentUser.nombre + ' (' + (currentUser.rol||'') + ') guardó turno manual "' + servicio + '" ≠ auto "' + _autoTA.servicioGuardado + '" · ' + (currentUser.area||'') + ' · ' + _hSaveStr + ' · shift ' + shiftId);
+    } else if (_autoTA.atipico) {
+      auditLog('AUTO_TURNO_ATIPICO', currentUser.nombre + ' · ' + (_autoTA.deptKey||currentUser.area||'') + ' · cierre ' + _hSaveStr + ' · turno asignado ' + _autoTA.turno + ' · distancia ' + _autoTA.distanciaMin + ' min al fin nominal · shift ' + shiftId);
+    }
+  }
 
   // ── Merma ───────────────────────────────────────────────────────────
   if (!sinMermaFlag && mermaRows.length > 0) {

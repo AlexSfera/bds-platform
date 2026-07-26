@@ -256,12 +256,16 @@ function _recFechaOperativa(turno){
 }
 
 function getRecTurnoValue() {
-  // FEAT-TURNO-AUTO: priorizar turno auto-asignado
-  if(window._turnoAutoResult && window._turnoAutoResult.turno && window._turnoAutoResult.areaEfectiva === 'Recepción'){
-    return window._turnoAutoResult.turno;
-  }
   var sel = document.querySelector('input[name="rec-turno"]:checked');
-  return sel ? sel.value : '';
+  if(sel) return sel.value;
+  // FEAT-TURNO-AUTO (spec 22): radios ocultos/sin marcar → turno automático
+  // por hora de cierre. lockRecTurnoIfCajaToday sigue teniendo prioridad
+  // (marca el radio → se lee arriba).
+  if(typeof autoAssignTurno === 'function' && currentUser && currentUser.area === 'Recepción'){
+    var a = autoAssignTurno('Recepción', currentUser.puesto);
+    if(a) return a.turno;
+  }
+  return '';
 }
 
 function updateRecTurnoStyle() {
@@ -1336,10 +1340,8 @@ async function getRecOpToday(turno) {
 }
 
 function openRecCajaChoice() {
-  // FEAT-TURNO-AUTO: turno heredado de auto-asignación, luego fallback a radio
-  _recTipoTurno = (window._turnoAutoResult && window._turnoAutoResult.areaEfectiva === 'Recepción')
-    ? window._turnoAutoResult.turno
-    : (getRecTurnoValue() || null);
+  // FIX UX: el turno se hereda de Mi Turno (radio rec-turno). NO se elige dos veces.
+  _recTipoTurno = getRecTurnoValue() || null;
 
   var fixedBox = document.getElementById('rec-tipo-turno-fixed');
   var pickBox  = document.getElementById('rec-tipo-turno-pick');
@@ -1684,11 +1686,13 @@ async function submitRecTraspaso() {
   // Una operación por turno y día (creación · admin exento)
   if(!_recTraspasoEditId && currentUser.rol !== 'admin'){
     // FIX-TURNO-HORA (spec 22): coherencia turno ↔ hora real.
-    // NOTA: redundante cuando turno es auto-asignado — se mantiene como cinturón.
-    // Si el turno vino de autoAssignTurno, saltar esta guardia.
-    var _turnoEsAuto = !!(window._turnoAutoResult && window._turnoAutoResult.turno && window._turnoAutoResult.areaEfectiva === 'Recepción');
+    // Caso 24-jul: traspaso de Mañana registrado como Tarde a las 14:46
+    // ocupó el slot de Tarde y bloqueó la caja real del turno.
+    // FEAT-TURNO-AUTO: la coherencia se valida contra el turno automático
+    // (misma regla que asigna — cinturón por si un radio quedó marcado a mano).
     var _hNow = new Date().getHours();
-    var _horaOk = _turnoEsAuto ? true
+    var _autoG = (typeof autoAssignTurno === 'function') ? autoAssignTurno('Recepción', currentUser.puesto) : null;
+    var _horaOk = _autoG ? (turno === _autoG.turno)
                 : (turno === 'Mañana') ? (_hNow >= 11 && _hNow < 17)
                 : (turno === 'Tarde')  ? (_hNow >= 20 || _hNow < 6)
                 : true;
@@ -1709,12 +1713,8 @@ async function submitRecTraspaso() {
   }
 
   var ts    = localTs();
-  // FEAT-TURNO-AUTO: fecha operativa del turno auto si disponible
-  var _autoFechaRec = (window._turnoAutoResult && window._turnoAutoResult.areaEfectiva === 'Recepción')
-    ? window._turnoAutoResult.fechaOperativa : null;
-  var fecha = _autoFechaRec
-    || (document.getElementById('t-fecha') && document.getElementById('t-fecha').value
-        ? document.getElementById('t-fecha').value : _recFechaOperativa(turno));
+  var fecha = document.getElementById('t-fecha') && document.getElementById('t-fecha').value
+            ? document.getElementById('t-fecha').value : _recFechaOperativa(turno);
 
   var record = {
     id:                      _recTraspasoEditId || genId(),

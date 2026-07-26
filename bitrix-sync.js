@@ -99,6 +99,117 @@ function toMadridParts(isoStr) {
   };
 }
 
+// ═══ FEAT-TURNO-AUTO v4 (spec 22 · docs/context/22_auto_turno_assignment.md) ═══
+// La conciliación es la FUENTE DE VERDAD FINAL de turno/servicio: asigna por
+// hora de APERTURA real de Bitrix según las tablas §2 (por departamento) y,
+// en Cocina/Sala, recalcula el array de servicios por solape §3 con el
+// intervalo trabajado. El front (shared.js autoAssignTurno) solo pone un
+// tentativo por hora de cierre — mantener ambos archivos coherentes.
+
+const SERVICE_WINDOWS = { 'Desayuno': [390, 660], 'Comida': [750, 990], 'Cena': [1170, 1410] }; // min desde 00:00
+
+// Copia servidor de la detección de departamento del front (shared.js).
+// Trampa 7: Entrenadores/Fisios y Recepción SYNCROLAB comparten area='SYNCROLAB'
+// → detectar por puesto, nunca por area.
+const PUESTOS_ENTRENADOR = ['Entrenador(a)', 'Coordinador(a) de Entrenadores'];
+const PUESTOS_FISIO      = ['Fisioterapeuta', 'Coordinador(a) de Fisioterapeutas'];
+function turnoDeptKey(area, puesto) {
+  const a = String(area || ''), p = String(puesto || '');
+  if (a === 'Recepción') return 'Recepción';
+  if (a === 'HK' || a === 'Housekeeping' || a === 'Limpieza') return 'Housekeeping';
+  if (a === 'Mantenimiento') return 'Mantenimiento';
+  if (a === 'Cocina' || a === 'Friegue') return 'Cocina';
+  if (a === 'Sala') return 'Sala';
+  if (/syncrolab|syncro lab/i.test(a)) {
+    if (PUESTOS_ENTRENADOR.indexOf(p) !== -1) return 'Entrenadores';
+    if (PUESTOS_FISIO.indexOf(p) !== -1) return 'Clínica';
+    return 'Recepción SYNCROLAB';
+  }
+  if (/cl[ií]nica|fisio/i.test(a)) return 'Clínica';
+  return null; // Administración y resto → no se toca (spec §5.3)
+}
+
+// Tablas §2: rangos de hora de APERTURA (min desde 00:00, [desde, hasta) con
+// wrap circular) → turno. inicios = inicios nominales para el umbral atípico
+// (>90 min, spec §4). ayerSiAperturaAntes: apertura de madrugada → fecha ayer.
+const TURNO_APERTURA_MAP = {
+  'Recepción': {
+    rangos: [ { d: 180, h: 660, t: 'Mañana' }, { d: 660, h: 1140, t: 'Tarde' }, { d: 1140, h: 180, t: 'Noche', ayerSiAperturaAntes: 180 } ],
+    inicios: [420, 900, 1380]
+  },
+  'Housekeeping':        { rangos: [ { d: 0, h: 660, t: 'Mañana' }, { d: 660, h: 1440, t: 'Tarde' } ], inicios: [360, 420, 840] },
+  'Mantenimiento':       { rangos: [ { d: 0, h: 660, t: 'Mañana' }, { d: 660, h: 1440, t: 'Tarde' } ], inicios: [420, 840] },
+  'Recepción SYNCROLAB': { rangos: [ { d: 0, h: 630, t: 'Mañana' }, { d: 630, h: 1440, t: 'Tarde' } ], inicios: [480, 510, 690, 795] },
+  'Entrenadores':        { rangos: [ { d: 0, h: 900, t: 'Mañana' }, { d: 900, h: 1440, t: 'Tarde' } ], inicios: [480, 540, 1020, 1080] },
+  'Clínica':             { rangos: [ { d: 0, h: 660, t: 'Mañana' }, { d: 660, h: 1440, t: 'Tarde' } ], inicios: [480, 720] },
+  'Cocina': {
+    rangos: [ { d: 120, h: 660, t: 'Mañana' }, { d: 660, h: 1020, t: 'Comida' }, { d: 1020, h: 120, t: 'Cena' } ],
+    inicios: [360, 540, 720, 1200], multi: true
+  },
+  'Sala': {
+    rangos: [ { d: 120, h: 630, t: 'Mañana' }, { d: 630, h: 900, t: 'Comida' }, { d: 900, h: 1080, t: 'Tarde' }, { d: 1080, h: 120, t: 'Cena' } ],
+    inicios: [360, 420, 660, 720, 780, 900, 1200], multi: true
+  }
+};
+
+function enRango(m, r) { // rango circular [d, h)
+  return r.d <= r.h ? (m >= r.d && m < r.h) : (m >= r.d || m < r.h);
+}
+
+// Asignación §2 por hora de apertura. endIso opcional → solape §3 (Cocina/Sala).
+// Devuelve null si el departamento no está en la config.
+function asignarTurnoSpec22(area, puesto, startIso, endIso) {
+  const key = turnoDeptKey(area, puesto);
+  if (!key || !TURNO_APERTURA_MAP[key]) return null;
+  const cfg = TURNO_APERTURA_MAP[key];
+  const { fechaMadrid, horaMadrid, minMadrid } = toMadridParts(startIso);
+  const m = horaMadrid * 60 + minMadrid;
+  const rango = cfg.rangos.find(r => enRango(m, r));
+  if (!rango) return null;
+  // Fecha operativa = día de inicio; Recepción Noche 00:00–02:59 → ayer (spec §2)
+  let fecha = fechaMadrid;
+  if (rango.ayerSiAperturaAntes != null && m < rango.ayerSiAperturaAntes) {
+    const [y, mo, d] = fechaMadrid.split('-').map(Number);
+    const prev = new Date(Date.UTC(y, mo - 1, d)); prev.setUTCDate(prev.getUTCDate() - 1);
+    fecha = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, '0')}-${String(prev.getUTCDate()).padStart(2, '0')}`;
+  }
+  // Atípico: distancia al inicio nominal más cercano >90 min (spec §4)
+  let dist = Infinity;
+  cfg.inicios.forEach(ini => { let dd = Math.abs(m - ini); if (dd > 720) dd = 1440 - dd; if (dd < dist) dist = dd; });
+  // Cocina/Sala: array final por solape ≥60 min (spec §3); sin solape → tentativo
+  let servicio = rango.t;
+  if (cfg.multi) {
+    const arr = computeServiciosSolape(startIso, endIso);
+    servicio = JSON.stringify(arr && arr.length ? arr : [rango.t]);
+  }
+  return { turno: rango.t, servicio, fecha, atipico: dist > 90, distanciaMin: dist, deptKey: key, multi: !!cfg.multi };
+}
+
+// Solape §3: servicios cuya ventana solapa ≥60 min con [start, end] (hora Madrid,
+// soporta cruce de medianoche). Devuelve array ordenado o null.
+function computeServiciosSolape(startIso, endIso) {
+  if (!startIso || !endIso) return null;
+  const s = toMadridParts(startIso), e = toMadridParts(endIso);
+  const ini = s.horaMadrid * 60 + s.minMadrid;
+  let fin = e.horaMadrid * 60 + e.minMadrid;
+  let dias = 0;
+  if (e.fechaMadrid !== s.fechaMadrid) { dias = Math.round((new Date(e.fechaMadrid) - new Date(s.fechaMadrid)) / 86400000); }
+  fin += dias * 1440;
+  if (fin <= ini) return null;
+  const res = [];
+  Object.keys(SERVICE_WINDOWS).forEach(sv => {
+    const w = SERVICE_WINDOWS[sv];
+    for (let dd = 0; dd <= Math.ceil(dias); dd++) {
+      const ov = Math.min(fin, w[1] + dd * 1440) - Math.max(ini, w[0] + dd * 1440);
+      if (ov >= 60 && res.indexOf(sv) === -1) res.push(sv);
+    }
+  });
+  const order = ['Desayuno', 'Comida', 'Cena'];
+  res.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  return res.length ? res : null;
+}
+
+// Fallback legacy (empleado sin area/puesto reconocible) — v3.
 function deducirServicioYFecha(isoStr) {
   const { fechaMadrid, horaMadrid } = toMadridParts(isoStr);
   if (horaMadrid >= 5 && horaMadrid < 15) return { servicio: 'Mañana', fecha: fechaMadrid };
@@ -295,6 +406,17 @@ async function paseAsociacion(fechaObjetivo, DRY_RUN) {
       }, 0);
       if (!cierreBx || totalSeg <= 0) { stillPending += g.recs.length; continue; }
 
+      // FEAT-TURNO-AUTO v4: datos del empleado + asignación §2/§3 con el
+      // intervalo real Bitrix (apertura del primer tramo → cierre del último)
+      const empRows = await sb('GET',
+        'employees?id=eq.' + encodeURIComponent(g.employee_id)
+        + '&select=id,nombre,area,puesto&limit=1'
+      );
+      const emp = (empRows && empRows.length) ? empRows[0] : null;
+      const inicioBx = g.recs[0].start_ts;
+      const finBxTs  = g.recs[g.recs.length - 1].end_ts;
+      const asig = emp ? asignarTurnoSpec22(emp.area, emp.puesto, inicioBx, finBxTs) : null;
+
       // Turnos MANUALES del empleado en fecha ±1 día
       const fDesde = ymdShift(g.fecha, -1);
       const fHasta = ymdShift(g.fecha, 1);
@@ -319,9 +441,19 @@ async function paseAsociacion(fechaObjetivo, DRY_RUN) {
 
       if (candidatos.length === 1) {
         const s = candidatos[0];
+        // FEAT-TURNO-AUTO v4: la conciliación reasigna turno/servicio (fuente
+        // de verdad final, spec 22) SALVO:
+        //   · Evento/Otro (los marca el jefe, spec §1.5) — nunca se pisan
+        //   · día con varios turnos manuales (partido) — cada tramo conserva
+        //     su tentativo; las horas del día van al último tramo (limitación
+        //     del agrupado por jornada, revisar en AUTO_TURNO_ATIPICO)
+        const shiftsMismoDia = shifts.filter(x => x.fecha === g.fecha).length;
+        const servActual = String(s.servicio || '');
+        const puedeReasignar = asig && shiftsMismoDia <= 1 && !/Evento|Otro/.test(servActual);
         if (!DRY_RUN) {
-          // SOLO horas + referencia Bitrix. Nunca checklist/KPIs/estado/declaraciones.
-          await sb('PATCH', `shifts?id=eq.${encodeURIComponent(s.id)}`, {
+          // Horas + referencia Bitrix (+ servicio si procede).
+          // Nunca checklist/KPIs/estado/declaraciones.
+          const patchBody = {
             horas:                   horasBx,
             horas_bitrix:            horasBx,
             horas_source:            'bitrix',
@@ -331,7 +463,29 @@ async function paseAsociacion(fechaObjetivo, DRY_RUN) {
             bitrix_duration_minutes: Math.round(totalSeg / 60),
             bitrix_synced_at:        nowMadridTs(),
             updated_at:              nowMadridTs()
-          }, { 'Prefer': 'return=minimal' });
+          };
+          if (puedeReasignar && String(asig.servicio) !== servActual) {
+            patchBody.servicio = asig.servicio;
+            try {
+              await sb('POST', 'audit_log', {
+                id: 'AL_BXTA_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+                ts: nowMadridTs(), usuario: 'system_bitrix_sync', rol: 'system',
+                action: 'AUTO_TURNO_RECONCILIADO',
+                detail: (s.nombre||g.employee_id) + ' · ' + g.fecha + ' · shift ' + s.id + ' · servicio "' + servActual + '" → "' + asig.servicio + '" (apertura Bitrix ' + String(inicioBx).slice(11,16) + ')'
+              }, { 'Prefer': 'return=minimal' });
+            } catch (_) {}
+          }
+          if (asig && asig.atipico) {
+            try {
+              await sb('POST', 'audit_log', {
+                id: 'AL_BXAT_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+                ts: nowMadridTs(), usuario: 'system_bitrix_sync', rol: 'system',
+                action: 'AUTO_TURNO_ATIPICO',
+                detail: (s.nombre||g.employee_id) + ' · ' + (asig.deptKey||'') + ' · apertura Bitrix ' + String(inicioBx).slice(11,16) + ' · turno ' + asig.turno + ' · distancia ' + asig.distanciaMin + ' min al inicio nominal · shift ' + s.id
+              }, { 'Prefer': 'return=minimal' });
+            } catch (_) {}
+          }
+          await sb('PATCH', `shifts?id=eq.${encodeURIComponent(s.id)}`, patchBody, { 'Prefer': 'return=minimal' });
           await sb('PATCH', `bitrix_time_records?id=in.(${g.recs.map(r=>r.id).join(',')})`, {
             sync_status:      'matched',
             matched_shift_id: s.id,
@@ -354,16 +508,13 @@ async function paseAsociacion(fechaObjetivo, DRY_RUN) {
         // 0 candidatos → AUTO-CREAR turno mínimo (v3 Jul 2026)
         // El empleado completa datos operativos vía la ventana de gracia 1d.
         try {
-          const empData = await sb('GET',
-            'employees?id=eq.' + encodeURIComponent(g.employee_id)
-            + '&select=id,nombre,area,puesto&limit=1'
-          );
-          const emp = (empData && empData.length) ? empData[0] : null;
+          // FEAT-TURNO-AUTO v4: emp ya cargado arriba; servicio final por
+          // tablas §2 + solape §3 (asig) — fallback al valor del intervalo.
           if (emp && totalSeg > 0) {
             // ID determinista: mismo employee+fecha siempre genera mismo ID → idempotente
             const autoId = 'BXAUTO_' + g.employee_id.replace(/[^a-zA-Z0-9]/g, '_')
                          + '_' + g.fecha.replace(/-/g, '');
-            const servDeducido = (g.recs[0] && g.recs[0].servicio) || 'Mañana';
+            const servDeducido = (asig && asig.servicio) || (g.recs[0] && g.recs[0].servicio) || 'Mañana';
 
             if (!DRY_RUN) {
               await sb('POST', 'shifts', {
@@ -488,7 +639,12 @@ export default async function handler(req, res) {
               if (!r.endTime || !r.duration) continue; // fichaje en curso: ignorar
               const st = (typeof r.startTime === 'string') ? r.startTime : (r.startTime && r.startTime.date);
               if (!st) continue;
-              const { servicio, fecha } = deducirServicioYFecha(st);
+              // FEAT-TURNO-AUTO v4: turno por hora de apertura según tablas §2
+              // del departamento del empleado; fallback legacy si no hay config.
+              const et = (typeof r.endTime === 'string') ? r.endTime : (r.endTime && r.endTime.date);
+              const asig = asignarTurnoSpec22(emp.area, emp.puesto, st, et);
+              const servicio = asig ? asig.turno : deducirServicioYFecha(st).servicio;
+              const fecha    = asig ? asig.fecha : deducirServicioYFecha(st).fecha;
               if (fecha !== fechaObjetivo) continue;
 
               rawRows.push({
@@ -546,7 +702,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      version: 'v3-asociacion-autocreate',
+      version: 'v4-turno-auto-spec22',
       dry_run: DRY_RUN,
       fecha: fechaObjetivo,
       empleados_procesados: (employees||[]).length,
