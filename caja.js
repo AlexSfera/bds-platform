@@ -265,8 +265,10 @@
 // Cena puede pasar de medianoche. Si hora actual < 02:00, la fecha operativa
 // es "ayer" (el servicio de Cena del día anterior). Margen: hasta las 2 AM.
 function _salaFechaOperativa(){
+  // FEAT-TURNO-AUTO spec §4: cierre 00:00-05:59 de jornada Cena abierta ayer → fecha = ayer.
+  // Cutoff ampliado de <2h a <6h (Cena termina hasta 01:00; margen de seguridad).
   var now = new Date();
-  if(now.getHours() < 2){
+  if(now.getHours() < 6){
     var ayer = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     return toYMD(ayer);
   }
@@ -726,6 +728,13 @@ async function renderCajaList() {
 }
 
 function getServicioValue() {
+  // FEAT-TURNO-AUTO: si hay turno auto-asignado, devolverlo directamente
+  if(window._turnoAutoResult && window._turnoAutoResult.turno && window._turnoAutoResult.areaEfectiva){
+    var _ae = window._turnoAutoResult.areaEfectiva;
+    // Para Cocina/Sala: turno tentativo como string (al cerrar será array de servicios)
+    return window._turnoAutoResult.servicio || window._turnoAutoResult.turno;
+  }
+  // ── Legacy: lectura de selectores manuales (Administración u override) ──
   // Recepción: return turno (Mañana/Tarde/Noche)
   if(currentUser && currentUser.area === 'Recepción') return getRecTurnoValue();
   // Housekeeping: return turno (Mañana/Tarde) desde radio
@@ -1228,7 +1237,10 @@ async function getSalaOpToday(servicio) {
 }
 
 function openSalaCajaChoice() {
-  var servs = getSalaTurnoServicio();
+  // FEAT-TURNO-AUTO: servicio heredado del turno auto-asignado
+  var autoServ = (window._turnoAutoResult && window._turnoAutoResult.areaEfectiva === 'Sala')
+    ? window._turnoAutoResult.turno : null;
+  var servs = autoServ ? [autoServ] : getSalaTurnoServicio();
   // Si Mi Turno tiene exactamente 1 servicio → fijo; si 0 o varios → pedir
   _salaTipoServ = (servs.length === 1) ? servs[0] : null;
 

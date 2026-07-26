@@ -158,6 +158,12 @@ function _labPuedeCerrar(turno, fecha){
 }
 
 function _labCurrentTurno(){
+  // FEAT-TURNO-AUTO: turno derivado de autoAssignTurno
+  if(typeof autoAssignTurno === 'function'){
+    var _autoLab = autoAssignTurno(currentUser ? currentUser.area : 'SYNCROLAB', currentUser ? currentUser.puesto : '');
+    if(_autoLab.turno && _autoLab.areaEfectiva === 'Recepción SYNCROLAB') return _autoLab.turno;
+  }
+  // Fallback: lectura de radio manual
   var sel = document.querySelector('input[name="servicio-lab"]:checked');
   return sel ? sel.value : null;
 }

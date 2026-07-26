@@ -275,7 +275,7 @@ async function saveFollowup() {
     nombre: currentUser.nombre,
     departamento: currentUser.area || '—',
     fecha: today(),
-    servicio: getRecTurnoValue() || getServicioValue() || '—',
+    servicio: (window._turnoAutoResult ? window._turnoAutoResult.turno : '') || getRecTurnoValue() || getServicioValue() || '—',
     categoria: 'Gestión pendiente',
     tipo_incidencia: tipo,
     descripcion: desc,
@@ -605,7 +605,7 @@ function buildInfoContent(area){
         '<b>'+_req('Fecha')+'</b><br>El día del turno.<br><br>'
 
       + '<b>'+_req('Turno')+'</b><br>'
-      + 'Mañana · Tarde · Noche. Solo uno. Una vez que hagas la caja, el sistema lo bloquea y no se puede cambiar.<br><br>'
+      + 'El sistema asigna tu turno automáticamente según la hora a la que abres la jornada. No necesitas seleccionarlo.<br><br>'
 
       + '<b>'+_req('Horas trabajadas')+'</b><br>'
       + 'Las horas reales del día, no las del contrato.<br><br>'
