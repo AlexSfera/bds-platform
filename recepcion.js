@@ -4,7 +4,8 @@
   var root = document.getElementById('rec-root');
   if(!root) { root = document.createElement('div'); root.id='rec-root'; document.body.appendChild(root); }
   root.innerHTML = `<div id="modal-rec-kpi" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
-  <div style="background:var(--bg2);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:580px;margin:40px auto;">
+  <div style="background:var(--bg2);border:2px solid #8b5cf6;border-radius:14px;padding:24px;width:100%;max-width:580px;margin:40px auto;position:relative;">
+    <button onclick="closeRecKpiModal()" style="position:absolute;top:12px;right:12px;background:var(--bg3);border:1px solid var(--border);color:var(--text);width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;" title="Cerrar">✕</button>
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#8b5cf6;letter-spacing:.2em;margin-bottom:6px;">RECEPCIÓN · KPI DE TURNO</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Cierre de turno — Preguntas de control</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:20px;">Responde antes de pasar al cuadre de caja.</div>
