@@ -1682,9 +1682,20 @@ async function loadForCorrection(shiftId){
   if(s.checklist_items){
     try{
       var chkArr=typeof s.checklist_items==='string'?JSON.parse(s.checklist_items):s.checklist_items;
-      if(Array.isArray(chkArr)&&chkArr.length>0) window._chkSavedState=chkArr;
+      if(Array.isArray(chkArr)&&chkArr.length>0){
+        window._chkSavedState=chkArr;
+        // Forzar re-init del checklist para que use _chkSavedState
+        if(typeof _chkInitialized!=='undefined') window._chkInitialized=false;
+      }
     }catch(e){}
   }
+
+  // ── Cross-sell ventas (Recepción) ──
+  try{
+    var allVentas=await getDB('recepcion_ventas');
+    var shiftVentas=allVentas.filter(function(v){return v.shift_id===shiftId;});
+    if(shiftVentas.length>0) window._correctionRecVentas=shiftVentas;
+  }catch(e){}
 
   document.getElementById('turno-form-card').scrollIntoView({behavior:'smooth'});
   toast('Turno cargado para corrección','warn');
@@ -1886,7 +1897,8 @@ async function _doSaveTurno() {
       await sbRequest('DELETE','gestiones',null,'shift_id=eq.'+shiftId);
       await sbRequest('DELETE','incidencias',null,'shift_id=eq.'+shiftId);
       await sbRequest('DELETE','ajustes',null,'shift_id=eq.'+shiftId);
-      invalidateCache('merma');invalidateCache('gestiones');invalidateCache('incidencias');invalidateCache('ajustes');
+      await sbRequest('DELETE','recepcion_ventas',null,'shift_id=eq.'+shiftId);
+      invalidateCache('merma');invalidateCache('gestiones');invalidateCache('incidencias');invalidateCache('ajustes');invalidateCache('recepcion_ventas');
       auditLog('CORRECCION_LIMPIEZA','Registros hijos previos eliminados · shift '+shiftId);
     }catch(e){ console.warn('[CORRECCION] Limpieza parcial:',e); }
     window._correctionShiftId = null;
