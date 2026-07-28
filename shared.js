@@ -338,32 +338,74 @@ function _turnoAutoManualAllowed(u){
   return false;
 }
 
-// UI spec §4: el selector de turno desaparece para el empleado — chip
-// read-only «Turno: X (asignado automáticamente)». Admin/jefe conservan el
-// selector con nota. Se llama al final de la config del formulario Mi Turno.
+// UI spec §4 (rev. CEO 26-jul): el selector de turno/servicio desaparece para
+// TODOS los roles en todos los departamentos con config auto. Fecha y Turno se
+// muestran como chips read-only alineados en una fila. Única excepción: en
+// Sala/Cocina los jefes/admin ven las opciones Evento/Otro (spec §1.5 — nunca
+// se auto-asignan). Administración queda excluida (spec §5.3, sin cambios).
+// Se llama al final de la config del formulario Mi Turno.
 function _applyTurnoAutoUI(){
   var old = document.getElementById('turno-auto-chip'); if(old) old.remove();
   if(!currentUser) return;
   var auto = autoAssignTurno(currentUser.area, currentUser.puesto);
-  if(!auto) return; // dept excluido → selector manual como siempre
-  var manualAllowed = _turnoAutoManualAllowed(currentUser);
-  var isRec = currentUser.area === 'Recepción';
-  var host = isRec ? document.getElementById('rec-turno-block') : document.getElementById('servicio-fg-block');
-  if(!host || !host.parentNode) return;
-  var chip = document.createElement('div');
-  chip.id = 'turno-auto-chip';
-  chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #8b5cf6;border-radius:16px;background:rgba(139,92,246,.08);font-size:13px;font-weight:600;color:#8b5cf6;margin:4px 0 10px;';
-  if(!manualAllowed){
-    chip.innerHTML = '🕐 Turno: ' + auto.turno + ' <span style="font-weight:400;color:var(--text3);">(asignado automáticamente)</span>';
-    ['rec-turno-block','servicio-fg-block'].forEach(function(id){
-      var el = document.getElementById(id); if(el) el.style.display = 'none';
+  if(!auto) return; // dept excluido (Administración) → formulario sin cambios
+
+  // 1) Ocultar selectores de turno/servicio para todos los roles
+  var recB = document.getElementById('rec-turno-block'); if(recB) recB.style.display = 'none';
+  var servB = document.getElementById('servicio-fg-block');
+  var esSalaCocina = (auto.areaEfectiva === 'Sala' || auto.areaEfectiva === 'Cocina');
+  var muestraEvento = esSalaCocina && _turnoAutoManualAllowed(currentUser);
+  if(servB) servB.style.display = muestraEvento ? 'block' : 'none';
+  if(muestraEvento){
+    // Solo Evento/Otro visibles; los servicios normales los asigna el sistema
+    document.querySelectorAll('input[name="servicio-sala"], input[name="servicio-cocina"]').forEach(function(cb){
+      var esManual = (cb.value === 'Evento' || cb.value === 'Otro');
+      var lbl = cb.closest ? cb.closest('label') : null;
+      if(lbl) lbl.style.display = esManual ? '' : 'none';
+      if(!esManual) cb.checked = false;
     });
-  } else {
-    var esAdminU = (typeof isAdmin === 'function' && isAdmin(currentUser));
-    chip.innerHTML = '🕐 Turno auto: ' + auto.turno + ' <span style="font-weight:400;color:var(--text3);">(sin marcar nada se usa el automático'
-      + (esAdminU ? '' : ' · manual solo Evento/Otro') + ')</span>';
+    var tsSel = document.getElementById('t-servicio'); if(tsSel) tsSel.style.display = 'none';
+    var lblServ = document.getElementById('t-servicio-label');
+    if(lblServ) lblServ.innerHTML = 'Evento / Otro <span style="font-weight:400;color:var(--text3);font-size:12px;">(opcional — márcalo solo si no es un servicio normal)</span>';
   }
-  host.parentNode.insertBefore(chip, host);
+
+  // En corrección, el chip muestra el servicio original conservado del shift
+  var enCorreccion = (typeof editingShiftId !== 'undefined' && editingShiftId && window._editingShiftServicioOriginal);
+
+  // 2) Fecha → chip read-only con el mismo formato que el turno, en una fila.
+  // El input queda oculto pero vivo para la lógica de guardado; si está vacío
+  // (primera apertura) se fija a la fecha operativa auto — ya no lo rellena
+  // el empleado a mano.
+  var fInput = document.getElementById('t-fecha');
+  var fechaTxt = '';
+  if(fInput){
+    if(!fInput.value && !enCorreccion) fInput.value = auto.fechaOperativa;
+    fechaTxt = fInput.value ? fmtChipFecha(fInput.value) : '';
+    var fg = fInput.closest ? fInput.closest('.fg') : null;
+    if(fg) fg.style.display = 'none';
+  }
+  function fmtChipFecha(ymd){
+    try { var p = ymd.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; } catch(e){ return ymd; }
+  }
+  var turnoTxt = enCorreccion
+    ? (typeof formatServiceOrTurn === 'function' ? formatServiceOrTurn(window._editingShiftServicioOriginal) : window._editingShiftServicioOriginal)
+    : auto.turno;
+  var turnoNota = enCorreccion ? '(original del turno en corrección)' : '(asignado automáticamente)';
+
+  var CHIP_CSS = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid #8b5cf6;border-radius:16px;background:rgba(139,92,246,.08);font-size:13px;font-weight:600;color:#8b5cf6;';
+  var row = document.createElement('div');
+  row.id = 'turno-auto-chip';
+  row.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 0 14px;';
+  row.innerHTML =
+      (fechaTxt ? '<div style="' + CHIP_CSS + '">📅 Fecha: ' + fechaTxt + ' <span style="font-weight:400;color:var(--text3);">(operativa)</span></div>' : '')
+    + '<div style="' + CHIP_CSS + '">🕐 Turno: ' + turnoTxt + ' <span style="font-weight:400;color:var(--text3);">' + turnoNota + '</span></div>';
+
+  // Insertar la fila ANTES del .grid2 que contiene la fecha (ancho completo,
+  // chips alineados en una sola línea — no dentro de una columna del grid)
+  var fgFecha = (fInput && fInput.closest) ? fInput.closest('.fg') : null;
+  var anchor = fgFecha && fgFecha.parentNode ? fgFecha.parentNode : null; // .grid2
+  if(!anchor) anchor = document.getElementById('servicio-fg-block') || recB;
+  if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(row, anchor);
 }
 window.autoAssignTurno = autoAssignTurno;
 window.computeServicios = computeServicios;
@@ -1482,6 +1524,7 @@ async function initTurnoForm(){
 function clearTurnoForm(){
   clearSalaFields();
   editingShiftId=null;
+  window._correctionShiftId = null; // reset correction flag
   window._editingShiftServicioOriginal = ''; // FEAT-TURNO-AUTO
   const modeEl=document.getElementById('turno-form-mode'); if(modeEl) modeEl.textContent='NUEVO';
   const saveBtn=document.getElementById('btn-save-turno'); if(saveBtn) saveBtn.textContent='💾 Guardar Turno';
@@ -1507,6 +1550,8 @@ function clearTurnoForm(){
     }
   }
   if(fechaInput) fechaInput.value=_fechaTurno;
+  // FEAT-TURNO-AUTO: reconstruir chips fecha/turno con los valores limpios
+  if(typeof _applyTurnoAutoUI === 'function') _applyTurnoAutoUI();
   // Fix Jun 2026: bloquear fecha para todos salvo admin (antes solo empleado).
   var _esAdminCF = currentUser && currentUser.rol === 'admin';
   if(fechaInput && !_esAdminCF && !editingShiftId){
@@ -1548,26 +1593,99 @@ async function renderCorrectionsPend(){
 async function loadForCorrection(shiftId){
   const s=(await getDB('shifts')).find(x=>x.id===shiftId); if(!s) return;
   editingShiftId=shiftId;
+  // Flag para que _doSaveTurno limpie registros hijos previos
+  window._correctionShiftId = shiftId;
+
   document.getElementById('turno-form-mode').textContent='CORRECCIÓN · '+fmtDate(s.fecha)+' · '+formatServiceOrTurn(s.servicio);
   document.getElementById('btn-save-turno').textContent='📤 Reenviar';
-  // Fix Jun 2026: si el turno original se guardó sin fecha (bug previo),
-  // autocompleta con hoy para que el empleado pueda corregir.
+
+  // ── Mostrar comentario del validador en el formulario ──
+  var corrAlert = document.getElementById('turno-alert-area');
+  if(corrAlert && s.comentario_validador){
+    corrAlert.innerHTML='<div class="alert a-warn" style="margin-bottom:12px;">⚠ <b>Corrección solicitada por '
+      +(s.validado_por||'supervisor')+':</b> «'+s.comentario_validador+'»</div>';
+  }
+
+  // ── Datos básicos ──
   document.getElementById('t-fecha').value = s.fecha || today();
+  var fechaInput = document.getElementById('t-fecha');
+  if(fechaInput){
+    fechaInput.removeAttribute('min'); fechaInput.removeAttribute('max');
+    fechaInput.removeAttribute('readonly'); fechaInput.removeAttribute('tabindex');
+    fechaInput.style.pointerEvents=''; fechaInput.style.opacity=''; fechaInput.style.cursor='';
+  }
   document.getElementById('t-servicio').value=s.servicio;
-  // FEAT-TURNO-AUTO: en corrección se conserva el servicio original del shift
-  // (getServicioValue lo usa si el selector está oculto/vacío)
+  // FEAT-TURNO-AUTO: conservar servicio original
   window._editingShiftServicioOriginal = s.servicio || '';
+  if(typeof _applyTurnoAutoUI === 'function') _applyTurnoAutoUI();
   var _elHoras = document.getElementById('t-horas'); if(_elHoras) _elHoras.value=s.horas;
   document.getElementById('t-responsable').value=s.responsable_id||'';
   var _elObs = document.getElementById('t-obs'); if(_elObs) _elObs.value=s.observacion||'';
-  setT('incidencia',s.incidencia_declarada);
+
+  // ── Toggles ──
+  setT('incidencia', s.incidencia_declarada || 'no');
+  setT('gestion', s.follow_up || 'no');
+
+  // ── Merma ──
   sinMermaFlag=s.merma_declarada==='no';
   if(sinMermaFlag) document.getElementById('sinmerma-btn').className='tbtn t-si';
+  else { var _smb=document.getElementById('sinmerma-btn'); if(_smb) _smb.className='tbtn'; }
   const mermas=(await getDB('merma')).filter(m=>m.shift_id===shiftId);
   mermaRows=[]; mermas.forEach(m=>mermaRows.push({rowId:genId(),producto:m.producto,cantidad:m.cantidad,unidad:m.unidad||'uds',causa:m.causa,obs:m.obs||''}));
   renderMermaRows();
+
+  // ── Incidencia ──
   const inci=(await getDB('incidencias')).find(i=>i.shift_id===shiftId);
-  if(inci){ document.getElementById('i-cat').value=inci.categoria||''; document.getElementById('i-sev').value=inci.severidad||''; document.getElementById('i-desc').value=inci.descripcion||''; document.getElementById('i-accion').value=inci.accion_inmediata||''; setT('reqform',inci.requiere_formacion==='Sí'?'si':'no'); setT('reqdisc',inci.requiere_disciplina==='Sí'?'si':'no'); }
+  if(inci){
+    var eCat=document.getElementById('i-cat'); if(eCat) eCat.value=inci.categoria||'';
+    var eSev=document.getElementById('i-sev'); if(eSev) eSev.value=inci.severidad||'';
+    var eDesc=document.getElementById('i-desc'); if(eDesc) eDesc.value=inci.descripcion||'';
+    var eAcc=document.getElementById('i-accion'); if(eAcc) eAcc.value=inci.accion_inmediata||'';
+    setT('reqform',inci.requiere_formacion==='Sí'?'si':'no');
+    setT('reqdisc',inci.requiere_disciplina==='Sí'?'si':'no');
+  }
+
+  // ── Gestión pendiente ──
+  if(s.follow_up === 'si'){
+    const gests=(await getDB('gestiones')).filter(g=>g.shift_id===shiftId);
+    if(gests.length>0){
+      var g0=gests[0];
+      var gTipo=document.getElementById('g-tipo'); if(gTipo) gTipo.value=g0.tipo_gestion||'';
+      var gPrio=document.getElementById('g-prioridad'); if(gPrio) gPrio.value=g0.prioridad||'media';
+      var gHab=document.getElementById('g-habitacion');
+      if(gHab){
+        if(typeof poblarSelectorHabitacion==='function') poblarSelectorHabitacion(gHab, g0.habitacion||'');
+        else gHab.value=g0.habitacion||'';
+      }
+      var gRes=document.getElementById('g-reserva'); if(gRes) gRes.value=g0.num_reserva||'';
+      var gDesc=document.getElementById('g-desc'); if(gDesc) gDesc.value=g0.descripcion||'';
+    }
+  }
+
+  // ── Ajustes Sala (JSON guardado en shift) ──
+  if(s.ajustes_sala){
+    try{
+      var ajArr=typeof s.ajustes_sala==='string'?JSON.parse(s.ajustes_sala):s.ajustes_sala;
+      if(Array.isArray(ajArr)&&ajArr.length>0) window._ajustesLines=ajArr;
+    }catch(e){}
+  }
+
+  // ── KPIs ──
+  if(s.kpi_entrenador){
+    try{ window._entrKpiState=typeof s.kpi_entrenador==='string'?JSON.parse(s.kpi_entrenador):s.kpi_entrenador; }catch(e){}
+  }
+  if(s.kpi_recepcion){
+    try{ window._recepKpiState=typeof s.kpi_recepcion==='string'?JSON.parse(s.kpi_recepcion):s.kpi_recepcion; }catch(e){}
+  }
+
+  // ── Checklist ──
+  if(s.checklist_items){
+    try{
+      var chkArr=typeof s.checklist_items==='string'?JSON.parse(s.checklist_items):s.checklist_items;
+      if(Array.isArray(chkArr)&&chkArr.length>0) window._chkSavedState=chkArr;
+    }catch(e){}
+  }
+
   document.getElementById('turno-form-card').scrollIntoView({behavior:'smooth'});
   toast('Turno cargado para corrección','warn');
 }
@@ -1759,6 +1877,19 @@ async function _doSaveTurno() {
     } else if (_autoTA.atipico) {
       auditLog('AUTO_TURNO_ATIPICO', currentUser.nombre + ' · ' + (_autoTA.deptKey||currentUser.area||'') + ' · cierre ' + _hSaveStr + ' · turno asignado ' + _autoTA.turno + ' · distancia ' + _autoTA.distanciaMin + ' min al fin nominal · shift ' + shiftId);
     }
+  }
+
+  // ── Corrección: limpiar registros hijos previos antes de re-insertar ──
+  if(isEditing && window._correctionShiftId === shiftId){
+    try{
+      await sbRequest('DELETE','merma',null,'shift_id=eq.'+shiftId);
+      await sbRequest('DELETE','gestiones',null,'shift_id=eq.'+shiftId);
+      await sbRequest('DELETE','incidencias',null,'shift_id=eq.'+shiftId);
+      await sbRequest('DELETE','ajustes',null,'shift_id=eq.'+shiftId);
+      invalidateCache('merma');invalidateCache('gestiones');invalidateCache('incidencias');invalidateCache('ajustes');
+      auditLog('CORRECCION_LIMPIEZA','Registros hijos previos eliminados · shift '+shiftId);
+    }catch(e){ console.warn('[CORRECCION] Limpieza parcial:',e); }
+    window._correctionShiftId = null;
   }
 
   // ── Merma ───────────────────────────────────────────────────────────
