@@ -375,6 +375,10 @@ function chkOpen(pendingData){
     if(_chkHasTurnoCerrado){
       clearChkLocalStorage();
       _chkState = Array(items.length).fill(false);
+    } else if(window._chkSavedState && Array.isArray(window._chkSavedState) && window._chkSavedState.length === items.length){
+      // Corrección: restaurar estado guardado del turno original
+      _chkState = window._chkSavedState.slice();
+      window._chkSavedState = null; // consumido
     } else {
       // Intentar recuperar borrador del día (mismo usuario, fecha, área, turno)
       var draft = _chkLoadLs(items.length);

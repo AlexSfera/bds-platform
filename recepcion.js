@@ -90,7 +90,7 @@
 
     <div id="kpi-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
     <button onclick="submitRecKpi()" style="width:100%;padding:14px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">Continuar al cuadre de caja →</button>
-    <button onclick="closeRecKpiModal()" style="width:100%;padding:11px;margin-top:8px;background:transparent;color:var(--text3);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
+    <button onclick="closeRecKpiModal()" style="width:100%;padding:11px;margin-top:8px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">✕ Cancelar</button>
   </div>
 </div>
 <div id="modal-rec-caja" style="position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;z-index:700;padding:16px;overflow-y:auto;">
@@ -327,6 +327,77 @@ function openRecKpiModal() {
   });
   var errEl = document.getElementById('kpi-err');
   if(errEl) errEl.textContent='';
+
+  // ── CORRECCIÓN: pre-poblar desde estado guardado ──
+  var saved = window._recepKpiState;
+  if(saved && typeof saved === 'object' && (saved.checkins || saved.checkouts || saved.reservas || saved.upsell_desayuno)){
+    // Campos numéricos
+    var _sf = function(id,v){ var el=document.getElementById(id); if(el && v) el.value=v; };
+    _sf('kpi-checkins', saved.checkins);
+    _sf('kpi-checkouts', saved.checkouts);
+    _sf('kpi-reservas', saved.reservas);
+    _sf('kpi-desal-ofertados', saved.desal_ofertados);
+    _sf('kpi-desal-vendidos', saved.desal_vendidos);
+    _sf('kpi-clientes-num', saved.clientes_num);
+    // Toggles
+    var _setBtn = function(key, val){
+      _recKpiState[key] = val;
+      var map = {
+        upsell_desayuno:        {si:'kpi-upsell-si',no:'kpi-upsell-no',na:'kpi-upsell-na'},
+        upsell_cena:            {si:'kpi-cena-si',no:'kpi-cena-no',na:'kpi-cena-na'},
+        syncrolab_ventas:       {si:'kpi-syncro-si',no:'kpi-syncro-no'},
+        lead_pendiente:         {si:'kpi-lead-si',no:'kpi-lead-no'},
+        clientes_insatisfechos: {si:'kpi-clientes-si',no:'kpi-clientes-no'},
+        clientes_resp_informado:{si:'kpi-resp-inf-si',no:'kpi-resp-inf-no'},
+        lead_en_bitrix:         {si:'kpi-lead-bitrix-si',no:'kpi-lead-bitrix-no'}
+      };
+      var ids = map[key]; if(!ids || !val || !ids[val]) return;
+      var btn = document.getElementById(ids[val]);
+      if(btn){ btn.classList.add(val==='si'?'t-si':val==='no'?'t-no':'t-na'); }
+    };
+    if(saved.upsell_desayuno) _setBtn('upsell_desayuno', saved.upsell_desayuno);
+    if(saved.upsell_cena) _setBtn('upsell_cena', saved.upsell_cena);
+    if(saved.syncrolab_ventas) _setBtn('syncrolab_ventas', saved.syncrolab_ventas);
+    if(saved.lead_pendiente) _setBtn('lead_pendiente', saved.lead_pendiente);
+    if(saved.clientes_insatisfechos) _setBtn('clientes_insatisfechos', saved.clientes_insatisfechos);
+    if(saved.clientes_resp_informado) _setBtn('clientes_resp_informado', saved.clientes_resp_informado);
+    if(saved.lead_en_bitrix) _setBtn('lead_en_bitrix', saved.lead_en_bitrix);
+    // Bloques dependientes
+    var _showBlock = function(id, cond){ var el=document.getElementById(id); if(el && cond) el.style.display='block'; };
+    _showBlock('desayuno-ventas-block', saved.upsell_desayuno==='si');
+    _showBlock('cena-ventas-block', saved.upsell_cena==='si');
+    _showBlock('kpi-syncro-block', saved.syncrolab_ventas==='si');
+    _showBlock('kpi-lead-block', saved.lead_pendiente==='si');
+    _showBlock('kpi-clientes-detail', saved.clientes_insatisfechos==='si');
+    // Lead fields
+    _sf('kpi-lead-desc', saved.lead_desc);
+    _sf('kpi-lead-resp', saved.lead_resp);
+    _sf('kpi-lead-fecha', saved.lead_fecha);
+    // Restaurar filas de ventas cross-sell desde recepcion_ventas
+    var cVentas = window._correctionRecVentas;
+    if(cVentas && Array.isArray(cVentas)){
+      cVentas.forEach(function(v){
+        if(v.tipo_venta==='desayuno'){
+          addDesayunoVenta();
+          var i=_desayunoVentaIdx-1;
+          _sf('dv-importe-'+i, v.importe); _sf('dv-pax-'+i, v.pax||1);
+          _sf('dv-mews-'+i, v.reserva_mews); _sf('dv-obs-'+i, v.comentario);
+        } else if(v.tipo_venta==='comida_cena'){
+          addCenaVenta();
+          var j=_cenaVentaIdx-1;
+          _sf('cv-importe-'+j, v.importe); _sf('cv-pax-'+j, v.pax||1);
+          _sf('cv-mews-'+j, v.reserva_mews); _sf('cv-obs-'+j, v.comentario);
+        } else if(v.tipo_venta==='syncrolab'){
+          addSyncroVenta();
+          var k=_syncroVentaIdx-1;
+          _sf('sv-tipo-'+k, v.servicio_detalle); _sf('sv-importe-'+k, v.importe);
+          _sf('sv-mews-'+k, v.reserva_mews); _sf('sv-obs-'+k, v.comentario);
+        }
+      });
+      window._correctionRecVentas = null; // consumido
+    }
+  }
+
   var m=document.getElementById('modal-rec-kpi');
   if(m) m.style.display='flex';
 }
