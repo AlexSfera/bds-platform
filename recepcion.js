@@ -1,4 +1,3 @@
-
 // ── HTML INJECTION ─────────────────────────────────────────
 (function injectRecHTML() {
   var root = document.getElementById('rec-root');
