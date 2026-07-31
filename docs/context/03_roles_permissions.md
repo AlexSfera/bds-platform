@@ -1,186 +1,237 @@
 # 03 — Roles y Permisos
 
+*Actualizado 30 jul 2026 — cruzado contra `shared.js` (306 KB) y `validacion.js` (140 KB) del repo.*
+
 ---
 
 ## 1. Roles del sistema
 
-| Rol | Código | Descripción |
+| Rol (código) | Etiqueta UI | Descripción |
 |---|---|---|
-| **Administrador** | `admin` | Acceso total a todos los departamentos y módulos |
-| **Jefe de Recepción** | `jefe_recepcion` | Supervisor de Recepción Hotel |
-| **Responsable de Sala / F&B Manager** | `fb` | Supervisor de Sala y Cocina |
-| **Chef** | `chef` | Supervisor de Cocina y Friegue |
-| **Responsable SYNCROLAB** | `coord_recepcion_syncrolab` | Supervisor SYNCROLAB |
-| **Coordinador Entrenadores** | `coord_entrenadores` | Supervisor de Entrenadores |
-| **Coordinador Fisioterapeutas** | `coord_fisioterapeutas` | Supervisor Clínica |
-| **Gobernante/a** | `gobernante` | Supervisor Housekeeping |
-| **Empleado** | `empleado` | Usuario operativo básico |
+| `admin` | ADMIN | Acceso total, todos los departamentos y módulos |
+| `adjunto_directivo` | ADJ.DIR | Acceso a todos los departamentos. Valida, gestiona Maestro. `canActAsAdmin = true` |
+| `adjunto` | ADJ.DIR/RRHH | Alias legacy de `adjunto_directivo`. Mismo comportamiento |
+| `contable` | CONTABLE | Solo Validación (pestaña Caja) + Dashboard. No valida turnos |
+| `fb` | F&B | Supervisor Sala + Cocina + Friegue + FnB |
+| `chef` | CHEF | Supervisor Cocina + Friegue |
+| `jefe_recepcion` | JEF.REC | Supervisor Recepción Hotel |
+| `gobernante` | GOB. | Supervisor Housekeeping + Limpieza |
+| `subgobernante` | SUBGOB. | Supervisor Housekeeping + Limpieza. `canActAsAdmin = false` |
+| `jefe_mantenimiento` | JEF.MANT. | Supervisor Mantenimiento. `canActAsAdmin = false` |
+| `coord_recepcion_syncrolab` | COORD.LAB | Supervisor Recepción SYNCROLAB + SyncroLab |
+| `coord_entrenadores` | COORD.ENTR | Supervisor Entrenadores + SYNCROLAB |
+| `coord_fisioterapeutas` | COORD.FISIO | Supervisor Fisioterapeutas + Clínica + SYNCROLAB |
+| `empleado` | (su área) | Usuario operativo básico, sin supervisión |
+
+**PIN de rol:** `ROLE_PINS = {'300415':'admin', '0101':'chef'}` — se detecta en login antes de buscar empleado.
 
 ---
 
-## 2. Departamentos por rol de supervisión
+## 2. Funciones clave de permisos (shared.js)
 
-| Rol | Departamentos que supervisa |
+| Función | Lógica |
 |---|---|
-| `admin` | Todos |
-| `jefe_recepcion` | Recepción |
-| `fb` | Sala · Cocina · Friegue |
-| `chef` | Cocina · Friegue |
-| `coord_recepcion_syncrolab` | Recepción SYNCROLAB |
-| `coord_entrenadores` | Entrenadores · SYNCROLAB |
-| `coord_fisioterapeutas` | Fisioterapeutas · Clínica |
-| `gobernante` | Housekeeping · Limpieza |
-| `empleado` | Solo su propio departamento (sin supervisión) |
+| `isAdmin(user)` | `user.rol === 'admin'` |
+| `isAdjuntoDirectivo(user)` | `user.rol === 'adjunto' \|\| 'adjunto_directivo'` |
+| `canActAsAdmin(user)` | `isAdmin(user) \|\| isAdjuntoDirectivo(user)` — **usada para DELETEs, Maestro editable, FIO delete, IP management** |
+| `isContable(user)` | `user.rol === 'contable'` |
+| `isSupervisor(user)` | `user.rol === 'jefe' \|\| rol en SUPERVISOR_DEPT_MAP` |
+| `getSupervisorDepartments(user)` | Devuelve array de deptos que supervisa (de `SUPERVISOR_DEPT_MAP`) o `[user.area]` |
+| `canViewDepartment(user, dept)` | Verifica acceso a un depto específico |
+| `hkIsGobernanta(user)` | Gobernanta o subgobernanta |
+| `_esEntrenador(emp)` | Detecta entrenador por `puesto`, NO por `area` (T11: area SYNCROLAB compartida) |
+| `_esFisio(emp)` | Detecta fisioterapeuta por `puesto` |
+| `_deptCatalogo(emp)` | Devuelve depto real para catálogo FIO |
+
+**⚠ Las columnas legacy `responsable` y `validador` en `employees` ya NO se usan para detección de rol.** Todo usa `SUPERVISOR_DEPT_MAP` + funciones de arriba.
 
 ---
 
-## 3. Matriz de permisos
-
-### 3.1 Mi Turno
-
-| Acción | Empleado | Jefe Dpto | Admin |
-|---|---|---|---|
-| Ver turno propio | ✅ | ✅ | ✅ |
-| Iniciar turno | ✅ | ✅ | ✅ |
-| Completar checklist | ✅ | ✅ | ✅ |
-| Registrar gestión pendiente | ✅ | ✅ | ✅ |
-| Registrar incidencia operativa | ✅ | ✅ | ✅ |
-| Crear tarea | ✅ | ✅ | ✅ |
-| Cerrar turno | ✅ | ✅ | ✅ |
-| Ver gestiones de su departamento | ✅ | ✅ | ✅ |
-| **Gestionar / cerrar gestiones de su dpto** | ✅ | ✅ | ✅ |
-| Ver incidencia propia (hasta cierre) | ✅ solo la suya | ✅ | ✅ |
-| **Gestionar / cerrar incidencias** | ❌ | ✅ (su dpto) | ✅ |
-| Ver tareas asignadas a su dpto | ✅ | ✅ | ✅ |
-| **Gestionar / cerrar tareas de su dpto** | ✅ | ✅ | ✅ |
-| Ver turnos de otros empleados | ❌ | ✅ (su dpto) | ✅ |
-
-### 3.2 Caja
-
-| Acción | Empleado | Jefe Dpto | Admin |
-|---|---|---|---|
-| Ver botón Caja en topbar | ✅ (si su dpto tiene caja) | ✅ (si su dpto tiene caja) | ✅ |
-| Realizar cierre de caja | ✅ (su dpto) | ✅ (su dpto) | ✅ |
-| Reabrir cierre de caja | ❌ | ✅ (su dpto) | ✅ |
-| **Eliminar cierre de caja** | ❌ | ❌ | ✅ |
-| Ver caja de otro departamento | ❌ | ❌ | ✅ |
-
-### 3.3 Validación
-
-| Acción | Empleado | Jefe Dpto | Admin |
-|---|---|---|---|
-| Ver módulo Validación | ❌ | ✅ (su dpto) | ✅ |
-| Validar turno | ❌ | ✅ (su dpto) | ✅ |
-| Reabrir turno validado | ❌ | ✅ (su dpto) | ✅ |
-| Cambiar estado gestión en validación | ❌ | ✅ (su dpto) | ✅ |
-| Cambiar estado incidencia en validación | ❌ | ✅ (su dpto) | ✅ |
-| Cambiar estado tarea en validación | ❌ | ✅ (su dpto) | ✅ |
-| Crear FIO en validación | ❌ | ✅ (su dpto) | ✅ |
-| Revalidar FIO | ❌ | ✅ (su dpto) | ✅ |
-
-### 3.4 Dashboard
-
-| Acción | Empleado | Jefe Dpto | Admin |
-|---|---|---|---|
-| Ver dashboard | ❌ | ✅ (su dpto) | ✅ (todos) |
-| Filtrar por departamento | ❌ | ❌ (fijo su dpto) | ✅ |
-| **Eliminar gestión** | ❌ | ✅ (su dpto) | ✅ |
-| **Eliminar incidencia** | ❌ | ✅ (su dpto) | ✅ |
-| **Eliminar tarea** | ❌ | ❌ | ✅ |
-| **Eliminar FIO** | ❌ | ❌ | ✅ |
-| **Eliminar cierre de caja** | ❌ | ❌ | ✅ |
-| Exportar datos | ❌ | ✅ (su dpto) | ✅ |
-
-### 3.5 Maestro / Administración
-
-| Acción | Empleado | Jefe Dpto | Admin |
-|---|---|---|---|
-| Acceder a Maestro | ❌ | ❌ | ✅ |
-| Crear empleados | ❌ | ❌ | ✅ |
-| Editar empleados | ❌ | ❌ | ✅ |
-| Activar/desactivar empleados | ❌ | ❌ | ✅ |
-| Gestionar tipologías | ❌ | ❌ | ✅ |
-| Ver audit_log | ❌ | ❌ | ✅ |
-
----
-
-## 4. Visibilidad por entidad — reglas de fila
-
-Esta es la regla más importante para el filtrado de datos en frontend y futura RLS en Supabase.
-
-### Gestiones
-
-| Rol | Ve | Puede gestionar/cerrar |
-|---|---|---|
-| Empleado | Todas las gestiones de **su departamento** | ✅ Sí — todas las de su departamento |
-| Jefe Dpto | Todas las gestiones de **su departamento** | ✅ Sí |
-| Admin | Todas | ✅ Sí + eliminar |
-
-### Incidencias
-
-| Rol | Ve | Puede gestionar/cerrar |
-|---|---|---|
-| Empleado | **Solo las que él mismo creó** — hasta que estén cerradas | ❌ No — solo registra |
-| Jefe Dpto | Todas las incidencias de **su departamento** | ✅ Sí |
-| Admin | Todas | ✅ Sí + eliminar |
-
-> Una incidencia cerrada desaparece de la vista del empleado que la creó.
-
-### Tareas
-
-| Rol | Ve | Puede gestionar/cerrar |
-|---|---|---|
-| Empleado (dpto **origen**) | ✅ Puede verla — es quien la creó | ❌ No gestiona |
-| Empleado (dpto **destino**) | ✅ Ve todas las tareas asignadas a su dpto | ✅ Puede cambiar estado y cerrar |
-| Jefe Dpto | Todas las tareas de su dpto (origen o destino) | ✅ Sí |
-| Admin | Todas | ✅ Sí + eliminar |
-
----
-
-## 5. Reglas de acceso por departamento
-
-- Un jefe de departamento **solo** accede a datos de su departamento
-- Un empleado **solo** accede a sus propios turnos y a los datos de su departamento
-- El administrador accede a todo sin restricción de departamento
-- La verificación se hace siempre en frontend comparando `currentUser.area` con el `departamento` del registro
-- Nunca confiar en que Supabase filtre por rol — el filtrado es responsabilidad del frontend y de las RLS policies
-
----
-
-## 6. Identificadores de rol en código
+## 3. SUPERVISOR_DEPT_MAP (shared.js ~línea 135)
 
 ```javascript
-var isAdminUser      = currentUser && currentUser.rol === 'admin';
-var isSupervisorUser = currentUser && (
-  currentUser.responsable === 1 ||
-  currentUser.validador === 1 ||
-  ['fb','chef','jefe_recepcion','gobernante',
-   'coord_recepcion_syncrolab','coord_entrenadores',
-   'coord_fisioterapeutas'].indexOf(currentUser.rol) !== -1
-);
-var isEmpleado = currentUser && !isAdminUser && !isSupervisorUser;
+const SUPERVISOR_DEPT_MAP = {
+  chef:                      ['Cocina', 'Friegue'],
+  fb:                        ['Sala', 'Cocina', 'Friegue', 'FnB', 'Food & Beverage'],
+  jefe_recepcion:            ['Recepción', 'Recepción SFERA'],
+  gobernante:                ['Housekeeping', 'Limpieza'],
+  subgobernante:             ['Housekeeping', 'Limpieza'],
+  jefe_mantenimiento:        ['Mantenimiento'],
+  coord_recepcion_syncrolab: ['Recepción SYNCROLAB', 'SyncroLab', 'SYNCROLAB'],
+  coord_entrenadores:        ['Entrenadores', 'SYNCROLAB', 'SyncroLab'],
+  coord_fisioterapeutas:     ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab'],
+  adjunto_directivo:         ['*'],   // todos los departamentos
+  adjunto:                   ['*']    // alias legacy
+};
 ```
 
----
-
-## 7. Visibilidad de elementos UI por rol
-
-| Elemento UI | Condición de visibilidad |
-|---|---|
-| Botón "Caja" en topbar | `deptTieneCaja(currentUser.area)` |
-| Botón "Cierre de Caja" | `deptTieneCaja(currentUser.area)` |
-| Bloque Merma en Mi Turno | `deptTieneMerma(currentUser.area)` |
-| Módulo Validación | `isSupervisorUser \|\| isAdminUser` |
-| Dashboard | `isSupervisorUser \|\| isAdminUser` |
-| Botón Eliminar (cualquier entidad) | `isAdminUser` (o jefe para gestiones de su dpto) |
-| Botones En proceso / Cerrar en gestiones | `isSupervisorUser \|\| isAdminUser` |
-| Botones En proceso / Cerrar en incidencias | `isSupervisorUser \|\| isAdminUser` |
-| Maestro | `isAdminUser` |
+`isJefe` en `getScreens()` = `isAdminU || isAdjDir || isSupervisor(user) || rol en lista explícita de supervisores` — controla acceso a Validación, Dashboard, Manager Bar.
 
 ---
 
-## 8. Preguntas abiertas
+## 4. Matriz de permisos por módulo
 
-- `[NO DATA]` — ¿Los jefes de departamento pueden ver el dashboard de otro departamento en modo lectura?
-- `[NO DATA]` — ¿Existe rol "Validador" separado del jefe de departamento?
-- `[NO DATA]` — ¿Un empleado puede ver sus propias incidencias cerradas en historial?
+### 4.1 Mi Turno / Mi Día
+
+| Acción | Empleado | Jefe Dpto | Contable | Admin/Adjunto |
+|---|---|---|---|---|
+| Ver/iniciar turno propio | ✅ | ✅ | ❌ | ✅ |
+| Completar checklist | ✅ | ✅ | ❌ | ✅ |
+| Registrar gestión | ✅ | ✅ | ❌ | ✅ |
+| Registrar incidencia | ✅ | ✅ | ❌ | ✅ |
+| Crear tarea | ✅ | ✅ | ❌ | ✅ |
+| Cerrar turno | ✅ | ✅ | ❌ | ✅ |
+| Declarar merma (Cocina/Friegue/FnB) | ✅ | ✅ | ❌ | ❌ (bypass temporal) |
+| KPI Entrenador (autodeclaración) | ✅ (entrenadores) | ❌ | ❌ | ❌ |
+| Nota/Sugerencia | ✅ | ✅ | ❌ | ✅ |
+
+### 4.2 Gestiones
+
+| Acción | Empleado | Jefe Dpto | Admin/Adjunto |
+|---|---|---|---|
+| Ver gestiones de su departamento | ✅ | ✅ | ✅ (todos) |
+| Avanzar/cerrar gestión de su dpto | ✅ | ✅ | ✅ |
+| Eliminar gestión | ❌ | ✅ (su dpto) | ✅ |
+
+### 4.3 Incidencias
+
+| Acción | Empleado | Jefe Dpto | Admin/Adjunto |
+|---|---|---|---|
+| Ver | Solo las que creó (desaparecen al cerrar) | Todas de su dpto | Todas |
+| Avanzar/cerrar | ❌ | ✅ (su dpto) | ✅ |
+| Eliminar | ❌ | ✅ (su dpto) | ✅ |
+
+### 4.4 Tareas
+
+| Acción | Empleado dpto origen | Empleado dpto destino | Jefe Dpto | Admin/Adjunto |
+|---|---|---|---|---|
+| Ver | ✅ (la creó) | ✅ (asignadas a su dpto) | ✅ | ✅ |
+| Avanzar/cerrar | ❌ | ✅ | ✅ | ✅ |
+| Eliminar | ❌ | ❌ | ❌ | ✅ (`canActAsAdmin`) |
+
+### 4.5 Caja
+
+| Acción | Empleado | Jefe Dpto | Contable | Admin/Adjunto |
+|---|---|---|---|---|
+| Realizar cierre | ✅ (su dpto) | ✅ (su dpto) | ❌ | ✅ |
+| Reabrir cierre | ❌ | ✅ (su dpto) | ❌ | ✅ |
+| Eliminar cierre | ❌ | ❌ | ❌ | ✅ (`canActAsAdmin`) |
+| Ver cierres (lectura) | ❌ | ✅ (su dpto) | ✅ (todos, solo Caja tab) | ✅ |
+
+### 4.6 Validación (7 pestañas)
+
+| Pestaña | Jefe Dpto | Contable | Admin/Adjunto |
+|---|---|---|---|
+| **Follow-up** (turnos) | ✅ su dpto | ❌ | ✅ todos |
+| **Operativo** (gestiones/incidencias/tareas/notas) | ✅ su dpto | ❌ | ✅ todos |
+| **Caja** (cierres) | ✅ su dpto | ✅ (ÚNICA pestaña visible) | ✅ todos |
+| **Hypoxic** | ✅ | ❌ | ✅ |
+| **Merma** | ✅ (Cocina/Friegue) | ❌ | ✅ |
+| **Notas** (employee_notes) | ✅ su dpto | ❌ | ✅ |
+| **FIO** | ✅ su dpto | ❌ | ✅ |
+
+Contable: `_updateContableTabLock()` oculta todas las pestañas excepto Caja. `switchValTab` fuerza `tab = 'caja'` si `isContable`.
+
+### 4.7 FIO
+
+| Acción | Empleado | Jefe Dpto | Admin/Adjunto |
+|---|---|---|---|
+| Ver Mis FIO | ✅ (solo los suyos) | ✅ (suyos + subordinados) | ✅ |
+| Disputar FIO | ✅ (solo los suyos) | ❌ | ❌ |
+| Crear FIO | ❌ | ✅ (su dpto) | ✅ |
+| Validar FIO | ❌ | ✅ (`canValidateFIO`) | ✅ |
+| Eliminar FIO | ❌ | ❌ | ✅ (`canActAsAdmin`) |
+
+### 4.8 Dashboard / Informes / Maestro
+
+| Acción | Empleado | Jefe Dpto | Contable | Admin/Adjunto |
+|---|---|---|---|---|
+| Dashboard | ❌ | ✅ (su dpto) | ✅ | ✅ (todos) |
+| Informes | ❌ | ✅ (Manager Bar) | ❌ | ✅ |
+| Maestro (CRUD empleados) | ❌ | ✅ (su dpto, limitado) | ❌ | ✅ (completo) |
+| Exportar | ❌ | ❌ | ❌ | ✅ |
+| Fichaje / Alertas | ❌ | ✅ | ❌ | ✅ |
+| Mi Rendimiento | ✅ | ✅ | ❌ | ❌ |
+
+### 4.9 Housekeeping (específicos)
+
+| Acción | Empleado HK | Gobernante/Subgob. | Admin/Adjunto |
+|---|---|---|---|
+| Mi Ruta | ✅ | ✅ | ✅ |
+| Checklist HK | ✅ | ✅ | ✅ |
+| Revisión HK | ❌ | ✅ (GESTIÓN HK dropdown) | ✅ |
+| Dashboard HK | ❌ | ✅ (GESTIÓN HK dropdown) | ✅ |
+| Planificación HK | ❌ | ✅ (GESTIÓN HK dropdown) | ✅ |
+| Zonas públicas | ❌ | ✅ (GESTIÓN HK dropdown) | ✅ |
+| Configuración HK | ❌ | ✅ (Manager Bar) | ✅ |
+
+### 4.10 Mantenimiento
+
+| Acción | Empleado Mant. | Jefe Mantenimiento | Admin/Adjunto |
+|---|---|---|---|
+| Kanban Tareas | ✅ | ✅ | ✅ |
+| Drag & drop columnas | ✅ | ✅ | ✅ |
+
+---
+
+## 5. Navegación — estructura `getScreens(rol)`
+
+La función `getScreens()` (shared.js ~línea 680) construye el menú dinámico. Hay 4 bloques principales:
+
+| Bloque | Contenido | Quién lo ve |
+|---|---|---|
+| **MI DÍA** | Turno, Checklist, Merma, Caja, Gestiones, Tareas, Incidencias, Hypoxic, Nota | Todos (varía por dpto) |
+| **MI DEPARTAMENTO** | Validación, Kanban Mant., Fichaje, Mis FIO, Mi Rendimiento | Jefes + empleados (no Administración) |
+| **GESTIÓN HK** (dropdown) | Revisión, Dashboard HK, Planificación, Zonas públicas | Solo Gobernante/Subgob. + Admin |
+| **MANAGER BAR** (dropdown) | Dashboard, Maestro, FIO, Informes, Config HK | Solo jefes + Admin/Adjunto |
+
+Rutas especiales: Admin no tiene Mi Turno ni Info. Contable solo ve Validación + Dashboard. Adjunto tiene estructura propia con acceso completo a Manager Bar.
+
+---
+
+## 6. Reglas de acceso por departamento
+
+- Un jefe solo accede a datos de sus departamentos (según `SUPERVISOR_DEPT_MAP`)
+- Un empleado solo accede a sus propios turnos y datos de su departamento
+- `canActAsAdmin` (admin + adjunto_directivo) accede a todo sin restricción
+- Contable: acceso cross-departamento solo en pestaña Caja de Validación
+- El filtrado es responsabilidad del frontend (JS). RLS es decorativo (61 policies `USING(true)` para anon)
+- Nunca confiar en que Supabase filtre por rol
+
+---
+
+## 7. Identificadores de rol en código (actual)
+
+```javascript
+// shared.js — funciones definitivas
+function isAdmin(user)           { return !!user && user.rol === 'admin'; }
+function isAdjuntoDirectivo(user){ return !!user && (user.rol === 'adjunto' || user.rol === 'adjunto_directivo'); }
+function canActAsAdmin(user)     { return isAdmin(user) || isAdjuntoDirectivo(user); }
+function isContable(user)        { return !!user && user.rol === 'contable'; }
+function isSupervisor(user)      { return !!user && (user.rol === 'jefe' || SUPERVISOR_DEPT_MAP.hasOwnProperty(user.rol)); }
+
+// getScreens() — flag compuesto:
+var isJefe = isAdminU || isAdjDir
+  || (typeof isSupervisor === 'function' && isSupervisor(currentUser))
+  || ['chef','fb','jefe_recepcion','supervisor','jefe',
+      'coord_recepcion_syncrolab','coord_entrenadores',
+      'coord_fisioterapeutas','gobernante',
+      'jefe_mantenimiento','subgobernante'].indexOf(rol) >= 0;
+```
+
+**⚠ Las columnas `responsable` y `validador` en `employees` son legacy — NO se usan para detección de rol.**
+
+---
+
+## 8. Personal clave actual (jul 2026)
+
+| Persona | Rol | Código | Nota |
+|---|---|---|---|
+| Alexander (CEO) | admin | `admin` | PIN 300415 |
+| Angélica Camacho | Adjunta Directiva / RRHH | `adjunto_directivo` | Reemplaza a Natalia Khotuleva |
+| José | Jefe de Sala | `fb` | Reemplaza a Stefan (despedido) |
+| Andrés | Chef / Jefe de Cocina | `chef` | PIN 0101 |
+| Juan Francisco Baena Espino | Jefe de Recepción Hotel | `jefe_recepcion` | |
+| Sofía | Coordinadora Entrenadores | `coord_entrenadores` | |
+| Carlos Marí Sendra | Contable | `contable` | Solo Caja + Dashboard |
+| Carles Mari Seguí | Administrador | — | |

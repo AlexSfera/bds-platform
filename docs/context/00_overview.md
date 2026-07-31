@@ -1,281 +1,150 @@
-# 00 — Overview: SynchroHub Follow-up SYNCROSFERA
+# 00 — Overview: SYNCRO SHIFT
 
-**Versión:** 2.1  
-**Fecha:** 2026-05  
-**Estado:** Referencia obligatoria antes de cualquier desarrollo  
-**Plataforma:** syncro-hub.vercel.app  
-**Stack actual:** Vanilla JS · Supabase (PostgreSQL) · Vercel  
+**Actualizado:** 2026-07-31
+**Plataforma:** syncro-shift.vercel.app (antes syncro-hub.vercel.app)
+**Stack:** Vanilla JS · Supabase (PostgreSQL) · Vercel auto-deploy
+**Repo:** github.com/AlexSfera/syncro_hub (rama `main`)
 
 ---
 
-## 1. Qué es SynchroHub
+## 1. Qué es SYNCRO SHIFT
 
-SynchroHub Follow-up SYNCROSFERA es la plataforma interna de control operativo diario de SYNCROSFERA (Health Sport Hotel, España). Centraliza en un único punto los siguientes módulos, cada uno con su objetivo operativo específico:
-
-**Registro y seguimiento de turno por departamento**
-Controlar la ejecución diaria del empleado: tareas realizadas, horas trabajadas, checklist completado, incidencias registradas, gestiones pendientes declaradas y KPIs del turno. El turno es la unidad operativa base de la plataforma.
-
-> **Regla de visibilidad y gestión por entidad:**
-> - **Gestiones:** el empleado crea, ve y gestiona todas las gestiones de su departamento.
-> - **Incidencias:** el empleado crea y ve solo las suyas hasta cierre. Solo el jefe/admin las procesa y cierra.
-> - **Tareas:** el empleado del departamento destino ve y gestiona las tareas asignadas. El empleado origen solo ve las que creó.
-
-**Gestión de incidencias operativas**
-Dar visibilidad inmediata al supervisor para que pueda actuar. Permite medir tiempos de solución, detectar reincidencias y analizar calidad operativa por departamento y empleado.
-
-**Seguimiento de gestiones pendientes entre turnos**
-Asegurar el traspaso correcto de información entre turnos. Evitar olvidos y mantener trazabilidad de responsabilidades. Una gestión pendiente no es una incidencia — es algo que debe continuar en el siguiente turno sin necesidad de una resolución formal urgente.
-
-**Asignación y control de tareas interdepartamentales**
-Gestionar acciones necesarias entre departamentos con responsable asignado, deadline, estado y control de cumplimiento. Una tarea puede cruzar departamentos — una gestión pendiente no.
-
-**Cierres de caja (departamentos con operación económica)**
-Controlar y cuadrar cobros diarios en efectivo, TPV, Stripe y, exclusivamente en Recepción Hotel, transferencias bancarias si aplican. Aplica a tres departamentos: Sala / Restaurante, Recepción Hotel y SYNCROLAB.
-
-**Validaciones de supervisores y jefes de departamento**
-El supervisor revisa lo ocurrido en el turno, comprueba la calidad de los datos, solicita correcciones si es necesario y valida la operación. Es el punto de control formal entre la ejecución del empleado y el reporting.
-
-**Control de merma — solo Cocina**
-Controlar pérdidas de producto, asignar responsabilidad entre cocineros y justificar desviaciones por parte del Chef y su equipo. La merma es un KPI propio de Cocina, explotable en dashboard por fecha, servicio, empleado, producto, cantidad, motivo y coste estimado.
-
-**FIO — Fallos Individuales Operativos**
-Registrar errores individuales de forma objetiva para seguimiento formal, amonestaciones justificadas y posible impacto futuro en bonus o penalizaciones. El FIO no es una incidencia ni una tarea. Solo lo crea el supervisor o admin desde el módulo de Validación.
-
-**Housekeeping — Planificación, ejecución y control de limpieza**
-Gestionar la planificación diaria y semanal de habitaciones y zonas públicas, controlar tiempos reales con pausas descontadas, validar el trabajo realizado y alimentar dashboard con KPIs de productividad y cumplimiento.
-
-**Compras necesarias — solo Mantenimiento**
-Registrar solicitudes internas de compra de materiales, herramientas o productos necesarios. No deben mezclarse con tareas, incidencias ni gestiones. Tienen estado, prioridad, responsable y trazabilidad propia.
+Plataforma interna de control operativo diario de SYNCROSFERA (Health Sport Hotel, España). Centraliza: registro de turnos, gestiones pendientes, incidencias, tareas interdepartamentales, cierres de caja (3 departamentos), validaciones de supervisores, merma, FIO, housekeeping, Kanban mantenimiento, incentivos, informes POSMEWS, fichaje Bitrix, sala hipóxica.
 
 ---
 
 ## 2. Ecosistema SYNCROSFERA
 
-| Sistema | Rol | Integración SynchroHub |
+| Sistema | Rol | Integración |
 |---|---|---|
-| **Bitrix24** | Single Source of Truth — tareas, CRM, RRHH | Futuro: sync tareas bidireccional |
-| **MEWS** | PMS hotel — reservas, check-in/out, room charges | Referencia en caja Recepción |
-| **POSMEWS** | POS restaurante — comandas, cobros | Referencia en caja Sala |
-| **Nubimed** | Sistema clínica — citas, historial | Referencia en SYNCROLAB |
-| **SynchroHub** | Control operativo diario interno | Este sistema |
+| **Bitrix24** | SSOT — tareas, CRM, RRHH, fichaje | Sync fichaje vía `bitrix-sync.js` (Edge Function) + alertas |
+| **MEWS** | PMS hotel — reservas, check-in/out | Referencia en caja Recepción. HK FASE 2 vía n8n (no implementada) |
+| **POSMEWS** | POS restaurante — comandas, cobros | CSV upload en Informes. Caja Sala |
+| **Nubimed** | Sistema clínica — citas, historial | Referencia en caja SYNCROLAB |
+| **VirtuGym** | App gimnasio | Referencia en caja SYNCROLAB |
+| **n8n** | Middleware automatizaciones | Cuadrantes, MEWS sync (futuro) |
 
 ---
 
-## 3. Departamentos operativos
+## 3. Departamentos y módulos
 
 | Departamento | Caja | Merma | Módulo JS | Estado |
 |---|---|---|---|---|
-| Cocina | ❌ | ✅ | `cocina.js` | Pendiente crear |
-| Sala | ✅ | ❌ | `sala.js` | Activo |
+| Cocina | ❌ | ✅ | `merma.js` (merma compartida con Friegue/FnB) | Activo |
+| Sala | ✅ | ❌ | `sala.js` + `caja.js` | Activo |
 | Recepción Hotel | ✅ | ❌ | `recepcion.js` | Activo |
-| SYNCROLAB | ✅ | ❌ | `syncrolab.js` | Pendiente crear |
-| Housekeeping | ❌ | ❌ | `housekeeping.js` | Pendiente crear |
-| Mantenimiento | ❌ | ❌ | `shared.js` | Activo básico |
-| Friegue | ❌ | ❌ | `shared.js` | Activo básico |
-| Economato | ❌ | ❌ | `shared.js` | Activo básico |
-| RRHH | ❌ | ❌ | `shared.js` | Activo básico |
-| Administración | ❌ | ❌ | `shared.js` | Activo básico |
-
-> **Nombre definitivo confirmado: `SYNCROLAB`**
-> Usar de forma consistente en tablas, dashboard, permisos y código.
-> No usar variantes: "Recepción SYNCROLAB", "RecepcionSyncrolab", "syncrolab".
+| SYNCROLAB | ✅ | ❌ | `syncrolab.js` | Activo |
+| Housekeeping | ❌ | ❌ | `housekeeping.js` | Activo (FASE 1) |
+| Mantenimiento | ❌ | ❌ | `mantenimiento.js` (Kanban tareas) | Activo |
+| Friegue | ❌ | ✅ | `shared.js` (base) + `merma.js` | Activo básico |
+| FnB | ❌ | ✅ | `shared.js` (base) + `merma.js` | Activo básico |
+| Economato | ❌ | ❌ | `shared.js` (base) | Activo básico |
+| RRHH | ❌ | ❌ | `shared.js` (base) | Activo básico |
+| Administración | ❌ | ❌ | `shared.js` (base) | Activo básico |
 
 ---
 
-## 4. Módulos principales y KPI
+## 4. Separación obligatoria entre entidades
 
-| Módulo | Alimenta dashboard | KPIs principales |
+| Entidad | Cuándo usar | Tabla |
 |---|---|---|
-| Mi Turno | ✅ | Horas, turnos, incidencias, gestiones por turno |
-| Validación | ✅ | Validaciones pendientes, tiempo medio validación |
-| Incidencias | ✅ | Abiertas, cerradas, tiempo medio resolución, reincidencias |
-| Gestiones Pendientes | ✅ | Abiertas, cerradas, tiempo medio resolución |
-| Tareas | ✅ | Pendientes, vencidas, completadas, por departamento |
-| FIO | ✅ | Totales, pendientes, por empleado, por tipo |
-| Merma (Cocina) | ✅ | Coste total, por producto, por empleado, por servicio |
-| Caja | ✅ | Diferencias, cuadre, fondos, días cuadrados/descuadrados |
-| Housekeeping | ✅ | Tiempos real vs estimado, cumplimiento, incidencias |
-| Compras necesarias | `[NO DATA]` | Pendiente definir KPI para Mantenimiento |
-| Mi ruta para hoy | ✅ | Habitaciones completadas, tiempo por habitación |
-| Planificación de rutas | ✅ | Carga estimada vs real, cumplimiento |
-| Maestro | ❌ | Sin KPI directo |
-| Info | ❌ | Sin KPI — solo informativo |
-
----
-
-## 5. Navegación estándar por departamento operativo
-
-### Base común — todos los departamentos
-
-```
-[ Mi turno ] [ Gestiones pendientes ] [ Incidencias ] [ Tareas ]
-                        ···
-[ Info ] [ 🏢 Nombre departamento ] [ Salir ]
-```
-
-**Reglas:**
-- Los 4 botones principales siempre visibles para todos los roles
-- `Info` siempre a la derecha — solo lectura, no operativo
-- Icono y nombre de departamento visibles pero no clicables
-- `Salir` siempre visible
-- No mostrar botones de otros departamentos
-- No duplicar botones
-- No mezclar navegación de Admin con empleado lineal
-
-### Módulos adicionales por departamento
-
-| Departamento | Botones adicionales |
-|---|---|
-| Sala | `Cierre de caja` (derecha) |
-| Recepción Hotel | `Caja Recepción` (derecha) |
-| SYNCROLAB | `Caja SYNCROLAB` (derecha) |
-| Cocina | *(merma integrada en Mi Turno — sin botón adicional)* |
-| Housekeeping empleado | `Mi ruta para hoy` (izquierda) |
-| Gobernanta / Subgobernanta | `Mi ruta para hoy` · `Planificación de rutas` (izquierda) |
-| Mantenimiento | `Compras necesarias` (izquierda) |
-
-### Navegación completa — Housekeeping empleado
-
-```
-[ Mi turno ] [ Mi ruta para hoy ] [ Gestiones pendientes ] [ Incidencias ] [ Tareas ]
-                        ···
-[ Info ] [ 🛏 Housekeeping ] [ Salir ]
-```
-
-### Navegación completa — Gobernanta / Subgobernanta
-
-```
-[ Mi turno ] [ Mi ruta para hoy ] [ Planificación de rutas ] [ Gestiones pendientes ] [ Incidencias ] [ Tareas ]
-                        ···
-[ Info ] [ 🛏 Housekeeping ] [ Salir ]
-```
-
-### Navegación completa — Mantenimiento
-
-```
-[ Mi turno ] [ Compras necesarias ] [ Tareas ] [ Gestiones pendientes ] [ Incidencias ]
-                        ···
-[ Info ] [ 🔧 Mantenimiento ] [ Salir ]
-```
-
----
-
-## 6. Flujo operativo estándar
-
-```
-Login
-    ↓
-Mi Turno → Inicio de turno
-    → Revisar gestiones pendientes heredadas del turno anterior
-    → Revisar incidencias abiertas
-    → Revisar tareas pendientes asignadas
-    ↓
-Durante el turno:
-    → Completar checklist del departamento
-    → Registrar incidencias si ocurren
-    → Registrar gestiones pendientes que queden abiertas
-    → Crear tareas si es necesario
-    → Registrar KPIs específicos del departamento si aplica
-    → Registrar módulos específicos (merma, ruta, compras)
-    ↓
-Cierre de turno
-    → Guardar turno
-    → Cierre de caja si aplica (Sala, Recepción, SYNCROLAB)
-    ↓
-[Jefe / Admin] → Validación
-    → Revisar checklist
-    → Procesar gestiones e incidencias (cambiar estado, cerrar)
-    → Revisar caja si aplica
-    → Crear FIO si aplica
-    → Validar turno
-    ↓
-Dashboard → refleja datos en tiempo real
-    ↓
-Logout
-```
-
----
-
-## 7. Separación obligatoria entre entidades
-
-> **Incidencias, gestiones pendientes y tareas son entidades diferentes.
-> No deben compartir tabla principal ni usarse como sustitutos entre sí.**
-
-| Entidad | Cuándo usar | Tabla SQL |
-|---|---|---|
-| **Incidencia** | Algo que ya ocurrió y afectó operación, cliente, calidad o dinero | `incidencias` |
+| **Incidencia** | Algo que ya ocurrió y afectó operación/cliente/calidad/dinero | `incidencias` |
 | **Gestión pendiente** | Algo que debe continuar entre turnos del mismo departamento | `gestiones` |
-| **Tarea** | Acción formal asignada con deadline, puede ser interdepartamental | `tareas` |
+| **Tarea** | Acción formal con deadline, puede ser interdepartamental | `tareas` |
 | **FIO** | Error individual detectado por supervisor en validación | `fio` |
-| **Merma** | Pérdida de producto — solo Cocina | `merma` |
-| **Compra necesaria** | Solicitud de compra — solo Mantenimiento | `maintenance_purchases` |
-| **Ruta Housekeeping** | Plan diario de limpieza | `housekeeping_plans` |
-| **Asignación Housekeeping** | Habitación o zona asignada a empleado | `housekeeping_assignments` |
+| **Merma** | Pérdida de producto — Cocina/Friegue/FnB | `merma` |
+| **Asignación HK** | Habitación/zona/tarea periódica asignada a empleado HK | `housekeeping_assignments` |
+
+Cada entidad tiene tabla propia. No mezclar. No crear tareas por merma. No crear incidencias por gestiones.
 
 ---
 
-## 8. FIO — definición y reglas
+## 5. Flujo operativo estándar
 
-El FIO no es una incidencia operativa ni una tarea. Es un fallo individual operativo detectado por el supervisor durante la validación del turno.
+```
+Login (PIN)
+  → Mi Turno → Inicio de turno
+    → Revisar gestiones heredadas del turno anterior
+    → Revisar incidencias abiertas
+    → Revisar tareas pendientes
+  → Durante el turno:
+    → Completar checklist
+    → Registrar incidencias / gestiones / tareas
+    → Módulos específicos (merma, ruta HK, caja)
+  → Cierre de turno → Guardar
+  → Cierre de caja si aplica (Sala, Recepción, SYNCROLAB)
 
-**Finalidad:**
-- Registrar errores objetivos de un empleado específico
-- Documentar reincidencias con trazabilidad
-- Justificar amonestaciones formales de forma objetiva
-- Posible impacto futuro en bonus o penalizaciones
+[Jefe/Admin] → Validación
+  → Revisar checklist, gestiones, incidencias, caja, merma
+  → Crear FIO si aplica
+  → Validar turno
 
-**Reglas obligatorias:**
-- Solo lo crea supervisor o admin — nunca el empleado
-- Se crea exclusivamente desde el módulo de Validación
-- Campos obligatorios: empleado afectado, tipo, severidad, comentario, fecha, responsable que lo registra
-- Se refleja en dashboard y reportes de control de personal
-- El empleado no puede crear FIO ni ver FIO de otros empleados
+Dashboard → refleja datos en tiempo real
+```
 
 ---
 
-## 9. Vinculación entre departamentos
+## 6. Documentación del proyecto — índice
 
-La plataforma permite relación entre departamentos sin mezclar datos entre sus tablas.
+### Activos (actualizados julio 2026)
 
-| Ejemplo operativo | Mecanismo técnico |
+| Doc | Contenido |
 |---|---|
-| Recepción crea tarea para Mantenimiento | `tareas`: `dept_origen='Recepción'`, `dept_destino='Mantenimiento'` |
-| SYNCROLAB crea tarea para Housekeeping | `tareas`: `dept_origen='SYNCROLAB'`, `dept_destino='Housekeeping'` |
-| Sala registra incidencia con impacto en Cocina | `incidencias`: `departamento='Sala'` |
-| Mantenimiento registra compra derivada de tarea | `maintenance_purchases` con `tarea_id` de referencia |
-| Admin visualiza todo | Sin filtro de departamento |
-| Jefe visualiza y valida solo su ámbito | Filtro fijo por `departamento` |
+| `03_roles_permissions.md` | Roles, SUPERVISOR_DEPT_MAP, matrices de permisos, personal clave |
+| `04_departments.md` | Configuración departamental, módulos JS activos |
+| `05_shifts_and_checklists.md` | Turnos, columnas, FEAT-TURNO-AUTO, checklist_items |
+| `07_incidents.md` | Incidencias: columnas, adjuntos, visibilidad, cierre |
+| `08_pending_managements.md` | Gestiones: columnas, leido_por, prioridad, cierre |
+| `09_tasks.md` | Tareas: estados, deadline, verificación, adjuntos |
+| `10_caja_all.md` | Cierres de caja Sala + Recepción + SYNCROLAB (unificado) |
+| `13_kitchen_waste.md` | Merma: Cocina/Friegue/FnB, búsqueda dual, cálculo coste |
+| `14_validations.md` | Validación: 7 pestañas, contable, FIO, merma |
+| `20_housekeeping.md` | HK: planificación, ejecución, revisión, zonas, FASE 2 |
+| `21_maintenance_purchases.md` | Mantenimiento: Kanban tareas con fecha_ejecucion |
+| `22_auto_turno_assignment.md` | Asignación automática de turno |
+| `23_feat_turno_auto_implementacion.md` | Implementación FEAT-TURNO-AUTO |
 
-Cada vínculo interdepartamental debe guardar: `departamento` origen, `dept_destino`, `employee_id`, `responsable_id`, `estado`, `fecha`, `created_at` y registro en `audit_log` si hay DELETE.
+### Referencia compacta
 
----
-
-## 10. Módulo Info
-
-Apartado informativo no operativo que puede mostrar instrucciones del departamento, reglas de uso, criterios operativos, ayuda rápida o procedimientos internos. No guarda datos operativos ni alimenta dashboard. Es de solo lectura para todos los roles excepto admin.
-
----
-
-## 11. Regla técnica — estructura SQL
-
-Cada entidad tiene su tabla con responsabilidad exclusiva. No cruzar datos entre tablas de cajas ni usar `incidencias` para guardar gestiones.
-
-| Tabla | Entidad exclusiva |
+| Doc | Contenido |
 |---|---|
-| `shifts` | Turnos |
-| `incidencias` | Incidencias operativas |
-| `gestiones` | Gestiones pendientes |
-| `tareas` | Tareas interdepartamentales |
-| `fio` | Fallos Individuales Operativos |
-| `merma` | Merma Cocina |
-| `maintenance_purchases` | Compras necesarias Mantenimiento |
-| `housekeeping_plans` | Planificaciones Housekeeping |
-| `housekeeping_assignments` | Asignaciones Housekeeping |
-| `housekeeping_rooms` | Catálogo habitaciones |
-| `housekeeping_public_areas` | Catálogo zonas públicas |
-| `sala_cash_closures` | Caja Sala |
-| `recepcion_cash` | Caja Recepción Hotel |
-| `syncrolab_cash` | Caja SYNCROLAB |
-| `audit_log` | Auditoría |
+| `trampas.md` | 18 trampas confirmadas que causaron bugs |
+| `mapa-modulos.md` | Mapa completo de módulos JS, funciones, sobreescrituras |
+| `esquema-supabase.md` | 46 tablas, columnas clave, auditoría RLS |
 
-**Transferencias bancarias: exclusivo de `recepcion_cash`. No añadir a Sala ni SYNCROLAB.**
+### Archivados (`_ARCHIVE/`)
+
+| Doc | Razón |
+|---|---|
+| `01_architecture.md` | Cubierto por mapa-modulos.md |
+| `02_global_app_structure.md` | Cubierto por mapa-modulos.md |
+| `15_dashboard.md` | B7 redesign pendiente; KPIs de referencia |
+| `16_master_admin.md` | Cubierto por esquema-supabase.md + mapa-modulos.md |
+| `17_sql_data_model.md` | Cubierto por esquema-supabase.md |
+| `18_qa_checklist.md` | Tests absorbidos en docs individuales + trampas.md |
+| `19_open_questions.md` | Mayoría respondidas por implementación |
+| `SYNCRO_HUB_ARCHITECTURE N.md` | Cubierto por mapa-modulos.md + memoria |
+
+### Eliminados (reemplazados)
+
+| Doc | Reemplazado por |
+|---|---|
+| `10_11_12_cash_closures.md` | `10_caja_all.md` |
+| `caja_sala_spec.md` | `10_caja_all.md` |
+| `Caja SyncroLab.md` | `10_caja_all.md` |
+
+---
+
+## 7. Preguntas abiertas residuales
+
+| Pregunta | Estado |
+|---|---|
+| ¿Jefes ven dashboard de otro dpto en lectura? | `adjunto_directivo` con `['*']` sí. Jefe normal no. |
+| ¿Exportación a Excel/PDF desde dashboard? | No implementado. B7 scope. |
+| ¿Dashboard histórico (semanas/meses anteriores)? | Sí — filtros Desde/Hasta con calendar picker. |
+| ¿Sync bidireccional tareas ↔ Bitrix24? | No implementado. Solo fichaje sync activo. |
+| ¿API MEWS para importar datos de caja? | No implementado. Datos manuales. |
+| ¿Merma genera incidencia automática si supera umbral? | No. Son independientes. |
+| ¿Checklists editables desde Maestro? | No. Hardcodeados en `checklist.js`. |
+| ¿Notificaciones (email/push/WhatsApp)? | No implementado. |
+| ¿Purga/archivo de datos antiguos? | No implementado. Todo en tabla principal. |

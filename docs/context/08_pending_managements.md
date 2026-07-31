@@ -1,185 +1,108 @@
 # 08 — Gestiones Pendientes
 
----
-
-## 1. Definición técnica
-
-Una **gestión pendiente** es un asunto operativo que queda sin resolver al final del turno y debe continuar en seguimiento en el siguiente. No es un problema grave (eso es una incidencia) ni una acción asignable a otro departamento (eso es una tarea).
-
-| Concepto | Cuándo usar |
-|---|---|
-| **Gestión pendiente** | Algo que queda pendiente dentro del mismo departamento entre turnos |
-| **Incidencia** | Problema real que ocurrió y requiere cierre formal con acción tomada |
-| **Tarea** | Acción que se asigna a una persona o a otro departamento con deadline |
+*Actualizado 30 jul 2026 — cruzado contra `shared.js`, `adjuntos.js`, `gestiones.js` del repo.*
 
 ---
 
-## 2. Tabla Supabase: `gestiones`
+## 1. Definición
 
-### Columnas
+Una **gestión pendiente** es un asunto operativo que queda sin resolver al final del turno y debe continuar en el siguiente. No es un problema grave (incidencia) ni una acción asignable a otro departamento (tarea).
+
+---
+
+## 2. Tabla Supabase: `gestiones` (424 filas)
 
 | Columna | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `id` | TEXT | ✅ | Generado en cliente con `genId()` |
+| `id` | TEXT PK | ✅ | `genId()` |
 | `shift_id` | TEXT | ✅ | ID del turno donde se registró |
 | `employee_id` | TEXT | ✅ | ID del empleado que registra |
 | `nombre` | TEXT | ✅ | Nombre legible del empleado |
+| `creado_por` | TEXT | — | Nombre del creador (puede diferir de `nombre` si se crea standalone) |
 | `departamento` | TEXT | ✅ | Departamento origen — nunca nulo |
 | `area` | TEXT | — | Alias de departamento |
 | `fecha` | TEXT | ✅ | YYYY-MM-DD |
-| `servicio` | TEXT | ✅ | Turno: Mañana · Tarde · Noche |
-| `tipo_gestion` | TEXT | ✅ | De la lista del departamento |
+| `servicio` | TEXT | ✅ | Turno |
+| `tipo_gestion` | TEXT | ✅ | De `incidencia_tipos.js` → `GESTION_TIPOS` |
 | `descripcion` | TEXT | ✅ | Qué queda pendiente |
+| `prioridad` | TEXT | — | `'alta'` · `'media'` · `'baja'` — mostrada con semáforo 🔴🟡🟢 |
+| `habitacion` | TEXT | — | Número de habitación (si aplica) |
+| `num_reserva` | TEXT | — | Número de reserva (si aplica) |
 | `accion_tomada` | TEXT | — | Obligatoria al cerrar |
-| `estado` | TEXT | ✅ | Ver estados abajo |
+| `estado` | TEXT | ✅ | `'Abierta'` → `'En proceso'` → `'Cerrada'` |
+| `leido_por` | JSONB | — | Array de IDs de usuarios que han leído la gestión |
+| `adjuntos` | JSONB | — | Array de URLs de archivos adjuntos (via `adjuntos.js`) |
 | `cerrado_por` | TEXT | — | Nombre de quien cierra |
 | `cerrado_ts` | TEXT | — | Timestamp de cierre |
 | `tiempo_gestion` | INTEGER | — | Minutos apertura → cierre |
 | `informado_responsable` | TEXT | ✅ | `'no'` · `'si'` |
-| `created_at` | TIMESTAMPTZ | ✅ | `localTs()` — hora local España |
+| `created_at` | TIMESTAMPTZ | ✅ | `localTs()` |
+| `updated_at` | TIMESTAMPTZ | — | Última modificación |
 
-### Estados
+---
 
-| Estado | Descripción | Transición |
+## 3. Estados
+
+| Estado | Transición | Quién |
 |---|---|---|
-| `'Abierta'` | Pendiente de gestionar | → En proceso · → Cerrada |
-| `'En proceso'` | Siendo gestionada | → Cerrada |
-| `'Cerrada'` | Resuelta | → Abierta (solo admin, con motivo) |
+| `'Abierta'` | → En proceso · → Cerrada | **Cualquier empleado del dpto** · Jefe · Admin |
+| `'En proceso'` | → Cerrada | **Cualquier empleado del dpto** · Jefe · Admin |
+| `'Cerrada'` | → Abierta (solo admin, con motivo + audit_log) | Admin |
+
+**⚠ A diferencia de incidencias, el empleado SÍ puede cambiar estado y cerrar gestiones de su departamento.** `bGestionEstadoClick` en `gestiones.js` es clickable sin check de rol.
 
 ---
 
-## 3. Tipologías por departamento
+## 4. Leído por
 
-Las tipologías viven en `incidencia_tipos.js` en el objeto `GESTION_TIPOS`.
+`leido_por` (JSONB array) registra qué usuarios han visto la gestión. Se actualiza vía PATCH directo:
 
-| Departamento | Tipos |
-|---|---|
-| Cocina | Producción/mise en place · Stock/material · Reservas/grupos · Cliente/huésped · Pedido específico · Otro |
-| Sala | Cliente/huésped petición especial · Reserva/grupo/evento · Reposición/pedido material · Información a confirmar · Otro |
-| Recepción | Check-in/llegada · Check-out/salida · Cobro/factura · Reserva MEWS · Comunicación cliente · Habitación/housekeeping · Solicitud especial · Gestión otro dpto · Grupo/evento · Otro |
-| Recepción SYNCROLAB | Cliente/lead · Reserva · Cobro/factura · Comunicación · Documentación · Coordinación hotel · Otro |
-| Resto | Tarea pendiente · Comunicación · Gestión administrativa · Otro |
-
-Para obtener la lista:
 ```javascript
-var tipos = getGestionTipos(currentUser.area);
-populateGestionTipoSelector('g-tipo', currentUser.area);
+// shared.js ~4282
+function registrarLecturaGestion(rec) {
+  var leido = Array.isArray(rec.leido_por) ? rec.leido_por.slice() : [];
+  if(leido.indexOf(currentUser.id) >= 0) return;
+  leido.push(currentUser.id);
+  // PATCH directo (no sbRequest por return=minimal)
+  fetch(url, { body: JSON.stringify({leido_por: leido}) });
+}
 ```
 
 ---
 
-## 4. Registro de gestión — flujo
+## 5. Adjuntos
 
-```
-Empleado en Mi Turno
-    → Activa toggle "¿Queda alguna gestión pendiente?" → Sí
-    → Selecciona tipo (lista de su departamento)
-    → Describe qué queda pendiente
-    → Se graba en tabla 'gestiones' al guardar turno
-    → estado = 'Abierta', created_at = localTs()
-```
-
-También puede registrarse de forma independiente desde el botón superior de Mi Turno, sin necesidad de cerrar el turno.
-
----
-
-## 5. Cierre de gestión — flujo
-
-```
-Jefe Dpto / Admin (en Validación o Dashboard)
-    → Localiza la gestión en el modal de validación o en dashboard
-    → Pulsa "En proceso" → estado cambia
-    → Pulsa "Cerrar" → campo "Acción tomada" obligatorio
-    → Al confirmar:
-        estado = 'Cerrada'
-        accion_tomada = texto
-        cerrado_por = currentUser.nombre
-        cerrado_ts = localTs()
-        tiempo_gestion = minutos entre created_at y cerrado_ts
-    → invalidateCache('gestiones')
-```
+`adjuntos.js` inyecta contenedores de adjuntos en gestiones (Mi Turno y modal standalone). Archivos en bucket `adjuntos` de Supabase Storage, guardados como JSON en `gestiones.adjuntos`.
 
 ---
 
 ## 6. Reglas de negocio
 
-- El empleado **registra** pero **no procesa** — sin botones de cambio de estado en Mi Turno
-- La validación del turno **no cierra** gestiones automáticamente
-- Una gestión cerrada puede reabrirse solo por admin con motivo + audit_log
-- La gestión permanece visible en follow-up y dashboard hasta que esté cerrada
-- El tiempo de gestión se graba en BD al cerrar, no se recalcula en frontend
-- Semáforo de tiempo: ≤24h 🟢 · ≤48h 🟡 · >48h 🔴
+- **Todos los empleados del departamento** pueden ver y gestionar las gestiones de su departamento
+- Las gestiones NO están restringidas al empleado que las creó
+- La validación del turno **NO cierra** gestiones automáticamente
+- Cerrada solo reabierta por admin con motivo + audit_log
+- Semáforo: ≤24h 🟢 · ≤48h 🟡 · >48h 🔴
+- También registrable de forma standalone (botón "Nueva gestión" fuera del flujo de turno)
 
 ---
 
-## 7. Visibilidad por rol — reglas de fila
+## 7. Visibilidad por rol
 
 | Rol | Qué ve | Puede gestionar/cerrar |
 |---|---|---|
-| **Empleado** | Todas las gestiones de su departamento | ✅ Sí — puede cambiar estado y cerrar |
-| **Jefe Dpto** | Todas las gestiones de su departamento | ✅ Sí |
-| **Admin** | Todas | ✅ Sí + eliminar |
-
-> Las gestiones son visibles y gestionables por todos los empleados del departamento.
-> No están restringidas al empleado que las creó.
-> El empleado SÍ puede cambiar estado y cerrar gestiones de su departamento.
-
-### Visibilidad por módulo
-
-| Módulo | Qué ve | Quién |
-|---|---|---|
-| Mi Turno | Todas las gestiones pendientes de su departamento | Empleado + Jefe + Admin |
-| Mi Turno | Botones En proceso / Cerrar activos | Empleado + Jefe + Admin |
-| Validación — lista turnos | Columna "Gestiones" con badge contador | Jefe/Admin |
-| Validación — modal turno | Detalle de cada gestión + botones acción | Jefe/Admin |
-| Dashboard — Gestiones Pendientes | Todas las del departamento + filtros | Jefe/Admin |
+| Empleado | Todas las gestiones de **su departamento** (no cerradas) | ✅ Sí |
+| Jefe Dpto | Todas las de su departamento | ✅ Sí |
+| Admin/Adjunto | Todas | ✅ Sí + eliminar |
 
 ---
 
-## 8. Columnas en dashboard
-
-| Columna | Fuente |
-|---|---|
-| Fecha apertura | `created_at` |
-| Hora apertura | `created_at` |
-| Fecha cierre | `cerrado_ts` |
-| Hora cierre | `cerrado_ts` |
-| Departamento | `departamento` |
-| Empleado | `nombre` |
-| Tipo | `tipo_gestion` |
-| Descripción | `descripcion` |
-| Estado | `estado` |
-| Acción tomada | `accion_tomada` |
-| Tiempo gestión | `tiempo_gestion` con semáforo |
-| Cerrado por | `cerrado_por` |
-
----
-
-## 9. Permisos de eliminación
+## 8. Eliminación
 
 | Rol | Puede eliminar |
 |---|---|
 | Empleado | ❌ |
-| Jefe Dpto | ✅ Solo gestiones de su departamento |
-| Admin | ✅ Todas |
+| Jefe Dpto | ✅ Solo de su departamento |
+| Admin/Adjunto | ✅ Todas (`canActAsAdmin`) |
 
-Toda eliminación requiere: confirmación + motivo + `auditLog()` antes del `dbDelete()`.
-
----
-
-## 10. QA — criterios de aceptación
-
-```
-□ El select de tipo muestra la lista correcta del departamento del empleado
-□ Al guardar turno, la gestión aparece en tabla 'gestiones' en Supabase
-□ El campo 'departamento' nunca es nulo
-□ El campo 'created_at' está en hora local España
-□ El empleado NO ve botones de cambio de estado
-□ El jefe/admin SÍ puede cambiar estado desde validación y dashboard
-□ Al cerrar: 'accion_tomada' es obligatoria
-□ Al cerrar: se graban cerrado_por, cerrado_ts, tiempo_gestion
-□ La validación del turno no cambia el estado de gestiones
-□ El dashboard muestra fecha y hora de apertura y cierre
-□ El jefe puede eliminar gestiones de su dpto — el empleado no puede
-□ Toda eliminación genera registro en audit_log
-```
+Toda eliminación: confirmación + motivo + `auditLog()` antes de `dbDelete()`.
