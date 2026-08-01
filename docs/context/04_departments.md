@@ -1,21 +1,17 @@
 # 04 — Departamentos
 
+*Actualizado 30 jul 2026 — cruzado contra `shared.js`, `getScreens()` y módulos JS del repo.*
+
 ---
 
-## 1. Configuración centralizada
+## 1. Catálogo de departamentos
+
+No existe un objeto `DEPT_CONFIG` centralizado en código. La configuración se distribuye entre `DEPT_ICONS`, `DEPT_COLORS`, `SUPERVISOR_DEPT_MAP`, `AREA_GROUPS` y flags en `getScreens()`.
 
 ```javascript
-const DEPT_CONFIG = {
-  'Cocina':         { emoji:'🍳', color:'#f59e0b', caja:false, merma:true,  modulo:'cocina.js'       },
-  'Sala':           { emoji:'🍽', color:'#3b82f6', caja:true,  merma:false, modulo:'sala.js'          },
-  'Recepción':      { emoji:'🏨', color:'#8b5cf6', caja:true,  merma:false, modulo:'recepcion.js'     },
-  'SYNCROLAB':      { emoji:'🏋', color:'#06b6d4', caja:true,  merma:false, modulo:'syncrolab.js'     },
-  'Housekeeping':   { emoji:'🛏', color:'#10b981', caja:false, merma:false, modulo:'housekeeping.js'  },
-  'Mantenimiento':  { emoji:'🔧', color:'#ef4444', caja:false, merma:false, modulo:'shared.js'        },
-  'Friegue':        { emoji:'🧽', color:'#f97316', caja:false, merma:false, modulo:'shared.js'        },
-  'Economato':      { emoji:'📦', color:'#a855f7', caja:false, merma:false, modulo:'shared.js'        },
-  'RRHH':           { emoji:'👥', color:'#64748b', caja:false, merma:false, modulo:'shared.js'        },
-  'Administración': { emoji:'📋', color:'#6366f1', caja:false, merma:false, modulo:'shared.js'        },
+const DEPT_ICONS = {
+  'Cocina':'🍳','Sala':'🍽','Mantenimiento':'🔧','Recepción':'🏨',
+  'Administración':'📋','Economato':'📦','Limpieza':'🧹'
 };
 ```
 
@@ -27,57 +23,48 @@ const DEPT_CONFIG = {
 
 | Campo | Valor |
 |---|---|
-| Caja | ❌ |
-| Merma | ✅ |
-| Módulo JS | `cocina.js` (pendiente crear) |
-| KPIs turno | Cubiertos, merma €, ajustes operativos |
-| Tipos incidencia | 14 tipos propios (ver `incidencia_tipos.js`) |
-| Tipos gestión | 6 tipos propios |
-| Checklist | Propio por turno (Apertura / Cierre) |
-| Módulos específicos | Merma integrada en Mi Turno |
-| Navegación extra | Ninguna |
+| Caja | ❌ (cierre de caja es de Sala) |
+| Merma | ✅ (pantalla Merma en MI DÍA) |
+| Módulo JS | Lógica en `shared.js` (no existe `cocina.js`) |
+| Supervisor | `chef` (Cocina + Friegue) |
+| Checklist | ✅ Apertura + Cierre |
+| Nav especial | Merma en MI DÍA |
 
 ### Sala
 
 | Campo | Valor |
 |---|---|
-| Caja | ✅ (`sala_cash_closures`) |
+| Caja | ✅ `sala_cash_closures` via `caja.js` (98 KB) |
 | Merma | ❌ |
-| Módulo JS | `sala.js` |
-| KPIs turno | Cubiertos, propinas efectivo, propinas TPV |
-| Tipos incidencia | 12 tipos propios |
-| Tipos gestión | 5 tipos propios |
-| Checklist | Propio por turno |
-| Módulos específicos | Cierre de caja Sala |
-| Navegación extra | `Cierre de caja` (derecha topbar) |
+| Supervisor | `fb` (Sala + Cocina + Friegue) |
+| Checklist | ✅ Apertura + Cierre |
+| Nav especial | Cierre/traspaso de caja (modal choice) |
+| Incentivos | Sí — semanal 3.125€ bruto objetivo + mensual 10.125€ |
 
 ### Recepción Hotel
 
 | Campo | Valor |
 |---|---|
-| Caja | ✅ (`recepcion_cash`) |
+| Caja | ✅ `recepcion_cash` via `recepcion.js` (116 KB) |
 | Merma | ❌ |
-| Módulo JS | `recepcion.js` |
-| KPIs turno | Check-ins, check-outs, pensiones, room charge, cargo Alexander |
-| Tipos incidencia | 12 tipos propios |
-| Tipos gestión | 10 tipos propios |
-| Checklist | Propio por turno (Mañana / Tarde / Noche) |
-| Módulos específicos | Caja Recepción (con transferencias) |
-| Navegación extra | `Caja Recepción` (derecha topbar) |
+| Supervisor | `jefe_recepcion` |
+| Checklist | ✅ Mañana + Tarde + Noche |
+| Nav especial | Caja Recepción (con transferencias, room charges, cross-selling) |
+| Incentivos | 10% ventas netas + pool colectivo 800€/mes (Booking ≥9.2) |
 
-### SYNCROLAB
+### SYNCROLAB (Recepción SYNCROLAB + Entrenadores + Fisioterapeutas)
 
 | Campo | Valor |
 |---|---|
-| Caja | ✅ (`syncrolab_cash` — pendiente crear) |
+| Caja | ✅ `syncrolab_cash_closures` via `syncrolab.js` (54 KB) |
+| Room charges | `syncrolab_room_charges` |
 | Merma | ❌ |
-| Módulo JS | `syncrolab.js` (pendiente crear) |
-| KPIs turno | Sesiones, cobros, leads, ocupación |
-| Tipos incidencia | 16 tipos propios |
-| Tipos gestión | 7 tipos propios |
+| Sistemas | Nubimed (Clínica) + VirtuGym (Fitness) — **no FlyBy** |
+| Supervisores | `coord_recepcion_syncrolab` (Rec.SYNCROLAB + SyncroLab), `coord_entrenadores` (Entrenadores + SYNCROLAB), `coord_fisioterapeutas` (Fisio + Clínica + SYNCROLAB) |
 | Checklist | `[NO DATA]` |
-| Módulos específicos | Caja SYNCROLAB |
-| Navegación extra | `Caja SYNCROLAB` (derecha topbar) |
+| Nav especial | Caja SYNCROLAB (cierre/traspaso, dual Nubimed+VirtuGym) |
+
+**⚠ T11:** Entrenadores, Fisioterapeutas y Recepción SYNCROLAB comparten `area='SYNCROLAB'`. Toda detección debe usar `puesto`, no `area`. Helpers: `_esEntrenador()`, `_esFisio()`, `_deptCatalogo()`.
 
 ### Housekeeping
 
@@ -85,16 +72,12 @@ const DEPT_CONFIG = {
 |---|---|
 | Caja | ❌ |
 | Merma | ❌ |
-| Módulo JS | `housekeeping.js` (pendiente crear) |
-| KPIs turno | Habitaciones completadas, tiempo real vs estimado |
-| Tipos incidencia | 14 tipos propios |
-| Tipos gestión | 5 tipos propios |
-| Checklist | Checklist final de limpieza por habitación |
-| Módulos específicos | Mi ruta para hoy · Planificación de rutas (Gobernanta) |
-| Navegación extra | `Mi ruta para hoy` · `Planificación de rutas` (Gobernanta) |
-| Tablas específicas | `housekeeping_plans` · `housekeeping_assignments` · `housekeeping_rooms` · `housekeeping_public_areas` |
-
-Ver `20_housekeeping.md` para especificación completa.
+| Módulo JS | `housekeeping.js` (115 KB) — **activo** |
+| Supervisores | `gobernante`, `subgobernante` |
+| Checklist | Por habitación (checklist_data en assignments) |
+| Nav especial | Mi Ruta, Revisión HK, Dashboard HK, Planificación, Zonas públicas, Configuración HK |
+| Tablas | `housekeeping_plans`, `housekeeping_assignments`, `housekeeping_rooms`, `housekeeping_public_areas`, `housekeeping_periodic_tasks` |
+| Nav (C4) | GESTIÓN HK como dropdown separado |
 
 ### Mantenimiento
 
@@ -102,44 +85,75 @@ Ver `20_housekeeping.md` para especificación completa.
 |---|---|
 | Caja | ❌ |
 | Merma | ❌ |
-| Módulo JS | `shared.js` |
-| KPIs turno | `[NO DATA]` |
-| Tipos incidencia | 16 tipos propios |
-| Tipos gestión | 6 tipos propios |
+| Módulo JS | `mantenimiento.js` (25 KB) |
+| Supervisor | `jefe_mantenimiento` |
 | Checklist | `[NO DATA]` |
-| Módulos específicos | Compras necesarias |
-| Navegación extra | `Compras necesarias` (izquierda topbar) |
-| Tablas específicas | `maintenance_purchases` |
+| Nav especial | Kanban Tareas (C1: columnas Pendiente / Urgente hoy / Urgente mañana / Planificado / Hecho) |
+| Nota | `maintenance_purchases` no está referenciada en código actual |
 
 ### Friegue
 
 | Campo | Valor |
 |---|---|
 | Caja | ❌ |
-| Merma | ❌ |
+| Merma | Declarable (mismo flujo Cocina; admin bypass) |
 | Módulo JS | `shared.js` |
-| Tipos incidencia | 7 tipos propios |
-| Tipos gestión | 4 tipos propios |
+| Supervisor | Cubierto por `chef` y `fb` |
 | Checklist | `[NO DATA]` |
 
-### Economato / RRHH / Administración
+### Administración
 
 | Campo | Valor |
 |---|---|
 | Caja | ❌ |
 | Merma | ❌ |
 | Módulo JS | `shared.js` |
-| Tipos incidencia | Ver `incidencia_tipos.js` |
-| Tipos gestión | Ver `incidencia_tipos.js` |
-| Checklist | `[NO DATA]` |
+| Nav | Sin incentivos, sin validación, sin fichaje. Turno manual (legacy fallback FEAT-TURNO-AUTO) |
+| Nota | Angélica Camacho (`adjunto_directivo`) tiene área Administración pero acceso `['*']` |
+
+### Economato / RRHH
+
+| Campo | Valor |
+|---|---|
+| Caja | ❌ |
+| Merma | ❌ |
+| Módulo JS | `shared.js` |
+| Estado | Operativo básico |
+
+### Fisioterapeutas / Marketing
+
+| Campo | Valor |
+|---|---|
+| Estado | Portal card "Próximamente" — sin módulo activo |
 
 ---
 
-## 3. Reglas de separación entre departamentos
+## 3. Departamentos con responsable de turno
 
-- Nunca mostrar merma fuera de Cocina
-- Nunca mostrar botón Caja en departamentos sin caja
-- Nunca leer tabla de caja de un departamento desde otro
-- Nunca mostrar incidencias de un departamento en el dashboard de otro (sin filtro correcto)
-- Nunca mostrar el checklist de Cocina a un empleado de Recepción
-- El nombre `SYNCROLAB` es el definitivo — no usar variantes
+`DEPTS_CON_RESPONSABLE`: Sala, Cocina, Friegue, Housekeeping, Limpieza, HK.
+
+Solo estos departamentos muestran el selector "Responsable de turno" en Mi Turno.
+
+---
+
+## 4. Reglas de separación
+
+- Merma: solo Cocina y Friegue (en nav solo Cocina tiene pantalla dedicada)
+- Caja: solo Sala, Recepción, SYNCROLAB — cada una su tabla
+- Nunca leer tabla de caja de un depto desde otro
+- Nunca mostrar checklist de un depto a empleado de otro
+- Incidencias/gestiones filtradas por departamento en frontend
+- `SYNCROLAB` es nombre definitivo — no usar variantes (SyncroLab solo como alias en BD)
+
+---
+
+## 5. Personal clave por departamento (jul 2026)
+
+| Departamento | Responsable | Rol |
+|---|---|---|
+| Sala | José | `fb` |
+| Cocina | Andrés | `chef` |
+| Recepción Hotel | Juan Francisco Baena Espino | `jefe_recepcion` |
+| Entrenadores | Sofía | `coord_entrenadores` |
+| RRHH / Administración | Angélica Camacho | `adjunto_directivo` |
+| Contabilidad | Carlos Marí Sendra | `contable` |
