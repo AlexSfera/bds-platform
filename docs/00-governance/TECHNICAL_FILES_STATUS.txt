@@ -1,0 +1,11 @@
+SYNCRO Shift — Archivos técnicos detectados
+
+NO EXISTE: package.json
+NO EXISTE: package-lock.json
+NO EXISTE: yarn.lock
+NO EXISTE: pnpm-lock.yaml
+NO EXISTE: README.md
+EXISTE: vercel.json
+NO EXISTE: AGENTS.md
+NO EXISTE: CLAUDE.md
+NO EXISTE: .env.example

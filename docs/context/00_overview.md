@@ -100,7 +100,7 @@ Dashboard → refleja datos en tiempo real
 | `13_kitchen_waste.md` | Merma: Cocina/Friegue/FnB, búsqueda dual, cálculo coste |
 | `14_validations.md` | Validación: 7 pestañas, contable, FIO, merma |
 | `20_housekeeping.md` | HK: planificación, ejecución, revisión, zonas, FASE 2 |
-| `21_maintenance_purchases.md` | Mantenimiento: Kanban tareas con fecha_ejecucion |
+| `21_mantenimiento_kanban.md` | Mantenimiento: Kanban tareas con fecha_ejecucion |
 | `22_auto_turno_assignment.md` | Asignación automática de turno |
 | `23_feat_turno_auto_implementacion.md` | Implementación FEAT-TURNO-AUTO |
 

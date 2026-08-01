@@ -167,9 +167,9 @@ Funciones: `collectSalaData`, `openAjustesModal`, `confirmAjustes`.
 ### incidencia_tipos.js (13 KB)
 **Catálogo de tipos de incidencia por departamento.** Expone `window.ENTRENADORES_AREAS`.
 
-### faults.js (26 KB, ~12 fns)
-**Sistema de faltas (paralelo a FIO, posible legacy).** Tabla referenciada: `employee_faults`.
-Funciones: `renderFaultsScreen`, `openNewFaultModal`, `saveNewFault`, `validateFault`, `deleteFault`.
+### faults.js (26 KB, ~12 fns) — ⚠ CÓDIGO MUERTO
+**Sistema de faltas paralelo a FIO, reemplazado.** NO cargado en index.html. Tabla `employee_faults` NO existe en Supabase. Archivo huérfano en el repo — candidato a eliminar.
+Funciones (no ejecutadas): `renderFaultsScreen`, `openNewFaultModal`, `saveNewFault`, `validateFault`, `deleteFault`.
 
 ### adjuntos.js (50 KB, 30 fns)
 **Gestión de adjuntos + overrides de CRUD.** Tablas: `gestiones`, `incidencias`.
