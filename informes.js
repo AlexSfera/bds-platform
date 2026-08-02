@@ -16,22 +16,27 @@ var _infControlWeek  = null;  // {inicio:'YYYY-MM-DD', fin:'YYYY-MM-DD'}
 var _infControlTicks = {};    // {acumulativo:{ok,filename,ts,error}, ...}
 
 var _INF_FILE_TYPES = [
-  // 1. Facturas CSV — archivo maestro: producción diaria por camarero, neto/bruto, pensiones
-  {key:'facturas',        label:'Facturas (producción)',         fmt:'csv',
+  // 1. Facturas CSV — producción diaria por camarero, pagos por factura
+  {key:'facturas',            label:'Facturas (producción)',        fmt:'csv',
    detect:function(t){ var h=(t.replace(/^\uFEFF/,'').split(/\r?\n/)[0]||''); return h.indexOf('Fecha')>=0&&h.indexOf('Usuario')>=0&&h.indexOf('Total')>=0; },
    feedsParser:true,
-   desc:'POSMEWS › Facturas · Desglose diario por camarero'},
-  // 2. Pagos/Acumulativo CSV — resumen para conciliación
-  {key:'pagos',           label:'Pagos / Acumulativo',           fmt:'csv',
-   detect:function(t){ return /M\xe9todos de pago/i.test(t)&&/Usuarios/i.test(t); },
-   desc:'POSMEWS › Acumulativo · Resumen métodos de pago'},
-  // 3-4. XLSX por nombre de archivo
-  {key:'compensaciones',  label:'Compensaciones y Anulaciones', fmt:'xlsx',
+   desc:'POSMEWS › Ventas → Facturas · CSV'},
+  // 2. Acumulativo Ventas XLSX — resumen semanal (3 hojas: Informe, RC, RC+productos)
+  {key:'acumulativo_ventas',  label:'Acumulativo Ventas',           fmt:'xlsx',
+   fnPattern:/acumulativo/i, xlsxDetect:'sheets>=3',
+   desc:'POSMEWS › Informes → Ventas → Acumulativo · XLSX'},
+  // 3. Acumulativo Pagos XLSX — métodos de pago y propinas (1 hoja)
+  {key:'acumulativo_pagos',   label:'Acumulativo Pagos',            fmt:'xlsx',
+   fnPattern:/acumulativo/i, xlsxDetect:'sheets<3',
+   desc:'POSMEWS › Informes → Pagos → Acumulativo · XLSX'},
+  // 4. Compensaciones y Anulaciones XLSX
+  {key:'compensaciones',      label:'Compensaciones y Anulaciones', fmt:'xlsx',
    fnPattern:/compensacion|anulacion/i,
-   desc:'POSMEWS › Compensaciones y Anulaciones'},
-  {key:'descuentos',      label:'Descuentos',                   fmt:'xlsx',
+   desc:'POSMEWS › Informes → Comps & Voids · XLSX'},
+  // 5. Descuentos XLSX
+  {key:'descuentos',          label:'Descuentos',                   fmt:'xlsx',
    fnPattern:/descuento/i,
-   desc:'POSMEWS › Descuentos'}
+   desc:'POSMEWS › Informes → Descuentos · XLSX'}
 ];
 
 // Estado informe de jefe
@@ -308,6 +313,7 @@ async function _infRenderSubTab(){
 
   // ── VENTAS / DATOS ───────────────────────────────────────────────
   if(sub==='ventas'){
+    if(dept==='Sala') { await _renderVentasDatos(tc); return; }
     _renderInformesProximamente(tc, dept+' · Ventas / Datos');
     return;
   }
@@ -393,6 +399,14 @@ function _readFileText(file){
     r.readAsText(file,'utf-8');
   });
 }
+function _readFileArrayBuffer(file){
+  return new Promise(function(ok,fail){
+    var r=new FileReader();
+    r.onload=function(e){ ok(e.target.result); };
+    r.onerror=function(){ fail(new Error('Error leyendo archivo')); };
+    r.readAsArrayBuffer(file);
+  });
+}
 
 window._infControlPrev=function(){ _infShiftControlWeek(-1); };
 window._infControlNext=function(){ _infShiftControlWeek(1); };
@@ -476,12 +490,32 @@ async function _infControlValidateFile(file){
       });
     }catch(e){}
   } else if(ext==='xlsx'){
+    // Collect all XLSX types matching filename
+    var xlsxMatches=[];
     _INF_FILE_TYPES.forEach(function(t){
-      if(t.fmt==='xlsx'&&t.fnPattern&&t.fnPattern.test(file.name)) type=t;
+      if(t.fmt==='xlsx'&&t.fnPattern&&t.fnPattern.test(file.name)) xlsxMatches.push(t);
     });
+    if(xlsxMatches.length===1){
+      type=xlsxMatches[0];
+    } else if(xlsxMatches.length>1){
+      // Multiple matches (e.g. both acumulativo types) — SheetJS distinguishes by sheet count
+      try{
+        var buf=await _readFileArrayBuffer(file);
+        file._xlsxBuf=buf;
+        if(typeof XLSX!=='undefined'){
+          var wb=XLSX.read(new Uint8Array(buf),{type:'array',bookSheets:true});
+          var nSheets=wb.SheetNames.length;
+          type=xlsxMatches.find(function(t){
+            if(t.xlsxDetect==='sheets>=3') return nSheets>=3;
+            if(t.xlsxDetect==='sheets<3') return nSheets<3;
+            return false;
+          })||xlsxMatches[0];
+        } else { type=xlsxMatches[0]; }
+      }catch(e){ type=xlsxMatches[0]; }
+    }
   }
   if(!type){
-    toast('Archivo no reconocido: '+file.name+'. CSV: debe contener datos de Acumulativo o Pagos. XLSX: nombre debe contener Compensaciones o Descuentos.','err');
+    toast('Archivo no reconocido: '+file.name+'. CSV: debe ser Facturas. XLSX: nombre debe contener Acumulativo, Compensaciones o Descuentos.','err');
     return;
   }
 
@@ -618,42 +652,120 @@ function _renderControlBody(){
     +'<input type="file" id="inf-control-input" multiple accept=".csv,.xlsx" style="display:none" onchange="_infControlFiles(this)">';
 }
 
-async function _renderInformesSala(el){
+// ══════════════════════════════════════════════════════════════════════
+// VENTAS / DATOS — Upload unificado POSMEWS (5 archivos)
+// ══════════════════════════════════════════════════════════════════════
+async function _renderVentasDatos(el){
   if(!_infControlWeek) _infControlWeek=_infGetWeekOf();
-  var objSemFmt=_infSalaObjSem.toLocaleString('es-ES',{minimumFractionDigits:2});
-  var objMesFmt=_infSalaObjMes.toLocaleString('es-ES',{minimumFractionDigits:2});
   el.innerHTML=''
-    // ── Card 1: Control semanal POSMEWS ──
     +'<div class="card" style="margin-bottom:16px;">'
     +  '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;">'
     +    '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);">📋 Control semanal POSMEWS</div>'
-    +    '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">Obj. semana: <strong style="color:var(--amber);">'+objSemFmt+'€</strong> · Obj. mes: <strong style="color:var(--amber);">'+objMesFmt+'€</strong></div>'
     +  '</div>'
-    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:14px;">Sube los 4 archivos obligatorios de cada semana (dom→sáb). Todos deben estar ✅ para marcar la semana como completa.</div>'
+    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:14px;">Sube los 5 archivos obligatorios de cada semana (dom→sáb). Todos deben estar ✅ para marcar la semana como completa.</div>'
     +  '<div id="inf-control-body"></div>'
-    // ── Instrucciones colapsables ──
     +  '<details style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">'
-    +    '<summary style="font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;">📋 Instrucciones: cómo descargar los 4 archivos de POSMEWS</summary>'
+    +    '<summary style="font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;">📋 Instrucciones: cómo descargar los 5 archivos de POSMEWS</summary>'
     +    '<div style="margin-top:10px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:rgba(255,255,255,.02);">'
     +      '<div style="font-size:10px;color:var(--amber);border:1px solid var(--amber);border-radius:4px;padding:6px 8px;margin-bottom:10px;line-height:1.4;">pos.mews.com › <strong>LA SELLA ACADEMY SL</strong> · desde ordenador · periodo <strong>domingo → sábado</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">1 · Facturas</div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">1 · Facturas (CSV)</div>'
     +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Ventas → Facturas</strong> → ajustar fechas dom→sáb → clic ⋮ → <strong style="color:var(--text2);">Exportar CSV</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">2 · Pagos / Acumulativo</div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">2 · Acumulativo Ventas (XLSX)</div>'
     +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Ventas</strong> → mismas fechas → clic ⋮ → <strong style="color:var(--text2);">Acumulativo</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">3 · Compensaciones y Anulaciones</div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">3 · Acumulativo Pagos (XLSX)</div>'
+    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Pagos</strong> → mismas fechas → clic ⋮ → <strong style="color:var(--text2);">Acumulativo</strong></div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">4 · Compensaciones y Anulaciones (XLSX)</div>'
     +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Compensaciones y Anulaciones</strong> → mismas fechas → descargar <strong style="color:var(--text2);">XLSX</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">4 · Descuentos</div>'
+    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">5 · Descuentos (XLSX)</div>'
     +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Descuentos</strong> → mismas fechas → descargar <strong style="color:var(--text2);">XLSX</strong></div>'
-    +      '<div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;font-size:10px;color:var(--text3);line-height:1.4;"><strong style="color:var(--text2);">5 · Enviar a Claude:</strong> adjunta los 4 archivos con el texto: <span style="font-family:var(--font-mono);color:var(--amber);">Análisis semanal POSMEWS [domingo] al [sábado]</span></div>'
     +    '</div>'
     +  '</details>'
     +'</div>'
-    // ── Resultado de producción (se rellena al subir Facturas) ──
     +'<div id="inf-sala-result"></div>';
   if(_infSalaData) _renderSalaTabla(_infSalaData,_infSalaData._costData||{});
-  // Inicializar control semanal
   _renderControlBody();
   _infLoadControlTicks();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// KPI SALA — Lee producción desde BD (datos subidos en Ventas/Datos)
+// ══════════════════════════════════════════════════════════════════════
+async function _renderInformesSala(el){
+  if(!_infControlWeek) _infControlWeek=_infGetWeekOf();
+  var w=_infControlWeek;
+  var objSemFmt=_infSalaObjSem.toLocaleString('es-ES',{minimumFractionDigits:2});
+  var objMesFmt=_infSalaObjMes.toLocaleString('es-ES',{minimumFractionDigits:2});
+  el.innerHTML=''
+    +'<div class="card" style="margin-bottom:16px;">'
+    +  '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">'
+    +    '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);">📊 KPI Sala — Producción por camarero</div>'
+    +    '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">Obj. semana: <strong style="color:var(--amber);">'+objSemFmt+'€</strong> · Obj. mes: <strong style="color:var(--amber);">'+objMesFmt+'€</strong></div>'
+    +  '</div>'
+    +  '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
+    +    '<button onclick="_infKpiPrev()" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">◄</button>'
+    +    '<span id="inf-kpi-week-label" style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text);">'+_infFmtDateFull(w.inicio)+' — '+_infFmtDateFull(w.fin)+'</span>'
+    +    '<button onclick="_infKpiNext()" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">►</button>'
+    +  '</div>'
+    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:6px;">Los datos se suben desde <strong style="color:var(--text2);">💶 Ventas / Datos</strong>. Aquí se muestran los datos guardados.</div>'
+    +'</div>'
+    +'<div id="inf-sala-result"><div style="color:var(--text3);text-align:center;padding:24px;">Cargando…</div></div>';
+  _infLoadSalaFromDB();
+}
+
+// Navegación semanal KPI
+window._infKpiPrev=function(){ _infShiftKpiWeek(-1); };
+window._infKpiNext=function(){ _infShiftKpiWeek(1); };
+function _infShiftKpiWeek(dir){
+  var w=_infControlWeek||_infGetWeekOf();
+  var d=new Date(w.inicio+'T12:00:00');
+  d.setDate(d.getDate()+(dir*7));
+  _infControlWeek=_infGetWeekOf(d.toISOString().slice(0,10));
+  var lbl=document.getElementById('inf-kpi-week-label');
+  if(lbl) lbl.textContent=_infFmtDateFull(_infControlWeek.inicio)+' — '+_infFmtDateFull(_infControlWeek.fin);
+  _infLoadSalaFromDB();
+}
+
+// Cargar producción semanal desde sala_produccion_semanal
+async function _infLoadSalaFromDB(){
+  var w=_infControlWeek||_infGetWeekOf();
+  var periodo=w.inicio+'_'+w.fin;
+  var el=document.getElementById('inf-sala-result');
+  if(!el) return;
+  try{
+    var rows=await getDB('sala_produccion_semanal');
+    rows=rows.filter(function(r){ return r.periodo===periodo; });
+    if(!rows.length){
+      el.innerHTML='<div class="card" style="text-align:center;padding:32px 24px;">'
+        +'<div style="font-size:28px;margin-bottom:10px;">📭</div>'
+        +'<div style="font-size:13px;color:var(--text3);font-family:var(--font-mono);">Sin datos de producción para esta semana.</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:6px;">Sube el CSV de Facturas en <strong style="color:var(--text2);">💶 Ventas / Datos</strong> y pulsa Guardar.</div>'
+        +'</div>';
+      return;
+    }
+    // Reconstruir estructura compatible con _renderSalaTabla
+    var fechasSet={}, porUsuario={};
+    rows.forEach(function(r){
+      var detalle=r.detalle_diario||{};
+      porUsuario[r.nombre]={
+        fechas:detalle,
+        totalBruto:parseFloat(r.produccion_bruta)||0,
+        facturas:parseInt(r.facturas)||0,
+        csvNombre:r.csv_nombre||r.nombre,
+        employee_id:r.employee_id
+      };
+      Object.keys(detalle).forEach(function(f){ fechasSet[f]=true; });
+    });
+    var fechas=Object.keys(fechasSet).sort();
+    var usuarios=Object.keys(porUsuario).sort(function(a,b){ return porUsuario[b].totalBruto-porUsuario[a].totalBruto; });
+    var data={fechas:fechas,usuarios:usuarios,porUsuario:porUsuario,rangoDias:fechas.length,tipo:'semanal',matchLog:[]};
+    var costData={};
+    if(fechas.length){
+      try{ costData=await _infSalaCostLaboral(fechas[0],fechas[fechas.length-1]); }catch(x){}
+    }
+    _renderSalaTabla(data,costData);
+  }catch(e){
+    el.innerHTML='<div class="card"><p style="color:var(--red);">Error cargando datos: '+_escHtml(e.message)+'</p></div>';
+  }
 }
 
 window._infHandleDrop=function(ev){
