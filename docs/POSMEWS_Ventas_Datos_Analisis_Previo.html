@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Módulo Ventas/Datos POSMEWS — Análisis Previo — SYNCROSFERA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --sf-navy: #0F1F3D; --sf-dark: #080E1A; --sf-teal: #00E5CC; --sf-teal-dim: #1A9E8F;
+      --sf-gold: #FFB800; --sf-gold-dim: #C49200; --sf-electric: #3B82F6; --sf-white: #FFFFFF;
+      --sf-light: #F0F4F8; --sf-gray: #7B8CA3; --sf-gray-dark: #374151; --sf-border: #CBD5E1;
+      --sf-success: #10B981; --sf-warning: #F59E0B; --sf-danger: #EF4444; --sf-info: #3B82F6;
+      --sf-font-heading: 'Inter', system-ui, sans-serif;
+      --sf-font-body: 'Inter', system-ui, sans-serif;
+      --sf-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --sf-radius: 12px; --sf-radius-sm: 8px;
+      --sf-shadow: 0 4px 20px rgba(0,229,204,0.08), 0 2px 8px rgba(0,0,0,0.06);
+      --sf-shadow-lg: 0 12px 40px rgba(0,229,204,0.12), 0 4px 16px rgba(0,0,0,0.1);
+      --sf-transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+      --sf-gradient-hero: linear-gradient(135deg, #080E1A 0%, #0F1F3D 50%, #162D55 100%);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--sf-font-body); color: var(--sf-gray-dark); background: var(--sf-light); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    h1,h2,h3,h4 { font-family: var(--sf-font-heading); color: var(--sf-navy); font-weight: 700; line-height: 1.2; }
+    .sf-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    .sf-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(15,31,61,0.95); backdrop-filter: blur(16px); border-bottom: 2px solid var(--sf-teal); }
+    .sf-nav-inner { max-width: 1200px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .sf-nav a { color: rgba(255,255,255,0.7); text-decoration: none; font-weight: 600; font-size: 0.8rem; transition: var(--sf-transition); }
+    .sf-nav a:hover { color: var(--sf-teal); }
+    .nav-links { display: flex; gap: 20px; flex-wrap: wrap; }
+
+    /* Hero */
+    .sf-hero { background: var(--sf-gradient-hero); padding: 110px 0 60px; position: relative; overflow: hidden; }
+    .sf-hero::before { content: ''; position: absolute; top: -50%; right: -20%; width: 600px; height: 600px; background: radial-gradient(circle, rgba(0,229,204,0.12) 0%, transparent 70%); border-radius: 50%; }
+    .sf-hero h1 { color: var(--sf-white); font-size: clamp(1.8rem,4vw,2.8rem); margin-bottom: 12px; }
+    .sf-hero p { color: rgba(255,255,255,0.6); font-size: 1rem; max-width: 700px; }
+    .hero-meta { display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; }
+    .hero-meta span { color: rgba(255,255,255,0.5); font-size: 0.8rem; font-family: var(--sf-font-mono); }
+    .hero-meta strong { color: var(--sf-teal); }
+
+    /* Sections */
+    .sf-section { padding: 60px 0; }
+    .sf-section:nth-child(even) { background: var(--sf-white); }
+    .sf-section-header { margin-bottom: 32px; padding-left: 18px; border-left: 4px solid var(--sf-teal); }
+    .sf-section-tag { display: inline-block; font-size: 0.72rem; font-weight: 800; color: var(--sf-teal); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
+    .sf-section-desc { color: var(--sf-gray); font-size: 0.9rem; margin-top: 6px; max-width: 700px; }
+
+    /* Panels */
+    .sf-panel { background: var(--sf-white); border: 1px solid var(--sf-border); border-radius: var(--sf-radius); overflow: hidden; box-shadow: var(--sf-shadow); margin-bottom: 24px; }
+    .sf-panel--accent { border-top: 3px solid var(--sf-teal); }
+    .sf-panel--gold { border-top: 3px solid var(--sf-gold); }
+    .sf-panel--danger { border-top: 3px solid var(--sf-danger); }
+    .sf-panel--electric { border-top: 3px solid var(--sf-electric); }
+    .sf-panel-header { padding: 14px 20px; background: var(--sf-navy); color: var(--sf-white); display: flex; align-items: center; gap: 10px; }
+    .sf-panel-header h3 { color: var(--sf-white); font-size: 0.95rem; margin: 0; }
+    .sf-panel-body { padding: 20px; }
+
+    /* Tables */
+    .sf-table-wrapper { border: 1px solid var(--sf-border); border-radius: var(--sf-radius); overflow-x: auto; box-shadow: var(--sf-shadow); margin-bottom: 20px; }
+    .sf-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .sf-table thead { background: var(--sf-navy); color: var(--sf-white); }
+    .sf-table th { padding: 11px 14px; text-align: left; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+    .sf-table td { padding: 10px 14px; border-bottom: 1px solid var(--sf-border); vertical-align: top; }
+    .sf-table tbody tr:hover { background: rgba(0,229,204,0.04); }
+    .sf-table tbody tr:nth-child(even) { background: rgba(240,244,248,0.5); }
+
+    /* Badges */
+    .sf-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .sf-badge.success { background: #D1FAE5; color: #065F46; border: 1px solid #6EE7B7; }
+    .sf-badge.warning { background: #FEF3C7; color: #92400E; border: 1px solid #FCD34D; }
+    .sf-badge.danger { background: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; }
+    .sf-badge.info { background: #DBEAFE; color: #1E40AF; border: 1px solid #93C5FD; }
+    .sf-badge.neutral { background: #F3F4F6; color: #374151; border: 1px solid #D1D5DB; }
+
+    /* Tabs */
+    .sf-tabs { border: 1px solid var(--sf-border); border-radius: var(--sf-radius); overflow: hidden; background: var(--sf-white); box-shadow: var(--sf-shadow); margin-bottom: 24px; }
+    .sf-tab-nav { display: flex; gap: 0; background: var(--sf-navy); overflow-x: auto; }
+    .sf-tab-btn { padding: 12px 20px; border: none; background: none; cursor: pointer; font-weight: 700; color: rgba(255,255,255,0.5); transition: var(--sf-transition); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 3px solid transparent; white-space: nowrap; font-family: var(--sf-font-body); }
+    .sf-tab-btn:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.04); }
+    .sf-tab-btn.active { color: var(--sf-teal); border-bottom-color: var(--sf-teal); background: rgba(0,229,204,0.08); }
+    .sf-tab-content { display: none; padding: 20px; }
+    .sf-tab-content.active { display: block; }
+
+    /* Grids */
+    .sf-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .sf-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+
+    /* Misc */
+    .code { font-family: var(--sf-font-mono); font-size: 0.8rem; background: #1E293B; color: #E2E8F0; padding: 2px 8px; border-radius: 4px; }
+    .alert { padding: 14px 18px; border-radius: var(--sf-radius-sm); margin-bottom: 16px; font-size: 0.85rem; line-height: 1.5; }
+    .alert-warning { background: #FEF3C7; border: 1px solid #FCD34D; color: #92400E; }
+    .alert-danger { background: #FEE2E2; border: 1px solid #FCA5A5; color: #991B1B; }
+    .alert-info { background: #DBEAFE; border: 1px solid #93C5FD; color: #1E40AF; }
+    .alert-success { background: #D1FAE5; border: 1px solid #6EE7B7; color: #065F46; }
+    .flow-diagram { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 16px; }
+    .flow-step { background: var(--sf-navy); color: var(--sf-white); padding: 8px 16px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; }
+    .flow-arrow { color: var(--sf-teal); font-size: 1.2rem; font-weight: 700; }
+    ul.checklist { list-style: none; padding: 0; }
+    ul.checklist li { padding: 6px 0; font-size: 0.85rem; display: flex; align-items: flex-start; gap: 8px; }
+    ul.checklist li::before { content: '☐'; color: var(--sf-teal); font-weight: 700; flex-shrink: 0; }
+    .mono { font-family: var(--sf-font-mono); font-size: 0.8rem; }
+    .teal { color: var(--sf-teal); }
+    .gold { color: var(--sf-gold); }
+    .red { color: var(--sf-danger); }
+    .small { font-size: 0.78rem; color: var(--sf-gray); }
+
+    /* Footer */
+    .sf-footer { background: var(--sf-navy); color: rgba(255,255,255,0.4); padding: 32px 0; font-size: 0.78rem; text-align: center; }
+
+    /* Print */
+    @media print {
+      .sf-nav, .no-print { display: none !important; }
+      .sf-section { padding: 20px 0; page-break-inside: avoid; }
+      body { font-size: 10pt; color: #000; background: #fff; }
+      .sf-panel, .sf-table-wrapper { box-shadow: none; border: 1px solid #ccc; }
+      .sf-hero { padding: 40px 0 20px; }
+    }
+    @media (max-width: 768px) {
+      .sf-section { padding: 36px 0; }
+      .sf-container { padding: 0 14px; }
+      .sf-hero { padding: 90px 0 40px; }
+      .sf-table { font-size: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="sf-nav no-print">
+  <div class="sf-nav-inner">
+    <svg class="sf-logo" viewBox="0 0 240 48" xmlns="http://www.w3.org/2000/svg" style="height:34px;width:auto;">
+      <defs><linearGradient id="sfGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#00E5CC"/><stop offset="100%" style="stop-color:#3B82F6"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="16" fill="none" stroke="url(#sfGrad)" stroke-width="2.5"/>
+      <path d="M24 6 C30 6, 38 12, 38 24 C38 36, 30 42, 24 42" fill="none" stroke="url(#sfGrad)" stroke-width="1.5" opacity="0.6"/>
+      <circle cx="24" cy="24" r="4" fill="url(#sfGrad)"/>
+      <text x="56" y="20" font-family="Inter,system-ui,sans-serif" font-weight="800" font-size="16" letter-spacing="0.08em"><tspan fill="#FFFFFF">SYNCRO</tspan><tspan fill="#00E5CC">SFERA</tspan></text>
+      <text x="56" y="36" font-family="Inter,system-ui,sans-serif" font-weight="400" font-size="8" fill="#7B8CA3" letter-spacing="0.15em">SPORT &amp; HEALTH HOTEL</text>
+    </svg>
+    <div class="nav-links">
+      <a href="#inventario">Inventario</a>
+      <a href="#tabla-analisis">Análisis</a>
+      <a href="#mapeo">Mapeo</a>
+      <a href="#calculo">Cálculo</a>
+      <a href="#arquitectura">Arquitectura</a>
+      <a href="#preguntas">Preguntas</a>
+      <a href="#qa">QA</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="sf-hero">
+  <div class="sf-container">
+    <h1>Módulo Ventas / Datos POSMEWS<br><span style="color:var(--sf-teal);font-size:0.6em;">Entregables Previos — Análisis e Investigación</span></h1>
+    <p>Investigación de informes POSMEWS, mapeo a modelo de datos, propuesta de cálculo de ingresos y plan de implementación. Documento previo a la fase de desarrollo.</p>
+    <div class="hero-meta">
+      <span>Fecha: <strong>02/08/2026</strong></span>
+      <span>Proyecto: <strong>SYNCRO SHIFT v4.0</strong></span>
+      <span>Módulo: <strong>Manager Bar → Informes → Sala → Ventas/Datos</strong></span>
+      <span>Estado: <strong style="color:var(--sf-gold);">PRE-DESARROLLO</strong></span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 1: INVENTARIO DE INFORMES POSMEWS -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="inventario">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">01 — Inventario</span>
+      <h2>Informes exportables de MEWS POS</h2>
+      <p class="sf-section-desc">Todos los informes disponibles en POSMEWS web dashboard, verificados contra documentación oficial help.mews.com.</p>
+    </div>
+
+    <div class="sf-tabs">
+      <div class="sf-tab-nav">
+        <button class="sf-tab-btn active" data-tab="tab-ventas">Ventas/Sales</button>
+        <button class="sf-tab-btn" data-tab="tab-pagos">Pagos/Payments</button>
+        <button class="sf-tab-btn" data-tab="tab-comps">Comps & Voids</button>
+        <button class="sf-tab-btn" data-tab="tab-descuentos">Descuentos</button>
+        <button class="sf-tab-btn" data-tab="tab-otros">Otros informes</button>
+      </div>
+
+      <!-- TAB: Ventas -->
+      <div class="sf-tab-content active" id="tab-ventas">
+        <h4 style="margin-bottom:12px;">Sales Report / Sales Analysis Report</h4>
+        <p class="small" style="margin-bottom:16px;">Ruta: <span class="code">Reports → Sales → ⋮ → Cumulative → Download as XLSX/CSV</span></p>
+
+        <div class="sf-grid-2">
+          <div class="sf-panel sf-panel--accent">
+            <div class="sf-panel-header"><h3>📊 Sales Report (pantalla)</h3></div>
+            <div class="sf-panel-body">
+              <p style="font-size:0.82rem;margin-bottom:10px;"><strong>Secciones del informe:</strong></p>
+              <ul style="font-size:0.8rem;padding-left:18px;line-height:1.8;">
+                <li><strong>Sales:</strong> Gross sales, Refunds, Discounts, Total collected, Taxes, Net sales, Surcharges, Gratuities, Covers, Failed PMS requests</li>
+                <li><strong>Taxes:</strong> Name, Subtotal, Amount (por tipo IVA)</li>
+                <li><strong>Discounts & Surcharges:</strong> Count + Total</li>
+                <li><strong>Payment Methods:</strong> Name, Count, Total</li>
+                <li><strong>Users:</strong> Name, Surcharges, Gratuities, Count, Total, Average</li>
+                <li><strong>Revenue by Center & Category:</strong> Category, Covers, Quantity, % of total, Total</li>
+                <li><strong>Categories:</strong> Name, Quantity, Tax, Total</li>
+                <li><strong>Food/Beverage:</strong> Name, Quantity, Tax, Total</li>
+                <li><strong>Products:</strong> Name, Quantity, % of total, Total</li>
+              </ul>
+              <p class="small" style="margin-top:8px;">Filtros: Revenue Centers, Outlets, Registers, Categories, Users, Show per day</p>
+            </div>
+          </div>
+
+          <div class="sf-panel sf-panel--gold">
+            <div class="sf-panel-header"><h3>📥 Sales Analysis (descarga)</h3></div>
+            <div class="sf-panel-body">
+              <p style="font-size:0.82rem;margin-bottom:10px;"><strong>Columnas del archivo CSV/XLSX:</strong></p>
+              <ul style="font-size:0.8rem;padding-left:18px;line-height:1.8;">
+                <li><strong>Property name</strong> — nombre del hotel</li>
+                <li><strong>Date</strong> — fecha de la venta</li>
+                <li><strong>Item Name</strong> — nombre del producto</li>
+                <li><strong>SKU</strong> — identificador único producto</li>
+                <li><strong>Family Group</strong> — grupo (España/Francia/Polonia)</li>
+                <li><strong>Family</strong> — familia del producto</li>
+                <li><strong>Sub-Family</strong> — subfamilia</li>
+                <li><strong>Revenue Centre</strong> — centro de ingresos</li>
+                <li><strong>Outlet</strong> — outlet (restaurante, bar, etc.)</li>
+                <li><strong>Quantity Sold</strong> — unidades vendidas</li>
+                <li><strong>Gross Sales</strong> — ventas brutas</li>
+                <li><strong>Discounts</strong> — descuentos aplicados</li>
+                <li><strong>Net Sales</strong> — ventas netas</li>
+                <li><strong>Average Net Sales</strong> — media neta</li>
+                <li><strong>Total % of Net Sales</strong> — % del total</li>
+              </ul>
+              <p class="small" style="margin-top:8px;">Formato: XLSX o PDF · Filtros: Revenue Centers, Outlets, Registers, Categories</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-warning" style="margin-top:16px;">
+          <strong>⚠ Nota actual del código:</strong> El archivo "Facturas" que se sube hoy es exportado desde <span class="code">Ventas → Facturas</span> como CSV. Contiene: Fecha, Usuario, Cancelación, Total [€], Descuento-Descripción. Este NO es el Sales Analysis — es un listado de facturas individuales (por camarero). Se debe confirmar si conviene migrar al Sales Analysis (más rico en datos) o mantener ambos.
+        </div>
+      </div>
+
+      <!-- TAB: Pagos -->
+      <div class="sf-tab-content" id="tab-pagos">
+        <h4 style="margin-bottom:12px;">Payments Report / Cumulative Payments</h4>
+        <p class="small" style="margin-bottom:16px;">Ruta: <span class="code">Reports → Payments → ⋮ → Cumulative → Download as CSV/XLSX/PDF</span></p>
+
+        <div class="sf-panel sf-panel--accent">
+          <div class="sf-panel-header"><h3>💳 Payments Report</h3></div>
+          <div class="sf-panel-body">
+            <p style="font-size:0.82rem;margin-bottom:10px;"><strong>Secciones:</strong></p>
+            <ul style="font-size:0.8rem;padding-left:18px;line-height:1.8;">
+              <li><strong>Sales:</strong> Gross sales (count+total), Refunds (count+total), Total collected, Gratuities</li>
+              <li><strong>Payment Methods:</strong> Name, Count, Total — <span class="teal">es la fuente canónica de métodos de pago</span></li>
+              <li><strong>Users:</strong> Name, Count, Total</li>
+            </ul>
+            <p class="small" style="margin-top:8px;">Filtros: Outlets, Registers, Users, Show per day</p>
+            <div class="alert alert-info" style="margin-top:12px;">
+              <strong>Diferencia clave:</strong> El Cumulative Payment report muestra income de TODOS los pagos (incluye ventas). El Cumulative Sales report muestra income solo de ventas. El Payments report es más amplio.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Comps & Voids -->
+      <div class="sf-tab-content" id="tab-comps">
+        <h4 style="margin-bottom:12px;">Comps & Voids Report</h4>
+        <p class="small" style="margin-bottom:16px;">Ruta: <span class="code">Reports → Comps & Voids → ⋮ → Download as XLSX</span></p>
+
+        <div class="sf-panel sf-panel--danger">
+          <div class="sf-panel-header"><h3>🔄 Compensaciones y Anulaciones (XLSX descargado)</h3></div>
+          <div class="sf-panel-body">
+            <p style="font-size:0.82rem;margin-bottom:10px;">El archivo XLSX tiene <strong>tabs separados</strong> para Comps y Voids.</p>
+            <p style="font-size:0.82rem;margin-bottom:10px;"><strong>Por Revenue Center:</strong></p>
+            <ul style="font-size:0.8rem;padding-left:18px;line-height:1.6;">
+              <li>Reason — motivo del comp/void</li>
+              <li>Notes — notas del usuario</li>
+              <li>Quantity — cantidad de items afectados</li>
+              <li>Product Categories — categorías afectadas con importes</li>
+              <li>Subtotal, Total</li>
+            </ul>
+            <p style="font-size:0.82rem;margin-top:12px;margin-bottom:10px;"><strong>Lista de facturas:</strong></p>
+            <ul style="font-size:0.8rem;padding-left:18px;line-height:1.6;">
+              <li>Invoice # — número de factura</li>
+              <li>Date — fecha</li>
+              <li>Cashier — cajero</li>
+              <li>Item — producto afectado</li>
+              <li>Reason — motivo</li>
+              <li>Description — notas</li>
+              <li>Quantity, Total, Subtotal</li>
+            </ul>
+            <p class="small" style="margin-top:8px;">Filtros: Outlets, Registers, Categories</p>
+          </div>
+        </div>
+
+        <div class="alert alert-warning">
+          <strong>Comp vs Void:</strong> Un <strong>Comp</strong> (compensación) elimina el cargo pero el producto ya fue preparado/servido — es una pérdida real. Un <strong>Void</strong> (anulación) cancela un item antes de prepararlo — no hay pérdida de producto. Ambos reducen el ingreso registrado. Para el Dashboard, deben tratarse como ajustes negativos separados.
+        </div>
+      </div>
+
+      <!-- TAB: Descuentos -->
+      <div class="sf-tab-content" id="tab-descuentos">
+        <h4 style="margin-bottom:12px;">Discount Report</h4>
+        <p class="small" style="margin-bottom:16px;">Ruta: <span class="code">Reports → Discount → ⋮ → Download as XLSX</span></p>
+
+        <div class="sf-panel sf-panel--gold">
+          <div class="sf-panel-header"><h3>🏷️ Descuentos (XLSX descargado)</h3></div>
+          <div class="sf-panel-body">
+            <p style="font-size:0.82rem;margin-bottom:10px;">Estructura idéntica a Comps & Voids:</p>
+            <p style="font-size:0.82rem;margin-bottom:8px;"><strong>Por Revenue Center:</strong> Reason, Notes, Quantity, Product Categories, Subtotal, Total</p>
+            <p style="font-size:0.82rem;margin-bottom:8px;"><strong>Lista de facturas:</strong> Invoice #, Date, Cashier, Item, Reason, Description, Quantity, Total, Subtotal</p>
+            <p class="small" style="margin-top:8px;">Formato: XLSX o PDF</p>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <strong>Descuento vs Comp:</strong> Un descuento reduce el precio pero el cliente sigue pagando algo. Un comp elimina el cargo por completo. En el Sales Report, los descuentos ya están descontados del Net Sales. En el Discount Report se ven los detalles (motivo, quién, qué producto).
+        </div>
+      </div>
+
+      <!-- TAB: Otros -->
+      <div class="sf-tab-content" id="tab-otros">
+        <h4 style="margin-bottom:12px;">Otros informes disponibles</h4>
+        <div class="sf-grid-3">
+          <div class="sf-panel">
+            <div class="sf-panel-body">
+              <h4 style="font-size:0.85rem;margin-bottom:6px;">Cash Drawer Report</h4>
+              <p class="small">Informe de caja registradora. Detalles de apertura/cierre. Ya cubierto por <span class="code">sala_cash_closures</span> en SYNCRO SHIFT.</p>
+              <span class="sf-badge neutral">No necesario</span>
+            </div>
+          </div>
+          <div class="sf-panel">
+            <div class="sf-panel-body">
+              <h4 style="font-size:0.85rem;margin-bottom:6px;">Mean Price per Covers</h4>
+              <p class="small">Ticket medio por comensal. Calculable desde Sales data. No requiere archivo separado.</p>
+              <span class="sf-badge neutral">Derivable</span>
+            </div>
+          </div>
+          <div class="sf-panel">
+            <div class="sf-panel-body">
+              <h4 style="font-size:0.85rem;margin-bottom:6px;">Daily Sales Summary (email)</h4>
+              <p class="small">Resumen diario por email. No exportable como archivo. Útil como verificación.</p>
+              <span class="sf-badge info">Solo referencia</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 2: TABLA DE ANÁLISIS -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="tabla-analisis">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">02 — Tabla de análisis</span>
+      <h2>Informes POSMEWS → Utilidad para Dashboard</h2>
+      <p class="sf-section-desc">Análisis de cada informe: qué datos contiene, qué falta, y para qué sirve en el Dashboard de ventas.</p>
+    </div>
+
+    <div class="sf-table-wrapper">
+      <table class="sf-table">
+        <thead>
+          <tr>
+            <th>Informe POSMEWS</th>
+            <th>Formato</th>
+            <th>Datos disponibles</th>
+            <th>Datos que faltan</th>
+            <th>Utilidad en Dashboard</th>
+            <th>Prioridad</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Facturas (actual)</strong><br><span class="small">Ventas → Facturas → CSV</span></td>
+            <td><span class="sf-badge info">CSV</span></td>
+            <td>Fecha, Usuario (camarero), Total €, Cancelación (sí/no), Descuento-Descripción</td>
+            <td>Revenue Center, Outlet, Payment Method, categoría Food/Bev, Taxes, Gross vs Net, SKU, Gratuities</td>
+            <td>Producción por camarero (uso actual). Insuficiente para Dashboard completo de ventas.</td>
+            <td><span class="sf-badge warning">Mantener</span></td>
+          </tr>
+          <tr>
+            <td><strong>Sales Analysis</strong><br><span class="small">Reports → Sales → Cumulative XLSX</span></td>
+            <td><span class="sf-badge success">XLSX</span></td>
+            <td>Date, Item Name, SKU, Family/Sub-Family, <strong>Revenue Centre</strong>, Outlet, Qty Sold, <strong>Gross Sales, Discounts, Net Sales</strong>, Avg Net, % of Net</td>
+            <td>Payment Method (no está en este informe), Gratuities, Covers per item, room charge flag</td>
+            <td><span class="teal"><strong>FUENTE PRINCIPAL</strong></span> de ingresos por centro, categoría Food/Bev, producto. Permite mapear centros de ingresos.</td>
+            <td><span class="sf-badge success">Crítico</span></td>
+          </tr>
+          <tr>
+            <td><strong>Cumulative Payments</strong><br><span class="small">Reports → Payments → Cumulative CSV</span></td>
+            <td><span class="sf-badge info">CSV</span></td>
+            <td>Gross sales, Refunds, Total collected, <strong>Gratuities</strong>, <strong>Payment Methods</strong> (name, count, total), Users</td>
+            <td>Desglose por Revenue Center, por producto, por categoría</td>
+            <td><span class="teal"><strong>FUENTE PRINCIPAL</strong></span> de métodos de pago (Tarjeta, Efectivo, Cargo habitación, Stripe) y propinas.</td>
+            <td><span class="sf-badge success">Crítico</span></td>
+          </tr>
+          <tr>
+            <td><strong>Comps & Voids</strong><br><span class="small">Reports → Comps & Voids → XLSX</span></td>
+            <td><span class="sf-badge warning">XLSX</span></td>
+            <td>Revenue Center, Reason, Notes, Qty, Product Categories, Subtotal/Total, Invoice #, Date, Cashier, Item</td>
+            <td>Payment method del invoice original</td>
+            <td>Detalle de compensaciones y anulaciones. KPIs de pérdida. Alertas si superan umbral.</td>
+            <td><span class="sf-badge success">Crítico</span></td>
+          </tr>
+          <tr>
+            <td><strong>Descuentos</strong><br><span class="small">Reports → Discount → XLSX</span></td>
+            <td><span class="sf-badge warning">XLSX</span></td>
+            <td>Revenue Center, Reason, Notes, Qty, Product Categories, Subtotal/Total, Invoice #, Date, Cashier, Item</td>
+            <td>Payment method, tipo de descuento (% vs fijo)</td>
+            <td>Detalle de descuentos aplicados. Separar de Comps/Voids. KPIs de descuento.</td>
+            <td><span class="sf-badge success">Crítico</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-success">
+      <strong>Conclusión:</strong> Se necesitan <strong>5 archivos</strong> (no 4) para reconstruir el Dashboard completo. El actual "Facturas CSV" se mantiene para producción por camarero, pero se añade el <strong>Sales Analysis XLSX</strong> como fuente canónica de ingresos por centro/categoría. El Cumulative Payments sigue siendo la fuente de métodos de pago y propinas.
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 3: DIFERENCIAS CONCEPTUALES -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="diferencias">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">03 — Conceptos clave</span>
+      <h2>Diferencias entre Venta, Factura, Pago y Revenue</h2>
+      <p class="sf-section-desc">Antes de construir el cálculo, hay que entender qué representa exactamente cada concepto en POSMEWS.</p>
+    </div>
+
+    <div class="sf-table-wrapper">
+      <table class="sf-table">
+        <thead>
+          <tr><th>Concepto</th><th>Qué es en POSMEWS</th><th>Dónde aparece</th><th>Impacto en Dashboard</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Venta (Sale)</strong></td>
+            <td>Registro de un producto vendido. Incluye gross, descuentos, net, taxes.</td>
+            <td>Sales Report, Sales Analysis</td>
+            <td>Base del ingreso bruto y neto por centro/categoría</td>
+          </tr>
+          <tr>
+            <td><strong>Factura (Invoice)</strong></td>
+            <td>Documento que agrupa uno o más items vendidos en una transacción. Tiene número, cajero, fecha.</td>
+            <td>Facturas CSV (actual), referenciado en Comps/Discounts</td>
+            <td>Cuenta de transacciones, ticket medio, producción por camarero</td>
+          </tr>
+          <tr>
+            <td><strong>Pago (Payment)</strong></td>
+            <td>Cómo se liquida la factura: tarjeta, efectivo, cargo habitación, Stripe.</td>
+            <td>Payments Report</td>
+            <td>Desglose por método de pago. Una factura puede tener pagos mixtos.</td>
+          </tr>
+          <tr>
+            <td><strong>Cargo a habitación</strong></td>
+            <td>Item POS enviado al perfil del huésped en MEWS PMS para liquidar allí. Se convierte en <strong>Mews Revenue</strong> (no Outlet Revenue).</td>
+            <td>Payments (como método), Mews PMS Accounting Report</td>
+            <td>Centro "Restaurante" + método "Cargo habitación". <span class="red">Aparece en POS como pago pero se liquida en PMS.</span></td>
+          </tr>
+          <tr>
+            <td><strong>Compensación (Comp)</strong></td>
+            <td>Producto servido pero no cobrado. Pérdida real (ya preparado/consumido).</td>
+            <td>Comps & Voids Report (tab Comps)</td>
+            <td>Ajuste negativo con pérdida operativa. Alerta si > umbral.</td>
+          </tr>
+          <tr>
+            <td><strong>Anulación (Void)</strong></td>
+            <td>Producto cancelado antes de servir. Sin pérdida de producto.</td>
+            <td>Comps & Voids Report (tab Voids)</td>
+            <td>Ajuste negativo sin pérdida operativa. Diferente de Comp.</td>
+          </tr>
+          <tr>
+            <td><strong>Descuento</strong></td>
+            <td>Reducción de precio. El cliente paga, pero menos.</td>
+            <td>Discount Report, ya descontado en Sales Net</td>
+            <td>Ya incluido en Net Sales. El informe separado da detalle (motivo, quién).</td>
+          </tr>
+          <tr>
+            <td><strong>Propina (Gratuity)</strong></td>
+            <td>Importe adicional voluntario. No es ingreso de la empresa.</td>
+            <td>Payments Report (Gratuities), Sales Report</td>
+            <td>Se muestra aparte. NO suma al ingreso. Se devuelve a empleados.</td>
+          </tr>
+          <tr>
+            <td><strong>Outlet Revenue vs Mews Revenue</strong></td>
+            <td><strong>Outlet Revenue:</strong> pagado en POS, reportado a MEWS como informativo.<br><strong>Mews Revenue:</strong> pagado/liquidado en MEWS (room charges).</td>
+            <td>Mews PMS Accounting Report</td>
+            <td>Para reconciliar POS ↔ PMS hay que comparar ambas secciones del Accounting Report.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 4: MAPEO POSMEWS → MODELO DE DATOS -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="mapeo">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">04 — Mapeo</span>
+      <h2>POSMEWS → Modelo de datos SYNCRO SHIFT</h2>
+      <p class="sf-section-desc">Correspondencia entre campos del informe y la tabla normalizada de operaciones.</p>
+    </div>
+
+    <div class="sf-panel sf-panel--accent">
+      <div class="sf-panel-header"><h3>📋 Fuentes canónicas por dato</h3></div>
+      <div class="sf-panel-body">
+        <div class="sf-table-wrapper" style="box-shadow:none;border:none;">
+          <table class="sf-table">
+            <thead>
+              <tr><th>Dato del Dashboard</th><th>Fuente canónica</th><th>Campo/Sección</th><th>Notas</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ingreso bruto por centro</td><td>Sales Analysis XLSX</td><td>Revenue Centre + Gross Sales</td><td>Mapear Revenue Centre → centro SYNCRO</td></tr>
+              <tr><td>Ingreso neto por centro</td><td>Sales Analysis XLSX</td><td>Revenue Centre + Net Sales</td><td>Ya descuenta descuentos, no comps/voids</td></tr>
+              <tr><td>Comida vs Bebida</td><td>Sales Analysis XLSX</td><td>Family Group / Family</td><td><span class="red">[VERIFICAR]</span> cómo están categorizados en vuestra config POSMEWS</td></tr>
+              <tr><td>Método de pago</td><td>Cumulative Payments CSV</td><td>Payment Methods section</td><td>Nombres exactos dependen de config: Tarjeta, Efectivo, Cash, Stripe, Room Charge…</td></tr>
+              <tr><td>Propinas</td><td>Cumulative Payments CSV</td><td>Gratuities</td><td>Total del periodo. Sin desglose por centro.</td></tr>
+              <tr><td>Compensaciones</td><td>Comps & Voids XLSX</td><td>Tab "Comps"</td><td>Desglose por Revenue Center, motivo, fecha</td></tr>
+              <tr><td>Anulaciones</td><td>Comps & Voids XLSX</td><td>Tab "Voids"</td><td>Desglose por Revenue Center, motivo, fecha</td></tr>
+              <tr><td>Descuentos</td><td>Descuentos XLSX</td><td>Por Revenue Center</td><td>Desglose por motivo, cajero, producto</td></tr>
+              <tr><td>Producción por camarero</td><td>Facturas CSV (actual)</td><td>Usuario + Total</td><td>Se mantiene el parser actual</td></tr>
+              <tr><td>Nº transacciones</td><td>Facturas CSV + Payments</td><td>Count de filas / invoices</td><td>Facturas CSV = conteo preciso por camarero</td></tr>
+              <tr><td>Ticket medio</td><td>Calculado</td><td>Net Sales / nº transacciones</td><td>Derivado</td></tr>
+              <tr><td>Cargos habitación</td><td>Cumulative Payments CSV</td><td>Payment Method = Room Charge (o similar)</td><td><span class="red">[VERIFICAR nombre exacto]</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="sf-panel sf-panel--gold">
+      <div class="sf-panel-header"><h3>🏢 Mapeo Revenue Centre POSMEWS → Centro de ingresos SYNCRO</h3></div>
+      <div class="sf-panel-body">
+        <div class="alert alert-danger">
+          <strong>⚠ REQUIERE DATOS REALES:</strong> No se puede hacer este mapeo sin ver los Revenue Centres configurados en vuestro POSMEWS. Necesito un export real del Sales Analysis para ver qué valores aparecen en la columna "Revenue Centre".
+        </div>
+        <div class="sf-table-wrapper" style="box-shadow:none;border:none;">
+          <table class="sf-table">
+            <thead>
+              <tr><th>Centro SYNCRO</th><th>Revenue Centre POSMEWS (hipótesis)</th><th>Criterio alternativo</th><th>Confianza</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Restaurante</strong></td><td>[NO DATA] — probablemente el RC principal o "Restaurant"</td><td>Outlet = Restaurante, método pago ≠ interno</td><td><span class="sf-badge danger">Verificar</span></td></tr>
+              <tr><td><strong>Pensiones</strong></td><td>[NO DATA] — puede no existir como RC separado</td><td>Podría ser método pago = "Room Charge" con items de desayuno/comida/cena tipo pensión. O no estar en POS (incluido en reserva MEWS PMS).</td><td><span class="sf-badge danger">Verificar</span></td></tr>
+              <tr><td><strong>Eventos</strong></td><td>[NO DATA] — podría ser un RC "Events" o "Eventos"</td><td>Método pago = Stripe, o un Outlet/RC específico para eventos</td><td><span class="sf-badge danger">Verificar</span></td></tr>
+              <tr><td><strong>SYNCROLAB</strong></td><td>[NO DATA] — probablemente un RC "SYNCROLAB" o "Internal"</td><td>Items específicos: batidos, agua pacientes, frutos secos SPA</td><td><span class="sf-badge danger">Verificar</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 5: PROPUESTA DE CÁLCULO -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="calculo">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">05 — Propuesta de cálculo</span>
+      <h2>Fórmula de Income Total Restaurante</h2>
+      <p class="sf-section-desc">Basada en la estructura de ingresos definida. Pendiente de validación con datos reales.</p>
+    </div>
+
+    <div class="sf-panel sf-panel--accent">
+      <div class="sf-panel-header"><h3>📐 Fórmula propuesta</h3></div>
+      <div class="sf-panel-body">
+        <div style="background:var(--sf-navy);border-radius:8px;padding:20px;margin-bottom:16px;">
+          <p style="font-family:var(--sf-font-mono);color:var(--sf-teal);font-size:0.9rem;line-height:2;">
+            <strong style="color:var(--sf-gold);">INCOME TOTAL RESTAURANTE =</strong><br>
+            &nbsp;&nbsp;Σ Sales Analysis [Net Sales] donde Revenue Centre ∈ {Restaurante, Pensiones, Eventos, SYNCROLAB}<br>
+            &nbsp;&nbsp;<span style="color:var(--sf-danger);">− Σ Comps & Voids [Total]</span> (ya excluidos de Net Sales o no, <span style="color:var(--sf-gold);">[VERIFICAR]</span>)<br>
+            &nbsp;&nbsp;<span style="color:var(--sf-danger);">− Propinas</span> (Gratuities del Payments report)<br><br>
+            <strong style="color:var(--sf-gold);">INGRESO NETO EMPRESA =</strong><br>
+            &nbsp;&nbsp;INCOME TOTAL RESTAURANTE<br>
+            &nbsp;&nbsp;<span style="color:var(--sf-danger);">− Propinas</span><br>
+            &nbsp;&nbsp;(Comps/Voids/Descuentos ya descontados si Net Sales es la base)
+          </p>
+        </div>
+
+        <div class="alert alert-danger">
+          <strong>⚠ PREGUNTA CRÍTICA:</strong> ¿El Net Sales del Sales Analysis ya descuenta Comps y Voids, o solo descuentos? Según la documentación de MEWS POS: <strong>Net Sales = Gross Sales − Discounts</strong>. Los Comps/Voids se reportan por separado. Esto significaría que hay que restar Comps/Voids del Net Sales para obtener el ingreso real. <strong>Necesita verificación con un export real.</strong>
+        </div>
+
+        <div class="sf-grid-2" style="margin-top:16px;">
+          <div class="sf-panel" style="margin-bottom:0;">
+            <div class="sf-panel-body">
+              <h4 style="font-size:0.85rem;margin-bottom:8px;color:var(--sf-teal);">Escenario A: Net Sales NO incluye Comps</h4>
+              <p style="font-size:0.8rem;font-family:var(--sf-font-mono);line-height:1.8;">
+                Ingreso real = Net Sales − Comps − Voids − Propinas<br>
+                → Comps y Voids se restan manualmente
+              </p>
+            </div>
+          </div>
+          <div class="sf-panel" style="margin-bottom:0;">
+            <div class="sf-panel-body">
+              <h4 style="font-size:0.85rem;margin-bottom:8px;color:var(--sf-gold);">Escenario B: Net Sales SÍ incluye Comps</h4>
+              <p style="font-size:0.8rem;font-family:var(--sf-font-mono);line-height:1.8;">
+                Ingreso real = Net Sales − Propinas<br>
+                → Comps/Voids solo se muestran para análisis
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sf-panel sf-panel--gold">
+      <div class="sf-panel-header"><h3>🔀 Posibles duplicidades</h3></div>
+      <div class="sf-panel-body">
+        <div class="sf-table-wrapper" style="box-shadow:none;border:none;">
+          <table class="sf-table">
+            <thead><tr><th>Riesgo</th><th>Descripción</th><th>Mitigación</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="sf-badge danger">Alto</span></td>
+                <td><strong>Descuentos contados dos veces:</strong> Sales Analysis resta descuentos de Net. El Discount Report los lista aparte. Si sumamos ambos, el descuento se cuenta doble.</td>
+                <td>El Discount Report es solo para DETALLE (motivo, quién). Para el cálculo de ingresos, usar solo Net Sales del Sales Analysis.</td>
+              </tr>
+              <tr>
+                <td><span class="sf-badge warning">Medio</span></td>
+                <td><strong>Pagos vs Ventas:</strong> Cumulative Payments incluye todas las ventas + otros pagos. Cumulative Sales solo ventas. Si se suman, se duplica.</td>
+                <td>Usar Sales Analysis para INGRESOS. Payments solo para MÉTODOS DE PAGO y PROPINAS.</td>
+              </tr>
+              <tr>
+                <td><span class="sf-badge warning">Medio</span></td>
+                <td><strong>Room charges:</strong> Aparecen como venta en POS y como revenue en MEWS PMS. Si se cruza con Accounting Report de MEWS, podrían duplicarse.</td>
+                <td>En el Dashboard POSMEWS, incluirlos normalmente. La conciliación POS↔PMS es un proceso separado.</td>
+              </tr>
+              <tr>
+                <td><span class="sf-badge info">Bajo</span></td>
+                <td><strong>Propinas en Payments vs Sales:</strong> Ambos informes las reportan. Elegir una sola fuente.</td>
+                <td>Usar Payments como fuente canónica de propinas (es más completo).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="sf-panel sf-panel--electric">
+      <div class="sf-panel-header"><h3>📅 Día contable / Business Date</h3></div>
+      <div class="sf-panel-body">
+        <div class="alert alert-warning">
+          <strong>⚠ VERIFICAR:</strong> El campo "Date" del Sales Analysis — ¿es fecha natural (calendario) o business date (día de negocio hasta el cierre)?<br>
+          En MEWS POS, el cierre de día se hace manualmente. Una venta a la 01:00 podría pertenecer al día anterior si el cierre no se ha hecho.<br><br>
+          <strong>Acción necesaria:</strong> Exportar un Sales Analysis de un día con ventas después de medianoche y verificar qué fecha se asigna.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 6: ARCHIVOS Y ARQUITECTURA -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="arquitectura">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">06 — Arquitectura</span>
+      <h2>Archivos a crear o modificar</h2>
+      <p class="sf-section-desc">Adaptado a la arquitectura existente de SYNCRO SHIFT (HTML + JS vanilla + Supabase PostgREST).</p>
+    </div>
+
+    <div class="alert alert-info" style="margin-bottom:20px;">
+      <strong>Nota sobre arquitectura del spec:</strong> El spec propone carpetas /ui, /services, /parsers, etc. Pero SYNCRO SHIFT usa JS vanilla monolítico (sin npm/import/export). La separación se hará en <strong>funciones dentro de archivos .js</strong>, no en carpetas tipo framework. Coherente con el patrón de informes.js, caja.js, etc.
+    </div>
+
+    <div class="sf-grid-2">
+      <div class="sf-panel sf-panel--accent">
+        <div class="sf-panel-header"><h3>📁 Archivos nuevos</h3></div>
+        <div class="sf-panel-body">
+          <ul style="font-size:0.82rem;line-height:2.2;list-style:none;padding:0;">
+            <li>📄 <span class="code">posmews_ventas.js</span> — Módulo principal: UI de carga, validación, preview, guardado. Parser para Sales Analysis XLSX. Parser para Cumulative Payments CSV.</li>
+            <li>📄 <span class="code">posmews_dashboard.js</span> — Dashboard de ventas: filtros, KPIs, gráficos (Chart.js). Queries a Supabase. Componentes de visualización.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="sf-panel sf-panel--gold">
+        <div class="sf-panel-header"><h3>✏️ Archivos a modificar</h3></div>
+        <div class="sf-panel-body">
+          <ul style="font-size:0.82rem;line-height:2.2;list-style:none;padding:0;">
+            <li>✏️ <span class="code">informes.js</span> — Cambiar sub-tab "ventas" de _renderInformesProximamente() a nuevo render. Registrar scripts.</li>
+            <li>✏️ <span class="code">index.html</span> — Añadir &lt;script src="posmews_ventas.js"&gt; y posmews_dashboard.js + Chart.js CDN.</li>
+            <li>✏️ <span class="code">shared.js</span> — Añadir helpers si necesario (XLSX parser, nuevas tablas en cache).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="sf-panel sf-panel--accent" style="margin-top:8px;">
+      <div class="sf-panel-header"><h3>🗄️ Tablas Supabase nuevas</h3></div>
+      <div class="sf-panel-body">
+        <div class="sf-table-wrapper" style="box-shadow:none;border:none;">
+          <table class="sf-table">
+            <thead><tr><th>Tabla</th><th>Propósito</th><th>Columnas principales</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="code">posmews_upload_batches</span></td>
+                <td>Registro de cada carga semanal (batch)</td>
+                <td>id, week_start, week_end, status (pending/processing/complete/error), uploaded_by, uploaded_at, processed_at, version, replaced_batch_id, validation_summary(jsonb)</td>
+              </tr>
+              <tr>
+                <td><span class="code">posmews_upload_files</span></td>
+                <td>Archivo individual dentro de un batch</td>
+                <td>id, batch_id → batches, report_type (sales_analysis/payments/comps_voids/discounts/facturas), original_name, format (csv/xlsx), status, error_message, row_count, checksum</td>
+              </tr>
+              <tr>
+                <td><span class="code">posmews_sales_data</span></td>
+                <td>Registros normalizados del Sales Analysis (línea por línea)</td>
+                <td>id, batch_id, business_date, item_name, sku, family_group, family, sub_family, revenue_centre, revenue_centre_mapped(enum), outlet, qty_sold, gross_sales, discounts, net_sales</td>
+              </tr>
+              <tr>
+                <td><span class="code">posmews_payments_data</span></td>
+                <td>Resumen de pagos del Cumulative Payments</td>
+                <td>id, batch_id, week_start, week_end, payment_method, payment_count, payment_total, gratuities_total, gross_sales, refunds_total</td>
+              </tr>
+              <tr>
+                <td><span class="code">posmews_adjustments</span></td>
+                <td>Comps, Voids y Descuentos normalizados</td>
+                <td>id, batch_id, adjustment_type (comp/void/discount), business_date, revenue_centre, reason, cashier, item, qty, subtotal, total, invoice_number, notes</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small" style="margin-top:8px;">Las tablas existentes <span class="code">sala_informes_control</span> y <span class="code">sala_produccion_semanal</span> se mantienen para compatibilidad. El nuevo módulo las puede alimentar en paralelo.</p>
+      </div>
+    </div>
+
+    <div class="sf-panel sf-panel--electric">
+      <div class="sf-panel-header"><h3>📦 Dependencia: Lector XLSX en el navegador</h3></div>
+      <div class="sf-panel-body">
+        <p style="font-size:0.85rem;margin-bottom:10px;">Los archivos Sales Analysis, Comps & Voids y Descuentos son XLSX. SYNCRO SHIFT no tiene un parser XLSX actualmente (solo valida los magic bytes PK).</p>
+        <p style="font-size:0.85rem;margin-bottom:10px;"><strong>Opción recomendada:</strong> <a href="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js" style="color:var(--sf-electric);">SheetJS (xlsx.full.min.js)</a> — ~500KB, CDN, sin dependencias. Lee XLSX en el navegador y devuelve JSON.</p>
+        <p style="font-size:0.85rem;">Se incluiría como <span class="code">&lt;script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"&gt;</span> en index.html.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 7: PREGUNTAS ABIERTAS -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="preguntas">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">07 — Preguntas abiertas</span>
+      <h2>Datos que necesitan verificación con exports reales</h2>
+      <p class="sf-section-desc">Estas preguntas bloquean la implementación de fórmulas contables definitivas.</p>
+    </div>
+
+    <div class="sf-table-wrapper">
+      <table class="sf-table">
+        <thead>
+          <tr><th>#</th><th>Pregunta</th><th>Cómo verificar</th><th>Impacto</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>P1</strong></td>
+            <td>¿Qué Revenue Centres están configurados en vuestro POSMEWS? ¿Cómo mapean a Restaurante/Pensiones/Eventos/SYNCROLAB?</td>
+            <td>Exportar un Sales Analysis de una semana completa y listar los valores únicos de la columna "Revenue Centre".</td>
+            <td><span class="sf-badge danger">Bloqueante</span></td>
+          </tr>
+          <tr>
+            <td><strong>P2</strong></td>
+            <td>¿Net Sales del Sales Analysis ya descuenta Comps/Voids, o solo Discounts?</td>
+            <td>Semana con comp conocido: comparar Gross − Discount vs Net Sales. Si coincide, Net Sales no incluye comps.</td>
+            <td><span class="sf-badge danger">Bloqueante</span></td>
+          </tr>
+          <tr>
+            <td><strong>P3</strong></td>
+            <td>¿"Efectivo" y "Cash" son el mismo método de pago o diferentes en vuestro POSMEWS?</td>
+            <td>Exportar Cumulative Payments y ver los nombres exactos en Payment Methods.</td>
+            <td><span class="sf-badge warning">Importante</span></td>
+          </tr>
+          <tr>
+            <td><strong>P4</strong></td>
+            <td>¿El campo "Date" del Sales Analysis es fecha calendario o business date (cierre)?</td>
+            <td>Exportar un día con ventas después de medianoche (ej: cierre a las 01:30). Ver qué fecha asigna.</td>
+            <td><span class="sf-badge warning">Importante</span></td>
+          </tr>
+          <tr>
+            <td><strong>P5</strong></td>
+            <td>¿Las pensiones (desayunos/comidas/cenas incluidas en reserva) pasan por POSMEWS o solo por MEWS PMS?</td>
+            <td>Verificar si existe un Revenue Centre o categoría para pensiones en el Sales Analysis. Si no aparece, las pensiones se gestionan 100% en MEWS PMS.</td>
+            <td><span class="sf-badge danger">Bloqueante</span></td>
+          </tr>
+          <tr>
+            <td><strong>P6</strong></td>
+            <td>¿Los consumos internos de SYNCROLAB (batidos, agua, frutos secos) se registran en POSMEWS? ¿Con qué Revenue Centre?</td>
+            <td>Revisar en POSMEWS si existe un RC "SYNCROLAB" o "Internal" o similar.</td>
+            <td><span class="sf-badge warning">Importante</span></td>
+          </tr>
+          <tr>
+            <td><strong>P7</strong></td>
+            <td>¿Los eventos (pagos Stripe) tienen un Revenue Centre propio en POSMEWS, o se mezclan con Restaurante?</td>
+            <td>Revisar configuración de Revenue Centres en POSMEWS Settings.</td>
+            <td><span class="sf-badge warning">Importante</span></td>
+          </tr>
+          <tr>
+            <td><strong>P8</strong></td>
+            <td>¿Cómo se llama exactamente el método de pago "cargo a habitación" en el Cumulative Payments? (Room Charge, Charge to Room, PMS, A la habitación…)</td>
+            <td>Export del Payments de una semana con cargos a habitación conocidos.</td>
+            <td><span class="sf-badge info">Necesario</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-danger" style="margin-top:16px;">
+      <strong>ACCIÓN REQUERIDA:</strong> Para desbloquear, necesito que exportes los 5 archivos de una semana real (preferiblemente una con eventos y cargos a habitación) y me los envíes. Con esos datos puedo: confirmar el mapeo de Revenue Centres, verificar la fórmula de cálculo, identificar los nombres exactos de métodos de pago, y determinar el comportamiento del business date. Sin esto, cualquier implementación sería especulativa.
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 8: PLAN QA -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="qa">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">08 — Plan QA</span>
+      <h2>Plan de verificación y calidad</h2>
+    </div>
+
+    <div class="sf-grid-2">
+      <div class="sf-panel sf-panel--accent">
+        <div class="sf-panel-header"><h3>✅ Tests de carga</h3></div>
+        <div class="sf-panel-body">
+          <ul class="checklist">
+            <li>Subir archivo válido → estado "Leído correctamente"</li>
+            <li>Subir CSV donde se espera XLSX → error de formato</li>
+            <li>Subir archivo de semana diferente → error de periodo</li>
+            <li>Subir archivo con columnas faltantes → error de contenido</li>
+            <li>Subir archivo duplicado → alerta de sustitución</li>
+            <li>Subir 5 archivos de golpe → detección correcta de cada tipo</li>
+            <li>Subir archivo con BOM UTF-8 → manejo correcto</li>
+            <li>Subir XLSX corrupto (no ZIP) → error</li>
+          </ul>
+        </div>
+      </div>
+      <div class="sf-panel sf-panel--gold">
+        <div class="sf-panel-header"><h3>✅ Tests de cálculo</h3></div>
+        <div class="sf-panel-body">
+          <ul class="checklist">
+            <li>Total Net Sales del parser = total del archivo original (±0.01€)</li>
+            <li>Propinas NO incluidas en ingreso neto</li>
+            <li>Comps/Voids restados correctamente (según escenario A o B)</li>
+            <li>Descuentos NO contados doble (ya en Net Sales)</li>
+            <li>Filtro por centro de ingresos → totales coherentes</li>
+            <li>Filtro combinado (centro + método pago + categoría) → sin duplicados</li>
+            <li>Semana sin datos → "Sin datos disponibles" (no 0)</li>
+            <li>Revenue Centre no mapeado → aparece como "Sin clasificar"</li>
+          </ul>
+        </div>
+      </div>
+      <div class="sf-panel sf-panel--electric">
+        <div class="sf-panel-header"><h3>✅ Tests de permisos</h3></div>
+        <div class="sf-panel-body">
+          <ul class="checklist">
+            <li>Jefe de Sala puede acceder y cargar</li>
+            <li>F&B Manager puede acceder y cargar</li>
+            <li>Admin/CEO puede acceder y cargar</li>
+            <li>Camarero NO puede acceder</li>
+            <li>Entrenador NO puede acceder</li>
+            <li>Recepción NO puede acceder</li>
+            <li>Intentar insertar vía API sin rol → RLS bloquea</li>
+          </ul>
+        </div>
+      </div>
+      <div class="sf-panel sf-panel--danger">
+        <div class="sf-panel-header"><h3>✅ Tests de auditoría</h3></div>
+        <div class="sf-panel-body">
+          <ul class="checklist">
+            <li>Cada carga genera entry en audit_log</li>
+            <li>Sustitución de semana registra versión anterior</li>
+            <li>audit_log incluye: usuario, acción, detalle, timestamp</li>
+            <li>No se pueden eliminar batches sin ser admin</li>
+            <li>Reprocesamiento registra razón y quién</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 9: WIREFRAME -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="wireframe">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">09 — Wireframe</span>
+      <h2>Estructura del módulo Ventas / Datos</h2>
+      <p class="sf-section-desc">El módulo tiene dos vistas: Carga de datos (upload) y Dashboard de análisis.</p>
+    </div>
+
+    <div class="sf-panel sf-panel--accent">
+      <div class="sf-panel-header"><h3>📤 Vista 1: Carga semanal (evolución del control actual)</h3></div>
+      <div class="sf-panel-body">
+        <div style="background:var(--sf-navy);border-radius:8px;padding:20px;color:var(--sf-white);font-family:var(--sf-font-mono);font-size:0.75rem;line-height:2;">
+          <p style="color:var(--sf-gold);font-weight:700;">┌─────────────────────────────────────────────────────────┐</p>
+          <p>│ 📋 <strong>Control semanal POSMEWS</strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Obj.sem: 3125€ │</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├─────────────────────────────────────────────────────────┤</p>
+          <p>│ ◄ &nbsp;<strong>02/08/2026 — 08/08/2026</strong>&nbsp; ► &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ❌ 0/5 │</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├──────────────────────┬──────────────────────────────────┤</p>
+          <p>│ ☐ Facturas &nbsp;&nbsp;&nbsp;<span style="color:#57d38c;">CSV</span>&nbsp; │ ☐ Pagos/Acumulativo &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#57d38c;">CSV</span> │</p>
+          <p>│ ☐ Sales Analysis <span style="color:var(--sf-gold);">XLSX</span>│ ☐ Comps & Voids &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--sf-gold);">XLSX</span> │</p>
+          <p>│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │ ☐ Descuentos &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--sf-gold);">XLSX</span> │</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├──────────────────────┴──────────────────────────────────┤</p>
+          <p>│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 📂 Arrastra archivos POSMEWS aquí &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├─────────────────────────────────────────────────────────┤</p>
+          <p>│ <span style="color:var(--sf-teal);">── Vista previa ──</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │</p>
+          <p>│ Revenue Centres: Restaurante(82%) SYNCROLAB(12%) ..│</p>
+          <p>│ Métodos pago: Tarjeta(65%) Efectivo(20%) Room(15%)│</p>
+          <p>│ Gross: 4,521€ &nbsp;Net: 4,280€ &nbsp;Propinas: 185€ &nbsp;&nbsp;&nbsp;&nbsp; │</p>
+          <p>│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [<span style="color:var(--sf-teal);"> GUARDAR EN SUPABASE </span>] &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │</p>
+          <p style="color:var(--sf-gold);font-weight:700;">└─────────────────────────────────────────────────────────┘</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="sf-panel sf-panel--gold" style="margin-top:8px;">
+      <div class="sf-panel-header"><h3>📊 Vista 2: Dashboard de ventas (nueva)</h3></div>
+      <div class="sf-panel-body">
+        <div style="background:var(--sf-navy);border-radius:8px;padding:20px;color:var(--sf-white);font-family:var(--sf-font-mono);font-size:0.75rem;line-height:2;">
+          <p style="color:var(--sf-gold);font-weight:700;">┌─────────────────────────────────────────────────────────┐</p>
+          <p>│ 📊 <strong>Dashboard Ventas Restaurante</strong>&nbsp;&nbsp;&nbsp;[Hoy|Sem|Mes|Año]│</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├─────────────────────────────────────────────────────────┤</p>
+          <p>│ FILTROS: [Centro▾] [Pago▾] [Tipo▾] [Rango fechas] │</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├───────────┬───────────┬───────────┬─────────────────────┤</p>
+          <p>│<span style="color:var(--sf-teal);"> Bruto</span> &nbsp;&nbsp;&nbsp;│<span style="color:var(--sf-teal);"> Neto</span> &nbsp;&nbsp;&nbsp;&nbsp;│<span style="color:var(--sf-teal);"> Ticket</span> &nbsp;&nbsp;│<span style="color:var(--sf-teal);"> Transacciones</span> &nbsp;&nbsp;&nbsp; │</p>
+          <p>│ 18,450€ &nbsp;&nbsp;│ 17,120€ &nbsp;&nbsp;│ 32.50€ &nbsp;&nbsp;│ 527 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├───────────┴───────────┴───────────┴─────────────────────┤</p>
+          <p>│ ┌─ Evolución ingresos ─────┐ ┌─ Distribución ────┐│</p>
+          <p>│ │ /\ &nbsp;&nbsp;&nbsp; /\ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ │ &nbsp; ◗ Rest 65% &nbsp;&nbsp;&nbsp;&nbsp;││</p>
+          <p>│ │/ &nbsp;\__/ &nbsp;\ &nbsp;&nbsp;Línea &nbsp;&nbsp;&nbsp;&nbsp;│ │ &nbsp; ◗ Pens 20% &nbsp;&nbsp;&nbsp;&nbsp;││</p>
+          <p>│ │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\___ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ │ &nbsp; ◗ Evnt &nbsp;8% &nbsp;&nbsp;&nbsp;&nbsp;││</p>
+          <p>│ └──────────────────────────┘ │ &nbsp; ◗ Sync &nbsp;7% &nbsp;&nbsp;&nbsp;&nbsp;││</p>
+          <p>│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └───────────────────┘│</p>
+          <p style="color:var(--sf-gold);font-weight:700;">├─────────────────────────────────────────────────────────┤</p>
+          <p>│ <span style="color:var(--sf-danger);">⚠ Ajustes negativos</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │</p>
+          <p>│ Comps: 3 (145€) | Voids: 1 (22€) | Desc: 8 (89€) │</p>
+          <p>│ Propinas: 185€ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</p>
+          <p style="color:var(--sf-gold);font-weight:700;">└─────────────────────────────────────────────────────────┘</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 10: FLUJO DE IMPLEMENTACIÓN -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="sf-section" id="flujo">
+  <div class="sf-container">
+    <div class="sf-section-header">
+      <span class="sf-section-tag">10 — Flujo de implementación</span>
+      <h2>Próximos pasos</h2>
+    </div>
+
+    <div class="sf-panel sf-panel--accent">
+      <div class="sf-panel-header"><h3>🚀 Fases de implementación</h3></div>
+      <div class="sf-panel-body">
+        <div class="sf-table-wrapper" style="box-shadow:none;border:none;">
+          <table class="sf-table">
+            <thead><tr><th>Fase</th><th>Entregable</th><th>Bloqueado por</th><th>Estado</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>0. Investigación</strong></td>
+                <td>Este documento</td>
+                <td>—</td>
+                <td><span class="sf-badge success">Completo</span></td>
+              </tr>
+              <tr>
+                <td><strong>1. Validación datos reales</strong></td>
+                <td>Export de 5 archivos de una semana real → confirmar mapeos, fórmulas, nombres</td>
+                <td>CEO exporta archivos de POSMEWS</td>
+                <td><span class="sf-badge danger">Pendiente</span></td>
+              </tr>
+              <tr>
+                <td><strong>2. Schema Supabase</strong></td>
+                <td>Crear 5 tablas nuevas + RLS + policies</td>
+                <td>Fase 1</td>
+                <td><span class="sf-badge neutral">Pendiente</span></td>
+              </tr>
+              <tr>
+                <td><strong>3. Parsers</strong></td>
+                <td>Sales Analysis XLSX parser, Payments CSV parser, Comps/Voids/Discounts XLSX parsers</td>
+                <td>Fase 1 (estructura real de columnas)</td>
+                <td><span class="sf-badge neutral">Pendiente</span></td>
+              </tr>
+              <tr>
+                <td><strong>4. UI de carga</strong></td>
+                <td>Panel de control semanal actualizado (5 archivos), validación, preview, guardado</td>
+                <td>Fase 3</td>
+                <td><span class="sf-badge neutral">Pendiente</span></td>
+              </tr>
+              <tr>
+                <td><strong>5. Dashboard</strong></td>
+                <td>KPIs, gráficos, filtros, ajustes negativos</td>
+                <td>Fase 4</td>
+                <td><span class="sf-badge neutral">Pendiente</span></td>
+              </tr>
+              <tr>
+                <td><strong>6. QA + Deploy</strong></td>
+                <td>Tests, verificación permisos, auditoría, deploy producción</td>
+                <td>Fase 5</td>
+                <td><span class="sf-badge neutral">Pendiente</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="sf-footer">
+  <div class="sf-container">
+    <p>SYNCROSFERA — La Sella Academy SLU — Av. de la Marina Alta 2, Pedreguer, España — +34 965 648 619</p>
+    <p style="margin-top:6px;color:rgba(255,255,255,0.25);">Documento generado el 02/08/2026 · SYNCRO SHIFT v4.0 · Pre-desarrollo Módulo Ventas/Datos</p>
+  </div>
+</footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Tabs
+  document.querySelectorAll('.sf-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabGroup = btn.closest('.sf-tabs');
+      tabGroup.querySelectorAll('.sf-tab-btn').forEach(b => b.classList.remove('active'));
+      tabGroup.querySelectorAll('.sf-tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      tabGroup.querySelector(`#${btn.dataset.tab}`).classList.add('active');
+    });
+  });
+  // Smooth scroll
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+});
+</script>
+</body>
+</html>

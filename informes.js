@@ -15,30 +15,9 @@ var _infSalaObjMes   = 10125.00;
 var _infControlWeek  = null;  // {inicio:'YYYY-MM-DD', fin:'YYYY-MM-DD'}
 var _infControlTicks = {};    // {acumulativo:{ok,filename,ts,error}, ...}
 
-var _INF_FILE_TYPES = [
-  // 1. Facturas CSV — producción diaria por camarero, pagos por factura
-  {key:'facturas',            label:'Facturas (producción)',        fmt:'csv',
-   detect:function(t){ var h=(t.replace(/^\uFEFF/,'').split(/\r?\n/)[0]||''); return h.indexOf('Fecha')>=0&&h.indexOf('Usuario')>=0&&h.indexOf('Total')>=0; },
-   feedsParser:true,
-   desc:'POSMEWS › Ventas → Facturas · CSV'},
-  // 2. Acumulativo Ventas XLSX — resumen semanal (3 hojas: Informe, RC, RC+productos)
-  {key:'acumulativo_ventas',  label:'Acumulativo Ventas',           fmt:'xlsx',
-   fnPattern:/acumulativo/i, xlsxDetect:'sheets>=3',
-   desc:'POSMEWS › Informes → Ventas → Acumulativo · XLSX'},
-  // 3. Acumulativo Pagos XLSX — métodos de pago y propinas (1 hoja)
-  {key:'acumulativo_pagos',   label:'Acumulativo Pagos',            fmt:'xlsx',
-   fnPattern:/acumulativo/i, xlsxDetect:'sheets<3',
-   desc:'POSMEWS › Informes → Pagos → Acumulativo · XLSX'},
-  // 4. Compensaciones y Anulaciones XLSX
-  {key:'compensaciones',      label:'Compensaciones y Anulaciones', fmt:'xlsx',
-   fnPattern:/compensacion|anulacion/i,
-   desc:'POSMEWS › Informes → Comps & Voids · XLSX'},
-  // 5. Descuentos XLSX
-  {key:'descuentos',          label:'Descuentos',                   fmt:'xlsx',
-   fnPattern:/descuento/i,
-   desc:'POSMEWS › Informes → Descuentos · XLSX'}
-];
-
+// _INF_FILE_TYPES → ahora vive en posmews_ventas.js como _PV_FILE_TYPES
+// Fallback para código legacy que aún referencia _INF_FILE_TYPES
+var _INF_FILE_TYPES = (typeof _PV_FILE_TYPES !== 'undefined') ? _PV_FILE_TYPES : [];
 // Estado informe de jefe
 var _infJefeMode     = 'lista';
 var _infJefeEditId   = null;
@@ -313,7 +292,7 @@ async function _infRenderSubTab(){
 
   // ── VENTAS / DATOS ───────────────────────────────────────────────
   if(sub==='ventas'){
-    if(dept==='Sala') { await _renderVentasDatos(tc); return; }
+    if(dept==='Sala' && typeof renderPosmewsVentas==='function') { await renderPosmewsVentas(tc); return; }
     _renderInformesProximamente(tc, dept+' · Ventas / Datos');
     return;
   }
@@ -399,14 +378,7 @@ function _readFileText(file){
     r.readAsText(file,'utf-8');
   });
 }
-function _readFileArrayBuffer(file){
-  return new Promise(function(ok,fail){
-    var r=new FileReader();
-    r.onload=function(e){ ok(e.target.result); };
-    r.onerror=function(){ fail(new Error('Error leyendo archivo')); };
-    r.readAsArrayBuffer(file);
-  });
-}
+// _readFileArrayBuffer → movido a posmews_ventas.js
 
 window._infControlPrev=function(){ _infShiftControlWeek(-1); };
 window._infControlNext=function(){ _infShiftControlWeek(1); };
@@ -650,41 +622,6 @@ function _renderControlBody(){
     +  '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);">📂 Arrastra archivos POSMEWS aquí <span style="font-size:10px;">(1 o varios a la vez)</span></div>'
     +'</div>'
     +'<input type="file" id="inf-control-input" multiple accept=".csv,.xlsx" style="display:none" onchange="_infControlFiles(this)">';
-}
-
-// ══════════════════════════════════════════════════════════════════════
-// VENTAS / DATOS — Upload unificado POSMEWS (5 archivos)
-// ══════════════════════════════════════════════════════════════════════
-async function _renderVentasDatos(el){
-  if(!_infControlWeek) _infControlWeek=_infGetWeekOf();
-  el.innerHTML=''
-    +'<div class="card" style="margin-bottom:16px;">'
-    +  '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;">'
-    +    '<div style="font-family:var(--font-mono);font-weight:700;font-size:13px;color:var(--text);">📋 Control semanal POSMEWS</div>'
-    +  '</div>'
-    +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:14px;">Sube los 5 archivos obligatorios de cada semana (dom→sáb). Todos deben estar ✅ para marcar la semana como completa.</div>'
-    +  '<div id="inf-control-body"></div>'
-    +  '<details style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">'
-    +    '<summary style="font-family:var(--font-mono);font-weight:700;font-size:11px;color:var(--text2);cursor:pointer;user-select:none;">📋 Instrucciones: cómo descargar los 5 archivos de POSMEWS</summary>'
-    +    '<div style="margin-top:10px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:rgba(255,255,255,.02);">'
-    +      '<div style="font-size:10px;color:var(--amber);border:1px solid var(--amber);border-radius:4px;padding:6px 8px;margin-bottom:10px;line-height:1.4;">pos.mews.com › <strong>LA SELLA ACADEMY SL</strong> · desde ordenador · periodo <strong>domingo → sábado</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">1 · Facturas (CSV)</div>'
-    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Ventas → Facturas</strong> → ajustar fechas dom→sáb → clic ⋮ → <strong style="color:var(--text2);">Exportar CSV</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">2 · Acumulativo Ventas (XLSX)</div>'
-    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Ventas</strong> → mismas fechas → clic ⋮ → <strong style="color:var(--text2);">Acumulativo</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">3 · Acumulativo Pagos (XLSX)</div>'
-    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Pagos</strong> → mismas fechas → clic ⋮ → <strong style="color:var(--text2);">Acumulativo</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">4 · Compensaciones y Anulaciones (XLSX)</div>'
-    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Compensaciones y Anulaciones</strong> → mismas fechas → descargar <strong style="color:var(--text2);">XLSX</strong></div>'
-    +      '<div style="font-size:10.5px;color:var(--text2);font-weight:700;margin-bottom:3px;">5 · Descuentos (XLSX)</div>'
-    +      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.4;">Menú › <strong style="color:var(--text2);">Informes → Descuentos</strong> → mismas fechas → descargar <strong style="color:var(--text2);">XLSX</strong></div>'
-    +    '</div>'
-    +  '</details>'
-    +'</div>'
-    +'<div id="inf-sala-result"></div>';
-  if(_infSalaData) _renderSalaTabla(_infSalaData,_infSalaData._costData||{});
-  _renderControlBody();
-  _infLoadControlTicks();
 }
 
 // ══════════════════════════════════════════════════════════════════════
