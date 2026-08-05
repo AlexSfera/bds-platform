@@ -101,7 +101,7 @@ async function renderPosmewsVentas(el){
     +  '</details>'
     +'</div>'
     // ── Resultado de producción (preview al subir Facturas) ──
-    +'<div id="pv-result"></div>';
+    +'<div id="pv-result"><div id="inf-sala-result"></div></div>';
   // Si hay datos parseados en memoria, mostrar preview
   if(_pvParsedData && typeof _renderSalaTabla==='function'){
     _renderSalaTabla(_pvParsedData,_pvParsedData._costData||{});
@@ -404,6 +404,13 @@ async function _pvValidateFile(file){
         if(typeof _infSalaData!=='undefined') window._infSalaData=parsed;
         window._infSalaData=parsed;
         window._infSalaData._costData=costData;
+        // Asegurar que #inf-sala-result existe (fallback a #pv-result)
+        if(!document.getElementById('inf-sala-result')){
+          var pvr=document.getElementById('pv-result');
+          if(pvr && !pvr.querySelector('#inf-sala-result')){
+            var d=document.createElement('div'); d.id='inf-sala-result'; pvr.appendChild(d);
+          }
+        }
         if(typeof _renderSalaTabla==='function') _renderSalaTabla(parsed,costData);
       }
     }catch(e){ console.error('Auto-parse Facturas:',e); }
@@ -490,3 +497,38 @@ function _pvRenderControlBody(){
     +'</div>'
     +'<input type="file" id="pv-file-input" multiple accept=".csv,.xlsx" style="display:none" onchange="_pvFiles(this)">';
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// FIX: Sub-tabs Informes no actualizan estilo visual al clic
+// Wrapper sobre _infRenderSubTab para re-aplicar active/inactive
+// ══════════════════════════════════════════════════════════════════════
+(function(){
+  if(typeof window._infRenderSubTab !== 'function') return;
+  var _origSubTab = window._infRenderSubTab;
+  window._infRenderSubTab = async function(){
+    await _origSubTab.apply(this, arguments);
+    // Buscar contenedor de sub-tabs y actualizar estilos
+    var cards = document.querySelectorAll('.card');
+    var subTabRow = null;
+    for(var i=0;i<cards.length;i++){
+      var btns = cards[i].querySelectorAll('button[onclick*="_infSubTab"]');
+      if(btns.length > 1){ subTabRow = cards[i]; break; }
+    }
+    if(!subTabRow) return;
+    var btns = subTabRow.querySelectorAll('button[onclick*="_infSubTab"]');
+    var labels = typeof INF_SUBTAB_LABELS !== 'undefined' ? INF_SUBTAB_LABELS : {};
+    var activeLabel = labels[window._infSubTab] || window._infSubTab || '';
+    btns.forEach(function(btn){
+      var isActive = btn.textContent.trim() === activeLabel.trim();
+      if(isActive){
+        btn.style.background = 'var(--amber)';
+        btn.style.color = '#0d1b2e';
+        btn.style.borderColor = 'var(--amber)';
+      } else {
+        btn.style.background = 'var(--bg2)';
+        btn.style.color = 'var(--text2)';
+        btn.style.borderColor = 'var(--border)';
+      }
+    });
+  };
+})();
