@@ -154,9 +154,55 @@ async function _pvLoadBatch(){
         });
         _pvRenderControlBody();
       }
+    } else {
+      // No batch → verificar datos existentes en BD (legacy)
+      await _pvCheckLegacyData(periodo);
     }
   }catch(e){ console.error('Error cargando batch:',e); }
 }
+
+// ── Verificar datos existentes en sala_produccion_semanal + sala_informes_control ──
+async function _pvCheckLegacyData(periodo){
+  try{
+    // 1. Datos de producción en sala_produccion_semanal
+    var prodRes=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo)+'&select=id,nombre',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    var prodRows=prodRes.ok?await prodRes.json():[];
+    // 2. Ticks legacy en sala_informes_control
+    var legRes=await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&select=tipo,filename,subido_ts',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    var legRows=legRes.ok?await legRes.json():[];
+    // Marcar Facturas si existe producción guardada
+    if(prodRows.length>0){
+      _pvFileTicks['facturas']={ok:true,filename:'Guardado en BD ('+prodRows.length+' camareros)',ts:null,fromDB:true};
+    }
+    // Marcar otros archivos desde legacy ticks
+    legRows.forEach(function(r){
+      if(r.tipo&&!_pvFileTicks[r.tipo]){
+        _pvFileTicks[r.tipo]={ok:true,filename:r.filename||'(registro legacy)',ts:r.subido_ts,fromDB:true};
+      }
+    });
+    var nOk=0;
+    _PV_FILE_TYPES.forEach(function(t){ if(_pvFileTicks[t.key]&&_pvFileTicks[t.key].ok) nOk++; });
+    var statusEl=document.getElementById('pv-batch-status');
+    if(statusEl&&nOk>0){
+      var deleteBtn='';
+      if(typeof isAdmin==='function'&&isAdmin(currentUser)){
+        deleteBtn=' <button onclick="window._pvDeleteWeekData(\''+periodo+'\')" style="background:none;border:1px solid var(--red);border-radius:4px;color:var(--red);font-size:10px;font-family:var(--font-mono);padding:2px 8px;cursor:pointer;margin-left:6px;">🗑 Eliminar</button>';
+      }
+      statusEl.innerHTML='<span style="font-size:10px;font-family:var(--font-mono);color:var(--amber);border:1px solid var(--amber);border-radius:4px;padding:2px 8px;">📂 DATOS EXISTENTES · '+nOk+'/5</span>'+deleteBtn;
+    }
+    _pvRenderControlBody();
+  }catch(e){ console.error('Error verificando datos legacy:',e); }
+}
+
+// ── Eliminar datos de la semana desde Ventas/Datos y refrescar ──
+window._pvDeleteWeekData=function(periodo){
+  if(typeof _infDeleteSemana!=='function'){ toast('Función de eliminación no disponible','err'); return; }
+  _infDeleteSemana(periodo).then(function(deleted){
+    if(deleted){_pvFileTicks={};_pvBatchId=null;_pvParsedData=null;_pvRenderControlBody();_pvLoadBatch();}
+  });
+};
 
 // ── Crear o reutilizar batch ─────────────────────────────────────────
 async function _pvEnsureBatch(){
@@ -408,8 +454,9 @@ function _pvRenderControlBody(){
       tickIcon='<span style="font-size:16px;opacity:.3;">☐</span>';
       tickDetail='<span style="font-size:10px;color:var(--text3);">Pendiente</span>';
     } else if(tick.ok){
-      tickIcon='<span style="font-size:16px;">✅</span>';
-      tickDetail='<span style="font-size:10px;color:var(--green);font-family:var(--font-mono);">'+(typeof _escHtml==='function'?_escHtml(tick.filename||''):tick.filename||'')+'</span>';
+      tickIcon=tick.fromDB?'<span style="font-size:16px;">📂</span>':'<span style="font-size:16px;">✅</span>';
+      var _fnTxt=(typeof _escHtml==='function'?_escHtml(tick.filename||''):tick.filename||'');
+      tickDetail='<span style="font-size:10px;color:'+(tick.fromDB?'var(--amber)':'var(--green)')+';font-family:var(--font-mono);">'+_fnTxt+'</span>';
     } else {
       tickIcon='<span style="font-size:16px;">❌</span>';
       tickDetail='<span style="font-size:10px;color:var(--red);">'+(typeof _escHtml==='function'?_escHtml(tick.error||tick.filename||'Error'):tick.error||'Error')+'</span>';

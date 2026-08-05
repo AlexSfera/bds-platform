@@ -644,6 +644,7 @@ async function _renderInformesSala(el){
     +    '<button onclick="_infKpiNext()" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;">►</button>'
     +  '</div>'
     +  '<div style="font-size:10.5px;color:var(--text3);margin-bottom:6px;">Los datos se suben desde <strong style="color:var(--text2);">💶 Ventas / Datos</strong>. Aquí se muestran los datos guardados.</div>'
+    +  '<div id="inf-kpi-actions"></div>'
     +'</div>'
     +'<div id="inf-sala-result"><div style="color:var(--text3);text-align:center;padding:24px;">Cargando…</div></div>';
   _infLoadSalaFromDB();
@@ -699,7 +700,12 @@ async function _infLoadSalaFromDB(){
     if(fechas.length){
       try{ costData=await _infSalaCostLaboral(fechas[0],fechas[fechas.length-1]); }catch(x){}
     }
-    _renderSalaTabla(data,costData);
+    _renderSalaTabla(data,costData,{readOnly:true});
+    // Botón eliminar solo para admin
+    var actEl=document.getElementById('inf-kpi-actions');
+    if(actEl&&typeof isAdmin==='function'&&isAdmin(currentUser)){
+      actEl.innerHTML='<button onclick="window._infDeleteSemana()" style="background:var(--bg4);border:1px solid var(--red);border-radius:6px;color:var(--red);font-size:11px;font-family:var(--font-mono);padding:5px 12px;cursor:pointer;margin-top:8px;">🗑 Eliminar datos de esta semana</button>';
+    } else if(actEl){ actEl.innerHTML=''; }
   }catch(e){
     el.innerHTML='<div class="card"><p style="color:var(--red);">Error cargando datos: '+_escHtml(e.message)+'</p></div>';
   }
@@ -862,8 +868,52 @@ window._infSalaGuardar=async function(){
   }catch(e){ toast('Error al guardar: '+e.message,'err'); }
 };
 
-function _renderSalaTabla(data,costData){
+// ── Eliminar producción semanal (solo admin) ──────────────────────────
+window._infDeleteSemana=async function(periodoOverride){
+  if(typeof isAdmin==='function'&&!isAdmin(currentUser)){ toast('Solo admin puede eliminar','err'); return false; }
+  var periodo=periodoOverride;
+  if(!periodo){
+    var w=_infControlWeek||_infGetWeekOf();
+    periodo=w.inicio+'_'+w.fin;
+  }
+  if(!confirm('⚠ ¿Eliminar TODOS los datos de producción de la semana '+periodo+'?\n\nEsta acción no se puede deshacer.')) return false;
+  try{
+    await auditLog('delete_produccion_semanal','Eliminado periodo '+periodo+' (sala_produccion_semanal + sala_informes_control)');
+    // 1. Eliminar producción
+    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
+      {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    // 2. Eliminar ticks legacy
+    await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo),
+      {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    // 3. Eliminar batch tracking (si existe)
+    var batchRes=await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo)+'&select=id',
+      {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    if(batchRes.ok){
+      var batches=await batchRes.json();
+      for(var i=0;i<batches.length;i++){
+        await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batches[i].id),
+          {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+      }
+      if(batches.length){
+        await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo),
+          {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+      }
+    }
+    invalidateCache('sala_produccion_semanal');
+    invalidateCache('sala_informes_control');
+    invalidateCache('posmews_upload_batches');
+    invalidateCache('posmews_upload_files');
+    toast('🗑 Datos eliminados: '+periodo,'ok');
+    // Refrescar KPI si está visible
+    if(document.getElementById('inf-sala-result')) _infLoadSalaFromDB();
+    return true;
+  }catch(e){ toast('Error al eliminar: '+e.message,'err'); return false; }
+};
+
+function _renderSalaTabla(data,costData,opts){
   costData=costData||{};
+  opts=opts||{};
   var el=document.getElementById('inf-sala-result');
   if(!el) return;
   var {usuarios,fechas,porUsuario,matchLog}=data;
@@ -955,10 +1005,10 @@ function _renderSalaTabla(data,costData){
     +  kpiBox('% Coste/Prod',_pctCosteProd.toFixed(1)+'%',_pctCosteProd>40?'var(--red)':_pctCosteProd>25?'var(--amber)':'var(--green)')
     +  kpiBox('Coste medio/cam',_mediaCoste.toFixed(2)+'€','var(--text3)')
     +'</div>':'')
-    +'<div style="display:flex;gap:8px;margin-bottom:14px;">'
+    +(opts.readOnly?'':'<div style="display:flex;gap:8px;margin-bottom:14px;">'
     +  '<button id="inf-sala-guardar" onclick="window._infSalaGuardar()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;font-family:var(--font-mono);cursor:pointer;">💾 Guardar semana</button>'
     +  '<button onclick="window._infSalaData=null;_infRenderSubTab()" style="background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:5px 12px;cursor:pointer;">✕ Nuevo CSV</button>'
-    +'</div>'
+    +'</div>')
     +'<div style="overflow-x:auto;">'
     +  '<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px;">'
     +    '<thead><tr style="background:var(--bg2);border-bottom:2px solid var(--border2);">'
