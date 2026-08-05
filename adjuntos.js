@@ -652,16 +652,26 @@ async function _adjGetEmployeeMap(){
 //   2) algún employee_id en staff_implicado_ids pertenece a un dept del supervisor
 function canViewIncidencia(user, inci, empMap){
   if(isAdmin(user)) return true;
-  // Check 1: departamento directo
+  // Check 1: departamento directo (puede ser resuelto o legacy 'SYNCROLAB')
   var iDept = inci.departamento || inci.area || '';
+  // Si dept es raw 'SYNCROLAB', resolver via el creador de la incidencia
+  if(/^syncrolab$/i.test(iDept.trim()) && empMap && inci.employee_id){
+    var creator = empMap[inci.employee_id];
+    if(creator && typeof _deptCatalogo === 'function'){
+      var resolved = _deptCatalogo(creator);
+      if(resolved) iDept = resolved;
+    }
+  }
   if(canViewDepartment(user, iDept)) return true;
-  // Check 2: departamentos del staff implicado
+  // Check 2: departamentos del staff implicado (usar _deptCatalogo)
   if(!empMap) return false;
   var staffIds = [];
   try { staffIds = JSON.parse(inci.staff_implicado_ids || '[]'); } catch(e){}
   for(var i = 0; i < staffIds.length; i++){
     var emp = empMap[staffIds[i]];
-    if(emp && emp.area && canViewDepartment(user, emp.area)) return true;
+    if(!emp) continue;
+    var empDept = (typeof _deptCatalogo === 'function') ? _deptCatalogo(emp) : (emp.area||'');
+    if(empDept && canViewDepartment(user, empDept)) return true;
   }
   return false;
 }
