@@ -139,9 +139,9 @@ const SUPERVISOR_DEPT_MAP = {
   gobernante: ['Housekeeping', 'Limpieza'],
   subgobernante: ['Housekeeping', 'Limpieza'],
   jefe_mantenimiento: ['Mantenimiento'],
-  coord_recepcion_syncrolab: ['Recepción SYNCROLAB', 'SyncroLab', 'SYNCROLAB'],
-  coord_entrenadores: ['Entrenadores', 'SYNCROLAB', 'SyncroLab'],
-  coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica', 'SYNCROLAB', 'SyncroLab'],
+  coord_recepcion_syncrolab: ['Recepción SYNCROLAB'],
+  coord_entrenadores: ['Entrenadores'],
+  coord_fisioterapeutas: ['Fisioterapeutas', 'Clínica'],
   adjunto_directivo: ['*'],  // acceso a todos los departamentos
   adjunto: ['*']             // alias legacy
 };
@@ -4741,7 +4741,7 @@ async function saveNewGestionStandalone(){
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
     area: currentUser.area||'',
-    departamento: currentUser.area||'',
+    departamento: _deptCatalogo(currentUser) || currentUser.area || '',
     fecha: today(),
     tipo_gestion: tipo || 'Otro',
     descripcion: desc,
@@ -5365,7 +5365,7 @@ async function saveNewIncidenciaStandalone(){
     employee_id: currentUser.id,
     nombre: currentUser.nombre,
     area: currentUser.area||'',
-    departamento: currentUser.area||'',
+    departamento: _deptCatalogo(currentUser) || currentUser.area || '',
     fecha: today(),
     tipo_incidencia: tipo || 'Otro',
     categoria: tipo || 'Otro',
