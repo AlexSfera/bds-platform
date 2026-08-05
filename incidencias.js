@@ -74,6 +74,8 @@ function buildInciObj(shiftId,fecha,servicio,ts){
   var staff=getStaffImplicado();
   return {
     id:genId(), shift_id:shiftId, employee_id:currentUser.id, nombre:currentUser.nombre,
+    area: currentUser.area||'',
+    departamento: (typeof _deptCatalogo==='function' ? _deptCatalogo(currentUser) : '') || currentUser.area || '',
     fecha, servicio,
     categoria:'Reportada por empleado',
     severidad:'Pendiente revision',
