@@ -4350,7 +4350,16 @@ async function openItemModal(type, id){
   var tipo = rec.tipo_gestion || rec.tipo_incidencia || rec.categoria || '—';
   var creador = rec.creado_por || rec.nombre || '—';
   var fechaCre = rec.created_at ? new Date(rec.created_at).toLocaleString('es-ES') : '—';
-  var dpto = rec.departamento || rec.area || '—';
+  var dpto = rec.departamento || rec.area || '';
+  // FIX-DEPT: resolver departamento desde employee cuando falta en el registro
+  if(!dpto && rec.employee_id){
+    try {
+      var _eList = await getDB('employees');
+      var _eRec = _eList.find(function(e){ return e.id === rec.employee_id; });
+      if(_eRec) dpto = (typeof _deptCatalogo === 'function' ? _deptCatalogo(_eRec) : '') || _eRec.area || '';
+    } catch(e){}
+  }
+  if(!dpto) dpto = '—';
   var accionPrev = rec.accion_tomada || rec.accion_inmediata || '';
 
   document.getElementById('mi-title').textContent =
