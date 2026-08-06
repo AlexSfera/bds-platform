@@ -41,9 +41,23 @@ function _isOperationalIncident(i) {
 }
 
 // ── PERMISOS ──────────────────────────────────────────────────────────
-function canCloseIncident(user,incident){
+function canCloseIncident(user,incident,empMap){
   if(typeof canActAsAdmin === 'function' && canActAsAdmin(user)) return true;
-  return isSupervisor(user) && canViewDepartment(user,getRecordDepartment(incident));
+  if(!isSupervisor(user)) return false;
+  var dept = getRecordDepartment(incident);
+  if(dept && dept !== '[NO DATA]' && canViewDepartment(user,dept)) return true;
+  // FIX-DEPT: fallback — resolver departamento desde employee_id
+  if(incident && incident.employee_id){
+    var eMap = empMap || (typeof _adjEmpCache==='object' ? _adjEmpCache : null);
+    if(eMap){
+      var emp = eMap[incident.employee_id];
+      if(emp){
+        var empDept = (typeof _deptCatalogo==='function') ? _deptCatalogo(emp) : (emp.area||'');
+        if(empDept && canViewDepartment(user,empDept)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function canValidateIncident(user,incident){
