@@ -134,7 +134,7 @@ async function loadIncentivosEmpleado(){
   var mesLabel = meses[parseInt(parts[1])-1]+' '+parts[0];
 
   // 1. Ventas semanales del mes
-  var ventasRes = await fetch(
+  var ventasRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/employee_sales_weekly?employee_id=eq.'+encodeURIComponent(empId)
       +'&fecha_inicio_semana=gte.'+range.inicio
       +'&fecha_inicio_semana=lte.'+range.fin
@@ -152,7 +152,7 @@ async function loadIncentivosEmpleado(){
   var rMensual  = rules.find(function(r){ return r.periodo==='mensual'; });
 
   // 3. FIO del mes (puntos acumulados)
-  var fioRes = await fetch(
+  var fioRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/fio?employee_id=eq.'+encodeURIComponent(empId)
       +'&incentive_month=eq.'+ym
       +'&status=in.(Validado,Cerrado,Disputado)&select=applied_points',
@@ -255,7 +255,7 @@ async function loadIncentivosEmpleadoRecepcion(){
 
   // 1. Ventas del mes de este empleado
   // ESQUEMA REAL: empleado_id, importe (bruto con IVA), reserva_mews, servicio_detalle
-  var ventasRes = await fetch(
+  var ventasRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/recepcion_ventas?empleado_id=eq.'+encodeURIComponent(empId)
       +'&fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
       +'&select=*&order=fecha.asc',
@@ -264,7 +264,7 @@ async function loadIncentivosEmpleadoRecepcion(){
   var ventas = ventasRes.ok ? await ventasRes.json() : [];
 
   // 2. FIO del mes — excluir saldados (liquidados en periodos anteriores)
-  var fioRes = await fetch(
+  var fioRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/fio?employee_id=eq.'+encodeURIComponent(empId)
       +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&saldado=is.false&select=applied_points',
     {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
@@ -311,7 +311,7 @@ async function loadIncentivosEmpleadoRecepcion(){
     : '<span class="badge b-green">Sin penalización FIO</span>';
 
   // 4b. Comprobar si hay liquidación para este mes
-  var liqRes = await fetch(
+  var liqRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/incentivos_liquidaciones?empleado_id=eq.'+encodeURIComponent(empId)+'&mes=eq.'+ym+'&select=*&limit=1',
     {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
   );
@@ -475,7 +475,7 @@ async function _incGestorCocina(el){
   var ym = _incentivosSelectedMonth;
   var costeData = null;
   try {
-    var r = await fetch(
+    var r = await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/cocina_costes_mes?mes=eq.'+ym+'&select=*&limit=1',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
     );
@@ -541,14 +541,14 @@ async function _incGuardarCocina(){
 
   // Buscar registro existente
   try {
-    var check = await fetch(
+    var check = await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/cocina_costes_mes?mes=eq.'+ym+'&select=id&limit=1',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
     );
     var existing = check.ok ? await check.json() : [];
     if(existing.length){
       // PATCH
-      await fetch(SUPABASE_URL+'/rest/v1/cocina_costes_mes?id=eq.'+existing[0].id,{
+      await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/cocina_costes_mes?id=eq.'+existing[0].id,{
         method:'PATCH',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify({ventas_comida:ventas,coste_mp:coste,porcentaje:pct,subido_por:currentUser.nombre})
@@ -595,7 +595,7 @@ async function calcularIncentivosGestor(){
     var rSemanal = rules.find(function(r){ return r.periodo==='semanal'; });
     var rMensual  = rules.find(function(r){ return r.periodo==='mensual'; });
 
-    var ventasRes = await fetch(
+    var ventasRes = await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/employee_sales_weekly'
         +'?departamento=in.(Sala,Jefe%20de%20Sala)'
         +'&fecha_inicio_semana=gte.'+range.inicio
@@ -606,7 +606,7 @@ async function calcularIncentivosGestor(){
     var ventasData = ventasRes.ok ? await ventasRes.json() : [];
 
     var empIdsSala = empsSala.map(function(e){ return e.id; }).join(',');
-    var fioResSala = empIdsSala ? await fetch(
+    var fioResSala = empIdsSala ? await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsSala+')'
         +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&select=employee_id,applied_points',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
@@ -651,7 +651,7 @@ async function calcularIncentivosGestor(){
     });
 
     function _ivaFactor(tipo){ return tipo === 'syncrolab' ? 1.21 : 1.10; }
-    var recVentasRes = empsRec.length ? await fetch(
+    var recVentasRes = empsRec.length ? await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/recepcion_ventas'
         +'?fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
         +'&select=empleado_id,importe,tipo_venta',
@@ -660,14 +660,14 @@ async function calcularIncentivosGestor(){
     var recVentasData = (recVentasRes && recVentasRes.ok) ? await recVentasRes.json() : [];
 
     var empIdsRec = empsRec.map(function(e){ return e.id; }).join(',');
-    var fioResRec = empIdsRec ? await fetch(
+    var fioResRec = empIdsRec ? await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/fio?employee_id=in.('+empIdsRec+')'
         +'&incentive_month=eq.'+ym+'&status=in.(Validado,Cerrado,Disputado)&saldado=is.false&select=employee_id,applied_points',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
     ) : null;
     var fioDataRec = (fioResRec && fioResRec.ok) ? await fioResRec.json() : [];
 
-    var liqRecRes = empIdsRec ? await fetch(
+    var liqRecRes = empIdsRec ? await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/incentivos_liquidaciones?empleado_id=in.('+empIdsRec+')&mes=eq.'+ym+'&select=empleado_id,incentivo_final,liquidado_at',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
     ) : null;
@@ -1142,7 +1142,7 @@ async function incGuardarRegla(id) {
 
   if(id) {
     // PATCH
-    var ok = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+id, {
+    var ok = await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+id, {
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({ departamento:dept, periodo:periodo, objetivo:objetivo, importe_bonus:bonus, notas:notas, updated_by:currentUser.nombre })
@@ -1163,7 +1163,7 @@ async function incGuardarRegla(id) {
 window.incGuardarRegla = incGuardarRegla;
 
 async function incToggleRegla(id, activo) {
-  var ok = await fetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+id, {
+  var ok = await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_incentive_rules?id=eq.'+id, {
     method:'PATCH',
     headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
     body: JSON.stringify({ activo: !activo, updated_by: currentUser.nombre })
@@ -1244,7 +1244,7 @@ async function _confirmarLiquidacion(empId, empNombre, ym, incBruto, penEur, inc
   }
 
   // 2. Marcar FIO del mes como saldados (no se borran)
-  var fioRes = await fetch(
+  var fioRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/fio?employee_id=eq.'+encodeURIComponent(empId)
       +'&incentive_month=eq.'+ym
       +'&status=in.(Validado,Cerrado,Disputado)',
@@ -1252,7 +1252,7 @@ async function _confirmarLiquidacion(empId, empNombre, ym, incBruto, penEur, inc
   );
   var fios = fioRes.ok ? await fioRes.json() : [];
   for(var i=0; i<fios.length; i++){
-    await fetch(SUPABASE_URL+'/rest/v1/fio?id=eq.'+fios[i].id, {
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/fio?id=eq.'+fios[i].id, {
       method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({ saldado: true })

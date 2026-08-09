@@ -269,7 +269,7 @@ async function deleteTask(taskId){
   }
   if(!confirm('¿Eliminar esta tarea permanentemente?\nEsta acción no se puede deshacer.')) return;
   try {
-    var delRes = await fetch(
+    var delRes = await syncroSupabaseFetch(
       SUPABASE_URL + '/rest/v1/tareas?id=eq.' + encodeURIComponent(taskId),
       { method:'DELETE', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'} }
     );

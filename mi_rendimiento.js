@@ -72,7 +72,7 @@ async function _mrLoadData(tipo){
   var mesLabel  = meses[parseInt(parts[1])-1] + ' ' + parts[0];
 
   // ── 1. Datos comunes: FIO del mes ───────────────────────────────
-  var fioRes = await fetch(
+  var fioRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/fio?employee_id=eq.'+encodeURIComponent(empId)
       +'&incentive_month=eq.'+ym
       +'&status=in.(Validado,Cerrado,Disputado)'
@@ -93,7 +93,7 @@ async function _mrLoadData(tipo){
 
   if(tipo === 'sala'){
     // Ventas semanales
-    var ventasRes = await fetch(
+    var ventasRes = await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/employee_sales_weekly?employee_id=eq.'+encodeURIComponent(empId)
         +'&fecha_inicio_semana=gte.'+range.inicio
         +'&fecha_inicio_semana=lte.'+range.fin
@@ -138,7 +138,7 @@ async function _mrLoadData(tipo){
 
   } else {
     // Recepción
-    var ventasRecRes = await fetch(
+    var ventasRecRes = await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/recepcion_ventas?empleado_id=eq.'+encodeURIComponent(empId)
         +'&fecha=gte.'+range.inicio+'&fecha=lte.'+range.fin
         +'&select=*&order=fecha.asc',
@@ -160,7 +160,7 @@ async function _mrLoadData(tipo){
 
   // ── 3. Liquidación: últimos 6 meses ────────────────────────────
   var ultMeses = getMonthOptions(6).map(function(o){ return o.value; });
-  var liqRes = await fetch(
+  var liqRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/incentivos_liquidaciones?empleado_id=eq.'+encodeURIComponent(empId)
       +'&mes=in.('+ultMeses.join(',')+')'
       +'&select=mes,importe_final,estado,liquidado_at&order=mes.desc',

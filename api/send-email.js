@@ -3,6 +3,8 @@
 // La API key de Resend vive como variable de entorno en Vercel (nunca en el frontend).
 // Despliega colocando este archivo en la carpeta /api/ del repositorio.
 
+import { isAuthEnabled, jsonResponse } from '../lib/auth-server.js';
+
 export const config = { runtime: 'edge' };
 
 // ── Plantilla A — nueva invitación / reenvío ─────────────────────────────
@@ -78,6 +80,10 @@ body{margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#1
 
 // ── Handler principal ─────────────────────────────────────────────────────
 export default async function handler(req) {
+
+  // En el modo seguro, el navegador no puede elegir destinatario, PIN ni actor.
+  // Alta y reset envían el correo desde endpoints autenticados server-side.
+  if (isAuthEnabled()) return jsonResponse({ error: 'Not found' }, 404);
 
   // Solo POST
   if (req.method !== 'POST') {

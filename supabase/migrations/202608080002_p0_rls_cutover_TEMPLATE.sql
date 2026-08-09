@@ -1,0 +1,23 @@
+-- SYNCRO SHIFT — RLS CUTOVER TEMPLATE
+-- Status: INVESTIGANDO. NON-EXECUTABLE BY DESIGN.
+--
+-- This file intentionally contains no DROP POLICY, REVOKE or CREATE POLICY
+-- statements for operational tables. The exact matrix for 51 tables is not yet
+-- complete, and guessing permissions would create either data exposure or an
+-- outage. Replace this template only after every table/operation/row/column is
+-- classified and tested in a non-LIVE environment.
+--
+-- Required order for the future executable migration:
+--   1. Assert syncro_auth_context() returns the expected employee and role.
+--   2. Add authenticated policies while legacy anon remains available.
+--   3. Add restrictive ceilings where a legacy policy targets PUBLIC.
+--   4. Run positive and negative tests for each matrix row.
+--   5. In one controlled transaction, remove open anon/PUBLIC policies.
+--   6. Revoke anon grants not expressly public.
+--   7. Validate Storage separately before making adjuntos private.
+--
+-- PostgreSQL combination rule:
+--   (at least one applicable PERMISSIVE policy) AND
+--   (every applicable RESTRICTIVE policy)
+--
+-- ABORT if any resource remains [NO DATA].

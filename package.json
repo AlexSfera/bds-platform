@@ -1,0 +1,9 @@
+{
+  "name": "syncro-shift",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check": "node --check auth-client.js && node --check lib/auth-server.js && node --check lib/authz-server.js && node --check lib/email-server.js && node --check lib/identity-server.js && node --check api/auth/change-pin.js && node --check api/auth/directory.js && node --check api/auth/employee.js && node --check api/auth/login.js && node --check api/auth/logout.js && node --check api/auth/me.js && node --check api/auth/provision.js && node --check api/auth/reset-pin.js && node --check api/auth/token.js"
+  }
+}

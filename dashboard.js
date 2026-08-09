@@ -486,7 +486,7 @@ async function _renderActividadEmpleado(shifts, allShifts, allEmployees) {
       // Calculamos el periodo del selector
       var periodo = (document.getElementById('dash-periodo') || {}).value || 'semana';
       var desde = periodo === 'hoy' ? today() : periodo === 'semana' ? startOfWeek() : startOfMonth();
-      var ventasRes = await fetch(
+      var ventasRes = await syncroSupabaseFetch(
         SUPABASE_URL + '/rest/v1/employee_sales_weekly'
           + '?fecha_inicio_semana=gte.' + desde
           + '&select=employee_id,ventas,fecha_inicio_semana',
@@ -1337,7 +1337,7 @@ async function renderDashPrevision() {
 
   var statusAll = [];
   try {
-    var sRes = await fetch(
+    var sRes = await syncroSupabaseFetch(
       SUPABASE_URL + '/rest/v1/employee_status?select=employee_id,tipo,fecha_inicio,fecha_fin',
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }
     );
@@ -1436,7 +1436,7 @@ async function renderDashPrevision() {
   window._dashGuardarCuadrante = async function() {
     try {
       var sid = 'cua_' + Date.now();
-      var res = await fetch(SUPABASE_URL + '/rest/v1/cuadrantes', {
+      var res = await syncroSupabaseFetch(SUPABASE_URL + '/rest/v1/cuadrantes', {
         method: 'POST',
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
                    'Content-Type': 'application/json', 'Prefer': 'return=minimal' },

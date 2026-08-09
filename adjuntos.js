@@ -64,7 +64,7 @@ async function adjuntoUpload(file, table, recordId){
   var safeName = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_');
   var ts = Date.now();
   var path = table + '/' + recordId + '/' + ts + '_' + safeName;
-  var res = await fetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
+  var res = await syncroSupabaseFetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
     method: 'POST',
     headers: {
       'apikey': SUPABASE_KEY,
@@ -88,7 +88,7 @@ async function adjuntoUpload(file, table, recordId){
 }
 
 async function adjuntoRemove(path){
-  var res = await fetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
+  var res = await syncroSupabaseFetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
     method: 'DELETE',
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });

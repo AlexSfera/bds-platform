@@ -20,7 +20,7 @@ async function sbRequest(method, table, body=null, params='') {
     }
   };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
+  const res = await syncroSupabaseFetch(url, opts);
   if (!res.ok) {
     const err = await res.text();
     console.error('Supabase error:', method, table, err);
@@ -627,6 +627,9 @@ function autoLogoutAfterCaja(){
   setTimeout(function(){ if(typeof logout === 'function') logout(); }, 1200);
 }
 function logout(){
+  if(window.SyncroAuth && window.SyncroAuth.enabled){
+    window.SyncroAuth.logout().catch(function(e){ console.warn('secure logout failed', e); });
+  }
   currentUser=null;
   var ap=document.getElementById('app');
   if(ap) ap.style.display='none';
@@ -3553,8 +3556,8 @@ async function renderMaestro(){
   }
   function pinCell(e){
     // PIN visible SOLO para admin. Jefes y adjunto_directivo nunca lo ven.
-    if(isAdmin(currentUser)) return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">'+e.pin+'</span>';
-    return '<span style="color:var(--text3)">●●●●</span>';
+    if(isAdmin(currentUser) && !(window.SyncroAuth&&window.SyncroAuth.enabled)) return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">'+e.pin+'</span>';
+    return '<span style="color:var(--text3)">●●●●●●</span>';
   }
   function accionesCell(e){
     if(!canEditRow(e)) return '<span style="font-size:11px;color:var(--text3);">🔒 Protegido</span>';
@@ -3611,6 +3614,7 @@ async function openEmpModal(empId){
   _editEmpId=empId||null;
   var isEdit = !!empId;
   var createDiv = document.getElementById('emp-pin-create');
+  var secureCreateDiv = document.getElementById('emp-pin-secure-create');
   var statusDiv = document.getElementById('emp-pin-status');
   if(empId){
     const e=(await getDB('employees')).find(x=>x.id===empId); if(!e) return;
@@ -3627,11 +3631,13 @@ async function openEmpModal(empId){
     document.getElementById('emp-rol').value=e.rol;
     document.getElementById('emp-obs').value=e.obs||'';
     if(createDiv) createDiv.style.display='none';
+    if(secureCreateDiv) secureCreateDiv.style.display='none';
     if(statusDiv) statusDiv.style.display='';
     var badge=document.getElementById('emp-pin-badge');
     if(badge){
-      badge.className='badge '+(e.pin?'b-green':'b-yellow');
-      badge.textContent=e.pin?'PIN configurado':'PIN pendiente';
+      var secureAccess=!!(window.SyncroAuth&&window.SyncroAuth.enabled);
+      badge.className='badge '+(secureAccess||e.pin?'b-green':'b-yellow');
+      badge.textContent=secureAccess?'Acceso seguro':(e.pin?'PIN configurado':'PIN pendiente');
     }
     var canReset = isAdmin(currentUser) ||
       (isSupervisor(currentUser) && e.rol==='empleado') ||
@@ -3655,7 +3661,9 @@ async function openEmpModal(empId){
     document.getElementById('emp-resp').value='0';
     document.getElementById('emp-val').value='0';
     document.getElementById('emp-rol').value='empleado';
-    if(createDiv) createDiv.style.display='';
+    var secureAuthCreate = !!(window.SyncroAuth&&window.SyncroAuth.enabled);
+    if(createDiv) createDiv.style.display=secureAuthCreate?'none':'';
+    if(secureCreateDiv) secureCreateDiv.style.display=secureAuthCreate?'':'none';
     if(statusDiv) statusDiv.style.display='none';
     window._resetPinEmpId=null; window._resetPinEmpName=''; window._resetPinEmpEmail='';
     _renderEmpIpPanel(null);
@@ -3832,6 +3840,10 @@ function _aplicarRestriccionesModalEmp(){
 async function enviarInvitacionEmpleado(emp){
   // emp: {nombre, email, pin, esReenvio?}
   if(!emp || !emp.email) return;
+  if(window.SyncroAuth&&window.SyncroAuth.enabled){
+    toast('En modo seguro se genera un PIN temporal nuevo desde Restablecer PIN','err');
+    return;
+  }
   var esReenvio = !!emp.esReenvio;
   if(!SYNCRO_EMAIL_ENDPOINT){
     var msg = esReenvio ? 'Invitación NO reenviada: configura el webhook n8n' : 'Empleado creado. Invitación pendiente: configura el webhook n8n';
@@ -3884,6 +3896,15 @@ function openResetPinModal(){
   document.getElementById('reset-pin-emp-nombre').textContent = 'Empleado: '+empName;
   document.getElementById('reset-pin-value').value='';
   document.getElementById('reset-pin-confirm').value='';
+  var secureReset = !!(window.SyncroAuth&&window.SyncroAuth.enabled);
+  var valueRow = document.getElementById('reset-pin-value-row');
+  var confirmRow = document.getElementById('reset-pin-confirm-row');
+  var secureRow = document.getElementById('reset-pin-secure-row');
+  var submitBtn = document.getElementById('reset-pin-submit');
+  if(valueRow) valueRow.style.display=secureReset?'none':'';
+  if(confirmRow) confirmRow.style.display=secureReset?'none':'';
+  if(secureRow) secureRow.style.display=secureReset?'':'none';
+  if(submitBtn) submitBtn.textContent=secureReset?'🔐 Generar PIN temporal':'💾 Guardar nuevo PIN';
   var emailRow   = document.getElementById('reset-pin-email-row');
   var noEmailRow = document.getElementById('reset-pin-noemail-row');
   var emailAddr  = document.getElementById('reset-pin-email-addr');
@@ -3901,6 +3922,10 @@ async function confirmarResetPin(){
   var empId    = window._resetPinEmpId;
   var empName  = window._resetPinEmpName||'?';
   var empEmail = window._resetPinEmpEmail||'';
+  if(window.SyncroAuth&&window.SyncroAuth.enabled){
+    await _secureResetPin(empId, empName);
+    return;
+  }
   var newPin   = (document.getElementById('reset-pin-value').value||'').trim();
   var confPin  = (document.getElementById('reset-pin-confirm').value||'').trim();
   if(!newPin || newPin.length<4){ toast('PIN mínimo 4 dígitos','err'); return; }
@@ -3914,7 +3939,7 @@ async function confirmarResetPin(){
     pin_updated_at: localTs(),
     pin_updated_by: (currentUser&&currentUser.nombre)||'?'
   };
-  var patchRes = await fetch(
+  var patchRes = await syncroSupabaseFetch(
     SUPABASE_URL+'/rest/v1/employees?id=eq.'+encodeURIComponent(empId),
     { method:'PATCH',
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
@@ -3934,6 +3959,51 @@ async function confirmarResetPin(){
   else { toast('PIN actualizado. Sin correo registrado — comunica el nuevo PIN presencialmente','err'); }
   toast('PIN de '+empName+' actualizado correctamente','ok');
   await renderMaestro();
+}
+
+function _showTemporaryPinDelivery(result, empName){
+  if(result&&result.delivery==='email'){
+    toast('PIN temporal enviado por correo a '+empName,'ok');
+    return;
+  }
+  var pin=result&&result.temporary_pin;
+  if(!/^\d{6}$/.test(pin||'')){
+    toast('El acceso se actualizó, pero no se confirmó la entrega del PIN','err');
+    return;
+  }
+  var message=document.getElementById('temp-pin-message');
+  var value=document.getElementById('temp-pin-value');
+  if(message) message.textContent='Empleado: '+empName+'. Entrega este PIN temporal en persona.';
+  if(value) value.textContent=pin;
+  document.getElementById('modal-temp-pin').classList.add('open');
+  if(result.delivery==='in_person_fallback'){
+    toast('El correo falló: usa la entrega presencial','err');
+  }
+}
+
+function closeTemporaryPinModal(){
+  var value=document.getElementById('temp-pin-value');
+  if(value) value.textContent='';
+  var message=document.getElementById('temp-pin-message');
+  if(message) message.textContent='';
+  closeModal('modal-temp-pin');
+}
+
+async function _secureResetPin(empId, empName){
+  if(!empId){ toast('Sin empleado seleccionado','err'); return; }
+  var submitBtn=document.getElementById('reset-pin-submit');
+  if(submitBtn) submitBtn.disabled=true;
+  try{
+    var result=await window.SyncroAuth.resetPin(empId);
+    closeModal('modal-reset-pin');
+    invalidateCache('employees');
+    await renderMaestro();
+    _showTemporaryPinDelivery(result,empName||'empleado');
+  }catch(err){
+    toast((err&&err.status===403)?'Sin permisos para restablecer este PIN':'No se pudo restablecer el PIN','err');
+  }finally{
+    if(submitBtn) submitBtn.disabled=false;
+  }
 }
 async function enviarNotificacionCambioPin(emp){
   if(!emp.email) return;
@@ -3963,6 +4033,10 @@ async function reenviarInvitacion(){
   var empId    = window._resetPinEmpId;
   var empName  = window._resetPinEmpName||'?';
   var empEmail = window._resetPinEmpEmail||'';
+  if(window.SyncroAuth&&window.SyncroAuth.enabled){
+    await _secureResetPin(empId,empName);
+    return;
+  }
   if(!empEmail){ toast('Este empleado no tiene correo registrado','err'); return; }
   var emps = await getDB('employees');
   var emp  = emps.find(function(e){ return e.id===empId; });
@@ -3970,6 +4044,10 @@ async function reenviarInvitacion(){
   await enviarInvitacionEmpleado({nombre:emp.nombre, email:emp.email, pin:emp.pin, esReenvio:true});
 }
 async function reenviarInvitacionDirect(empId, empNombre, empEmail){
+  if(window.SyncroAuth&&window.SyncroAuth.enabled){
+    await _secureResetPin(empId,empNombre);
+    return;
+  }
   if(!empEmail){ toast('Este empleado no tiene correo registrado','err'); return; }
   var emps = await getDB('employees');
   var emp  = emps.find(function(e){ return e.id===empId; });
@@ -3981,16 +4059,17 @@ async function saveEmpleado(){
   const nombre=document.getElementById('emp-nombre').value.trim();
   // PIN solo se lee en creación; en edición se gestiona desde el modal de reset
   const isEdit = !!_editEmpId;
-  const pin = isEdit ? '' : ((document.getElementById('emp-pin')||{}).value||'').trim();
+  const secureAuth = !!(window.SyncroAuth&&window.SyncroAuth.enabled);
+  const pin = (isEdit||secureAuth) ? '' : ((document.getElementById('emp-pin')||{}).value||'').trim();
   const email=((document.getElementById('emp-email')||{}).value||'').trim();
   if(!nombre){toast('Nombre obligatorio','err');return;}
-  if(!isEdit){
+  if(!isEdit&&!secureAuth){
     // PIN obligatorio en creación; correo es opcional
     if(!pin||pin.length<4){toast('PIN mínimo 4 dígitos','err');return;}
   }
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('Correo electrónico no válido','err');return;}
   const employees=await getDB('employees');
-  if(!isEdit && employees.find(function(e){return e.pin===pin&&e.id!==_editEmpId;})){toast('PIN ya en uso','err');return;}
+  if(!isEdit && !secureAuth && employees.find(function(e){return e.pin===pin&&e.id!==_editEmpId;})){toast('PIN ya en uso','err');return;}
   if(email && employees.find(function(e){return e.email&&e.email.toLowerCase()===email.toLowerCase()&&e.id!==_editEmpId;})){toast('Correo ya en uso','err');return;}
   // Guardar email anterior (para detectar cambio en edición)
   var emailAnterior = '';
@@ -4058,10 +4137,44 @@ async function saveEmpleado(){
     email: email
     // PIN no se incluye en PATCH — se cambia solo desde confirmarResetPin()
   };
-  if(!isEdit) empPayload.pin = pin;  // solo en creación
+  if(!isEdit && !secureAuth) empPayload.pin = pin;  // solo en creación legacy
+  if(!isEdit && secureAuth){
+    try{
+      var provisionResult=await window.SyncroAuth.provisionEmployee(empPayload);
+      invalidateCache('employees');
+      closeModal('modal-empleado');
+      await renderMaestro();
+      toast('Empleado creado correctamente','ok');
+      _showTemporaryPinDelivery(provisionResult,nombre);
+    }catch(provisionErr){
+      var provisionMsg=provisionErr&&provisionErr.status===403
+        ? 'Sin permisos para crear este empleado'
+        : ((provisionErr&&provisionErr.message)||'No se pudo crear el empleado');
+      toast(provisionMsg,'err');
+    }
+    return;
+  }
+  if(isEdit && secureAuth){
+    try{
+      var updateResult=await window.SyncroAuth.updateEmployee(_editEmpId,empPayload);
+      invalidateCache('employees');
+      closeModal('modal-empleado');
+      await renderMaestro();
+      toast('Empleado actualizado correctamente','ok');
+      if(updateResult&&updateResult.access_pending){
+        setTimeout(function(){ toast('Acceso pendiente: genera un PIN temporal para este empleado','err'); },1200);
+      }
+    }catch(updateErr){
+      var updateMsg=updateErr&&updateErr.status===403
+        ? 'Sin permisos para actualizar este empleado'
+        : ((updateErr&&updateErr.message)||'No se pudo actualizar el empleado');
+      toast(updateMsg,'err');
+    }
+    return;
+  }
   if(_editEmpId){
     // Direct fetch PATCH — bypasses sbRequest abstraction for reliability
-    var patchRes = await fetch(
+    var patchRes = await syncroSupabaseFetch(
       SUPABASE_URL + '/rest/v1/employees?id=eq.' + encodeURIComponent(_editEmpId),
       {
         method: 'PATCH',
@@ -4099,7 +4212,7 @@ async function saveEmpleado(){
   // Caso A: se añadió correo por primera vez → enviar invitación con PIN actual
   // Caso B: se cambió el correo → enviar invitación al nuevo correo con PIN actual
   // En ambos casos necesitamos el PIN actual del empleado (no viaja en el payload de edición)
-  if(isEdit && email && email.toLowerCase() !== emailAnterior.toLowerCase()){
+  if(isEdit && !secureAuth && email && email.toLowerCase() !== emailAnterior.toLowerCase()){
     // Correo nuevo o cambiado — leer PIN actual de Supabase
     var empsActualizados = await getDB('employees');
     invalidateCache('employees'); // forzar recarga
@@ -4149,8 +4262,24 @@ function filterMaestro(){
   });
 }
 async function toggleEmp(empId, newEstado){
+  if(window.SyncroAuth&&window.SyncroAuth.enabled){
+    try{
+      var secureStatus=await window.SyncroAuth.setEmployeeStatus(empId,newEstado);
+      invalidateCache('employees');
+      var secureFilter=document.getElementById('maestro-estado-filter');
+      if(secureFilter) secureFilter.value=(newEstado==='Baja')?'Baja':'Activo';
+      await renderMaestro();
+      toast('Estado: '+newEstado,'ok');
+      if(secureStatus&&secureStatus.access_pending){
+        setTimeout(function(){ toast('Empleado activo sin identidad: genera un PIN temporal','err'); },1200);
+      }
+    }catch(statusErr){
+      toast((statusErr&&statusErr.status===403)?'Sin permisos para cambiar este estado':'Error al actualizar estado','err');
+    }
+    return;
+  }
   // BUG-EMP-01 fix: usar dbUpdate puntual en lugar de setDB (bulk upsert)
-  var res = await fetch(
+  var res = await syncroSupabaseFetch(
     SUPABASE_URL + '/rest/v1/employees?id=eq.' + encodeURIComponent(empId),
     { method: 'PATCH',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,
@@ -4172,6 +4301,20 @@ async function deleteEmp(empId, empNombre){
   if(!isAdmin(currentUser)){ toast('Solo admin puede eliminar empleados', 'err'); return; }
   var ok = confirm('¿Eliminar definitivamente a "' + empNombre + '"?\nEsta acción no se puede deshacer.\nSolo es posible si el empleado está en Baja.');
   if(!ok) return;
+  if(window.SyncroAuth&&window.SyncroAuth.enabled){
+    try{
+      var secureDelete=await window.SyncroAuth.deleteEmployee(empId);
+      invalidateCache('employees');
+      await renderMaestro();
+      toast(empNombre+' eliminado definitivamente','ok');
+      if(secureDelete&&secureDelete.auth_cleanup_pending){
+        setTimeout(function(){ toast('Empleado eliminado; queda limpieza pendiente de su identidad Auth','err'); },1200);
+      }
+    }catch(deleteErr){
+      toast((deleteErr&&deleteErr.status===403)?'No se permite eliminar este empleado':'Error al eliminar empleado','err');
+    }
+    return;
+  }
   // Verificar que sigue en Baja antes de borrar
   var emps = await getDB('employees');
   var emp = emps.find(function(e){ return e.id === empId; });
@@ -4191,7 +4334,7 @@ async function deleteEmp(empId, empNombre){
 function toCSV(rows,cols){ const h=cols.join(';'); const b=rows.map(r=>cols.map(c=>{ const v=r[c]??''; return typeof v==='string'&&(v.includes(';')||v.includes('\n'))?`"${v}"`:v; }).join(';')); return [h,...b].join('\n'); }
 function dl(content,filename){ const blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url); }
 async function exportCSV(type){
-  if(type==='employees') { var _empCols = isAdmin(currentUser) ? ['id','nombre','email','area','puesto','pin','estado','responsable','validador','rol','coste','fecha_alta'] : ['id','nombre','email','area','puesto','estado','responsable','validador','rol','coste','fecha_alta']; dl(toCSV(await getDB('employees'),_empCols),'BDS_Maestro.csv'); }
+  if(type==='employees') { var _empCols = isAdmin(currentUser) && !(window.SyncroAuth&&window.SyncroAuth.enabled) ? ['id','nombre','email','area','puesto','pin','estado','responsable','validador','rol','coste','fecha_alta'] : ['id','nombre','email','area','puesto','estado','responsable','validador','rol','coste','fecha_alta']; dl(toCSV(await getDB('employees'),_empCols),'BDS_Maestro.csv'); }
   if(type==='shifts') { dl(toCSV(await getDB('shifts'),['id','fecha','servicio','nombre','area','puesto','horas','responsable_nombre','follow_up','merma_declarada','incidencia_declarada','observacion','estado','validado_por','validado_ts','comentario_validador','created_at']),'BDS_Input.csv'); }
   if(type==='incidencias') { dl(toCSV(await getDB('incidencias'),['id','fecha','servicio','nombre','categoria','severidad','descripcion','accion_inmediata','requiere_formacion','requiere_disciplina','estado','created_at']),'BDS_Incidencias.csv'); }
   if(type==='merma') { dl(toCSV(await getDB('merma'),['id','fecha','servicio','nombre','producto','cantidad','unidad','causa','obs','coste_unitario','coste_total','created_at']),'BDS_Merma.csv'); }
@@ -4287,7 +4430,7 @@ async function registrarLecturaGestion(rec){
   if(ya) return;
   leido.push({id: currentUser.id, nombre: currentUser.nombre, ts: localTs()});
   try {
-    var res = await fetch(
+    var res = await syncroSupabaseFetch(
       SUPABASE_URL + '/rest/v1/gestiones?id=eq.' + encodeURIComponent(rec.id),
       { method:'PATCH',
         headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},

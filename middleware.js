@@ -23,6 +23,18 @@ const SUPABASE_URL = 'https://tsfhrpdpbkciofvejrao.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_3GWGNkIs6byRG1F1BIxlkg_qhiRUgBt';
 const CACHE_TTL_MS = 60000; // 60s
 
+function middlewareSupabaseKey() {
+  if (process.env.SYNCRO_AUTH_ENABLED === 'true') {
+    // Tras retirar el acceso anon, la lista dinámica sólo puede leerla el
+    // middleware server-side. Nunca existe fallback anon en modo seguro.
+    if (!process.env.SUPABASE_SERVICE_KEY) {
+      throw new Error('SUPABASE_SERVICE_KEY no configurada para middleware seguro');
+    }
+    return process.env.SUPABASE_SERVICE_KEY;
+  }
+  return SUPABASE_KEY;
+}
+
 // Cache en memoria del runtime Edge (se reinicia entre cold starts — aceptable)
 let _ipCache = null;
 let _ipCacheTs = 0;
@@ -33,12 +45,13 @@ async function getDynamicIPs() {
     return _ipCache;
   }
   try {
+    const accessKey = middlewareSupabaseKey();
     const res = await fetch(
       SUPABASE_URL + '/rest/v1/employee_ips?active=eq.true&select=ip',
       {
         headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'apikey': accessKey,
+          'Authorization': 'Bearer ' + accessKey,
         },
       }
     );

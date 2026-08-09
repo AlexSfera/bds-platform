@@ -769,6 +769,22 @@ tr:hover td{background:rgba(96,165,250,.06);}
     </div>
   </div>
 
+  <!-- Cambio obligatorio del PIN temporal — sólo se usa con Auth seguro -->
+  <div id="portal-pin-change-modal" style="display:none;position:fixed;inset:0;z-index:1101;background:rgba(0,0,20,.9);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
+    <div style="background:#0f2a3d;border:1px solid rgba(46,196,182,.4);border-radius:16px;padding:28px 24px;width:100%;max-width:380px;text-align:center;">
+      <div id="p-change-name" style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.18em;color:#2ec4b6;text-transform:uppercase;margin-bottom:8px;"></div>
+      <div style="font-size:17px;font-weight:600;color:#fff;margin-bottom:8px;">Crea tu PIN personal</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:18px;">Debe tener 6 dígitos y no puede ser una secuencia sencilla.</div>
+      <input id="p-change-new" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="Nuevo PIN" style="width:100%;padding:12px;margin-bottom:10px;background:#071825;border:1px solid #2e5a8a;border-radius:8px;color:#fff;text-align:center;font-size:18px;letter-spacing:.25em;">
+      <input id="p-change-confirm" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="Repite el PIN" style="width:100%;padding:12px;margin-bottom:8px;background:#071825;border:1px solid #2e5a8a;border-radius:8px;color:#fff;text-align:center;font-size:18px;letter-spacing:.25em;">
+      <div id="p-change-error" style="min-height:22px;color:#ef4444;font-size:12px;margin-bottom:10px;font-family:monospace;"></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="pChangePinCancel()" style="flex:1;padding:12px;background:#1e3558;border:1px solid #2e5a8a;border-radius:8px;color:#cbd5e1;font-size:14px;font-weight:600;cursor:pointer;">Cancelar</button>
+        <button id="p-change-save" onclick="pChangePinSave()" style="flex:1;padding:12px;background:#2ec4b6;border:none;border-radius:8px;color:#0B1F33;font-size:14px;font-weight:700;cursor:pointer;">GUARDAR</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PORTAL CONTENT -->
   <main class="ps-page">
 
@@ -2440,6 +2456,9 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <input type="password" id="emp-pin" maxlength="6" autocomplete="new-password" placeholder="····">
           <span style="font-size:11px;color:var(--text3);display:block;margin-top:4px;">El empleado recibirá un correo indicando que su acceso ha sido configurado.</span>
         </div>
+        <div id="emp-pin-secure-create" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);">
+          🔐 El servidor generará un PIN temporal de seis dígitos. Se enviará por correo cuando exista; si no, se mostrará una sola vez para su entrega presencial.
+        </div>
         <!-- En edición -->
         <div id="emp-pin-status" style="display:none;">
           <label>Acceso al sistema</label>
@@ -2475,13 +2494,16 @@ tr:hover td{background:rgba(96,165,250,.06);}
   <div class="modal" style="max-width:400px;">
     <div class="modal-title">🔑 Restablecer PIN</div>
     <p id="reset-pin-emp-nombre" style="color:var(--text2);font-size:13px;margin:0 0 12px;"></p>
-    <div class="fg" style="margin-bottom:12px;">
+    <div class="fg" id="reset-pin-value-row" style="margin-bottom:12px;">
       <label>Nuevo PIN (4-6 dígitos) <span class="req">*</span></label>
       <input type="password" id="reset-pin-value" maxlength="6" autocomplete="new-password" placeholder="····" style="letter-spacing:4px;font-size:18px;text-align:center;">
     </div>
-    <div class="fg" style="margin-bottom:16px;">
+    <div class="fg" id="reset-pin-confirm-row" style="margin-bottom:16px;">
       <label>Confirmar PIN</label>
       <input type="password" id="reset-pin-confirm" maxlength="6" autocomplete="new-password" placeholder="····" style="letter-spacing:4px;font-size:18px;text-align:center;">
+    </div>
+    <div id="reset-pin-secure-row" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text2);">
+      🔐 El servidor generará un PIN temporal nuevo y obligará al empleado a cambiarlo en su siguiente acceso.
     </div>
     <div id="reset-pin-email-row" style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:var(--text2);display:none;">
       <strong>📧 Notificación:</strong> Se enviará un correo a <span id="reset-pin-email-addr" style="color:var(--accent1);"></span> informando del cambio de PIN.
@@ -2491,7 +2513,20 @@ tr:hover td{background:rgba(96,165,250,.06);}
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-reset-pin')">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarResetPin()">💾 Guardar nuevo PIN</button>
+      <button class="btn btn-primary" id="reset-pin-submit" onclick="confirmarResetPin()">💾 Guardar nuevo PIN</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN temporal: sólo aparece cuando la entrega debe ser presencial -->
+<div class="modal-overlay" id="modal-temp-pin">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">🔐 Entrega presencial del PIN</div>
+    <p id="temp-pin-message" style="color:var(--text2);font-size:13px;"></p>
+    <div id="temp-pin-value" style="background:var(--bg3);border:2px solid var(--accent1);border-radius:10px;padding:18px;text-align:center;font-family:var(--font-mono);font-size:32px;font-weight:700;letter-spacing:8px;"></div>
+    <p style="font-size:12px;color:#f59e0b;">Este valor se muestra una sola vez. Entrégalo personalmente, no lo envíes por mensajería y no lo guardes en notas compartidas.</p>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeTemporaryPinModal()">Ya lo he anotado</button>
     </div>
   </div>
 </div>
@@ -2499,6 +2534,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
 <div id="toast-c"></div>
 <div class="ver-badge">v3.0 · Schema 3.0 · Migración Supabase lista</div>
 
+<script src="auth-client.js"></script>
 <script src="shared.js"></script>
 <script src="tareas.js"></script>
 <script src="incidencias.js"></script>

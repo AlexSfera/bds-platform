@@ -131,7 +131,7 @@ async function _pvLoadBatch(){
   var w=_pvWeek||_pvGetWeekOf();
   var periodo=w.inicio+'_'+w.fin;
   try{
-    var res=await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo)+'&order=version.desc&limit=1',
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo)+'&order=version.desc&limit=1',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(!res.ok) return;
     var batches=await res.json();
@@ -144,7 +144,7 @@ async function _pvLoadBatch(){
         statusEl.innerHTML='<span style="font-size:10px;font-family:var(--font-mono);color:'+color+';border:1px solid '+color+';border-radius:4px;padding:2px 8px;">Batch v'+batches[0].version+' · '+st.toUpperCase()+'</span>';
       }
       // Cargar archivos del batch
-      var fRes=await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(_pvBatchId)+'&select=*',
+      var fRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(_pvBatchId)+'&select=*',
         {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
       if(fRes.ok){
         var files=await fRes.json();
@@ -165,11 +165,11 @@ async function _pvLoadBatch(){
 async function _pvCheckLegacyData(periodo){
   try{
     // 1. Datos de producción en sala_produccion_semanal
-    var prodRes=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo)+'&select=id,nombre',
+    var prodRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo)+'&select=id,nombre',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     var prodRows=prodRes.ok?await prodRes.json():[];
     // 2. Ticks legacy en sala_informes_control
-    var legRes=await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&select=tipo,filename,subido_ts',
+    var legRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&select=tipo,filename,subido_ts',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     var legRows=legRes.ok?await legRes.json():[];
     // Marcar Facturas si existe producción guardada
@@ -215,12 +215,12 @@ async function _pvEnsureBatch(){
       status:'pending', uploaded_by:currentUser?currentUser.nombre:'?',
       uploaded_at:localTs(), version:1
     };
-    var res=await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?select=id',{
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?select=id',{
       method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
       'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(row)});
     if(!res.ok){
       // Puede existir — buscar último
-      var existing=await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo)+'&order=version.desc&limit=1',
+      var existing=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo)+'&order=version.desc&limit=1',
         {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
       if(existing.ok){var arr=await existing.json(); if(arr.length){_pvBatchId=arr[0].id;return _pvBatchId;}}
       throw new Error('No se pudo crear batch');
@@ -244,9 +244,9 @@ async function _pvSaveFile(typeKey,filename,status,errorMsg,rowCount){
   };
   try{
     // Upsert: delete existing for this batch+type, then insert
-    await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batchId)+'&report_type=eq.'+encodeURIComponent(typeKey),
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batchId)+'&report_type=eq.'+encodeURIComponent(typeKey),
       {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-    await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_files',{
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files',{
       method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
       'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(row)});
     invalidateCache('posmews_upload_files');
@@ -257,14 +257,14 @@ async function _pvSaveFile(typeKey,filename,status,errorMsg,rowCount){
 
 async function _pvCheckBatchComplete(batchId){
   try{
-    var res=await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batchId)+'&status=eq.ok&select=report_type',
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batchId)+'&status=eq.ok&select=report_type',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(!res.ok) return;
     var files=await res.json();
     var okTypes=files.map(function(f){return f.report_type;});
     var allOk=_PV_FILE_TYPES.every(function(t){return okTypes.indexOf(t.key)>=0;});
     if(allOk){
-      await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?id=eq.'+encodeURIComponent(batchId),{
+      await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?id=eq.'+encodeURIComponent(batchId),{
         method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
         'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:'complete',processed_at:localTs()})});
       invalidateCache('posmews_upload_batches');
@@ -427,9 +427,9 @@ async function _pvSaveLegacyTick(typeKey,filename,dates){
     subido_por:currentUser?currentUser.nombre:'?', subido_ts:localTs()
   };
   try{
-    await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&tipo=eq.'+encodeURIComponent(typeKey),
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&tipo=eq.'+encodeURIComponent(typeKey),
       {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-    await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control',{
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_informes_control',{
       method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
       'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(row)});
     invalidateCache('sala_informes_control');

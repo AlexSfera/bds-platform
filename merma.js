@@ -57,7 +57,7 @@ var _mermaPlatosCache = null;
 async function _mermaFetchDirect(params) {
   var url = SUPABASE_URL + '/rest/v1/' + params;
   try {
-    var res = await fetch(url, {
+    var res = await syncroSupabaseFetch(url, {
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': 'Bearer ' + SUPABASE_KEY,

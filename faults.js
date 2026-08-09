@@ -475,7 +475,7 @@ async function deleteFault(fid){
   await dbUpdate('employee_faults', fid, {}); // noop para forzar timestamp, opcional
   // DELETE real
   try {
-    await fetch((window.SUPABASE_URL||'')+'/rest/v1/employee_faults?id=eq.'+encodeURIComponent(fid), {
+    await syncroSupabaseFetch((window.SUPABASE_URL||'')+'/rest/v1/employee_faults?id=eq.'+encodeURIComponent(fid), {
       method:'DELETE',
       headers:{ apikey: window.SUPABASE_KEY, Authorization:'Bearer '+window.SUPABASE_KEY }
     });

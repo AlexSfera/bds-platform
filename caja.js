@@ -634,7 +634,7 @@ async function saveCajaForm() {
     var cajaUrl = SUPABASE_URL + '/rest/v1/sala_cash_closures';
     var cajaMethod = _editingCajaId ? 'PATCH' : 'POST';
     var cajaFetchUrl = _editingCajaId ? cajaUrl + '?id=eq.' + encodeURIComponent(_editingCajaId) : cajaUrl;
-    var cajaRes = await fetch(cajaFetchUrl, {
+    var cajaRes = await syncroSupabaseFetch(cajaFetchUrl, {
       method: cajaMethod,
       headers: {
         'apikey': SUPABASE_KEY,
@@ -1573,7 +1573,7 @@ async function submitSalaTraspaso() {
     var url = SUPABASE_URL + '/rest/v1/sala_cash_closures';
     var method = _salaTraspasoEditId ? 'PATCH' : 'POST';
     var fetchUrl = _salaTraspasoEditId ? url + '?id=eq.' + encodeURIComponent(_salaTraspasoEditId) : url;
-    var res = await fetch(fetchUrl, {
+    var res = await syncroSupabaseFetch(fetchUrl, {
       method: method,
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify(record)
@@ -1631,7 +1631,7 @@ async function eliminarCierreCaja(cajaId) {
   if(!motivo || !motivo.trim()) { toast('Motivo obligatorio','err'); return; }
   if(!confirm('¿Eliminar este cierre de caja? Acción irreversible — quedará registrada en auditoría.')) return;
   await auditLog('DELETE_CIERRE_CAJA', 'Cierre '+cajaId+' eliminado por '+currentUser.nombre+' — '+motivo.trim());
-  var res = await fetch(
+  var res = await syncroSupabaseFetch(
     SUPABASE_URL + '/rest/v1/sala_cash_closures?id=eq.' + encodeURIComponent(cajaId),
     { method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Prefer': 'return=minimal' } }
   );
@@ -1672,7 +1672,7 @@ window.corregirCajaSala = corregirCajaSala;
 async function reabrirCierre(cajaId) {
   var motivo = prompt('Motivo para reabrir el cierre (obligatorio):');
   if(!motivo||!motivo.trim()){ toast('Motivo obligatorio para reabrir','err'); return; }
-  var res = await fetch(
+  var res = await syncroSupabaseFetch(
     SUPABASE_URL + '/rest/v1/sala_cash_closures?id=eq.' + encodeURIComponent(cajaId),
     { method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({estado:'A revisar'}) }

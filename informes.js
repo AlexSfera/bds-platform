@@ -190,7 +190,7 @@ async function renderInformes(){
 
   // Cargar objetivos Sala (sin cambio)
   try {
-    var rulesRes=await fetch(
+    var rulesRes=await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/dept_incentive_rules?departamento=in.(Sala,Jefe%20de%20Sala)&activo=eq.true&select=periodo,objetivo',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
     );
@@ -396,7 +396,7 @@ async function _infLoadControlTicks(){
   if(!_infControlWeek) _infControlWeek=_infGetWeekOf();
   var periodo=_infControlWeek.inicio+'_'+_infControlWeek.fin;
   try{
-    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&select=*',
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&select=*',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(res.ok){
       var rows=await res.json();
@@ -420,9 +420,9 @@ async function _infControlSaveTick(typeKey,filename,dates,ok,checks){
   };
   try{
     // Upsert: delete then insert
-    await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&tipo=eq.'+encodeURIComponent(typeKey),
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo)+'&tipo=eq.'+encodeURIComponent(typeKey),
       {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control',{
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_informes_control',{
       method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
       'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(row)});
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -835,13 +835,13 @@ window._infSalaGuardar=async function(){
   var periodo=fechaMin+'_'+fechaMax;
   // Comprobar duplicados
   try{
-    var chk=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo)+'&select=id,nombre',
+    var chk=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo)+'&select=id,nombre',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(chk.ok){
       var prev=await chk.json();
       if(prev.length>0&&!confirm('⚠ Ya existen '+prev.length+' registros para '+periodo+'. ¿Sobreescribir?')) return;
       if(prev.length>0){
-        await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
+        await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
           {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
       }
     }
@@ -857,7 +857,7 @@ window._infSalaGuardar=async function(){
     };
   });
   try{
-    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal',{
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal',{
       method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
       'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(rows)});
     if(!res.ok){ var txt=await res.text(); throw new Error('HTTP '+res.status+' '+txt); }
@@ -880,23 +880,23 @@ window._infDeleteSemana=async function(periodoOverride){
   try{
     await auditLog('delete_produccion_semanal','Eliminado periodo '+periodo+' (sala_produccion_semanal + sala_informes_control)');
     // 1. Eliminar producción
-    var res=await fetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
       {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(!res.ok) throw new Error('HTTP '+res.status);
     // 2. Eliminar ticks legacy
-    await fetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo),
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_informes_control?periodo=eq.'+encodeURIComponent(periodo),
       {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     // 3. Eliminar batch tracking (si existe)
-    var batchRes=await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo)+'&select=id',
+    var batchRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo)+'&select=id',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(batchRes.ok){
       var batches=await batchRes.json();
       for(var i=0;i<batches.length;i++){
-        await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batches[i].id),
+        await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batches[i].id),
           {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
       }
       if(batches.length){
-        await fetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo),
+        await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?periodo=eq.'+encodeURIComponent(periodo),
           {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
       }
     }
@@ -1055,7 +1055,7 @@ async function _renderInformeJefeLista(el){
   try {
     var url=SUPABASE_URL+'/rest/v1/dept_reports?select=*&order=ts.desc&limit=50';
     if(!isAdmin_&&depts.length) url+='&departamento=in.('+depts.map(encodeURIComponent).join(',')+')';
-    var res=await fetch(url,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    var res=await syncroSupabaseFetch(url,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(!res.ok) throw new Error('HTTP '+res.status);
     _infJefeList=await res.json();
   } catch(e){
@@ -1109,7 +1109,7 @@ async function _renderInformeJefeForm(el){
     existing=(_infJefeList||[]).find(function(r){ return r.id===_infJefeEditId; });
     if(!existing){
       try {
-        var res=await fetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeEditId)+'&select=*',{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+        var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeEditId)+'&select=*',{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
         if(res.ok){ var arr=await res.json();existing=arr[0]||null; }
       } catch(e){}
     }
@@ -1261,7 +1261,7 @@ window._infGuardarInforme=async function(estado){
       if(!empId) continue;
       try {
         var sid='es_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-        await fetch(SUPABASE_URL+'/rest/v1/employee_status',{
+        await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/employee_status',{
           method:'POST',
           headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
           body:JSON.stringify({
@@ -1288,12 +1288,12 @@ window._infGuardarInforme=async function(estado){
   };
   try {
     if(_infJefeEditId){
-      var pRes=await fetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeEditId),
+      var pRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeEditId),
         {method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
       if(!pRes.ok) throw new Error('HTTP '+pRes.status);
     } else {
       payload.id='inf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-      var iRes=await fetch(SUPABASE_URL+'/rest/v1/dept_reports',
+      var iRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports',
         {method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
       if(!iRes.ok) throw new Error('HTTP '+iRes.status);
     }
@@ -1308,7 +1308,7 @@ async function _renderInformeJefeDetalle(el){
   var r=(_infJefeList||[]).find(function(x){ return x.id===_infJefeViewId; });
   if(!r){
     try {
-      var res=await fetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeViewId)+'&select=*',{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+      var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeViewId)+'&select=*',{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
       if(res.ok){ var arr=await res.json();r=arr[0]||null; }
     } catch(e){}
   }
@@ -1391,7 +1391,7 @@ async function _renderInformeJefeDetalle(el){
 
 window._infPublicarDesdeVer=async function(id){
   try {
-    var res=await fetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(id),
+    var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(id),
       {method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
        body:JSON.stringify({estado:'publicado',ts:localTs()})});
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -1418,7 +1418,7 @@ async function _renderRRHH(el){
   var hoy=today();
   var statusAll=[];
   try {
-    var sRes=await fetch(
+    var sRes=await syncroSupabaseFetch(
       SUPABASE_URL+'/rest/v1/employee_status?select=*&order=fecha_inicio.desc',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}}
     );
@@ -1561,7 +1561,7 @@ async function _renderRRHH(el){
 window.infGetUltimoPublicado=async function(departamento){
   try {
     var url=SUPABASE_URL+'/rest/v1/dept_reports?departamento=eq.'+encodeURIComponent(departamento)+'&estado=eq.publicado&order=ts.desc&limit=1&select=*';
-    var res=await fetch(url,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    var res=await syncroSupabaseFetch(url,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(!res.ok) return null;
     var arr=await res.json();
     return arr[0]||null;
@@ -1571,7 +1571,7 @@ window.infGetPublicados=async function(departamento,limite){
   limite=limite||10;
   try {
     var url=SUPABASE_URL+'/rest/v1/dept_reports?departamento=eq.'+encodeURIComponent(departamento)+'&estado=eq.publicado&order=ts.desc&limit='+limite+'&select=*';
-    var res=await fetch(url,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    var res=await syncroSupabaseFetch(url,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     if(!res.ok) return [];
     return await res.json();
   } catch(e){ return []; }
@@ -1581,7 +1581,7 @@ window.infGetDisponibles=async function(departamento){
   try {
     var employees=await _infGetEmployees();
     var hoy=today();
-    var sRes=await fetch(SUPABASE_URL+'/rest/v1/employee_status?select=employee_id,tipo,fecha_fin',
+    var sRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/employee_status?select=employee_id,tipo,fecha_fin',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     var statusAll=sRes.ok?await sRes.json():[];
     var noDisp=new Set();

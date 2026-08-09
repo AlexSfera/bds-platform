@@ -861,7 +861,7 @@ window.renderValCajaRecepcion = renderValCajaRecepcion;
 // ── CAJA-V2 · ACCIONES VALIDACIÓN RECEPCIÓN ─────────────────────────────
 async function validarCajaRec(id){
   try{
-    await fetch(SUPABASE_URL+'/rest/v1/recepcion_cash?id=eq.'+encodeURIComponent(id), {
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/recepcion_cash?id=eq.'+encodeURIComponent(id), {
       method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({ estado:'validado', validado_por:currentUser.nombre, validado_ts:localTs(), updated_at:localTs() })
     });
@@ -875,7 +875,7 @@ async function correccionCajaRec(id){
   var motivo = prompt('Motivo de la corrección (se enviará al responsable):');
   if(motivo === null) return;
   try{
-    await fetch(SUPABASE_URL+'/rest/v1/recepcion_cash?id=eq.'+encodeURIComponent(id), {
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/recepcion_cash?id=eq.'+encodeURIComponent(id), {
       method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({ estado:'correccion', comentario_validador:motivo||null, updated_at:localTs() })
     });
@@ -997,7 +997,7 @@ async function validarCajaLab(id){
     toast('No se puede validar: diferencia sin explicación','err'); return;
   }
   try{
-    await fetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
       method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({ estado:'validado', updated_at:localTs() })
     });
@@ -1012,7 +1012,7 @@ async function correccionCajaLab(id){
   var motivo = prompt('Motivo de la corrección (se enviará al responsable):');
   if(motivo === null) return;
   try{
-    await fetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
       method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({ estado:'correccion', comentario_validador:motivo||null, updated_at:localTs() })
     });
@@ -1031,7 +1031,7 @@ async function eliminarCajaLab(id){
   if(!confirm('¿Eliminar definitivamente esta caja SYNCROLAB? No se puede deshacer.')) return;
   try{
     if(typeof auditLog==='function') await auditLog('LAB_CAJA_DELETE', currentUser.nombre+' eliminó caja SYNCROLAB '+id+' · motivo: '+motivo);
-    await fetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
+    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/syncrolab_cash_closures?id=eq.'+encodeURIComponent(id), {
       method:'DELETE', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'}
     });
     invalidateCache('syncrolab_cash_closures');
@@ -1177,7 +1177,7 @@ async function validarCierre(cajaId) {
 async function reabrirCierre(cajaId) {
   var motivo = prompt('Motivo para reabrir el cierre (obligatorio):');
   if(!motivo||!motivo.trim()){ toast('Motivo obligatorio para reabrir','err'); return; }
-  var res = await fetch(
+  var res = await syncroSupabaseFetch(
     SUPABASE_URL + '/rest/v1/sala_cash_closures?id=eq.' + encodeURIComponent(cajaId),
     { method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
       body: JSON.stringify({estado:'A revisar'}) }
@@ -1288,6 +1288,8 @@ var _pGridObserver = new MutationObserver(function(mutations){
 
 var _pD='',_pP='',_pGoBusy=false;
 var _pLabel = '', _pColor = '#2ec4b6';
+var _pEmployeeId = '', _pEmployeeName = '';
+var _pPendingCurrentPin = '';
 
 function _pClk(){
   var d=new Date();
@@ -1325,7 +1327,13 @@ async function pSel(dept, label, color){
 
   var areas = _pDeptAreas[dept] || [label];
   var emps = [];
-  try { emps = (await getDB('employees')).filter(function(e){ return e.estado === 'Activo'; }); } catch(e){}
+  try {
+    if(window.SyncroAuth && window.SyncroAuth.enabled){
+      emps = await window.SyncroAuth.directory(dept);
+    } else {
+      emps = (await getDB('employees')).filter(function(e){ return e.estado === 'Activo'; });
+    }
+  } catch(e){}
   var deptEmps = emps.filter(function(e){
     var a = (e.area||'').trim();
     var areaMatch = areas.some(function(x){ return x.toLowerCase() === a.toLowerCase(); });
@@ -1382,12 +1390,17 @@ async function pSel(dept, label, color){
     var parts = (nombre||'').trim().split(/\s+/);
     return (parts[0]||'').charAt(0).toUpperCase() + (parts[1]||'').charAt(0).toUpperCase();
   }
+  function escHtml(value){
+    return String(value == null ? '' : value).replace(/[&<>"']/g,function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
   // Cada tarjeta es clickable → abre el PIN directamente
   function empCard(e){
-    return '<div onclick="_pOpenPin()" style="display:flex;align-items:center;gap:14px;background:#0f2035;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 16px;min-width:160px;cursor:pointer;transition:all .15s;" onmouseover="this.style.background=\'#162840\';this.style.borderColor=\''+color+'88\'" onmouseout="this.style.background=\'#0f2035\';this.style.borderColor=\'rgba(255,255,255,.12)\'">'
+    return '<div data-employee-id="'+escHtml(e.id)+'" data-employee-name="'+escHtml(e.nombre)+'" onclick="_pOpenPin(this.dataset.employeeId,this.dataset.employeeName)" style="display:flex;align-items:center;gap:14px;background:#0f2035;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 16px;min-width:160px;cursor:pointer;transition:all .15s;" onmouseover="this.style.background=\'#162840\';this.style.borderColor=\''+color+'88\'" onmouseout="this.style.background=\'#0f2035\';this.style.borderColor=\'rgba(255,255,255,.12)\'">'
       +'<div style="width:40px;height:40px;border-radius:50%;background:'+color+'33;border:2px solid '+color+'66;display:flex;align-items:center;justify-content:center;font-family:\'JetBrains Mono\',monospace;font-size:13px;font-weight:700;color:'+color+';flex-shrink:0;">'+empInitials(e.nombre)+'</div>'
-      +'<div><div style="font-size:14px;font-weight:600;color:#f1f5f9;">'+e.nombre+'</div>'
-      +'<div style="font-size:12px;color:#94a3b8;">'+e.puesto+'</div></div>'
+      +'<div><div style="font-size:14px;font-weight:600;color:#f1f5f9;">'+escHtml(e.nombre)+'</div>'
+      +'<div style="font-size:12px;color:#94a3b8;">'+escHtml(e.puesto)+'</div></div>'
       +'</div>';
   }
   function section(titleLabel, titleColor, empsArr){
@@ -1398,6 +1411,9 @@ async function pSel(dept, label, color){
       +empsArr.map(empCard).join('')
       +'</div></div>';
   }
+  var emptyState = (window.SyncroAuth && window.SyncroAuth.enabled)
+    ? '<div style="color:#f59e0b;font-size:14px;padding:20px 0;">No se pudo cargar el equipo de este departamento. Vuelve atrás e inténtalo de nuevo.</div>'
+    : '<div style="color:#64748b;font-size:14px;padding:20px 0;">Sin empleados activos — haz click aquí para entrar con PIN<br><br><button onclick="_pOpenPin()" style="background:'+color+';border:none;border-radius:8px;padding:12px 24px;color:#0B1F33;font-size:14px;font-weight:700;cursor:pointer;">Entrar con PIN →</button></div>';
 
   var html = ''
     +'<div id="pdept-team-screen" style="animation:fadeIn .2s ease;">'
@@ -1408,7 +1424,7 @@ async function pSel(dept, label, color){
     +(equipo.length       ? section('EQUIPO',                '#94a3b8', equipo)       : '')
     +(responsables.length ? section('RESPONSABLE DE TURNO',  '#2ec4b6', responsables) : '')
     +(jefes.length        ? section('JEFE / VALIDADOR',      color,     jefes)        : '')
-    +(!deptEmps.length    ? '<div style="color:#64748b;font-size:14px;padding:20px 0;">Sin empleados activos — haz click aquí para entrar con PIN<br><br><button onclick="_pOpenPin()" style="background:'+color+';border:none;border-radius:8px;padding:12px 24px;color:#0B1F33;font-size:14px;font-weight:700;cursor:pointer;">Entrar con PIN →</button></div>' : '')
+    +(!deptEmps.length    ? emptyState : '')
     +'</div>';
 
   // Ocultar secciones del portal grid y mostrar pantalla de equipo
@@ -1422,12 +1438,14 @@ async function pSel(dept, label, color){
   }
 }
 
-function _pOpenPin(){
+function _pOpenPin(employeeId, employeeName){
+  _pEmployeeId = employeeId || '';
+  _pEmployeeName = employeeName || '';
   var box = document.getElementById('p-pin-box');
   var lbl = document.getElementById('pdept-lbl');
   var err = document.getElementById('p-err');
-  if(box){box.textContent='* * * *';box.className='p-pin-box';box.style.borderColor='rgba(46,196,182,.3)';box.style.color='#2ec4b6';}
-  if(lbl){ lbl.textContent = _pLabel || _pD; lbl.style.color = _pColor; }
+  if(box){box.textContent=(window.SyncroAuth&&window.SyncroAuth.enabled)?'* * * * * *':'* * * *';box.className='p-pin-box';box.style.borderColor='rgba(46,196,182,.3)';box.style.color='#2ec4b6';}
+  if(lbl){ lbl.textContent = _pEmployeeName || _pLabel || _pD; lbl.style.color = _pColor; }
   if(err){err.style.display='none';err.textContent='';}
   document.getElementById('portal-pin-modal').style.display='flex';
 }
@@ -1437,7 +1455,7 @@ function pBack(){
   if(teamDiv) teamDiv.remove();
   var main = document.querySelector('#portal-screen > main');
   if(main) main.querySelectorAll('section').forEach(function(s){ s.style.display = ''; });
-  _pD = ''; _pP = '';
+  _pD = ''; _pP = ''; _pEmployeeId = ''; _pEmployeeName = '';
 }
 
 function pK(d){
@@ -1451,19 +1469,89 @@ function pBk(){
   if(_pGoBusy) return;
   _pP=_pP.slice(0,-1);
   var box=document.getElementById('p-pin-box');
-  if(box) box.textContent=_pP.length===0?'* * * *':_pP.replace(/./g,'*');
+  if(box) box.textContent=_pP.length===0?((window.SyncroAuth&&window.SyncroAuth.enabled)?'* * * * * *':'* * * *'):_pP.replace(/./g,'*');
 }
 
 function pClose(){
-  _pP=''; _pGoBusy=false;
+  _pP=''; _pGoBusy=false; _pEmployeeId=''; _pEmployeeName=''; _pPendingCurrentPin='';
   document.getElementById('portal-pin-modal').style.display='none';
+}
+
+function _pOpenPinChange(employeeName, currentPin){
+  _pPendingCurrentPin = currentPin;
+  var name=document.getElementById('p-change-name');
+  var newPin=document.getElementById('p-change-new');
+  var confirmPin=document.getElementById('p-change-confirm');
+  var err=document.getElementById('p-change-error');
+  if(name) name.textContent=employeeName||'Empleado';
+  if(newPin) newPin.value='';
+  if(confirmPin) confirmPin.value='';
+  if(err) err.textContent='';
+  document.getElementById('portal-pin-modal').style.display='none';
+  document.getElementById('portal-pin-change-modal').style.display='flex';
+  if(newPin) newPin.focus();
+}
+
+async function pChangePinCancel(){
+  _pPendingCurrentPin=''; _pP=''; _pGoBusy=false;
+  document.getElementById('portal-pin-change-modal').style.display='none';
+  if(window.SyncroAuth && window.SyncroAuth.enabled) await window.SyncroAuth.logout();
+}
+
+async function pChangePinSave(){
+  if(!_pPendingCurrentPin || !(window.SyncroAuth && window.SyncroAuth.enabled)) return;
+  var newPin=(document.getElementById('p-change-new')||{}).value||'';
+  var confirmPin=(document.getElementById('p-change-confirm')||{}).value||'';
+  var err=document.getElementById('p-change-error');
+  var save=document.getElementById('p-change-save');
+  if(!/^\d{6}$/.test(newPin)){ if(err) err.textContent='El PIN debe tener exactamente 6 dígitos.'; return; }
+  if(newPin!==confirmPin){ if(err) err.textContent='Los dos PIN no coinciden.'; return; }
+  if(save) save.disabled=true;
+  try {
+    await window.SyncroAuth.changePin(_pPendingCurrentPin,newPin);
+    _pPendingCurrentPin=''; _pP=''; _pGoBusy=false;
+    document.getElementById('portal-pin-change-modal').style.display='none';
+    alert('PIN cambiado. Entra de nuevo con tu PIN personal.');
+  } catch(e) {
+    _pPendingCurrentPin='';
+    if(err) err.textContent=e.status===429?'Demasiados intentos. Espera antes de probar otra vez.':'No se pudo cambiar el PIN. Vuelve a iniciar sesión.';
+    setTimeout(function(){ pChangePinCancel(); },2500);
+  } finally {
+    if(save) save.disabled=false;
+  }
 }
 
 async function pGo(){
   if(_pGoBusy) return;
-  if(_pP.length < 4) return;
+  var secureAuth = window.SyncroAuth && window.SyncroAuth.enabled;
+  if(secureAuth && (!_pEmployeeId || _pP.length !== 6)) return;
+  if(!secureAuth && _pP.length < 4) return;
   _pGoBusy=true;
   var pin=_pP;
+  if(secureAuth){
+    try {
+      var secureSession = await window.SyncroAuth.login(_pEmployeeId, pin);
+      if(secureSession.forcePinChange){
+        _pP=''; _pGoBusy=false;
+        _pOpenPinChange(_pEmployeeName,pin);
+        return;
+      }
+      document.getElementById('portal-pin-modal').style.display='none';
+      _pP=''; _pGoBusy=false;
+      await _pLaunch(secureSession.profile);
+    } catch(authErr) {
+      var authBox=document.getElementById('p-pin-box');
+      var authMsg=document.getElementById('p-err');
+      if(authBox){authBox.className='p-pin-box p-err';authBox.textContent=authErr.status===429?'ESPERA':'ACCESO DENEGADO';authBox.style.borderColor='#ef4444';authBox.style.color='#ef4444';}
+      if(authMsg){authMsg.textContent=authErr.status===429?'Demasiados intentos. Espera antes de probar otra vez.':'Empleado o PIN incorrecto';authMsg.style.display='block';}
+      setTimeout(function(){
+        _pP=''; _pGoBusy=false;
+        if(authBox){authBox.className='p-pin-box';authBox.textContent='* * * * * *';authBox.style.borderColor='rgba(46,196,182,.3)';authBox.style.color='#2ec4b6';}
+        if(authMsg){authMsg.style.display='none';authMsg.textContent='';}
+      },2500);
+    }
+    return;
+  }
   runMigrations();
   seedEmployees();
   var RP={'300415':'admin'};
@@ -1529,6 +1617,14 @@ async function _pLaunch(u){
   if(ap) ap.style.display='block';
   await startApp();
 }
+
+document.addEventListener('DOMContentLoaded',function(){
+  if(!(window.SyncroAuth && window.SyncroAuth.enabled)) return;
+  window.SyncroAuth.restore().then(function(session){
+    if(session && session.forcePinChange) return window.SyncroAuth.logout();
+    if(session) return _pLaunch(session.profile);
+  }).catch(function(e){ console.warn('secure session restore failed', e); });
+});
 
 document.addEventListener('keydown',function(e){
   var m=document.getElementById('portal-pin-modal');
@@ -1965,7 +2061,7 @@ async function valMermaSaveCoste() {
   var costeTotal = parseFloat((costeUnit * cantidad).toFixed(2));
 
   try {
-    var res = await fetch(SUPABASE_URL + '/rest/v1/merma?id=eq.' + id, {
+    var res = await syncroSupabaseFetch(SUPABASE_URL + '/rest/v1/merma?id=eq.' + id, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_KEY,

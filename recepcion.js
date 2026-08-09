@@ -1890,7 +1890,7 @@ async function confirmarCargoLab(id, nuevoEstado) {
     var coment = motivo || null;
   }
   try {
-    await fetch(SUPABASE_URL + '/rest/v1/syncrolab_room_charges?id=eq.' + encodeURIComponent(id), {
+    await syncroSupabaseFetch(SUPABASE_URL + '/rest/v1/syncrolab_room_charges?id=eq.' + encodeURIComponent(id), {
       method: 'PATCH',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({

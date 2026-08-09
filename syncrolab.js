@@ -100,7 +100,7 @@ async function _labChargePhotoUpload(inputEl, idx, containerId){
   try {
     var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'').substring(0,60);
     var path = 'charges/' + genId() + '_' + safeName;
-    var res = await fetch(SUPABASE_URL + '/storage/v1/object/syncrolab/' + encodeURIComponent(path), {
+    var res = await syncroSupabaseFetch(SUPABASE_URL + '/storage/v1/object/syncrolab/' + encodeURIComponent(path), {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': file.type, 'x-upsert': 'true' },
       body: file
@@ -142,7 +142,7 @@ async function _labSaveCharges(syncrolabCashId, fecha){
       solicitado_por_id: currentUser.id, solicitado_por_nombre: currentUser.nombre,
       estado: 'pendiente', created_at: ts, updated_at: ts
     };
-    await fetch(url, { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify(rec) });
+    await syncroSupabaseFetch(url, { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify(rec) });
   }
   invalidateCache(LAB_CHARGES_TABLE);
 }
@@ -311,7 +311,7 @@ async function _labSave(record, editId){
   var url = SUPABASE_URL + '/rest/v1/' + LAB_TABLE;
   var method = editId ? 'PATCH' : 'POST';
   var fetchUrl = editId ? url + '?id=eq.' + encodeURIComponent(editId) : url;
-  var res = await fetch(fetchUrl, {
+  var res = await syncroSupabaseFetch(fetchUrl, {
     method: method,
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
     body: JSON.stringify(record)
