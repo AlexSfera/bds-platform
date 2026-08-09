@@ -496,6 +496,16 @@ function getSupervisorDepartments(user){
   if(isAdmin(user)) return ['*'];
   if(user.rol==='jefe'){
     var a=user.area||'';
+    // FIX-SYNCROLAB-DEPT: jefes SYNCROLAB → restringir a su sub-departamento
+    if(/^syncrolab$/i.test(a.trim()) && typeof _deptCatalogo === 'function'){
+      var resolved = _deptCatalogo(user);
+      if(resolved && !/^syncrolab$/i.test(resolved.trim())){
+        if(resolved === 'Entrenadores') return SUPERVISOR_DEPT_MAP.coord_entrenadores || [resolved];
+        if(resolved === 'Recepción SYNCROLAB') return SUPERVISOR_DEPT_MAP.coord_recepcion_syncrolab || [resolved];
+        if(resolved === 'Fisioterapeutas') return SUPERVISOR_DEPT_MAP.coord_fisioterapeutas || [resolved];
+        return [resolved];
+      }
+    }
     return AREA_GROUPS[a] || (a?[a]:[]);
   }
   return SUPERVISOR_DEPT_MAP[user.rol] || (user.area?[user.area]:[]);
