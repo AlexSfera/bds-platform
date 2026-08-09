@@ -1942,7 +1942,7 @@ async function _doSaveTurno() {
       employee_id:           currentUser.id,
       nombre:                currentUser.nombre,
       area:                  currentUser.area || '',
-      departamento:          currentUser.area || '',
+      departamento:          (_deptCatalogo(currentUser) || currentUser.area || ''),
       fecha:                 fecha,
       tipo_gestion:          gTipo,
       descripcion:           gDesc,
