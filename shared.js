@@ -496,6 +496,16 @@ function getSupervisorDepartments(user){
   if(isAdmin(user)) return ['*'];
   if(user.rol==='jefe'){
     var a=user.area||'';
+    // FIX-SYNCROLAB-DEPT: jefes SYNCROLAB → restringir a su sub-departamento
+    if(/^syncrolab$/i.test(a.trim()) && typeof _deptCatalogo === 'function'){
+      var resolved = _deptCatalogo(user);
+      if(resolved && !/^syncrolab$/i.test(resolved.trim())){
+        if(resolved === 'Entrenadores') return SUPERVISOR_DEPT_MAP.coord_entrenadores || [resolved];
+        if(resolved === 'Recepción SYNCROLAB') return SUPERVISOR_DEPT_MAP.coord_recepcion_syncrolab || [resolved];
+        if(resolved === 'Fisioterapeutas') return SUPERVISOR_DEPT_MAP.coord_fisioterapeutas || [resolved];
+        return [resolved];
+      }
+    }
     return AREA_GROUPS[a] || (a?[a]:[]);
   }
   return SUPERVISOR_DEPT_MAP[user.rol] || (user.area?[user.area]:[]);
@@ -515,7 +525,8 @@ function canValidateDepartment(user,dept){
 }
 function getRecordDepartment(record,shiftMap){
   if(!record) return '[NO DATA]';
-  var direct = record.area || record.departamento || record.dept_destino || record.dept_origen;
+  // FIX-DEPT-ORDER: departamento es más específico (ej. 'Entrenadores') que area ('SYNCROLAB')
+  var direct = record.departamento || record.area || record.dept_destino || record.dept_origen;
   if(direct) return direct;
   if(shiftMap && record.shift_id){
     var shift = shiftMap[record.shift_id];
@@ -4493,16 +4504,7 @@ async function openItemModal(type, id){
   var tipo = rec.tipo_gestion || rec.tipo_incidencia || rec.categoria || '—';
   var creador = rec.creado_por || rec.nombre || '—';
   var fechaCre = rec.created_at ? new Date(rec.created_at).toLocaleString('es-ES') : '—';
-  var dpto = rec.departamento || rec.area || '';
-  // FIX-DEPT: resolver departamento desde employee cuando falta en el registro
-  if(!dpto && rec.employee_id){
-    try {
-      var _eList = await getDB('employees');
-      var _eRec = _eList.find(function(e){ return e.id === rec.employee_id; });
-      if(_eRec) dpto = (typeof _deptCatalogo === 'function' ? _deptCatalogo(_eRec) : '') || _eRec.area || '';
-    } catch(e){}
-  }
-  if(!dpto) dpto = '—';
+  var dpto = rec.departamento || rec.area || '—';
   var accionPrev = rec.accion_tomada || rec.accion_inmediata || '';
 
   document.getElementById('mi-title').textContent =
@@ -4791,8 +4793,9 @@ async function renderGestionesScreen(){
   var verTodos = isAdminU;
   var all = [];
   try { all = await getDB('gestiones'); } catch(e){}
+  // FIX-GEST-FILTER: usar canViewDepartment para que jefes SYNCROLAB vean subdepartamentos
   var list = verTodos ? all : all.filter(function(g){
-    return normalizeDeptName(g.departamento||g.area||'') === normalizeDeptName(dept);
+    return canViewDepartment(currentUser, g.departamento||g.area||'');
   });
   list = list.filter(function(g){ return (g.estado||'Abierta') !== 'Cerrada'; });
   list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
@@ -4944,8 +4947,9 @@ async function renderIncidenciasScreen(){
   var verTodos = isAdminU;
   var all = [];
   try { all = await getDB('incidencias'); } catch(e){}
+  // FIX-INCI-FILTER: usar canViewDepartment para que jefes SYNCROLAB vean subdepartamentos
   var list = verTodos ? all : all.filter(function(i){
-    return normalizeDeptName(i.departamento||i.area||'') === normalizeDeptName(dept);
+    return canViewDepartment(currentUser, i.departamento||i.area||'');
   });
   list = list.filter(function(i){
     var s = normalizeIncidentState(i.estado);
