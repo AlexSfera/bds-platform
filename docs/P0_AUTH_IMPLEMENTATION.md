@@ -2,13 +2,12 @@
 
 ## Estado
 
-**Estado:** `CORREGIDO` en la rama local `codex/p0-security-containment`; la
-base Auth aditiva está `VERIFICADO` en LIVE y los dos flags siguen desactivados.
+**Estado:** `VERIFICADO` en LIVE. La base Auth, las 59 identidades activas, el
+cliente y servidor Auth y la contención anónima RLS están activos.
 
-Este estado no significa que `SEC-013` esté corregido en producción. El código
-preparatorio se desplegó el 10/08/2026 con ambos flags apagados, pero todavía no
-se ha realizado el corte de RLS o identidades. El hallazgo maestro continúa
-`PLANIFICADO` hasta completar ese corte.
+`SEC-013` quedó `VERIFICADO` en producción el 10/08/2026. La matriz definitiva
+por rol/fila y Storage siguen pendientes y no deben confundirse con el cierre
+del acceso anónimo y la autenticación PIN ya ejecutados.
 
 ## Protección contra activación accidental
 
@@ -135,7 +134,7 @@ Se documentaron sin valores en `.env.example`:
 - `SUPABASE_URL`;
 - `SUPABASE_SERVICE_KEY`;
 - `SUPABASE_PUBLISHABLE_KEY`;
-- `SYNCRO_AUTH_ENABLED=false`;
+- `SYNCRO_AUTH_ENABLED=true` en LIVE (`false` sigue siendo el rollback);
 - `SYNCRO_AUTH_RATE_LIMIT_SECRET`;
 - `SYNCRO_AUTH_PIN_FINGERPRINT_SECRET`;
 - `SYNCRO_AUTH_INTERNAL_EMAIL_DOMAIN`;
@@ -144,10 +143,9 @@ Se documentaron sin valores en `.env.example`:
 
 Los secretos no deben copiarse al frontend, documentación, logs o repositorio.
 Las seis variables nuevas se configuraron el 10/08/2026 en Vercel para
-Production y Preview. `SYNCRO_AUTH_ENABLED` permanece explícitamente en
-`false`. El commit `4009869` se desplegó después en Preview y Production;
-Vercel informó `Ready` y la comprobación del dominio canónico confirmó
-`SyncroAuth.enabled === false`, portal y aplicación presentes.
+Production y Preview. `SYNCRO_AUTH_ENABLED=true` quedó desplegado en Production;
+el cliente `dc5b70d` activó también `AUTH_ENABLED=true` y Vercel informó
+`Ready`. El rollback conserva ambos interruptores documentados.
 
 La configuración Auth LIVE se verificó el mismo día: longitud mínima de
 password exactamente seis caracteres, alta pública desactivada, enlace manual
@@ -206,39 +204,34 @@ Resultado actual:
   `anon` sin acceso, `employees`/`employee_ips` sólo backend, sesión inexistente
   sin filas ni escritura, sesión vigente con acceso operativo; rollback probado
   y base temporal retirada.
-- la misma prueba cubre la vista `security_invoker`: grant anónimo retirado,
-  lectura autenticada sometida al contexto de las tablas base y grants previos
-  restaurados por rollback, incluido el grantee especial `PUBLIC`.
+- la misma prueba cubre la vista `security_invoker`: acceso directo anónimo y
+  autenticado retirado y grants previos restaurados por rollback, incluido el
+  grantee especial `PUBLIC`.
 
 Las pruebas usan PostgreSQL real y una fixture mínima separada, marcada como
 exclusiva de test, para suplir la ausencia de una migración base versionada de
-`employees`. La integración Auth/PostgREST ya está confirmada sobre esa fixture;
-aún falta repetirla con el esquema operativo completo y la matriz definitiva de
-policies. La migración Auth aditiva sí se aplicó a LIVE, todavía vacía; no se
-crearon identidades ni PIN reales y no se alteraron las tablas operativas.
+`employees`. La integración Auth/PostgREST está confirmada sobre esa fixture y
+el corte LIVE confirmó 59 identidades activas, 59 huellas únicas y cero fallos
+de entrega. El postflight conservó 76 empleados y 12 filas de allowlist; al
+menos una identidad ya completó el cambio obligatorio de PIN. La matriz
+definitiva de policies por rol/fila sigue pendiente.
 
-## Trabajo pendiente antes de activar
+## Trabajo pendiente después del corte
 
 - resolver las decisiones `[NO DATA]` de la matriz nominal ya creada en
   `docs/P0_RLS_ACCESS_MATRIX.md`;
-- aplicar la contención autenticada intermedia ya probada y completar después
-  las policies definitivas por rol/fila de la matriz;
+- completar las policies definitivas por rol/fila de la matriz;
 - diseñar grants/policies de columnas para que la lectura general de
   `employees` no entregue PIN, coste o correo fuera de los roles autorizados;
-- preparar el corte de las 59 identidades activas confirmadas en LIVE: todos
-  los PIN actuales deben rotarse porque son legibles anónimamente, aunque seis
-  ya tengan seis cifras; 55 entregas temporales pueden usar email y cuatro
-  requieren entrega presencial;
+- entregar presencialmente los cuatro PIN del archivo privado y eliminarlo
+  después de confirmar sus cambios;
 - diseñar las policies y URLs firmadas de `adjuntos`;
 - ampliar la integración local ya superada al esquema operativo completo y a
   todas las policies/RPC de la matriz;
 - mantener en la matriz definitiva los casos cruzados negativos de
   subdepartamentos SYNCROLAB ya añadidos por `SEC-023`;
-- ejecutar el preflight del aprovisionamiento y después crear las identidades
-  iniciales sin reutilizar los PIN legacy;
-- resolver la entrega segura de los cuatro PIN sin correo antes de activar;
-- ejecutar la ventana de corte LIVE ya autorizada sólo cuando RLS y la entrega
-  completa hayan superado sus comprobaciones.
+- retirar de `employees` los PIN legacy mediante una migración separada una vez
+  confirmado que todos los accesos necesarios funcionan.
 
 ## Decisión de entrega resuelta
 

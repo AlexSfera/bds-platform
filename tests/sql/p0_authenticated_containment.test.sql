@@ -49,10 +49,10 @@ select test_support.assert_true(
   'anon must lose public view access explicitly'
 );
 select test_support.assert_true(
-  has_table_privilege(
+  not has_table_privilege(
     'authenticated', 'public.containment_demo_view', 'SELECT'
   ),
-  'authenticated must retain security-invoker view access'
+  'unconsumed public views must remain backend-only'
 );
 
 set role authenticated;
@@ -62,10 +62,6 @@ set request.jwt.claims = '{"app_metadata":{"syncro_authz_version":1}}';
 select test_support.assert_true(
   (select count(*) from public.containment_demo) = 1,
   'valid completed identity must read operational rows'
-);
-select test_support.assert_true(
-  (select count(*) from public.containment_demo_view) = 1,
-  'security-invoker view must preserve valid-session access'
 );
 insert into public.containment_demo (employee_id, value)
 values ('E-001', 'valid-session-write');
@@ -89,11 +85,6 @@ select test_support.assert_true(
   (select count(*) from public.containment_demo) = 0,
   'unknown authenticated user must see no operational rows'
 );
-select test_support.assert_true(
-  (select count(*) from public.containment_demo_view) = 0,
-  'security-invoker view must preserve the session ceiling'
-);
-
 do $$
 begin
   begin

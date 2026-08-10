@@ -218,6 +218,20 @@ por la base de datos.
 | SEC-034 | Supabase / RPC huérfano | P1 | CONFIRMADO | `sync_shifts_horas_from_bitrix()` permite ejecutar una actualización masiva de `shifts.horas` y concede `EXECUTE` a `public`, `anon` y `authenticated`, sin consumidor ni trigger localizados. No amplía el CRUD anónimo P0 ya confirmado sobre `shifts`, pero reduce una mutación masiva a una sola llamada pública. | Inspección administrativa LIVE de firma, definición, propietario, modo invoker y grants; búsqueda global sin consumidores. La función copia `bitrix_attendance.horas` a turnos con horas nulas o cero. Ejecuciones abusivas o efectos reales: `[NO DATA]`. La migración intermedia `202608100002` revoca su ejecución a navegador y la reserva a `service_role`; verificada sólo en local, incluido rollback. | Aplicar la revocación durante el corte RLS; conservar la función sólo si existe un proceso server-side identificado y, en caso contrario, retirarla mediante cambio separado después de comprobar jobs externos. |
 | SEC-035 | Supabase / Vista Housekeeping | P1 | CONFIRMADO | `hk_incidencias_detalle` concede SELECT a `anon` y expone detalles operativos, descripciones, acciones, personal implicado, validación y datos de limpieza. La vista usa `security_invoker`, por lo que no amplía el acceso anónimo ya confirmado sobre sus tablas base, pero constituía una superficie pública omitida del inventario inicial de 51 tablas. | Preflight administrativo LIVE: única vista de `public`, grants SELECT efectivos para `anon` y `authenticated`, definición sobre `incidencias` y `housekeeping_assignments`, `security_invoker=on`; búsqueda local sin consumidores. Accesos o abuso reales: `[NO DATA]`. La migración `202608100002` ampliada revoca el grant anónimo explícitamente, conserva SELECT autenticado sujeto a las RLS base y prueba doble aplicación y rollback en local. | Aplicar la revocación durante el corte RLS y mantener la vista dentro del inventario de superficie; decidir después si se conserva para consumidores externos `[NO DATA]` o se retira. |
 
+### Actualización de estado del corte LIVE — 10/08/2026
+
+- `SEC-013`, `SEC-014`, `SEC-030`, `SEC-034` y `SEC-035`: `VERIFICADO` para
+  la corrección descrita en el corte. Las filas maestras conservan el problema
+  histórico para no perder evidencia.
+- `SEC-001` a `SEC-005` y `SEC-007` a `SEC-010`: la vía `anon` quedó
+  `VERIFICADO` como cerrada, pero el riesgo residual de autorización lateral
+  entre usuarios autenticados sigue `CONFIRMADO` hasta completar la matriz por
+  rol/fila. No se declara cerrado ese alcance restante.
+- Postflight LIVE: 51 tablas con policy restrictiva de sesión, 49 policies
+  intermedias autenticadas, cero grants de tabla para `anon`, cero acceso
+  autenticado directo a `employees`/`employee_ips`, vista y RPC públicos
+  cerrados; HTTP anónimo 401 en cuatro recursos representativos.
+
 ## Alcance mínimo de la auditoría de seguridad
 
 La auditoría deberá cubrir, como mínimo:
@@ -574,3 +588,20 @@ alcance, la decisión, la modificación, la prueba y el resultado.
   `security_invoker`. La prueba local detectó y corrigió además el tratamiento
   del grantee especial `PUBLIC` en rollback; doble aplicación y reversión
   completa quedaron `VERIFICADO`. LIVE aún no se modificó con esta migración.
+- Corte Auth LIVE ejecutado: se crearon 59 identidades activas con huellas de
+  PIN únicas; 55 entregas definitivas por correo y cuatro entregas presenciales
+  se completaron sin fallo. El archivo presencial quedó fuera del repositorio,
+  con modo `0600`. Dos ejecuciones parciales previas fueron invalidadas por una
+  rotación final; cualquier correo anterior quedó obsoleto y sólo sirve el más
+  reciente. No se reproducen nombres, correos ni PIN en este registro.
+- Vercel activó `SYNCRO_AUTH_ENABLED=true`; el commit `dc5b70d` activó el
+  cliente y quedó `Ready` en Production. El portal mostró seis posiciones de
+  PIN, el directorio backend respondió HTTP 200 y el correo legacy quedó 404.
+- Aplicación LIVE de `202608100002_p0_authenticated_containment.sql` después de
+  publicar `fce70f8`. El postflight confirmó 51/51 tablas con ceiling de sesión,
+  49 policies autenticadas intermedias, cero grants anónimos, cero acceso
+  autenticado directo a `employees`/`employee_ips`, RPC sólo `service_role` y
+  vista sin acceso de navegador. Se conservaron 76 empleados, 12 IP y 59
+  identidades; 58 seguían con cambio obligatorio, por lo que al menos una ya
+  completó el flujo LIVE. HTTP anónimo devolvió 401 sobre `employees`,
+  `shifts`, `employee_ips` y `hk_incidencias_detalle`. Rollback LIVE no aplicado.

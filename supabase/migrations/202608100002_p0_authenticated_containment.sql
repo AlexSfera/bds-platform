@@ -1,5 +1,5 @@
 -- SYNCRO SHIFT — authenticated containment for operational public tables
--- Status: VERIFICADO locally on 2026-08-10; not yet applied to LIVE.
+-- Status: VERIFICADO locally and applied to LIVE on 2026-08-10.
 --
 -- Goal: remove anonymous browser access while preserving the current feature
 -- surface for valid, fully-onboarded employees. This is an interim ceiling;
@@ -117,10 +117,7 @@ begin
   end loop;
 
   for resource in
-    select c.relname as view_name,
-           c.relkind,
-           coalesce(c.reloptions @> array['security_invoker=true'], false)
-             as security_invoker
+    select c.relname as view_name
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public' and c.relkind in ('v', 'm')
@@ -129,12 +126,6 @@ begin
       'revoke all privileges on table public.%I from public, anon, authenticated',
       resource.view_name
     );
-    if resource.relkind = 'v' and resource.security_invoker then
-      execute format(
-        'grant select on table public.%I to authenticated',
-        resource.view_name
-      );
-    end if;
   end loop;
 end;
 $cutover$;

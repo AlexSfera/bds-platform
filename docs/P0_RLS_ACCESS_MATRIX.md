@@ -2,12 +2,12 @@
 
 ## Estado y alcance
 
-**Estado:** `INVESTIGANDO`
+**Estado:** `VERIFICADO` para contención anónima; `INVESTIGANDO` para la matriz
+definitiva por rol/fila.
 
 **Fecha de verificación:** 2026-08-10
-**Entorno modificado:** la base Auth aditiva y la contención específica de
-`employee_ips` están `VERIFICADO` en LIVE. La contención autenticada general
-permanece `PLANIFICADO` y no se ha aplicado.
+**Entorno modificado:** base Auth, 59 identidades, contención de `employee_ips`
+y contención autenticada general `VERIFICADO` en LIVE.
 
 Esta matriz separa tres cosas que no deben confundirse:
 
@@ -15,13 +15,18 @@ Esta matriz separa tres cosas que no deben confundirse:
 2. el acceso objetivo ya respaldado por los flujos funcionales auditados;
 3. las decisiones empresariales todavía marcadas como `[NO DATA]`.
 
+La columna de las 51 tablas conserva el snapshot anterior al corte como
+evidencia histórica. Desde el postflight del 10/08/2026, `anon` tiene cero
+grants S/I/U/D sobre esas tablas; `authenticated` exige contexto vigente y
+mantiene temporalmente CRUD lateral en 49 tablas hasta completar esta matriz.
+
 No es una migración ni autoriza cambios de grants, RLS o policies. La plantilla
 `supabase/migrations/202608080002_p0_rls_cutover_TEMPLATE.sql` debe permanecer
 no ejecutable mientras exista una decisión necesaria en `[NO DATA]`.
 
 La migración intermedia
-`supabase/migrations/202608100002_p0_authenticated_containment.sql` sí es
-ejecutable y está `VERIFICADO` localmente, incluida reaplicación y rollback. Su
+`supabase/migrations/202608100002_p0_authenticated_containment.sql` está
+`VERIFICADO` localmente y en LIVE, incluida reaplicación y rollback local. Su
 alcance es deliberadamente limitado: retira el acceso `anon`, exige una
 identidad Auth vigente, reserva `employees` y `employee_ips` al backend y
 bloquea el RPC huérfano `sync_shifts_horas_from_bitrix()`. Para conservar el
@@ -38,6 +43,11 @@ exposición pública, pero no resuelve todavía el acceso lateral entre empleado
   `hk_incidencias_detalle`, con SELECT anónimo. No tiene consumidores locales y
   queda registrada por separado como `SEC-035`; la contención intermedia revoca
   su grant anónimo de forma explícita.
+- El postflight LIVE confirmó 51/51 tablas con la policy restrictiva de sesión,
+  49 policies intermedias autenticadas, cero tablas legibles o escribibles por
+  `anon`, ningún acceso directo autenticado a `employees`/`employee_ips`, RPC
+  público cerrado y HTTP 401 anónimo sobre `employees`, `shifts`,
+  `employee_ips` y `hk_incidencias_detalle`.
 - El 2026-08-10 se reconstruyó el inventario nominal a partir del snapshot de
   46 tablas de `docs/context/esquema-supabase.md` y las cinco tablas POSMEWS
   verificadas posteriormente.
@@ -85,7 +95,7 @@ exposición pública, pero no resuelve todavía el acceso lateral entre empleado
 
 | Recurso | `anon` | `authenticated` directo | Backend `service_role` | Estado |
 |---|---|---|---|---|
-| `syncro_auth_identities` | Sin acceso | Sin acceso de tabla | CRUD para aprovisionamiento, login, reset y revocación | VERIFICADO LIVE; cero identidades en el postflight |
+| `syncro_auth_identities` | Sin acceso | Sin acceso de tabla | CRUD para aprovisionamiento, login, reset y revocación | VERIFICADO LIVE; 59 identidades activas |
 | `syncro_auth_rate_buckets` | Sin acceso | Sin acceso de tabla | Reserva atómica y bloqueo | VERIFICADO LIVE |
 | `syncro_auth_audit` | Sin acceso | Sin acceso de tabla | Inserción y consulta operativa protegida | VERIFICADO LIVE |
 | `syncro_auth_context()` | Sin ejecución | Devuelve únicamente el contexto propio vigente | Ejecución permitida | VERIFICADO LIVE |
@@ -94,11 +104,11 @@ exposición pública, pero no resuelve todavía el acceso lateral entre empleado
 
 | Vista | Acceso LIVE antes del corte | Objetivo intermedio | Estado |
 |---|---|---|---|
-| `hk_incidencias_detalle` | SELECT `anon` y `authenticated`; `security_invoker=on` | Sin `anon`; SELECT `authenticated` sujeto a RLS/contexto de las tablas base | CONFIRMADO; ver `SEC-035` |
+| `hk_incidencias_detalle` | SELECT `anon` y `authenticated`; `security_invoker=on` | Sin acceso directo de navegador; backend si se reactiva | VERIFICADO LIVE; ver `SEC-035` |
 
 ## Matriz de las 51 tablas LIVE
 
-| # | Tabla | Acceso LIVE actual | Consumidores principales | `SELECT` objetivo | `INSERT/UPDATE/DELETE` objetivo | Estado o decisión pendiente |
+| # | Tabla | Acceso LIVE antes del corte | Consumidores principales | `SELECT` objetivo | `INSERT/UPDATE/DELETE` objetivo | Estado o decisión pendiente |
 |---:|---|---|---|---|---|---|
 | 1 | `ajustes` | CRUD anon — CONFIRMADO | Caja Sala, turno, validación | Propio durante el turno; responsables del ámbito; admin/adjunto | Alta sólo dentro de caja/turno autorizado; corrección transaccional; borrado confirmado sólo admin/adjunto | PLANIFICADO; ver `SUP-050`, `SUP-051`, `SUP-054`, `SEC-031` y `SEC-033` |
 | 2 | `audit_log` | CRUD anon — CONFIRMADO | `shared.js`, caja, FIO, validación, Bitrix | Consulta protegida para auditoría | Inserción sólo server-side; U/D denegados por defecto | Retención y quién puede consultar/exportar: `[NO DATA]` |
@@ -111,7 +121,7 @@ exposición pública, pero no resuelve todavía el acceso lateral entre empleado
 | 9 | `dept_incentive_rules` | CRUD anon — CONFIRMADO | Incentivos, informes, rendimiento | Empleado: regla aplicable; responsables del ámbito; admin/adjunto | Backend financiero con vigencia/versionado; sin D libre | Roles que aprueban y rectifican reglas: `[NO DATA]` |
 | 10 | `dept_reports` | Bloqueada — CONFIRMADO | Dashboard, informes | Responsables del ámbito y admin/adjunto; destinatarios publicados por definir | Publicación/rectificación backend por periodo y estado | Relación transaccional con `employee_status` y visibilidad del empleado: `[NO DATA]` |
 | 11 | `employee_incentives` | CRUD anon — CONFIRMADO | Sin literal JS activo | Sin acceso directo hasta confirmar uso | Sin escrituras | Conservar, sustituir o retirar: `[NO DATA]` |
-| 12 | `employee_ips` | SELECT anon — VERIFICADO LIVE 10/08/2026 | Middleware, Maestro | SELECT anónimo temporal sólo por compatibilidad del middleware; objetivo final sin lectura de navegador | Contención LIVE VERIFICADO: todos los privilegios salvo SELECT retirados de `public`, `anon` y `authenticated`; escritura conservada para `service_role`; objetivo final: lectura service-role y gestión backend por admin/adjunto | P0 `SEC-030`; autoría de seis IP dinámicas: `[NO DATA]`; rollback no aplicado |
+| 12 | `employee_ips` | SELECT anon — VERIFICADO antes del corte | Middleware, Maestro | Sin lectura directa de navegador | Contención LIVE VERIFICADO: ningún privilegio para `public`, `anon` o `authenticated`; acceso backend `service_role` | P0 `SEC-030`; autoría de seis IP dinámicas: `[NO DATA]`; rollback no aplicado |
 | 13 | `employee_notes` | CRUD anon — CONFIRMADO | Mi Día, Validación | Autor propio; responsables de su ámbito; admin/adjunto | I con autor derivado; marcar lectura por responsable/ámbito; D según decisión empresarial | Borrado, anonimato, retención y lectura global o por responsable: `[NO DATA]`; ver `SUP-052` y `SEC-032` |
 | 14 | `employee_sales_weekly` | CRUD anon — CONFIRMADO | Dashboard, incentivos, rendimiento | Empleado propio; responsables del ámbito; admin/adjunto | Importación backend idempotente; corrección auditada; sin D libre | Autoridad final de importación/corrección: `[NO DATA]` |
 | 15 | `employee_status` | Bloqueada — CONFIRMADO | Auth empleado, dashboard, informes | Empleado propio y responsables autorizados; admin/adjunto | Backend de estado con fechas y transición verificadas | Qué estados ve el empleado y quién aprueba cada tipo: `[NO DATA]` |
