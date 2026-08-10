@@ -213,7 +213,7 @@ exclusiva de test, para suplir la ausencia de una migración base versionada de
 `employees`. La integración Auth/PostgREST está confirmada sobre esa fixture y
 el corte LIVE confirmó 59 identidades activas, 59 huellas únicas y cero fallos
 de entrega. El postflight conservó 76 empleados y 12 filas de allowlist; al
-menos una identidad ya completó el cambio obligatorio de PIN. La matriz
+menos dos identidades ya completaron el cambio obligatorio de PIN. La matriz
 definitiva de policies por rol/fila sigue pendiente.
 
 ## Trabajo pendiente después del corte

@@ -602,6 +602,6 @@ alcance, la decisión, la modificación, la prueba y el resultado.
   49 policies autenticadas intermedias, cero grants anónimos, cero acceso
   autenticado directo a `employees`/`employee_ips`, RPC sólo `service_role` y
   vista sin acceso de navegador. Se conservaron 76 empleados, 12 IP y 59
-  identidades; 58 seguían con cambio obligatorio, por lo que al menos una ya
-  completó el flujo LIVE. HTTP anónimo devolvió 401 sobre `employees`,
+  identidades; en el postflight final 57 seguían con cambio obligatorio, por lo
+  que al menos dos ya completaron el flujo LIVE. HTTP anónimo devolvió 401 sobre `employees`,
   `shifts`, `employee_ips` y `hk_incidencias_detalle`. Rollback LIVE no aplicado.
