@@ -18,6 +18,7 @@ import {
   canEditEmployee,
   canResetEmployeePin,
   canUpdateEmployee,
+  effectiveDepartment,
   normalizeEmployeeDraft
 } from '../lib/authz-server.js';
 
@@ -102,6 +103,49 @@ test('server authorization preserves admin, adjunto, F&B and department boundari
   ), true);
   assert.equal(canDeleteEmployee(
     { id: 'admin1', rol: 'admin' }, { id: 'admin1', rol: 'admin', estado: 'Baja' }
+  ), false);
+});
+
+test('SYNCROLAB authorization derives both actor and target scope from trusted positions', () => {
+  const trainerBoss = {
+    id: 'trainer-boss', rol: 'jefe', area: 'SYNCROLAB',
+    puesto: 'Coordinador(a) de Entrenadores'
+  };
+  const physioBoss = {
+    id: 'physio-boss', rol: 'jefe', area: 'SYNCROLAB',
+    puesto: 'Coordinador(a) de Fisioterapeutas'
+  };
+  const receptionBoss = {
+    id: 'reception-boss', rol: 'jefe', area: 'SYNCROLAB',
+    puesto: 'Coordinador(a) de Atención al Cliente'
+  };
+  const trainer = {
+    rol: 'empleado', area: 'SYNCROLAB', puesto: 'Entrenador(a)'
+  };
+  const physio = {
+    rol: 'empleado', area: 'SYNCROLAB', puesto: 'Fisioterapeuta'
+  };
+  const reception = {
+    rol: 'empleado', area: 'SYNCROLAB', puesto: 'Atención al Cliente'
+  };
+
+  assert.equal(effectiveDepartment(trainer), 'Entrenadores');
+  assert.equal(effectiveDepartment(physio), 'Fisioterapeutas');
+  assert.equal(effectiveDepartment(reception), 'Recepción SYNCROLAB');
+
+  assert.equal(canCreateEmployee(trainerBoss, trainer), true);
+  assert.equal(canCreateEmployee(trainerBoss, physio), false);
+  assert.equal(canCreateEmployee(trainerBoss, reception), false);
+  assert.equal(canEditEmployee(physioBoss, physio), true);
+  assert.equal(canEditEmployee(physioBoss, trainer), false);
+  assert.equal(canResetEmployeePin(receptionBoss, reception), true);
+  assert.equal(canResetEmployeePin(receptionBoss, trainer), false);
+
+  assert.equal(canCreateEmployee(
+    { id: 'trainer-coord', rol: 'coord_entrenadores', area: 'SYNCROLAB' }, trainer
+  ), true);
+  assert.equal(canCreateEmployee(
+    { id: 'trainer-coord', rol: 'coord_entrenadores', area: 'SYNCROLAB' }, physio
   ), false);
 });
 
@@ -238,6 +282,49 @@ test('a supervisor cannot provision an employee outside their department', async
     body: JSON.stringify({
       nombre: 'Ana', puesto: 'Camarera', area: 'Cocina', rol: 'empleado',
       email: '', obs: '', estado: 'Activo', coste: 14, responsable: 0, validador: 0
+    })
+  }));
+  assert.equal(res.status, 403);
+});
+
+test('a SYNCROLAB trainer supervisor cannot provision across laboratory subdepartments', async () => {
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    const method = init.method || 'GET';
+    if (url.endsWith('/auth/v1/user') && method === 'GET') {
+      return json({
+        id: '88888888-8888-4888-8888-888888888888',
+        app_metadata: { syncro_authz_version: 2 }
+      });
+    }
+    if (url.includes('syncro_auth_identities?auth_user_id=')) {
+      return json([{
+        employee_id: 'trainer-boss',
+        auth_user_id: '88888888-8888-4888-8888-888888888888',
+        active: true, force_pin_change: false, authz_version: 2,
+        pin_fingerprint: 'trainer-boss-fp'
+      }]);
+    }
+    if (url.includes('employees?id=eq.trainer-boss')) {
+      return json([{
+        id: 'trainer-boss', nombre: 'Coordinador Entrenadores', area: 'SYNCROLAB',
+        puesto: 'Coordinador(a) de Entrenadores', rol: 'jefe', responsable: 1,
+        validador: 1, estado: 'Activo'
+      }]);
+    }
+    throw new Error('Authorization should stop before this request: ' + method + ' ' + url);
+  };
+
+  const res = await provisionHandler(new Request('https://syncro.example/api/auth/provision', {
+    method: 'POST',
+    headers: {
+      origin: 'https://syncro.example', authorization: 'Bearer ' + accessToken(2),
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      nombre: 'Fisio Nuevo', puesto: 'Fisioterapeuta', area: 'Entrenadores',
+      rol: 'empleado', email: '', obs: '', estado: 'Activo', coste: 14,
+      responsable: 0, validador: 0
     })
   }));
   assert.equal(res.status, 403);

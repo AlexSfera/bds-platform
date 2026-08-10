@@ -1,5 +1,5 @@
 -- SYNCRO SHIFT — P0 authentication foundation (ADDITIVE ONLY)
--- Status: PLANIFICADO. Do not run in LIVE without explicit approval.
+-- Status: VERIFICADO locally and applied to LIVE on 2026-08-10.
 -- This migration does not remove legacy PINs or change existing RLS policies.
 
 begin;

@@ -2,12 +2,12 @@
 
 ## Estado
 
-**Estado:** `CORREGIDO` exclusivamente en la rama local
-`codex/p0-security-containment` y con los dos flags desactivados.
+**Estado:** `CORREGIDO` en la rama local `codex/p0-security-containment`; la
+base Auth aditiva está `VERIFICADO` en LIVE y los dos flags siguen desactivados.
 
-Este estado no significa que `SEC-013` esté corregido en producción. No se ha
-desplegado código ni se han ejecutado migraciones o cambios en Supabase LIVE.
-El hallazgo maestro continúa `PLANIFICADO` hasta completar el corte.
+Este estado no significa que `SEC-013` esté corregido en producción. El código
+no se ha desplegado y todavía no se ha realizado el corte de RLS o identidades.
+El hallazgo maestro continúa `PLANIFICADO` hasta completar ese corte.
 
 ## Protección contra activación accidental
 
@@ -44,6 +44,10 @@ ninguno de los flags ejecuta por sí mismo una migración o altera Supabase.
   activación/baja y eliminación; los cambios de autorización rotan la versión y
   la eliminación exige admin, estado Baja, auditoría previa y prohíbe borrar la
   propia cuenta.
+- `scripts/auth-cutover.js`: preflight y aprovisionamiento reiniciable de
+  empleados activos existentes; omite identidades ya completadas, regenera
+  accesos temporales incompletos, no muestra PIN enviados por correo y exige
+  una ruta privada fuera del repositorio para cualquier entrega presencial.
 
 Alta y reset tienen límites independientes por actor, IP y sistema. El PIN
 temporal caduca por defecto a las 24 horas, configurable entre 5 minutos y 7
@@ -72,6 +76,14 @@ admin gestiona todo; adjunto no gestiona cuentas admin; F&B queda limitado a su
 misma capa cubre alta, edición, estado, reset y eliminación. Las restantes
 tablas todavía necesitan sus policies/RPC antes del corte.
 
+El merge de `main` del 09/08/2026 confirmó una excepción (`SEC-023`): el
+frontend ya restringía a los jefes de SYNCROLAB por puesto/subdepartamento,
+pero `lib/authz-server.js` concedía a cualquier `rol='jefe'` del área
+`SYNCROLAB` el grupo completo. La rama local ahora deriva el departamento
+efectivo tanto del actor como del empleado objetivo y aplica ámbitos separados
+para Recepción SYNCROLAB, Entrenadores y Fisioterapia/Clínica. Los flags siguen
+apagados y la corrección no se ha desplegado.
+
 ### Middleware
 
 Cuando el modo seguro se active, la lectura server-side de `employee_ips`
@@ -79,12 +91,26 @@ exigirá `SUPABASE_SERVICE_KEY`. No existe fallback a `anon` en modo seguro. Si
 falta la clave, sólo continúan funcionando las IP estáticas y la incidencia
 queda en el log.
 
+El bypass previo al corte quedó documentado como `SEC-030`: LIVE permitía CRUD
+anónimo y grants adicionales sobre la misma tabla que el middleware utiliza
+como allowlist. La contención compatible
+`202608100001_p0_employee_ips_containment.sql` se aplicó a LIVE el 10/08/2026:
+conserva temporalmente SELECT para el middleware legacy, retira todos los demás
+privilegios de `public`, `anon` y `authenticated`, y deja la gestión escrita a
+`service_role`. Las 12 filas y las ocho activas se conservaron. La verificación
+HTTP obtuvo 200 y ocho filas en lectura, y 401 para PATCH/DELETE sobre un ID
+inexistente. El rollback está verificado sólo en local y no se aplicó a LIVE.
+
 ### Migraciones preparadas y verificación local
 
 - `supabase/migrations/202608080001_p0_auth_foundation.sql`:
   relación Auth↔empleado, huella única, caducidad temporal, rate limit,
   auditoría, versión de autorización y contexto RLS. Aplicada dos veces sin
-  error sobre PostgreSQL 17.10 local para comprobar sintaxis e idempotencia.
+  error sobre PostgreSQL 17.10 local para comprobar sintaxis e idempotencia y
+  aplicada a LIVE el 10/08/2026 tras un preflight que confirmó que los tres
+  recursos no existían. El postflight confirmó tres tablas con RLS, cero
+  identidades, ausencia de SELECT para `anon`/`authenticated`, DML para
+  `service_role` y ejecución de contexto para `authenticated`.
 - `supabase/rollback/202608080001_p0_auth_foundation_rollback.sql`:
   reversión destructiva únicamente antes del corte y con aprobación. Verificada
   en una segunda base local aislada, confirmando la retirada de las tres tablas
@@ -114,6 +140,14 @@ Se documentaron sin valores en `.env.example`:
 - `SYNCRO_EMAIL_FROM` y `RESEND_API_KEY`.
 
 Los secretos no deben copiarse al frontend, documentación, logs o repositorio.
+Las seis variables nuevas se configuraron el 10/08/2026 en Vercel para
+Production y Preview. `SYNCRO_AUTH_ENABLED` permanece explícitamente en
+`false`; configurar variables no desplegó código ni activó el flujo nuevo.
+
+La configuración Auth LIVE se verificó el mismo día: longitud mínima de
+password exactamente seis caracteres, alta pública desactivada, enlace manual
+desactivado y login anónimo desactivado. La creación administrativa mediante
+`service_role` permanece disponible para el aprovisionamiento controlado.
 
 ## Verificación local
 
@@ -131,7 +165,7 @@ node --test tests/auth-supabase-e2e.test.js <contra Supabase local>
 
 Resultado actual:
 
-- 20 pruebas ordinarias superadas y una prueba E2E Supabase adicional superada
+- 25 pruebas ordinarias superadas y una prueba E2E Supabase adicional superada
   cuando se habilita explícitamente el entorno local;
 - 0 pruebas fallidas;
 - sintaxis JavaScript válida;
@@ -168,21 +202,30 @@ Las pruebas usan PostgreSQL real y una fixture mínima separada, marcada como
 exclusiva de test, para suplir la ausencia de una migración base versionada de
 `employees`. La integración Auth/PostgREST ya está confirmada sobre esa fixture;
 aún falta repetirla con el esquema operativo completo y la matriz definitiva de
-policies. No se ha tocado LIVE ni se han usado empleados o PIN reales.
+policies. La migración Auth aditiva sí se aplicó a LIVE, todavía vacía; no se
+crearon identidades ni PIN reales y no se alteraron las tablas operativas.
 
 ## Trabajo pendiente antes de activar
 
-- confirmar en la configuración objetivo no productiva y posteriormente LIVE
-  que Auth mantiene longitud mínima compatible con PIN de seis dígitos;
-- completar la matriz de permisos de las 51 tablas;
+- resolver las decisiones `[NO DATA]` de la matriz nominal ya creada en
+  `docs/P0_RLS_ACCESS_MATRIX.md`;
 - crear y probar policies `authenticated` y sus denegaciones;
 - diseñar grants/policies de columnas para que la lectura general de
   `employees` no entregue PIN, coste o correo fuera de los roles autorizados;
+- preparar el corte de las 59 identidades activas confirmadas en LIVE: todos
+  los PIN actuales deben rotarse porque son legibles anónimamente, aunque seis
+  ya tengan seis cifras; 55 entregas temporales pueden usar email y cuatro
+  requieren entrega presencial;
 - diseñar las policies y URLs firmadas de `adjuntos`;
 - ampliar la integración local ya superada al esquema operativo completo y a
   todas las policies/RPC de la matriz;
-- aprovisionar las identidades iniciales sin reutilizar los PIN legacy;
-- definir ventana de corte y autorización LIVE.
+- mantener en la matriz definitiva los casos cruzados negativos de
+  subdepartamentos SYNCROLAB ya añadidos por `SEC-023`;
+- ejecutar el preflight del aprovisionamiento y después crear las identidades
+  iniciales sin reutilizar los PIN legacy;
+- resolver la entrega segura de los cuatro PIN sin correo antes de activar;
+- ejecutar la ventana de corte LIVE ya autorizada sólo cuando RLS y la entrega
+  completa hayan superado sus comprobaciones.
 
 ## Decisión de entrega resuelta
 
