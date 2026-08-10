@@ -30,14 +30,31 @@ begin
   end loop;
 
   for resource in
+    select c.relname as view_name
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind in ('v', 'm')
+  loop
+    execute format(
+      'revoke all privileges on table public.%I from public, anon, authenticated',
+      resource.view_name
+    );
+  end loop;
+
+  for resource in
     select table_name, grantee, string_agg(privilege_type, ', ' order by privilege_type) privileges
       from syncro_private.p0_cutover_table_grants
      where migration_id = '202608100002'
      group by table_name, grantee
   loop
     execute format(
-      'grant %s on table public.%I to %I',
-      resource.privileges, resource.table_name, resource.grantee
+      'grant %s on table public.%I to %s',
+      resource.privileges,
+      resource.table_name,
+      case when resource.grantee = 'PUBLIC'
+        then 'public'
+        else quote_ident(resource.grantee)
+      end
     );
   end loop;
 
@@ -61,8 +78,13 @@ begin
      group by sequence_name, grantee
   loop
     execute format(
-      'grant %s on sequence public.%I to %I',
-      resource.privileges, resource.sequence_name, resource.grantee
+      'grant %s on sequence public.%I to %s',
+      resource.privileges,
+      resource.sequence_name,
+      case when resource.grantee = 'PUBLIC'
+        then 'public'
+        else quote_ident(resource.grantee)
+      end
     );
   end loop;
 end;

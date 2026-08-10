@@ -115,6 +115,27 @@ begin
       resource.sequence_name
     );
   end loop;
+
+  for resource in
+    select c.relname as view_name,
+           c.relkind,
+           coalesce(c.reloptions @> array['security_invoker=true'], false)
+             as security_invoker
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind in ('v', 'm')
+  loop
+    execute format(
+      'revoke all privileges on table public.%I from public, anon, authenticated',
+      resource.view_name
+    );
+    if resource.relkind = 'v' and resource.security_invoker then
+      execute format(
+        'grant select on table public.%I to authenticated',
+        resource.view_name
+      );
+    end if;
+  end loop;
 end;
 $cutover$;
 

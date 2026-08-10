@@ -34,6 +34,12 @@ create policy fixture_containment_demo_open on public.containment_demo for all
 insert into public.containment_demo (employee_id, value)
 values ('E-001', 'before-cutover');
 
+create or replace view public.containment_demo_view
+with (security_invoker = true)
+as select id, employee_id, value from public.containment_demo;
+grant select on table public.containment_demo_view
+  to public, anon, authenticated, service_role;
+
 create or replace function public.sync_shifts_horas_from_bitrix()
 returns table(updated_count integer)
 language sql

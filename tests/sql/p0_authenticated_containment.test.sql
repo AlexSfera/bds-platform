@@ -44,6 +44,16 @@ select test_support.assert_true(
   ),
   'orphan bulk-update RPC must be blocked for authenticated clients'
 );
+select test_support.assert_true(
+  not has_table_privilege('anon', 'public.containment_demo_view', 'SELECT'),
+  'anon must lose public view access explicitly'
+);
+select test_support.assert_true(
+  has_table_privilege(
+    'authenticated', 'public.containment_demo_view', 'SELECT'
+  ),
+  'authenticated must retain security-invoker view access'
+);
 
 set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
@@ -52,6 +62,10 @@ set request.jwt.claims = '{"app_metadata":{"syncro_authz_version":1}}';
 select test_support.assert_true(
   (select count(*) from public.containment_demo) = 1,
   'valid completed identity must read operational rows'
+);
+select test_support.assert_true(
+  (select count(*) from public.containment_demo_view) = 1,
+  'security-invoker view must preserve valid-session access'
 );
 insert into public.containment_demo (employee_id, value)
 values ('E-001', 'valid-session-write');
@@ -74,6 +88,10 @@ set request.jwt.claims = '{"app_metadata":{"syncro_authz_version":1}}';
 select test_support.assert_true(
   (select count(*) from public.containment_demo) = 0,
   'unknown authenticated user must see no operational rows'
+);
+select test_support.assert_true(
+  (select count(*) from public.containment_demo_view) = 0,
+  'security-invoker view must preserve the session ceiling'
 );
 
 do $$

@@ -19,6 +19,16 @@ select test_support.assert_true(
   'rollback must restore prior anon sequence privileges'
 );
 select test_support.assert_true(
+  has_table_privilege('anon', 'public.containment_demo_view', 'SELECT'),
+  'rollback must restore prior anon view SELECT'
+);
+select test_support.assert_true(
+  has_table_privilege(
+    'authenticated', 'public.containment_demo_view', 'SELECT'
+  ),
+  'rollback must restore prior authenticated view SELECT'
+);
+select test_support.assert_true(
   not exists (
     select 1 from pg_policies
      where schemaname = 'public'

@@ -34,6 +34,10 @@ exposición pública, pero no resuelve todavía el acceso lateral entre empleado
 - El catálogo LIVE confirmó previamente 51 tablas ordinarias en `public`, las
   51 con RLS: 43 con CRUD anónimo efectivo, tres con sólo lectura anónima y
   cinco bloqueadas por no tener policy.
+- El preflight final localizó además una vista `security_invoker`,
+  `hk_incidencias_detalle`, con SELECT anónimo. No tiene consumidores locales y
+  queda registrada por separado como `SEC-035`; la contención intermedia revoca
+  su grant anónimo de forma explícita.
 - El 2026-08-10 se reconstruyó el inventario nominal a partir del snapshot de
   46 tablas de `docs/context/esquema-supabase.md` y las cinco tablas POSMEWS
   verificadas posteriormente.
@@ -85,6 +89,12 @@ exposición pública, pero no resuelve todavía el acceso lateral entre empleado
 | `syncro_auth_rate_buckets` | Sin acceso | Sin acceso de tabla | Reserva atómica y bloqueo | VERIFICADO LIVE |
 | `syncro_auth_audit` | Sin acceso | Sin acceso de tabla | Inserción y consulta operativa protegida | VERIFICADO LIVE |
 | `syncro_auth_context()` | Sin ejecución | Devuelve únicamente el contexto propio vigente | Ejecución permitida | VERIFICADO LIVE |
+
+## Vistas públicas fuera de las 51 tablas
+
+| Vista | Acceso LIVE antes del corte | Objetivo intermedio | Estado |
+|---|---|---|---|
+| `hk_incidencias_detalle` | SELECT `anon` y `authenticated`; `security_invoker=on` | Sin `anon`; SELECT `authenticated` sujeto a RLS/contexto de las tablas base | CONFIRMADO; ver `SEC-035` |
 
 ## Matriz de las 51 tablas LIVE
 

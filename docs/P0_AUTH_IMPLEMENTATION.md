@@ -206,6 +206,9 @@ Resultado actual:
   `anon` sin acceso, `employees`/`employee_ips` sólo backend, sesión inexistente
   sin filas ni escritura, sesión vigente con acceso operativo; rollback probado
   y base temporal retirada.
+- la misma prueba cubre la vista `security_invoker`: grant anónimo retirado,
+  lectura autenticada sometida al contexto de las tablas base y grants previos
+  restaurados por rollback, incluido el grantee especial `PUBLIC`.
 
 Las pruebas usan PostgreSQL real y una fixture mínima separada, marcada como
 exclusiva de test, para suplir la ausencia de una migración base versionada de
