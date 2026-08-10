@@ -1,9 +1,8 @@
 (function(global){
   'use strict';
 
-  // CUTOVER FLAG: mantener false hasta que Auth, RLS y la matriz de pruebas
-  // estén aplicados y verificados en un entorno controlado.
-  var AUTH_ENABLED = false;
+  // Auth seguro activado tras aprovisionamiento y preflight LIVE verificados.
+  var AUTH_ENABLED = true;
   var API_BASE = '/api/auth';
   var nativeFetch = global.fetch.bind(global);
   var accessToken = null;

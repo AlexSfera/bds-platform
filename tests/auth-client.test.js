@@ -3,8 +3,13 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-test('disabled browser auth keeps the legacy transport unchanged', async () => {
-  const source = await readFile(new URL('../auth-client.js', import.meta.url), 'utf8');
+test('legacy transport remains available if the cutover flag is rolled back', async () => {
+  const productionSource = await readFile(new URL('../auth-client.js', import.meta.url), 'utf8');
+  assert.match(productionSource, /var AUTH_ENABLED = true;/);
+  const source = productionSource.replace(
+    'var AUTH_ENABLED = true;',
+    'var AUTH_ENABLED = false;'
+  );
   const calls = [];
   const expected = { ok: true, status: 200 };
   const window = {
