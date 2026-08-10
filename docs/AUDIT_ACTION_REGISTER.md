@@ -215,6 +215,7 @@ por la base de datos.
 | SEC-031 | Autorización frontend / Mi Turno | P1 | CONFIRMADO | La interfaz sólo ofrece correcciones de turnos propios en estado “En corrección”, pero `loadForCorrection(shiftId)` acepta cualquier ID y `_doSaveTurno()` confía en las variables globales `editingShiftId`/`_correctionShiftId`. Una llamada directa puede sobrescribir una fila ajena con la identidad del actor y eliminar todos sus hijos por `shift_id`; no se comprueban propietario, estado previo ni ámbito dentro de la operación. | Control visual en `shared.js:1597-1605`; carga y escritura en `shared.js:1607-1630,1805-1918`. `shifts` y las cinco tablas hijas permiten CRUD anónimo LIVE; abuso real: `[NO DATA]`. | Implementar comandos backend separados para alta y corrección; derivar empleado de la sesión, exigir propietario/autoridad, estado “En corrección” y versión, y ejecutar la sustitución autorizada de hijos de forma transaccional con pruebas negativas vinculadas a `SEC-007` a `SEC-010`. |
 | SEC-032 | Autorización frontend / Notas | P2 | CONFIRMADO | La interfaz filtra notas por autor/departamento y sólo muestra “marcar leída” a responsables, pero `markNotaLeida(nid)` no revalida actor, ámbito ni fila. Cualquier usuario con sesión de interfaz puede marcar como leída una nota ajena; la eliminación sí comprueba propietario o admin contra la fila recuperada. | Reglas visuales en `shared.js:5083-5151` y Validación; escritura global en `shared.js:5240-5251`. LIVE permite CRUD anónimo sobre `employee_notes`; abuso real: `[NO DATA]`. | Convertir lectura/gestión en comando backend con responsable y ámbito derivados; definir si el leído es global o por responsable y añadir pruebas negativas relacionadas con `SEC-007` a `SEC-010`. |
 | SEC-033 | Autorización frontend / Ajustes | P1 | CONFIRMADO | `saveNewAjusteMod()` está expuesta globalmente, no revalida departamento ni rol y acepta tipo e importe del llamador. Cualquier usuario con sesión puede crear un ajuste financiero atribuido a sí mismo fuera del flujo de caja; el borrado sí exige admin. | `shared.js:5274-5473`; no se localizó enlace de navegación activo al módulo, pero `showScreen('ajustes-mod')`, el elemento de pantalla y las funciones globales permiten activarlo. LIVE permite CRUD anónimo sobre `ajustes`; abuso real: `[NO DATA]`. | Integrar el alta en un comando de caja autorizado por actor, departamento, turno y reglas de signo/importe; denegar el módulo huérfano o retirarlo y añadir pruebas directas sin UI vinculadas a `SEC-007` a `SEC-010`. |
+| SEC-034 | Supabase / RPC huérfano | P1 | CONFIRMADO | `sync_shifts_horas_from_bitrix()` permite ejecutar una actualización masiva de `shifts.horas` y concede `EXECUTE` a `public`, `anon` y `authenticated`, sin consumidor ni trigger localizados. No amplía el CRUD anónimo P0 ya confirmado sobre `shifts`, pero reduce una mutación masiva a una sola llamada pública. | Inspección administrativa LIVE de firma, definición, propietario, modo invoker y grants; búsqueda global sin consumidores. La función copia `bitrix_attendance.horas` a turnos con horas nulas o cero. Ejecuciones abusivas o efectos reales: `[NO DATA]`. La migración intermedia `202608100002` revoca su ejecución a navegador y la reserva a `service_role`; verificada sólo en local, incluido rollback. | Aplicar la revocación durante el corte RLS; conservar la función sólo si existe un proceso server-side identificado y, en caso contrario, retirarla mediante cambio separado después de comprobar jobs externos. |
 
 ## Alcance mínimo de la auditoría de seguridad
 
@@ -544,10 +545,25 @@ alcance, la decisión, la modificación, la prueba y el resultado.
   legacy de empleados no cambió.
 - Implementación local del aprovisionamiento inicial reiniciable: distingue
   altas, PIN temporal pendiente, identidad inactiva y acceso completado; no
-  devuelve PIN enviados por correo y separa las entregas presenciales. Pasan 25
+  devuelve PIN enviados por correo y separa las entregas presenciales. Pasan 28
   pruebas ordinarias, una E2E Supabase real y todas las comprobaciones de
   sintaxis/whitespace. El corte de RLS, identidades y código sigue pendiente.
 - Commit `4009869` creado, rama `codex/p0-security-containment` publicada y
   `main` avanzado sin conflicto. Vercel verificó `Ready` tanto en Preview como
   en Production. El dominio canónico cargó portal y aplicación con
   `SyncroAuth.enabled === false`; no se activaron identidades ni RLS nuevas.
+- Incorporación de `SEC-034`: el RPC LIVE huérfano
+  `sync_shifts_horas_from_bitrix()` permite a `public`, `anon` y
+  `authenticated` lanzar una actualización masiva de horas. No amplía el CRUD
+  anónimo P0 ya confirmado sobre `shifts`; abuso o ejecución real: `[NO DATA]`.
+- Implementación local del endpoint autenticado `GET /api/auth/employees` y
+  sustitución de la lectura directa de `employees` en modo seguro. Las
+  respuestas excluyen siempre el PIN y aplican campos por rol, ámbito y fila.
+- Creación y verificación local de la contención intermedia
+  `202608100002_p0_authenticated_containment.sql`: aplicada dos veces en una
+  base aislada, retiró acceso anónimo, reservó `employees`/`employee_ips` al
+  backend, bloqueó el RPC huérfano y exigió contexto Auth vigente. El rollback
+  restauró grants y RPC; la base de prueba se eliminó. Su riesgo residual queda
+  explícito: usuarios autenticados mantienen CRUD directo sobre las restantes
+  tablas hasta completar las reglas empresariales por rol/fila. LIVE aún no se
+  modificó con esta migración.

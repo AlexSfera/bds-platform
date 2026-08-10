@@ -5,7 +5,9 @@
 **Estado:** `INVESTIGANDO`
 
 **Fecha de verificación:** 2026-08-10
-**Entorno modificado:** ninguno. No se ejecutaron escrituras en Supabase LIVE.
+**Entorno modificado:** la base Auth aditiva y la contención específica de
+`employee_ips` están `VERIFICADO` en LIVE. La contención autenticada general
+permanece `PLANIFICADO` y no se ha aplicado.
 
 Esta matriz separa tres cosas que no deben confundirse:
 
@@ -16,6 +18,16 @@ Esta matriz separa tres cosas que no deben confundirse:
 No es una migración ni autoriza cambios de grants, RLS o policies. La plantilla
 `supabase/migrations/202608080002_p0_rls_cutover_TEMPLATE.sql` debe permanecer
 no ejecutable mientras exista una decisión necesaria en `[NO DATA]`.
+
+La migración intermedia
+`supabase/migrations/202608100002_p0_authenticated_containment.sql` sí es
+ejecutable y está `VERIFICADO` localmente, incluida reaplicación y rollback. Su
+alcance es deliberadamente limitado: retira el acceso `anon`, exige una
+identidad Auth vigente, reserva `employees` y `employee_ips` al backend y
+bloquea el RPC huérfano `sync_shifts_horas_from_bitrix()`. Para conservar el
+funcionamiento actual mientras se completa la matriz, concede CRUD directo a
+`authenticated` sobre las restantes tablas operativas. Por tanto cierra la
+exposición pública, pero no resuelve todavía el acceso lateral entre empleados.
 
 ## Evidencia reproducible
 
@@ -69,10 +81,10 @@ no ejecutable mientras exista una decisión necesaria en `[NO DATA]`.
 
 | Recurso | `anon` | `authenticated` directo | Backend `service_role` | Estado |
 |---|---|---|---|---|
-| `syncro_auth_identities` | Sin acceso | Sin acceso de tabla | CRUD para aprovisionamiento, login, reset y revocación | PLANIFICADO; verificado localmente |
-| `syncro_auth_rate_buckets` | Sin acceso | Sin acceso de tabla | Reserva atómica y bloqueo | PLANIFICADO; verificado localmente |
-| `syncro_auth_audit` | Sin acceso | Sin acceso de tabla | Inserción y consulta operativa protegida | PLANIFICADO; verificado localmente |
-| `syncro_auth_context()` | Sin ejecución | Devuelve únicamente el contexto propio vigente | Ejecución permitida | PLANIFICADO; verificado localmente |
+| `syncro_auth_identities` | Sin acceso | Sin acceso de tabla | CRUD para aprovisionamiento, login, reset y revocación | VERIFICADO LIVE; cero identidades en el postflight |
+| `syncro_auth_rate_buckets` | Sin acceso | Sin acceso de tabla | Reserva atómica y bloqueo | VERIFICADO LIVE |
+| `syncro_auth_audit` | Sin acceso | Sin acceso de tabla | Inserción y consulta operativa protegida | VERIFICADO LIVE |
+| `syncro_auth_context()` | Sin ejecución | Devuelve únicamente el contexto propio vigente | Ejecución permitida | VERIFICADO LIVE |
 
 ## Matriz de las 51 tablas LIVE
 
@@ -164,3 +176,8 @@ P0 es imprescindible resolver, como mínimo:
 
 Hasta resolverlas, sí se pueden preparar fixtures y pruebas negativas locales,
 pero no una migración LIVE segura y completa.
+
+La contención intermedia no inventa esas reglas: sustituye temporalmente la
+exposición anónima por acceso de usuarios autenticados y conserva como riesgo
+residual `CONFIRMADO` el CRUD lateral entre dichos usuarios. No debe confundirse
+con la matriz definitiva.

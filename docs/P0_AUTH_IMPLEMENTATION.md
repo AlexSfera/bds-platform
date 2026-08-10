@@ -28,6 +28,8 @@ ninguno de los flags ejecuta por sí mismo una migración o altera Supabase.
 
 - `GET /api/auth/directory`: directorio mínimo de empleados activos por portal;
   nunca devuelve PIN, correo o coste.
+- `GET /api/auth/employees`: sustituye la lectura directa de `employees` en
+  modo seguro; nunca devuelve PIN y limita campos según rol, ámbito y fila.
 - `POST /api/auth/login`: identificador seleccionado + PIN exacto de seis
   dígitos; comprobación de origen, rate limit atómico y respuesta genérica.
 - `POST /api/auth/token`: renueva la sesión mediante refresh token en cookie.
@@ -168,7 +170,7 @@ node --test tests/auth-supabase-e2e.test.js <contra Supabase local>
 
 Resultado actual:
 
-- 25 pruebas ordinarias superadas y una prueba E2E Supabase adicional superada
+- 28 pruebas ordinarias superadas y una prueba E2E Supabase adicional superada
   cuando se habilita explícitamente el entorno local;
 - 0 pruebas fallidas;
 - sintaxis JavaScript válida;
@@ -200,6 +202,10 @@ Resultado actual:
   anteriores, nuevo login y eventos de auditoría;
 - peticiones anónimas reales a `employees` y `syncro_auth_identities` rechazadas
   por PostgREST con HTTP 401.
+- contención autenticada intermedia aplicada dos veces en una base aislada:
+  `anon` sin acceso, `employees`/`employee_ips` sólo backend, sesión inexistente
+  sin filas ni escritura, sesión vigente con acceso operativo; rollback probado
+  y base temporal retirada.
 
 Las pruebas usan PostgreSQL real y una fixture mínima separada, marcada como
 exclusiva de test, para suplir la ausencia de una migración base versionada de
@@ -212,7 +218,8 @@ crearon identidades ni PIN reales y no se alteraron las tablas operativas.
 
 - resolver las decisiones `[NO DATA]` de la matriz nominal ya creada en
   `docs/P0_RLS_ACCESS_MATRIX.md`;
-- crear y probar policies `authenticated` y sus denegaciones;
+- aplicar la contención autenticada intermedia ya probada y completar después
+  las policies definitivas por rol/fila de la matriz;
 - diseñar grants/policies de columnas para que la lectura general de
   `employees` no entregue PIN, coste o correo fuera de los roles autorizados;
 - preparar el corte de las 59 identidades activas confirmadas en LIVE: todos

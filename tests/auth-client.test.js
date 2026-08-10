@@ -42,4 +42,6 @@ test('all audited browser Supabase fetches use the central authenticated transpo
   const directFetches = shared.match(/(^|[^A-Za-z0-9_])fetch\s*\(/gm) || [];
   assert.equal(directFetches.length, 2, 'shared.js sólo conserva los dos POST internos de correo');
   assert.match(shared, /syncroSupabaseFetch\s*\(/);
+  assert.match(shared, /table === 'employees'.*SyncroAuth\.enabled/s);
+  assert.match(shared, /SyncroAuth\.employees\(\)/);
 });

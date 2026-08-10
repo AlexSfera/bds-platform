@@ -57,6 +57,16 @@
     return Array.isArray(data.employees) ? data.employees : [];
   }
 
+  async function employees(){
+    if(!AUTH_ENABLED) throw authError('Authentication feature is disabled', 404);
+    var token = await getAccessToken(false);
+    var data = await api('/employees', {
+      method:'GET',
+      headers:{ Authorization:'Bearer ' + token }
+    });
+    return Array.isArray(data.employees) ? data.employees : [];
+  }
+
   async function refresh(){
     if(!AUTH_ENABLED) return null;
     if(refreshPromise) return refreshPromise;
@@ -160,6 +170,7 @@
   global.SyncroAuth = Object.freeze({
     get enabled(){ return AUTH_ENABLED; },
     directory:directory,
+    employees:employees,
     login:login,
     changePin:changePin,
     provisionEmployee:provisionEmployee,

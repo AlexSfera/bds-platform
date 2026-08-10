@@ -71,7 +71,12 @@ async function getDB(table) {
   if (_cache[table] && (now - (_cacheTs[table]||0)) < CACHE_TTL) {
     return _cache[table];
   }
-  let data = await dbGetAll(table);
+  let data;
+  if (table === 'employees' && window.SyncroAuth && window.SyncroAuth.enabled) {
+    data = await window.SyncroAuth.employees();
+  } else {
+    data = await dbGetAll(table);
+  }
   // MERGE-BX-01 (Jul 2026): los turnos técnicos de Bitrix NO son turnos
   // operativos. Se excluyen de TODA la app (dashboard, validación, KPIs,
   // recuentos, sumas de horas y guard de 2 turnos/día):
