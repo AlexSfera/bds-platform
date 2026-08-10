@@ -6,8 +6,9 @@
 base Auth aditiva está `VERIFICADO` en LIVE y los dos flags siguen desactivados.
 
 Este estado no significa que `SEC-013` esté corregido en producción. El código
-no se ha desplegado y todavía no se ha realizado el corte de RLS o identidades.
-El hallazgo maestro continúa `PLANIFICADO` hasta completar ese corte.
+preparatorio se desplegó el 10/08/2026 con ambos flags apagados, pero todavía no
+se ha realizado el corte de RLS o identidades. El hallazgo maestro continúa
+`PLANIFICADO` hasta completar ese corte.
 
 ## Protección contra activación accidental
 
@@ -142,7 +143,9 @@ Se documentaron sin valores en `.env.example`:
 Los secretos no deben copiarse al frontend, documentación, logs o repositorio.
 Las seis variables nuevas se configuraron el 10/08/2026 en Vercel para
 Production y Preview. `SYNCRO_AUTH_ENABLED` permanece explícitamente en
-`false`; configurar variables no desplegó código ni activó el flujo nuevo.
+`false`. El commit `4009869` se desplegó después en Preview y Production;
+Vercel informó `Ready` y la comprobación del dominio canónico confirmó
+`SyncroAuth.enabled === false`, portal y aplicación presentes.
 
 La configuración Auth LIVE se verificó el mismo día: longitud mínima de
 password exactamente seis caracteres, alta pública desactivada, enlace manual

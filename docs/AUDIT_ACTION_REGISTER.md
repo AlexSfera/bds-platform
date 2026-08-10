@@ -547,3 +547,7 @@ alcance, la decisión, la modificación, la prueba y el resultado.
   devuelve PIN enviados por correo y separa las entregas presenciales. Pasan 25
   pruebas ordinarias, una E2E Supabase real y todas las comprobaciones de
   sintaxis/whitespace. El corte de RLS, identidades y código sigue pendiente.
+- Commit `4009869` creado, rama `codex/p0-security-containment` publicada y
+  `main` avanzado sin conflicto. Vercel verificó `Ready` tanto en Preview como
+  en Production. El dominio canónico cargó portal y aplicación con
+  `SyncroAuth.enabled === false`; no se activaron identidades ni RLS nuevas.
