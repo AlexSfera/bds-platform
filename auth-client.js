@@ -151,6 +151,53 @@
     return authorizedRequest('/employee', 'DELETE', { employee_id:employeeId });
   }
 
+  async function attachmentApi(path, method, payload){
+    if(!AUTH_ENABLED) throw authError('Authentication feature is disabled', 404);
+    var token = await getAccessToken(false);
+    var response = await nativeFetch('/api/attachments/' + path, {
+      method:method,
+      credentials:'include',
+      headers:{ Authorization:'Bearer ' + token, 'Content-Type':'application/json' },
+      body:JSON.stringify(payload || {})
+    });
+    var data = null;
+    try { data = await response.json(); } catch(_error) {}
+    if(!response.ok) throw authError(data && data.error, response.status);
+    return data || {};
+  }
+
+  async function uploadAttachment(file, table, recordId){
+    var signed = await attachmentApi('sign-upload', 'POST', {
+      table:table, record_id:recordId, name:file.name, type:file.type, size:file.size
+    });
+    if(!signed.url || !signed.path) throw authError('Invalid signed upload', 502);
+    var uploadUrl = signed.url;
+    if(signed.token && uploadUrl.indexOf('token=') < 0){
+      uploadUrl += (uploadUrl.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(signed.token);
+    }
+    var response = await nativeFetch(uploadUrl, {
+      method:'PUT',
+      headers:{ 'Content-Type':file.type, 'x-upsert':'false' },
+      body:file
+    });
+    if(!response.ok) throw authError('Attachment upload failed', response.status);
+    return { path:signed.path };
+  }
+
+  async function attachmentUrl(table, recordId, path){
+    var signed = await attachmentApi('sign-download', 'POST', {
+      table:table, record_id:recordId, path:path
+    });
+    if(!signed.url) throw authError('Invalid signed download', 502);
+    return signed.url;
+  }
+
+  async function deleteAttachment(table, recordId, path){
+    return attachmentApi('object', 'DELETE', {
+      table:table, record_id:recordId, path:path
+    });
+  }
+
   async function supabaseFetch(input, init){
     if(!AUTH_ENABLED) return nativeFetch(input, init);
     var token = await getAccessToken(false);
@@ -177,6 +224,9 @@
     updateEmployee:updateEmployee,
     setEmployeeStatus:setEmployeeStatus,
     deleteEmployee:deleteEmployee,
+    uploadAttachment:uploadAttachment,
+    attachmentUrl:attachmentUrl,
+    deleteAttachment:deleteAttachment,
     logout:logout,
     refresh:refresh,
     restore:restore,

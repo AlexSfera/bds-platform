@@ -32,7 +32,7 @@ test('legacy transport remains available if the cutover flag is rolled back', as
 
 test('all audited browser Supabase fetches use the central authenticated transport', async () => {
   const files = [
-    'adjuntos.js', 'caja.js', 'dashboard.js', 'faults.js', 'incentivos.js',
+    'caja.js', 'dashboard.js', 'faults.js', 'incentivos.js',
     'informes.js', 'mantenimiento.js', 'merma.js', 'mi_rendimiento.js',
     'posmews_ventas.js', 'recepcion.js', 'syncrolab.js', 'tareas.js',
     'validacion.js'
@@ -42,6 +42,12 @@ test('all audited browser Supabase fetches use the central authenticated transpo
     assert.doesNotMatch(source, /(^|[^A-Za-z0-9_])fetch\s*\(/, file);
     assert.match(source, /syncroSupabaseFetch\s*\(/, file);
   }
+
+  const attachments = await readFile(new URL('../adjuntos.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(attachments, /(^|[^A-Za-z0-9_])fetch\s*\(/);
+  assert.match(attachments, /SyncroAuth\.uploadAttachment\(/);
+  assert.match(attachments, /SyncroAuth\.attachmentUrl\(/);
+  assert.match(attachments, /SyncroAuth\.deleteAttachment\(/);
 
   const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
   const directFetches = shared.match(/(^|[^A-Za-z0-9_])fetch\s*\(/gm) || [];

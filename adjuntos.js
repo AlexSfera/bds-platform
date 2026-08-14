@@ -61,42 +61,41 @@ var ADJ_MAX_SIZE  = 10 * 1024 * 1024; // 10 MB por archivo
 // ── SUPABASE STORAGE API ──────────────────────────────────────────────
 
 async function adjuntoUpload(file, table, recordId){
-  var safeName = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_');
-  var ts = Date.now();
-  var path = table + '/' + recordId + '/' + ts + '_' + safeName;
-  var res = await syncroSupabaseFetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': file.type || 'application/octet-stream',
-      'x-upsert': 'true'
-    },
-    body: file
-  });
-  if(!res.ok){
-    var errText = '';
-    try { errText = (await res.json()).message || ''; } catch(e){}
-    throw new Error('Upload failed: ' + res.status + ' ' + errText);
-  }
+  if(!window.SyncroAuth || !window.SyncroAuth.enabled) throw new Error('Se requiere una sesión válida');
+  var signed = await window.SyncroAuth.uploadAttachment(file, table, recordId);
   return {
-    name: file.name, path: path, size: file.size,
+    name: file.name, path: signed.path, size: file.size,
     type: file.type || 'application/octet-stream',
     uploaded_by: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.nombre : 'Sistema',
     uploaded_at: localTs()
   };
 }
 
-async function adjuntoRemove(path){
-  var res = await syncroSupabaseFetch(SUPABASE_URL + '/storage/v1/object/' + ADJ_BUCKET + '/' + path, {
-    method: 'DELETE',
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  });
-  return res.ok;
+async function adjuntoSanitizeFile(file){
+  if(!file || !file.type || file.type.indexOf('image/') !== 0) return file;
+  var bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation:'from-image' });
+    var canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    var context = canvas.getContext('2d', { alpha:file.type !== 'image/jpeg' });
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    var safeType = file.type === 'image/png' ? 'image/png' : file.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+    var blob = await new Promise(function(resolve){ canvas.toBlob(resolve, safeType, 0.92); });
+    if(!blob) throw new Error('No se pudo limpiar la imagen');
+    return new File([blob], file.name, { type:safeType, lastModified:Date.now() });
+  } catch(error){
+    if(bitmap && bitmap.close) bitmap.close();
+    throw new Error('No se pudo retirar la información EXIF de ' + file.name);
+  }
 }
 
-function adjuntoPublicUrl(path){
-  return SUPABASE_URL + '/storage/v1/object/public/' + ADJ_BUCKET + '/' + path;
+async function adjuntoRemove(path, table, recordId){
+  if(!window.SyncroAuth || !window.SyncroAuth.enabled) throw new Error('Se requiere una sesión válida');
+  await window.SyncroAuth.deleteAttachment(table, recordId, path);
+  return true;
 }
 
 // ── DB: leer y guardar adjuntos de un registro ────────────────────────
@@ -112,7 +111,8 @@ async function adjuntoGetFromRecord(table, recordId){
 }
 
 async function adjuntoSaveToRecord(table, recordId, adjuntosArray){
-  await dbUpdate(table, recordId, { adjuntos: JSON.stringify(adjuntosArray), updated_at: localTs() });
+  var result = await dbUpdate(table, recordId, { adjuntos: JSON.stringify(adjuntosArray), updated_at: localTs() });
+  if(result === null) throw new Error('No se pudieron guardar los metadatos del adjunto');
   invalidateCache(table);
 }
 
@@ -127,14 +127,22 @@ async function adjuntoUploadBatch(files, table, recordId){
   }
   var newAdj = [];
   for(var i = 0; i < files.length; i++){
-    var f = files[i];
+    var f;
+    try { f = await adjuntoSanitizeFile(files[i]); }
+    catch(error){ toast(error.message, 'err'); continue; }
     if(f.size > ADJ_MAX_SIZE){ toast(f.name + ': excede 10 MB', 'err'); continue; }
     try { newAdj.push(await adjuntoUpload(f, table, recordId)); }
     catch(e){ toast('Error subiendo ' + f.name + ': ' + e.message, 'err'); }
   }
   if(!newAdj.length) return existing;
   var merged = existing.concat(newAdj);
-  await adjuntoSaveToRecord(table, recordId, merged);
+  try { await adjuntoSaveToRecord(table, recordId, merged); }
+  catch(error){
+    for(var j = 0; j < newAdj.length; j++){
+      try { await adjuntoRemove(newAdj[j].path, table, recordId); } catch(_cleanupError){}
+    }
+    throw error;
+  }
   auditLog('ADJUNTO_UPLOAD', table + '/' + recordId + ' — ' + newAdj.map(function(a){ return a.name; }).join(', '));
   toast(newAdj.length + ' archivo(s) adjuntado(s)', 'ok');
   return merged;
@@ -143,8 +151,12 @@ async function adjuntoUploadBatch(files, table, recordId){
 async function adjuntoRemoveFromRecord(table, recordId, path){
   var existing = await adjuntoGetFromRecord(table, recordId);
   var filtered = existing.filter(function(a){ return a.path !== path; });
-  await adjuntoRemove(path);
   await adjuntoSaveToRecord(table, recordId, filtered);
+  try { await adjuntoRemove(path, table, recordId); }
+  catch(error){
+    try { await adjuntoSaveToRecord(table, recordId, existing); } catch(_restoreError){}
+    throw error;
+  }
   auditLog('ADJUNTO_DELETE', table + '/' + recordId + ' — ' + path.split('/').pop());
   toast('Archivo eliminado', 'ok');
   return filtered;
@@ -232,13 +244,12 @@ function adjuntoRenderViewer(adjuntos, table, recordId, editable){
     html += '<div class="adj-list">';
     for(var i = 0; i < adjuntos.length; i++){
       var a = adjuntos[i];
-      var url = adjuntoPublicUrl(a.path);
       var sizeStr = a.size < 1024 ? a.size + ' B' : a.size < 1048576 ? Math.round(a.size / 1024) + ' KB' : (a.size / 1048576).toFixed(1) + ' MB';
       var isImg = a.type && a.type.indexOf('image/') === 0;
       html += '<div class="adj-item">';
-      if(isImg) html += '<img class="adj-thumb" src="' + url + '" alt="" loading="lazy">';
+      if(isImg) html += '<img class="adj-thumb" data-adj-private-src="' + _adjEsc(a.path) + '" alt="" loading="lazy">';
       else html += _adjFileIcon(a.type, a.name);
-      html += '<span class="adj-item-name"><a href="' + url + '" target="_blank" rel="noopener">' + _adjEsc(a.name) + '</a></span>';
+      html += '<span class="adj-item-name"><a href="#" data-adj-private-href="' + _adjEsc(a.path) + '">' + _adjEsc(a.name) + '</a></span>';
       html += '<span class="adj-item-size">' + sizeStr + '</span>';
       if(editable) html += '<button class="adj-item-del" onclick="adjuntoDeleteFromViewer(\'' + table + '\',\'' + recordId + '\',\'' + _adjEsc(a.path) + '\')" title="Eliminar">🗑</button>';
       html += '</div>';
@@ -257,6 +268,25 @@ function adjuntoRenderViewer(adjuntos, table, recordId, editable){
   }
   html += '</div>';
   return html;
+}
+
+async function _adjHydratePrivateUrls(container, table, recordId){
+  if(!container || !window.SyncroAuth || !window.SyncroAuth.enabled) return;
+  var nodes = container.querySelectorAll('[data-adj-private-href],[data-adj-private-src]');
+  for(var i = 0; i < nodes.length; i++){
+    var node = nodes[i];
+    var path = node.getAttribute('data-adj-private-href') || node.getAttribute('data-adj-private-src');
+    try {
+      var url = await window.SyncroAuth.attachmentUrl(table, recordId, path);
+      if(node.hasAttribute('data-adj-private-href')){
+        node.href = url; node.target = '_blank'; node.rel = 'noopener';
+      } else {
+        node.src = url;
+      }
+    } catch(_error){
+      if(node.hasAttribute('data-adj-private-href')) node.title = 'No se pudo autorizar la descarga';
+    }
+  }
 }
 
 async function adjuntoUploadFromViewer(table, recordId, input){
@@ -283,6 +313,7 @@ async function _adjRefreshViewer(table, recordId){
   containers.forEach(function(c){
     var editable = c.getAttribute('data-adj-editable') === 'true';
     c.innerHTML = adjuntoRenderViewer(adjuntos, table, recordId, editable);
+    _adjHydratePrivateUrls(c, table, recordId);
     _adjSetupDragDrop(c, table, recordId);
   });
 }
@@ -533,6 +564,7 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
     adjContainer.setAttribute('data-adj-viewer', table + '-' + id);
     adjContainer.setAttribute('data-adj-editable', editable ? 'true' : 'false');
     adjContainer.innerHTML = adjuntoRenderViewer(adjuntos, table, id, editable);
+    _adjHydratePrivateUrls(adjContainer, table, id);
     body.appendChild(adjContainer);
     _adjSetupDragDrop(adjContainer, table, id);
   };
@@ -603,6 +635,7 @@ async function _adjToggleTaskFiles(taskId, card){
   panel.setAttribute('data-adj-editable', editable ? 'true' : 'false');
   panel.style.cssText = 'padding:8px 0;border-top:1px solid var(--border);margin-top:8px;';
   panel.innerHTML = adjuntoRenderViewer(adjuntos, 'tareas', taskId, editable);
+  _adjHydratePrivateUrls(panel, 'tareas', taskId);
   card.appendChild(panel);
   _adjSetupDragDrop(panel, 'tareas', taskId);
 }
