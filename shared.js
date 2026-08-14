@@ -757,6 +757,7 @@ function getScreens(rol){
     incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
     miRendimiento:{id:'mi-rendimiento', label:'📈 Mi Rendimiento'},
     informes:    {id:'informes',    label:'📊 Informes'},
+    horasMes:    {id:'horas-mes',   label:'⏱ Horas Mensuales'},
     checklist:   {id:'chk-mod',     label:'✅ Checklist', action:'openChkMidDay'},
     nota:        {id:'notas-mod',   label:'💬 Nota'}
   };
@@ -772,7 +773,8 @@ function getScreens(rol){
       {id:'liquidacion-entr', label:'💳 Liquidación'},
       {sep:true,label:'MANAGER BAR',dropdown:true},
       ITEMS.fichaje, ITEMS.dashboard,
-      ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.informes
+      ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.informes,
+      ITEMS.horasMes
     ];
   }
 
@@ -1118,6 +1120,7 @@ async function showScreen(id){
   if(id==='mi-rendimiento' && typeof renderMiRendimiento==='function')  renderMiRendimiento();
   if(id==='liquidacion-entr' && typeof renderLiquidacionEntr==='function') renderLiquidacionEntr();
   if(id==='informes'    && typeof renderInformes==='function')           renderInformes();
+  if(id==='horas-mes'   && typeof renderHorasMensuales==='function')     renderHorasMensuales();
   updateDots();
 }
 async function updateDots(){
