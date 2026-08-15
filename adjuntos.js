@@ -281,9 +281,22 @@ async function _adjHydratePrivateUrls(container, table, recordId){
       if(node.hasAttribute('data-adj-private-href')){
         node.href = url; node.target = '_blank'; node.rel = 'noopener';
       } else {
+        node.addEventListener('error', function(){
+          this.style.display = 'none';
+          var item=this.closest('.adj-item');
+          if(item) item.setAttribute('data-adj-error','No se pudo mostrar la vista previa');
+        }, {once:true});
         node.src = url;
       }
     } catch(_error){
+      var item=node.closest('.adj-item');
+      if(item && !item.querySelector('.adj-load-error')){
+        var warning=document.createElement('span');
+        warning.className='adj-load-error';
+        warning.style.cssText='color:var(--red);font-size:10px;';
+        warning.textContent='No se pudo cargar';
+        item.appendChild(warning);
+      }
       if(node.hasAttribute('data-adj-private-href')) node.title = 'No se pudo autorizar la descarga';
     }
   }

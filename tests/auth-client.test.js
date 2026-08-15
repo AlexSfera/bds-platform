@@ -56,3 +56,12 @@ test('all audited browser Supabase fetches use the central authenticated transpo
   assert.match(shared, /table === 'employees'.*SyncroAuth\.enabled/s);
   assert.match(shared, /SyncroAuth\.employees\(\)/);
 });
+
+test('validation exposes management actions for gestiones and tareas', async () => {
+  const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
+  const tareas = await readFile(new URL('../tareas.js', import.meta.url), 'utf8');
+  assert.match(shared, /bGestionEstadoClick\(g\.estado\|\|'Abierta',g\.id\)/);
+  assert.match(shared, /bTaskEstadoClick\(t\.estado,t\.id\)/);
+  assert.match(tareas, /function openTaskStateModal\(taskId\)/);
+  assert.match(tareas, /async function taskStateAction\(taskId,newState\)/);
+});
