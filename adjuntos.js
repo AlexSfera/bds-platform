@@ -501,7 +501,7 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
         var gRec = null;
         for(var g = 0; g < gg.length; g++){ if(gg[g].shift_id === newShiftId){ gRec = gg[g]; break; } }
         if(gRec) await adjuntoUploadBatch(gFiles, 'gestiones', gRec.id);
-      } catch(e){ console.error('Adjuntos gestión error:', e); }
+      } catch(e){ console.error('Adjuntos gestión error:', e); toast('El turno se guardó, pero el adjunto de gestión no: '+e.message,'err'); }
     }
     if(iFiles.length){
       try {
@@ -510,7 +510,7 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
         var iRec = null;
         for(var k = ii.length - 1; k >= 0; k--){ if(ii[k].shift_id === newShiftId){ iRec = ii[k]; break; } }
         if(iRec) await adjuntoUploadBatch(iFiles, 'incidencias', iRec.id);
-      } catch(e){ console.error('Adjuntos incidencia error:', e); }
+      } catch(e){ console.error('Adjuntos incidencia error:', e); toast('El turno se guardó, pero el adjunto de incidencia no: '+e.message,'err'); }
     }
   };
 })();
@@ -525,8 +525,33 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
     await _origSaveTask.apply(this, arguments);
     var last = window._adjLastInserted;
     if(tFiles.length && last && last.table === 'tareas'){
-      try { await adjuntoUploadBatch(tFiles, 'tareas', last.id); } catch(e){ console.error('Adjuntos tarea error:', e); }
+      try { await adjuntoUploadBatch(tFiles, 'tareas', last.id); }
+      catch(e){ console.error('Adjuntos tarea error:', e); toast('La tarea se guardó, pero el adjunto no: '+e.message,'err'); }
     }
+  };
+})();
+
+// ── Wrapper openTaskStateModal — adjuntos en Validación / Tareas ─────
+(function(){
+  if(typeof window.openTaskStateModal !== 'function') return;
+  var _orig = window.openTaskStateModal;
+  window.openTaskStateModal = async function(taskId){
+    await _orig.apply(this, arguments);
+    var body = document.getElementById('task-state-body');
+    if(!body || body.querySelector('[data-adj-viewer]')) return;
+    var tareas = await getDB('tareas');
+    var task = (tareas||[]).find(function(t){ return t.id === taskId; });
+    if(!task) return;
+    var editable = false;
+    if(typeof canActAsAdmin === 'function') editable = canActAsAdmin(currentUser);
+    if(!editable && typeof canProgressTask === 'function') editable = canProgressTask(task);
+    var viewer = document.createElement('div');
+    viewer.setAttribute('data-adj-viewer', 'tareas-' + taskId);
+    viewer.setAttribute('data-adj-editable', editable ? 'true' : 'false');
+    viewer.innerHTML = adjuntoRenderViewer(await adjuntoGetFromRecord('tareas', taskId), 'tareas', taskId, editable);
+    body.appendChild(viewer);
+    _adjHydratePrivateUrls(viewer, 'tareas', taskId);
+    _adjSetupDragDrop(viewer, 'tareas', taskId);
   };
 })();
 
@@ -580,7 +605,8 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
     await _orig.apply(this, arguments);
     var last = window._adjLastInserted;
     if(files.length && last && last.table === 'incidencias'){
-      try { await adjuntoUploadBatch(files, 'incidencias', last.id); } catch(e){ console.error(e); }
+      try { await adjuntoUploadBatch(files, 'incidencias', last.id); }
+      catch(e){ console.error(e); toast('La incidencia se guardó, pero el adjunto no: '+e.message,'err'); }
     }
   };
 })();

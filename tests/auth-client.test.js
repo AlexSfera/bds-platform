@@ -71,6 +71,8 @@ test('gestion modal renders attachments and legacy records are patched compatibl
   assert.match(attachments, /window\.openItemModal = async function\(type, id\)/);
   assert.match(attachments, /data-adj-viewer/);
   assert.match(attachments, /adjuntoRenderViewer\(adjuntos, table, id, editable\)/);
+  assert.match(attachments, /window\.openTaskStateModal = async function\(taskId\)/);
+  assert.match(attachments, /adjuntoGetFromRecord\('tareas', taskId\)/);
   assert.match(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\) \}\)/);
   assert.doesNotMatch(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\), updated_at:/);
 });
