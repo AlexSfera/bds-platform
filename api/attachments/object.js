@@ -27,7 +27,13 @@ export default async function handler(req) {
     if (!target || !path) return jsonResponse({ error: 'Invalid attachment' }, 400);
     if (!await requireReadableRecord(token, target)) return jsonResponse({ error: 'Forbidden' }, 403);
     await deleteAttachmentObject(path);
-    await recordAttachmentEvent('ATTACHMENT_OBJECT_DELETE', session.profile, target, { path });
+    try {
+      await recordAttachmentEvent('ATTACHMENT_OBJECT_DELETE', session.profile, target, { path });
+    } catch (auditError) {
+      // El objeto ya fue eliminado. No comunicar un fallo falso ni provocar
+      // que el cliente restaure metadatos que apuntan a un archivo inexistente.
+      console.warn('ATTACHMENT_DELETE_AUDIT_FAILED', auditError?.message || 'unknown');
+    }
     return jsonResponse({ deleted: true });
   } catch (error) {
     if (error.message === 'REQUEST_TOO_LARGE' || error.message === 'INVALID_JSON') return jsonResponse({ error: 'Invalid request' }, 400);

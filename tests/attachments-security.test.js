@@ -65,6 +65,8 @@ function mockAuthenticatedStorage() {
     if (url.includes('/storage/v1/object/sign/')) return json({
       signedURL: '/object/sign/adjuntos/tareas/task1/file.jpg?token=download-token'
     });
+    if (url.includes('/storage/v1/object/adjuntos/') && init.method === 'DELETE') return json({});
+    if (url.includes('/rest/v1/syncro_auth_audit')) return json({ error: 'audit unavailable' }, 503);
     throw new Error('Unexpected request: ' + url);
   };
   return calls;
@@ -147,6 +149,19 @@ test('authenticated endpoints return absolute signed Storage URLs after checking
   const recordChecks = calls.filter(call => call.url.includes('/rest/v1/tareas?'));
   assert.equal(recordChecks.every(call => call.url.includes('select=id&limit=1')), true);
   assert.equal(recordChecks.some(call => call.url.includes('updated_at')), false);
+});
+
+test('attachment deletion succeeds when the secondary audit write fails', async () => {
+  const calls = mockAuthenticatedStorage();
+  const req = new Request('https://syncro.example/api/attachments/object', {
+    method: 'DELETE',
+    headers: { origin: 'https://syncro.example', authorization: 'Bearer ' + token() },
+    body: JSON.stringify({ table: 'tareas', record_id: 'task1', path: 'tareas/task1/file.jpg' })
+  });
+  const response = await objectHandler(req);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).deleted, true);
+  assert.equal(calls.some(call => call.url.includes('/storage/v1/object/adjuntos/')), true);
 });
 
 test('migration makes adjuntos private with limits and keeps a reconstructable rollback', async () => {
