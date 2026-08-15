@@ -65,3 +65,12 @@ test('validation exposes management actions for gestiones and tareas', async () 
   assert.match(tareas, /function openTaskStateModal\(taskId\)/);
   assert.match(tareas, /async function taskStateAction\(taskId,newState\)/);
 });
+
+test('gestion modal renders attachments and legacy records are patched compatibly', async () => {
+  const attachments = await readFile(new URL('../adjuntos.js', import.meta.url), 'utf8');
+  assert.match(attachments, /window\.openItemModal = async function\(type, id\)/);
+  assert.match(attachments, /data-adj-viewer/);
+  assert.match(attachments, /adjuntoRenderViewer\(adjuntos, table, id, editable\)/);
+  assert.match(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\) \}\)/);
+  assert.doesNotMatch(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\), updated_at:/);
+});

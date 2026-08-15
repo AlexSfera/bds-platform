@@ -111,7 +111,9 @@ async function adjuntoGetFromRecord(table, recordId){
 }
 
 async function adjuntoSaveToRecord(table, recordId, adjuntosArray){
-  var result = await dbUpdate(table, recordId, { adjuntos: JSON.stringify(adjuntosArray), updated_at: localTs() });
+  // Algunas gestiones legacy no tienen updated_at. El adjunto sólo requiere
+  // actualizar su propio campo; añadir columnas opcionales rompe todo el PATCH.
+  var result = await dbUpdate(table, recordId, { adjuntos: JSON.stringify(adjuntosArray) });
   if(result === null) throw new Error('No se pudieron guardar los metadatos del adjunto');
   invalidateCache(table);
 }
@@ -538,8 +540,33 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
     await _orig.apply(this, arguments);
     var last = window._adjLastInserted;
     if(files.length && last && last.table === 'gestiones'){
-      try { await adjuntoUploadBatch(files, 'gestiones', last.id); } catch(e){ console.error(e); }
+      try { await adjuntoUploadBatch(files, 'gestiones', last.id); }
+      catch(e){ console.error(e); toast('La gestión se guardó, pero el adjunto no: '+e.message,'err'); }
     }
+  };
+})();
+
+// ── Wrapper openItemModal — muestra adjuntos en el modal operativo ───
+(function(){
+  if(typeof window.openItemModal !== 'function') return;
+  var _orig = window.openItemModal;
+  window.openItemModal = async function(type, id){
+    await _orig.apply(this, arguments);
+    if(type !== 'gestion' && type !== 'incidencia') return;
+    var table = type === 'gestion' ? 'gestiones' : 'incidencias';
+    var body = document.getElementById('mi-body');
+    if(!body || body.querySelector('[data-adj-viewer]')) return;
+    var adjuntos = await adjuntoGetFromRecord(table, id);
+    var editable = false;
+    if(typeof canActAsAdmin === 'function') editable = canActAsAdmin(currentUser);
+    if(!editable && typeof isSupervisor === 'function') editable = isSupervisor(currentUser);
+    var viewer = document.createElement('div');
+    viewer.setAttribute('data-adj-viewer', table + '-' + id);
+    viewer.setAttribute('data-adj-editable', editable ? 'true' : 'false');
+    viewer.innerHTML = adjuntoRenderViewer(adjuntos, table, id, editable);
+    body.appendChild(viewer);
+    _adjHydratePrivateUrls(viewer, table, id);
+    _adjSetupDragDrop(viewer, table, id);
   };
 })();
 
