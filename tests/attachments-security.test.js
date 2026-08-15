@@ -144,6 +144,9 @@ test('authenticated endpoints return absolute signed Storage URLs after checking
   assert.match((await downloadRes.json()).url, /^https:\/\/project\.supabase\.co\/storage\/v1\/object\/sign\//);
 
   assert.equal(calls.some(call => call.url.includes('/rest/v1/tareas?')), true);
+  const recordChecks = calls.filter(call => call.url.includes('/rest/v1/tareas?'));
+  assert.equal(recordChecks.every(call => call.url.includes('select=id&limit=1')), true);
+  assert.equal(recordChecks.some(call => call.url.includes('updated_at')), false);
 });
 
 test('migration makes adjuntos private with limits and keeps a reconstructable rollback', async () => {
