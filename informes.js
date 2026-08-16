@@ -1640,7 +1640,7 @@ var _infEntrConfig = {};
 
 // Clasifica una actividad (col F) + créditos (col J) → tipo KPI + factor.
 // Devuelve null si la fila debe descartarse.
-function _infEntrClasificar(actividad, credits){
+function _infEntrClasificar(actividad, credits, instructor){
   var a = String(actividad||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
   var j = parseInt(credits, 10); if(isNaN(j)) j = 0;
 
@@ -1659,17 +1659,27 @@ function _infEntrClasificar(actividad, credits){
   // PT 30 min en piscina (solo si hubo reserva real)
   if(/piscina\s*pt.*30|pt\s*30/.test(a)){ if(j <= 0) return null; return {kpi:'pt_30', factor:0.5, efectiva:true}; }
 
-  // PT 50 min en piscina → PT normal x1
+  // PT 50 min en piscina → credits>=2 DUO (1.5), credits=1 PT (1.0)
   if(/piscina\s*pt.*50|pt\s*50/.test(a)) {
-    if(j <= 0) return null;            // no-show
+    if(j <= 0) return null;
+    if(j >= 2) return {kpi:'pt_duo', factor:1.5, efectiva:true};
     return {kpi:'pt', factor:1, efectiva:true};
   }
 
   // Entrenamiento personal → J decide individual / DUO / no-show
   if(/entrenamiento\s*personal/.test(a)) {
     if(j <= 0) return null;            // no-show, no cuenta
-    if(j === 2) return {kpi:'pt_duo', factor:1.5, efectiva:true};
+    if(j >= 2) return {kpi:'pt_duo', factor:1.5, efectiva:true};
     return {kpi:'pt', factor:1, efectiva:true};   // j=1 (y cualquier otro >0)
+  }
+
+  // Oleksandra Melnykova: Clase Natación + Swim Ladies siempre efectivas
+  if(instructor){
+    var instrN = String(instructor).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    if(/oleksandra\s*melnykova/.test(instrN) && /clase\s*natacion|swim\s*ladies/.test(a)){
+      if(j <= 0) return null;
+      return {kpi:'dir_efectiva', factor:1, efectiva:true};
+    }
   }
 
   // Resto = clase dirigida (adultos/agua/etc.) → efectiva si J>=4
@@ -1739,7 +1749,7 @@ function _infParseEntrenadores(text, employees){
     if(cols.length<=Math.max(cFecha,cAct,cInstr,cCred)) continue;
     var instrRaw=(cols[cInstr]||'').trim().replace(/\s+/g,' ');
     if(!instrRaw){ sinInstr++; continue; }            // reserva sin instructor
-    var cls=_infEntrClasificar(cols[cAct], cols[cCred]);
+    var cls=_infEntrClasificar(cols[cAct], cols[cCred], instrRaw);
     if(!cls){ descartadas++; continue; }
     var ym=_infEntrYM(cols[cFecha]);
     if(!ym){ descartadas++; continue; }
