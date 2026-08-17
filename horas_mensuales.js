@@ -1,23 +1,36 @@
 // ═══════════════════════════════════════════════════════════════════════
 // HORAS_MENSUALES.JS · Panel de horas mensuales trabajadas
-// v2 (Ago 2026) — Sólo admin. Botón backfill integrado.
+// v3 (Ago 2026) — Selector empleado + leyenda interactiva + tooltips
 //
 // DOS VISTAS con pestañas:
 //   1. "Por trabajador (mes)"  → barras horizontales + línea vertical media
-//   2. "Evolución mensual"     → líneas por empleado + línea media global
+//                                 + orden configurable (más, menos, distancia)
+//                                 + tooltip por barra
+//   2. "Evolución mensual"     → líneas por empleado + media global
+//                                 + leyenda lateral con checkboxes de aislado
+//                                 + tooltip por punto
 //
-// Botón BACKFILL: sólo visible para admin. Ejecuta backfill histórico
-// enero-agosto 2026 desde el navegador. Confirmación tipeando "BACKFILL".
+// SELECTOR EMPLEADO:
+//   Filtro global. Cuando se elige uno concreto:
+//     · Vista "Por trabajador — mes" → una barra grande + KPIs personales
+//     · Vista "Evolución mensual"    → sólo su línea + línea gris de media
 //
-// Cero escritura sobre shifts. Datos vía /api/monthly-hours.
+// Cero escritura. Sólo lee /api/monthly-hours.
 // ═══════════════════════════════════════════════════════════════════════
 
 var _hmData        = null;
 var _hmActiveTab   = 'porMes';
 var _hmSelectedYm  = '';
 var _hmFilterArea  = '';
+var _hmSelectedEmp = '';    // '' = todos, o employee.id
 var _hmIncluirBaja = false;
+var _hmSortMode    = 'desc'; // 'desc' | 'asc' | 'dist'
+var _hmIsolatedEmp = '';     // en vista evolución, aislar un empleado por clic en leyenda
 var _hmBackfillEnCurso = false;
+
+// Paleta cíclica, expuesta a nivel módulo para que la leyenda use los
+// mismos colores que el SVG.
+var HM_PALETTE = ['#60a5fa','#c084fc','#22d3ee','#fbbf24','#34d399','#f87171','#fb923c','#a78bfa','#f472b6','#67e8f9','#facc15','#4ade80'];
 
 async function renderHorasMensuales(){
   var el = document.getElementById('horas-mes-content');
@@ -30,12 +43,9 @@ async function renderHorasMensuales(){
     await _hmLoadData(false);
     _hmRender();
   } catch (e) {
-    // Si el endpoint devuelve error, mostrar CTA para backfill si hay poca
-    // data (probable que aún no se haya lanzado).
-    var msg = String(e.message || e);
     el.innerHTML = '<div class="card">'
       + '<p style="color:var(--red);padding:20px 0;">'
-      +   '❌ Error cargando datos: ' + _hmEsc(msg)
+      +   '❌ Error cargando datos: ' + _hmEsc(String(e.message || e))
       + '</p>'
       + '<button class="btn" onclick="renderHorasMensuales()">Reintentar</button>'
       + '</div>';
@@ -81,21 +91,45 @@ function _hmRender(){
          + '>' + _hmMonthLabel(ym) + '</option>';
   }).join('');
 
+  // Empleados disponibles según área e "incluir bajas" — ordenados alfabéticamente
+  var empsDisponibles = _hmFilterEmployees();
+  var empOpts = '<option value="">Todos los empleados</option>'
+    + empsDisponibles
+        .slice()
+        .sort(function(a,b){ return a.nombre.localeCompare(b.nombre, 'es'); })
+        .map(function(e){
+          return '<option value="' + _hmEsc(e.id) + '"'
+               + (e.id === _hmSelectedEmp ? ' selected' : '')
+               + '>' + _hmEsc(e.nombre)
+               + (e.estado !== 'Activo' ? ' · ' + e.estado : '')
+               + '</option>';
+        }).join('');
+
   var meta = _hmData.cache === 'hit' ? '📦 caché servidor' : '🔄 recalculado';
   var nRecords = (_hmData.n_records != null) ? _hmData.n_records : '?';
 
-  // Aviso si hay pocos datos (probable backfill pendiente)
-  var avisoBackfill = '';
   var hayHistoria = _hmData.employees.some(function(e){
     return (e.monthly['2026-01'] || 0) > 0 || (e.monthly['2026-02'] || 0) > 0;
   });
-  if(!hayHistoria){
-    avisoBackfill = ''
-      + '<div style="background:rgba(251,191,36,.1);border:1px solid var(--amber);border-radius:6px;'
-      +      'padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--amber);">'
-      +   '⚠ <strong>Faltan datos históricos.</strong> Sólo se ven registros del cron nocturno '
-      +   '(desde julio 2026). Para ver enero-junio, ejecuta el backfill una vez con el botón '
-      +   '<strong>⚙ Backfill histórico</strong>.'
+  var avisoBackfill = hayHistoria ? '' : ''
+    + '<div style="background:rgba(251,191,36,.1);border:1px solid var(--amber);border-radius:6px;'
+    +      'padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--amber);">'
+    +   '⚠ <strong>Faltan datos históricos.</strong> Sólo se ven registros del cron nocturno '
+    +   '(desde julio 2026). Para ver enero-junio, ejecuta el backfill una vez con el botón '
+    +   '<strong>⚙ Backfill histórico</strong>.'
+    + '</div>';
+
+  // Ordenación (sólo en vista Por Trabajador)
+  var ordenWrap = '';
+  if(_hmActiveTab === 'porMes' && !_hmSelectedEmp){
+    var sortOpts = ''
+      + '<option value="desc"' + (_hmSortMode==='desc' ? ' selected' : '') + '>Más horas ↓</option>'
+      + '<option value="asc"'  + (_hmSortMode==='asc'  ? ' selected' : '') + '>Menos horas ↓</option>'
+      + '<option value="dist"' + (_hmSortMode==='dist' ? ' selected' : '') + '>Distancia a la media</option>';
+    ordenWrap = ''
+      + '<div class="fg" style="min-width:180px;">'
+      +   '<label>Ordenar por</label>'
+      +   '<select onchange="_hmOnSort(this.value)">' + sortOpts + '</select>'
       + '</div>';
   }
 
@@ -107,11 +141,16 @@ function _hmRender(){
     +       '<label>Área</label>'
     +       '<select id="hm-area" onchange="_hmOnArea(this.value)">' + areaOpts + '</select>'
     +     '</div>'
+    +     '<div class="fg" style="min-width:220px;flex:1.5;">'
+    +       '<label>Empleado</label>'
+    +       '<select id="hm-emp" onchange="_hmOnEmp(this.value)">' + empOpts + '</select>'
+    +     '</div>'
     +     '<div class="fg" id="hm-month-wrap" style="min-width:170px;flex:1;'
     +           (_hmActiveTab === 'porMes' ? '' : 'display:none;') + '">'
     +       '<label>Mes</label>'
     +       '<select id="hm-month" onchange="_hmOnMonth(this.value)">' + monthOpts + '</select>'
     +     '</div>'
+    +     ordenWrap
     +     '<div class="fg" style="min-width:170px;">'
     +       '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'
     +         '<input type="checkbox" id="hm-baja"' + (_hmIncluirBaja ? ' checked' : '') + ' onchange="_hmOnBaja(this.checked)"/>'
@@ -134,7 +173,12 @@ function _hmRender(){
     +   '<div id="hm-tab-body" style="padding:16px;">'
     +     (_hmActiveTab === 'porMes' ? _hmRenderPorMes() : _hmRenderEvolucion())
     +   '</div>'
-    + '</div>';
+    + '</div>'
+    // Contenedor global del tooltip (fuera del SVG para posicionarlo con clientX/Y)
+    + '<div id="hm-tooltip" style="position:fixed;pointer-events:none;background:var(--bg2);'
+    +      'border:1px solid var(--amber);border-radius:6px;padding:8px 12px;'
+    +      'font-family:var(--font-mono);font-size:12px;color:var(--text);'
+    +      'box-shadow:var(--shadow);z-index:9998;display:none;white-space:nowrap;"></div>';
 }
 
 function _hmTabBtn(id, label){
@@ -167,10 +211,15 @@ function _hmUniqueAreas(){
 // ─── VISTA 1: BARRAS POR TRABAJADOR EN UN MES ────────────────────────
 function _hmRenderPorMes(){
   var ym = _hmSelectedYm;
+
+  // Modo empleado individual
+  if(_hmSelectedEmp){
+    return _hmRenderPorMesEmpleadoIndividual(ym);
+  }
+
   var emps = _hmFilterEmployees()
-    .map(function(e){ return { nombre: e.nombre, area: e.area, horas: e.monthly[ym] || 0 }; })
-    .filter(function(e){ return e.horas > 0; })
-    .sort(function(a, b){ return b.horas - a.horas; });
+    .map(function(e){ return { id: e.id, nombre: e.nombre, area: e.area, horas: e.monthly[ym] || 0 }; })
+    .filter(function(e){ return e.horas > 0; });
 
   if(!emps.length){
     return '<p style="color:var(--text3);text-align:center;padding:30px 0;">'
@@ -182,13 +231,23 @@ function _hmRenderPorMes(){
   var maxH  = Math.max.apply(null, emps.map(function(e){ return e.horas; }));
   var minH  = Math.min.apply(null, emps.map(function(e){ return e.horas; }));
 
+  // Ordenación configurable
+  if(_hmSortMode === 'desc'){
+    emps.sort(function(a,b){ return b.horas - a.horas; });
+  } else if(_hmSortMode === 'asc'){
+    emps.sort(function(a,b){ return a.horas - b.horas; });
+  } else if(_hmSortMode === 'dist'){
+    // Ordenar por distancia absoluta a la media (los más "raros" arriba)
+    emps.sort(function(a,b){ return Math.abs(b.horas - media) - Math.abs(a.horas - media); });
+  }
+
   var kpis = ''
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;">'
-    +   _hmKpi('Empleados',     emps.length + '',            'var(--text)')
-    +   _hmKpi('Horas totales', suma.toFixed(1) + ' h',      'var(--cyan)')
-    +   _hmKpi('Media / empleado', media.toFixed(1) + ' h',  'var(--amber)')
-    +   _hmKpi('Máx.',           maxH.toFixed(1) + ' h',     'var(--green)')
-    +   _hmKpi('Mín.',           minH.toFixed(1) + ' h',     'var(--orange)')
+    +   _hmKpi('Empleados',       emps.length + '',            'var(--text)')
+    +   _hmKpi('Horas totales',   suma.toFixed(1) + ' h',      'var(--cyan)')
+    +   _hmKpi('Media / empleado', media.toFixed(1) + ' h',    'var(--amber)')
+    +   _hmKpi('Máx.',            maxH.toFixed(1) + ' h',      'var(--green)')
+    +   _hmKpi('Mín.',            minH.toFixed(1) + ' h',      'var(--orange)')
     + '</div>';
 
   var W = 720;
@@ -207,7 +266,14 @@ function _hmRenderPorMes(){
     var isAbove = e.horas >= media;
     var col = isAbove ? 'var(--green)' : 'var(--orange)';
     var nombreCorto = e.nombre.length > 24 ? e.nombre.slice(0, 22) + '…' : e.nombre;
-    return '<g>'
+    var pctVsMedia = ((e.horas - media) / media * 100);
+    var pctStr = (pctVsMedia >= 0 ? '+' : '') + pctVsMedia.toFixed(0) + '%';
+    var tooltipData = _hmEsc(e.nombre + '|' + e.area + '|' + e.horas.toFixed(1) + 'h|' + pctStr + ' vs media');
+    return '<g style="cursor:pointer;" '
+      +   'onmouseenter="_hmShowTip(event,\'' + tooltipData + '\')" '
+      +   'onmousemove="_hmMoveTip(event)" '
+      +   'onmouseleave="_hmHideTip()" '
+      +   'onclick="_hmOnEmp(\'' + _hmEsc(e.id) + '\')" >'
       + '<text x="' + (PAD_L - 8) + '" y="' + (y + rowH/2 + 4) + '" text-anchor="end" '
       +   'font-size="10" font-family="var(--font-ui)" fill="var(--text2)">'
       +   _hmEsc(nombreCorto)
@@ -224,9 +290,9 @@ function _hmRenderPorMes(){
   var mediaX = xPos(media);
   var lineaMedia = ''
     + '<line x1="' + mediaX + '" y1="' + PAD_T + '" x2="' + mediaX + '" y2="' + (PAD_T + chartH)
-    +   '" stroke="var(--amber)" stroke-width="2" stroke-dasharray="4,3"/>'
+    +   '" stroke="var(--amber)" stroke-width="2" stroke-dasharray="4,3" pointer-events="none"/>'
     + '<text x="' + mediaX + '" y="' + (PAD_T - 6) + '" text-anchor="middle" '
-    +   'font-size="10" fill="var(--amber)" font-family="var(--font-mono)" font-weight="700">'
+    +   'font-size="10" fill="var(--amber)" font-family="var(--font-mono)" font-weight="700" pointer-events="none">'
     +   '↓ media ' + media.toFixed(1) + 'h'
     + '</text>';
 
@@ -253,24 +319,143 @@ function _hmRenderPorMes(){
     + 'margin-bottom:8px;letter-spacing:.08em;text-transform:uppercase;">'
     + 'Horas trabajadas · ' + _hmMonthLabel(ym)
     + (_hmFilterArea ? ' · ' + _hmEsc(_hmFilterArea) : '')
+    + ' · <span style="color:var(--text2);text-transform:none;">clic en una barra → ver detalle del empleado</span>'
     + '</div>';
 
   return kpis + subtitulo + svg;
 }
 
+// ─── VISTA 1B: EMPLEADO INDIVIDUAL EN UN MES ─────────────────────────
+function _hmRenderPorMesEmpleadoIndividual(ym){
+  var e = _hmData.employees.find(function(x){ return x.id === _hmSelectedEmp; });
+  if(!e){
+    return '<p style="color:var(--red);text-align:center;padding:30px 0;">'
+         + 'Empleado no encontrado.</p>';
+  }
+
+  // Datos globales (todos activos + área filtrada si aplica) para comparar
+  var todos = _hmFilterEmployees()
+    .map(function(x){ return x.monthly[ym] || 0; })
+    .filter(function(v){ return v > 0; });
+  var mediaGlobal = todos.length ? (todos.reduce(function(a,b){return a+b;}, 0) / todos.length) : 0;
+
+  var horasMes = e.monthly[ym] || 0;
+  var mesesConDatos = _hmData.months.filter(function(m){ return (e.monthly[m] || 0) > 0; });
+  var totalPersonal = mesesConDatos.reduce(function(a,m){ return a + (e.monthly[m] || 0); }, 0);
+  var mediaPersonal = mesesConDatos.length ? totalPersonal / mesesConDatos.length : 0;
+
+  var mejorMes = null, peorMes = null;
+  mesesConDatos.forEach(function(m){
+    var v = e.monthly[m];
+    if(!mejorMes || v > mejorMes.v) mejorMes = { m: m, v: v };
+    if(!peorMes  || v < peorMes.v)  peorMes  = { m: m, v: v };
+  });
+
+  var pctVsMedia = mediaGlobal > 0 ? ((horasMes - mediaGlobal) / mediaGlobal * 100) : 0;
+  var pctVsPersonal = mediaPersonal > 0 ? ((horasMes - mediaPersonal) / mediaPersonal * 100) : 0;
+
+  var kpis = ''
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px;">'
+    +   _hmKpi(_hmMonthLabel(ym),        horasMes.toFixed(1) + ' h',   'var(--cyan)')
+    +   _hmKpi('vs media grupo',         (pctVsMedia>=0?'+':'') + pctVsMedia.toFixed(0) + '%',
+                 pctVsMedia >= 0 ? 'var(--green)' : 'var(--orange)')
+    +   _hmKpi('vs su media personal',   (pctVsPersonal>=0?'+':'') + pctVsPersonal.toFixed(0) + '%',
+                 pctVsPersonal >= 0 ? 'var(--green)' : 'var(--orange)')
+    +   _hmKpi('Media personal',         mediaPersonal.toFixed(1) + ' h', 'var(--amber)')
+    +   _hmKpi('Total histórico',        totalPersonal.toFixed(0) + ' h', 'var(--text2)')
+    + '</div>';
+
+  var W = 720, H = 200;
+  var PAD_L = 60, PAD_R = 60, PAD_T = 40, PAD_B = 40;
+  var chartW = W - PAD_L - PAD_R;
+  var chartH = H - PAD_T - PAD_B;
+
+  var maxVal = Math.max(horasMes, mediaGlobal, mediaPersonal, 1) * 1.15;
+  var xPos = function(v){ return PAD_L + (v / maxVal) * chartW; };
+  var yCenter = PAD_T + chartH / 2;
+  var barH = 40;
+
+  var wEmp = xPos(horasMes) - PAD_L;
+  var xMediaGlobal = xPos(mediaGlobal);
+  var xMediaPersonal = xPos(mediaPersonal);
+
+  var svg = '<div style="overflow-x:auto;">'
+    + '<svg viewBox="0 0 ' + W + ' ' + H + '" '
+    +   'style="width:100%;max-width:' + W + 'px;display:block;" '
+    +   'xmlns="http://www.w3.org/2000/svg">'
+    // Barra del empleado
+    + '<rect x="' + PAD_L + '" y="' + (yCenter - barH/2) + '" width="' + wEmp
+    +   '" height="' + barH + '" rx="6" fill="var(--cyan)" opacity=".85"/>'
+    + '<text x="' + (PAD_L + wEmp + 8) + '" y="' + (yCenter + 5) + '" '
+    +   'font-size="14" font-family="var(--font-mono)" fill="var(--text)" font-weight="700">'
+    +   horasMes.toFixed(1) + ' h</text>'
+    // Línea vertical media grupo
+    + (mediaGlobal > 0 ? '<line x1="' + xMediaGlobal + '" y1="' + PAD_T + '" x2="' + xMediaGlobal
+        + '" y2="' + (H - PAD_B) + '" stroke="var(--amber)" stroke-width="2" stroke-dasharray="4,3"/>'
+      + '<text x="' + xMediaGlobal + '" y="' + (PAD_T - 8) + '" text-anchor="middle" '
+      +   'font-size="10" fill="var(--amber)" font-family="var(--font-mono)" font-weight="700">'
+      +   'media grupo ' + mediaGlobal.toFixed(1) + 'h</text>' : '')
+    // Línea vertical media personal
+    + (mediaPersonal > 0 && Math.abs(mediaPersonal - mediaGlobal) > 5 ? '<line x1="' + xMediaPersonal
+        + '" y1="' + PAD_T + '" x2="' + xMediaPersonal + '" y2="' + (H - PAD_B)
+        + '" stroke="var(--purple)" stroke-width="2" stroke-dasharray="2,3"/>'
+      + '<text x="' + xMediaPersonal + '" y="' + (H - PAD_B + 14) + '" text-anchor="middle" '
+      +   'font-size="10" fill="var(--purple)" font-family="var(--font-mono)" font-weight="700">'
+      +   'media personal ' + mediaPersonal.toFixed(1) + 'h</text>' : '')
+    + '</svg></div>';
+
+  var titulo = ''
+    + '<div style="margin-bottom:14px;">'
+    +   '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">'
+    +     _hmEsc(e.nombre) + '</div>'
+    +   '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">'
+    +     _hmEsc(e.area) + (e.puesto ? ' · ' + _hmEsc(e.puesto) : '')
+    +     ' · <span style="color:' + (e.estado==='Activo' ? 'var(--green)' : 'var(--orange)') + ';">'
+    +     _hmEsc(e.estado) + '</span>'
+    +   '</div>'
+    + '</div>';
+
+  var extras = mejorMes && peorMes ? ''
+    + '<div style="margin-top:16px;display:flex;gap:16px;flex-wrap:wrap;font-size:12px;font-family:var(--font-mono);">'
+    +   '<div style="background:var(--bg4);padding:8px 12px;border-radius:6px;border:1px solid var(--green);">'
+    +     '<span style="color:var(--green);font-weight:700;">🏆 Mejor mes:</span> '
+    +     _hmMonthLabel(mejorMes.m) + ' — <strong style="color:var(--text);">' + mejorMes.v.toFixed(1) + ' h</strong>'
+    +   '</div>'
+    +   '<div style="background:var(--bg4);padding:8px 12px;border-radius:6px;border:1px solid var(--orange);">'
+    +     '<span style="color:var(--orange);font-weight:700;">📉 Peor mes:</span> '
+    +     _hmMonthLabel(peorMes.m) + ' — <strong style="color:var(--text);">' + peorMes.v.toFixed(1) + ' h</strong>'
+    +   '</div>'
+    + '</div>' : '';
+
+  return titulo + kpis + svg + extras;
+}
+
 // ─── VISTA 2: EVOLUCIÓN MENSUAL (LÍNEAS) ─────────────────────────────
 function _hmRenderEvolucion(){
-  var emps = _hmFilterEmployees().filter(function(e){ return e.total > 0; });
+  var empsBase = _hmFilterEmployees().filter(function(e){ return e.total > 0; });
   var months = _hmData.months;
 
-  if(!emps.length || !months.length){
+  if(!empsBase.length || !months.length){
     return '<p style="color:var(--text3);text-align:center;padding:30px 0;">'
          + 'No hay datos suficientes con los filtros actuales.</p>';
   }
 
+  // Si hay empleado seleccionado, sólo ese
+  var soloUno = !!_hmSelectedEmp;
+  var empsRender = soloUno
+    ? empsBase.filter(function(e){ return e.id === _hmSelectedEmp; })
+    : empsBase;
+
+  if(soloUno && !empsRender.length){
+    return '<p style="color:var(--red);text-align:center;padding:30px 0;">'
+         + 'El empleado seleccionado no tiene datos en el rango.</p>';
+  }
+
+  // Media global calculada con TODA la base (aunque se muestre sólo uno,
+  // la referencia sigue siendo el grupo entero)
   var mediaPorMes = months.map(function(ym){
-    var vals = emps.map(function(e){ return e.monthly[ym] || 0; })
-                   .filter(function(v){ return v > 0; });
+    var vals = empsBase.map(function(e){ return e.monthly[ym] || 0; })
+                       .filter(function(v){ return v > 0; });
     if(!vals.length) return { ym: ym, v: 0, n: 0 };
     var sum = vals.reduce(function(a, b){ return a + b; }, 0);
     return { ym: ym, v: sum / vals.length, n: vals.length };
@@ -278,14 +463,14 @@ function _hmRenderEvolucion(){
 
   var conDatos = mediaPorMes.filter(function(m){return m.v>0;});
   var mediaGlobal = conDatos.length ? conDatos.reduce(function(a, m){ return a + m.v; }, 0) / conDatos.length : 0;
+  var totalGlobal = empsRender.reduce(function(a, e){ return a + e.total; }, 0);
 
-  var totalGlobal = emps.reduce(function(a, e){ return a + e.total; }, 0);
   var kpis = ''
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;">'
-    +   _hmKpi('Empleados',     emps.length + '',              'var(--text)')
+    +   _hmKpi(soloUno ? 'Empleado' : 'Empleados', soloUno ? '1' : (empsRender.length + ''), 'var(--text)')
     +   _hmKpi('Meses',         months.length + '',            'var(--text2)')
     +   _hmKpi('Horas totales', totalGlobal.toFixed(0) + ' h', 'var(--cyan)')
-    +   _hmKpi('Media / mes',   mediaGlobal.toFixed(1) + ' h', 'var(--amber)')
+    +   _hmKpi('Media grupo / mes',   mediaGlobal.toFixed(1) + ' h', 'var(--amber)')
     + '</div>';
 
   var W = 720, H = 380;
@@ -294,12 +479,13 @@ function _hmRenderEvolucion(){
   var chartH = H - PAD_T - PAD_B;
 
   var maxV = 0;
-  emps.forEach(function(e){
+  empsRender.forEach(function(e){
     months.forEach(function(ym){
       var v = e.monthly[ym] || 0;
       if(v > maxV) maxV = v;
     });
   });
+  mediaPorMes.forEach(function(m){ if(m.v > maxV) maxV = m.v; });
   maxV = Math.max(maxV * 1.1, 10);
 
   var xStep = chartW / Math.max(1, months.length - 1);
@@ -323,26 +509,55 @@ function _hmRenderEvolucion(){
       +      _hmMonthLabelCorto(ym) + '</text>';
   }).join('');
 
-  var PALETTE = ['#60a5fa','#c084fc','#22d3ee','#fbbf24','#34d399','#f87171','#fb923c','#a78bfa','#f472b6','#67e8f9','#facc15','#4ade80'];
+  // Asignar índices de color estables por empleado (por su posición en la lista base ordenada)
+  var idxByEmpId = {};
+  empsBase.forEach(function(e, idx){ idxByEmpId[e.id] = idx; });
 
-  var lineas = emps.map(function(e, idx){
-    var col = PALETTE[idx % PALETTE.length];
+  // Líneas por empleado — con hover para tooltip y click para aislar
+  var lineas = empsRender.map(function(e){
+    var idx = idxByEmpId[e.id] || 0;
+    var col = HM_PALETTE[idx % HM_PALETTE.length];
+    var esActivo = !_hmIsolatedEmp || _hmIsolatedEmp === e.id;
+    var opacity = soloUno ? .95 : (esActivo ? .85 : .08);
+    var strokeW = soloUno ? 3 : (esActivo ? 2 : 1);
+
     var puntos = months.map(function(ym, i){
       var v = e.monthly[ym] || 0;
       return xPos(i) + ',' + yPos(v);
     }).join(' ');
+
+    // Círculos por punto — hovereables
+    var circulos = months.map(function(ym, i){
+      var v = e.monthly[ym] || 0;
+      if(v <= 0) return '';
+      var tooltipData = _hmEsc(e.nombre + '|' + _hmMonthLabel(ym) + '|' + v.toFixed(1) + 'h|' + e.area);
+      return '<circle cx="' + xPos(i) + '" cy="' + yPos(v) + '" r="4" '
+        +      'fill="' + col + '" opacity="' + opacity + '" '
+        +      'style="cursor:pointer;" '
+        +      'onmouseenter="_hmShowTip(event,\'' + tooltipData + '\')" '
+        +      'onmousemove="_hmMoveTip(event)" '
+        +      'onmouseleave="_hmHideTip()"/>';
+    }).join('');
+
     return '<polyline points="' + puntos + '" fill="none" stroke="' + col
-      +      '" stroke-width="1.5" opacity=".55"/>';
+      +      '" stroke-width="' + strokeW + '" opacity="' + opacity + '" style="pointer-events:none;"/>'
+      +   circulos;
   }).join('');
 
+  // Línea gruesa de la media global
   var puntosMedia = mediaPorMes.map(function(m, i){
     return xPos(i) + ',' + yPos(m.v);
   }).join(' ');
   var lineaMedia = ''
-    + '<polyline points="' + puntosMedia + '" fill="none" stroke="var(--amber)" stroke-width="3"/>'
+    + '<polyline points="' + puntosMedia + '" fill="none" stroke="var(--amber)" stroke-width="3" pointer-events="none"/>'
     + mediaPorMes.map(function(m, i){
-        return '<circle cx="' + xPos(i) + '" cy="' + yPos(m.v) + '" r="3.5" '
-          +      'fill="var(--amber)" stroke="var(--bg3)" stroke-width="1.5"/>';
+        if(m.v <= 0) return '';
+        var tt = _hmEsc('Media grupo|' + _hmMonthLabel(m.ym) + '|' + m.v.toFixed(1) + 'h|' + m.n + ' emps');
+        return '<circle cx="' + xPos(i) + '" cy="' + yPos(m.v) + '" r="4.5" '
+          +      'fill="var(--amber)" stroke="var(--bg3)" stroke-width="1.5" style="cursor:pointer;" '
+          +      'onmouseenter="_hmShowTip(event,\'' + tt + '\')" '
+          +      'onmousemove="_hmMoveTip(event)" '
+          +      'onmouseleave="_hmHideTip()"/>';
       }).join('');
 
   var svg = '<div style="overflow-x:auto;">'
@@ -356,20 +571,86 @@ function _hmRenderEvolucion(){
     +   '" stroke="var(--border)"/>'
     + '</svg></div>';
 
-  var leyenda = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;'
+  // Leyenda con checkboxes (sólo si están todos)
+  var leyenda = '';
+  if(!soloUno){
+    var chips = empsBase.map(function(e){
+      var idx = idxByEmpId[e.id] || 0;
+      var col = HM_PALETTE[idx % HM_PALETTE.length];
+      var esActivo = !_hmIsolatedEmp || _hmIsolatedEmp === e.id;
+      return '<div onclick="_hmToggleIsolate(\'' + _hmEsc(e.id) + '\')" '
+        +      'style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;'
+        +      'background:' + (esActivo ? 'var(--bg4)' : 'transparent') + ';'
+        +      'border:1px solid ' + (esActivo ? col : 'var(--border)') + ';'
+        +      'border-radius:14px;cursor:pointer;font-size:11px;color:' + (esActivo ? 'var(--text)' : 'var(--text3)') + ';'
+        +      'font-family:var(--font-mono);opacity:' + (esActivo ? '1' : '.5') + ';">'
+        +   '<span style="width:10px;height:10px;background:' + col + ';border-radius:50%;display:inline-block;"></span>'
+        +   _hmEsc(e.nombre)
+        +   ' <span style="color:var(--text3);">' + e.total.toFixed(0) + 'h</span>'
+        + '</div>';
+    }).join(' ');
+
+    leyenda = ''
+      + '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">'
+      +   '<div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-bottom:8px;letter-spacing:.1em;text-transform:uppercase;">'
+      +     'Empleados · clic para aislar / des-aislar '
+      +     (_hmIsolatedEmp ? ' · <span style="color:var(--amber);">Aislado activo — clic de nuevo para volver</span>' : '')
+      +   '</div>'
+      +   '<div style="display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;">'
+      +     chips
+      +   '</div>'
+      + '</div>';
+  }
+
+  var leyendaTop = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;'
     + 'font-size:10px;font-family:var(--font-mono);color:var(--text3);">'
-    + '<span><span style="display:inline-block;width:24px;height:3px;background:var(--amber);vertical-align:middle;margin-right:5px;"></span>Media mensual</span>'
-    + '<span><span style="display:inline-block;width:20px;height:1.5px;background:var(--blue);vertical-align:middle;margin-right:5px;opacity:.55;"></span>Cada línea = un empleado</span>'
+    + '<span><span style="display:inline-block;width:24px;height:3px;background:var(--amber);vertical-align:middle;margin-right:5px;"></span>Media grupo</span>'
+    + (soloUno ? '' : '<span><span style="display:inline-block;width:20px;height:1.5px;background:var(--blue);vertical-align:middle;margin-right:5px;opacity:.55;"></span>Cada línea = un empleado (pasa el ratón para ver)</span>')
     + '</div>';
 
   var subtitulo = '<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3);'
     + 'margin-bottom:8px;letter-spacing:.08em;text-transform:uppercase;">'
-    + 'Evolución mensual · ' + emps.length + ' empleados'
+    + 'Evolución mensual · '
+    + (soloUno ? _hmEsc(empsRender[0].nombre) : empsRender.length + ' empleados')
     + (_hmFilterArea ? ' · ' + _hmEsc(_hmFilterArea) : '')
     + '</div>';
 
-  return kpis + subtitulo + svg + leyenda;
+  return kpis + subtitulo + svg + leyendaTop + leyenda;
 }
+
+// ─── TOOLTIPS ────────────────────────────────────────────────────────
+function _hmShowTip(ev, dataStr){
+  var tip = document.getElementById('hm-tooltip');
+  if(!tip) return;
+  var parts = dataStr.split('|');
+  var html = '<strong style="color:var(--amber);">' + parts[0] + '</strong>';
+  for(var i = 1; i < parts.length; i++){
+    html += '<br><span style="color:var(--text3);font-size:11px;">' + parts[i] + '</span>';
+  }
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  _hmMoveTip(ev);
+}
+window._hmShowTip = _hmShowTip;
+
+function _hmMoveTip(ev){
+  var tip = document.getElementById('hm-tooltip');
+  if(!tip) return;
+  var x = (ev.clientX || 0) + 14;
+  var y = (ev.clientY || 0) + 14;
+  // Evitar que se salga por el borde derecho
+  var maxX = window.innerWidth - tip.offsetWidth - 10;
+  if(x > maxX) x = maxX;
+  tip.style.left = x + 'px';
+  tip.style.top  = y + 'px';
+}
+window._hmMoveTip = _hmMoveTip;
+
+function _hmHideTip(){
+  var tip = document.getElementById('hm-tooltip');
+  if(tip) tip.style.display = 'none';
+}
+window._hmHideTip = _hmHideTip;
 
 // ─── BACKFILL — MODAL Y EJECUCIÓN ────────────────────────────────────
 function _hmAbrirBackfill(){
@@ -392,7 +673,7 @@ function _hmAbrirBackfill(){
     +   '<p style="font-size:12px;color:var(--text3);margin-bottom:16px;">'
     +     '• Duración estimada: 2-8 min<br>'
     +     '• No modifica la tabla <code>shifts</code><br>'
-    +     '• No requiere acción posterior — se puede pulsar más de una vez sin efectos'
+    +     '• Se puede pulsar más de una vez sin efectos'
     +   '</p>'
     +   '<div style="background:rgba(251,191,36,.08);border:1px solid var(--amber);border-radius:6px;'
     +        'padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--amber);">'
@@ -463,8 +744,6 @@ async function _hmLanzarBackfill(){
 
   var t0 = Date.now();
   try {
-    // Nota: syncroSupabaseFetch añade el Bearer token de la sesión.
-    // El endpoint acepta esa auth cuando el rol es admin.
     var res = await syncroSupabaseFetch('/api/bitrix-backfill-hours?desde=2026-01-01', {
       method: 'POST'
     });
@@ -521,10 +800,33 @@ function _hmOnTab(id){ _hmActiveTab = id; _hmRender(); }
 window._hmOnTab = _hmOnTab;
 function _hmOnMonth(ym){ _hmSelectedYm = ym; _hmRender(); }
 window._hmOnMonth = _hmOnMonth;
-function _hmOnArea(area){ _hmFilterArea = area; _hmRender(); }
+function _hmOnArea(area){
+  _hmFilterArea = area;
+  // Reset selección de empleado si ya no pertenece al área
+  if(_hmSelectedEmp){
+    var e = _hmData.employees.find(function(x){ return x.id === _hmSelectedEmp; });
+    if(e && area && e.area !== area){ _hmSelectedEmp = ''; }
+  }
+  _hmIsolatedEmp = '';
+  _hmRender();
+}
 window._hmOnArea = _hmOnArea;
+function _hmOnEmp(empId){
+  _hmSelectedEmp = empId || '';
+  _hmIsolatedEmp = '';
+  _hmRender();
+}
+window._hmOnEmp = _hmOnEmp;
 function _hmOnBaja(v){ _hmIncluirBaja = !!v; _hmRender(); }
 window._hmOnBaja = _hmOnBaja;
+function _hmOnSort(mode){ _hmSortMode = mode; _hmRender(); }
+window._hmOnSort = _hmOnSort;
+
+function _hmToggleIsolate(empId){
+  _hmIsolatedEmp = (_hmIsolatedEmp === empId) ? '' : empId;
+  _hmRender();
+}
+window._hmToggleIsolate = _hmToggleIsolate;
 
 async function _hmForceReload(){
   var el = document.getElementById('horas-mes-content');
@@ -543,6 +845,9 @@ window._hmForceReload = _hmForceReload;
 function _hmExportCsv(){
   if(!_hmData) return;
   var emps = _hmFilterEmployees();
+  if(_hmSelectedEmp){
+    emps = emps.filter(function(e){ return e.id === _hmSelectedEmp; });
+  }
   var months = _hmData.months;
   var lines = [];
   lines.push(['Empleado','Área','Puesto','Estado'].concat(months).concat(['Total']).join(';'));
