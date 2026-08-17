@@ -7,6 +7,7 @@
 // today, currentUser, _doSaveTurno, auditLog, invalidateCache, dbGetAll, toast (globales).
 // ═══════════════════════════════════════════════════════════════════════
 var LAB_TABLE = 'syncrolab_cash_closures';
+var _labSubmitting = false; // anti doble-click
 var LAB_CHARGES_TABLE = 'syncrolab_room_charges';
 var _labTipoTurno = null;
 var _labTraspasoEditId = null;
@@ -421,10 +422,17 @@ async function submitLabTraspaso(){
   var errEl=document.getElementById('lab-tras-err');
   if(errs.length){ if(errEl) errEl.textContent=errs.join(' · '); toast(errs[0],'err'); return; }
   if(errEl) errEl.textContent='';
-  if(!_labTraspasoEditId && currentUser.rol!=='admin'){
+  if(!_labTraspasoEditId){
     var dup=await getLabOpToday(turno);
-    if(dup){ var m='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=m; toast(m,'err'); return; }
+    if(dup){
+      if(currentUser.rol==='admin'){
+        if(!confirm('⚠ Ya existe un '+(dup.tipo==='traspaso'?'traspaso':'cierre')+' para turno '+turno+' hoy.\n\n¿Seguro que quieres crear OTRO registro?')) return;
+      } else {
+        var m='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=m; toast(m,'err'); return;
+      }
+    }
   }
+  if(_labSubmitting){ toast('Guardando…','info'); return; } _labSubmitting=true;
   var ts=localTs();
   var totalTras=(nReal||0)+(vReal||0);
   var record={
@@ -453,7 +461,7 @@ async function submitLabTraspaso(){
     toast('Caja SYNCROLAB guardada correctamente y pendiente de validación.','ok');
     if(typeof renderLabCajaList==='function') renderLabCajaList();
     _labAutoLogout();
-  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar traspaso','err'); }
+  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar traspaso','err'); }finally{ _labSubmitting=false; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -561,10 +569,17 @@ async function submitLabCierre(){
   if(!_labCierreEditId && currentUser.rol!=='admin' && !_labPuedeCerrar(turno,today())){
     var mc='El turno '+turno+' no puede cerrar caja. Haz un traspaso.'; if(errEl) errEl.textContent=mc; toast(mc,'err'); return;
   }
-  if(!_labCierreEditId && currentUser.rol!=='admin'){
+  if(!_labCierreEditId){
     var dup=await getLabOpToday(turno);
-    if(dup){ var md='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=md; toast(md,'err'); return; }
+    if(dup){
+      if(currentUser.rol==='admin'){
+        if(!confirm('⚠ Ya existe un '+(dup.tipo==='traspaso'?'traspaso':'cierre')+' para turno '+turno+' hoy.\n\n¿Seguro que quieres crear OTRO registro?')) return;
+      } else {
+        var md='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=md; toast(md,'err'); return;
+      }
+    }
   }
+  if(_labSubmitting){ toast('Guardando…','info'); return; } _labSubmitting=true;
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
   var rec={};
   ['nub','vg'].forEach(function(sys){
@@ -610,7 +625,7 @@ async function submitLabCierre(){
     toast('Caja SYNCROLAB guardada correctamente y pendiente de validación.','ok');
     if(typeof renderLabCajaList==='function') renderLabCajaList();
     _labAutoLogout();
-  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar cierre','err'); }
+  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar cierre','err'); }finally{ _labSubmitting=false; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
