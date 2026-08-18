@@ -488,6 +488,7 @@ function submitRecKpi() {
 function openRecCajaModal(existingId) {
   _recCajaEditId = existingId || null;
   window._cajaCorrectMode = false;
+  window._recLabChargesConfirmed = []; // reset al abrir
   if(typeof renderRecLabCharges === 'function') renderRecLabCharges();
 
   // Reset todos los campos
@@ -833,6 +834,24 @@ async function submitRecCaja() {
       if(typeof autoLogoutAfterCaja === 'function') autoLogoutAfterCaja();
     }
     invalidateCache(REC_TABLE);
+
+    // Vincular cargos SYNCROLAB confirmados durante esta sesión al cierre
+    if(_recLabChargesConfirmed && _recLabChargesConfirmed.length){
+      var cierreId = _recCajaEditId || (result && result.id) || record.id;
+      if(cierreId){
+        for(var ci=0; ci<_recLabChargesConfirmed.length; ci++){
+          try {
+            await syncroSupabaseFetch(SUPABASE_URL + '/rest/v1/syncrolab_room_charges?id=eq.' + encodeURIComponent(_recLabChargesConfirmed[ci]), {
+              method: 'PATCH',
+              headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+              body: JSON.stringify({ cierre_recepcion_id: cierreId, updated_at: localTs() })
+            });
+          } catch(e2){ /* no bloquear cierre por fallo de vinculación */ }
+        }
+        invalidateCache('syncrolab_room_charges');
+      }
+    }
+
     closeRecCajaModal();
     renderRecepcionCajaList();
   } catch(e){
@@ -1851,35 +1870,61 @@ async function submitRecTraspaso() {
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// CAJA-V2 · CARGOS SYNCROLAB PENDIENTES (conciliación en cierre Recepción)
+// CAJA-V2 · CARGOS SYNCROLAB (conciliación en cierre Recepción)
 // Recepción ve los cargos que SYNCROLAB pidió cargar a habitación y confirma
 // si los cargó en MEWS (cargado) o no (no_cargado).
+// FIX: cargos confirmados se muestran en gris readonly; editables en corrección.
 // ═══════════════════════════════════════════════════════════════════════
+window._recLabChargesConfirmed = []; // IDs confirmados durante esta sesión
+
 async function renderRecLabCharges() {
   var block = document.getElementById('rec-lab-charges-block');
   var list  = document.getElementById('rec-lab-charges-list');
   if(!block || !list) return;
   var rows = [];
   try { rows = await getDB('syncrolab_room_charges'); } catch(e){ rows = []; }
+
+  // Pendientes: mostrar siempre (con botones de acción)
   var pend = rows.filter(function(r){ return r.estado === 'pendiente'; })
                  .sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
-  if(!pend.length){ block.style.display = 'none'; return; }
-  block.style.display = 'block';
-  // Deduplicar cargos por habitacion+concepto+importe+fecha (protección contra doble-save)
-  var seen = {};
-  var uniquePend = pend.filter(function(c){
-    var key = (c.habitacion||'')+'|'+(c.concepto||'')+'|'+(c.importe||'')+'|'+(c.fecha||'');
-    if(seen[key]) return false;
-    seen[key] = true;
-    return true;
-  });
-  if(!uniquePend.length){ block.style.display = 'none'; return; }
 
-  list.innerHTML = uniquePend.map(function(c){
+  // Confirmados: mostrar si están vinculados a este cierre o confirmados en esta sesión
+  var confirmed = [];
+  if(_recCajaEditId){
+    confirmed = rows.filter(function(r){
+      return (r.estado === 'cargado' || r.estado === 'no_cargado') &&
+             (r.cierre_recepcion_id === _recCajaEditId || _recLabChargesConfirmed.indexOf(r.id) !== -1);
+    });
+  } else {
+    // Cierre nuevo: mostrar los que se acaban de confirmar en esta sesión
+    confirmed = rows.filter(function(r){
+      return (r.estado === 'cargado' || r.estado === 'no_cargado') &&
+             _recLabChargesConfirmed.indexOf(r.id) !== -1;
+    });
+  }
+
+  // Deduplicar por habitacion+concepto+importe+fecha
+  var seen = {};
+  function dedup(arr){
+    return arr.filter(function(c){
+      var key = c.id; // dedup por ID (más seguro)
+      if(seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+  var uniquePend = dedup(pend);
+  var uniqueConf = dedup(confirmed);
+
+  if(!uniquePend.length && !uniqueConf.length){ block.style.display = 'none'; return; }
+  block.style.display = 'block';
+
+  var isCorrectMode = !!window._cajaCorrectMode;
+
+  function _renderChargeCard(c, isPending){
     var sysBadge = c.sistema === 'VirtuGym'
       ? '<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid #10b981;">VirtuGym</span>'
       : '<span class="badge" style="background:rgba(99,102,241,.15);color:#6366f1;border:1px solid #6366f1;">Nubimed</span>';
-    // Calcular días desde la solicitud para que Recepción sepa la antigüedad
     var diasTexto = '';
     if(c.fecha){
       var hoy = new Date(today()+'T12:00:00');
@@ -1889,18 +1934,54 @@ async function renderRecLabCharges() {
       else if(diffDias === 1) diasTexto = ' (ayer)';
       else if(diffDias > 1) diasTexto = ' (hace '+diffDias+' días)';
     }
-    return '<div style="padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">'
+    // Estado badge para cargos confirmados
+    var estadoBadge = '';
+    var cardBg = 'var(--bg)';
+    var cardBorder = 'var(--border)';
+    var cardOpacity = '1';
+    if(!isPending){
+      cardOpacity = '0.65';
+      if(c.estado === 'cargado'){
+        estadoBadge = '<span class="badge b-green" style="font-size:10px;">✓ Cargado</span>';
+        cardBg = 'rgba(16,185,129,.05)';
+        cardBorder = 'rgba(16,185,129,.3)';
+      } else {
+        estadoBadge = '<span class="badge b-orange" style="font-size:10px;">✗ No cargado</span>';
+        cardBg = 'rgba(245,158,11,.05)';
+        cardBorder = 'rgba(245,158,11,.3)';
+      }
+    }
+    var btns = '';
+    if(isPending || isCorrectMode){
+      btns = '<div style="display:flex;gap:6px;">'
+        + '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="confirmarCargoLab(\''+c.id+'\',\'cargado\')">✓ Cargado en MEWS</button>'
+        + '<button class="btn btn-sm btn-warn" onclick="confirmarCargoLab(\''+c.id+'\',\'no_cargado\')">✗ No cargado</button>'
+        + '</div>';
+    }
+    var confirmedInfo = '';
+    if(!isPending && c.cargado_por){
+      confirmedInfo = '<div style="font-size:10px;color:var(--text3);margin-top:4px;font-family:var(--font-mono);">por '+c.cargado_por+(c.comentario_recepcion ? ' · '+c.comentario_recepcion : '')+'</div>';
+    }
+    return '<div style="padding:10px;background:'+cardBg+';border:1px solid '+cardBorder+';border-radius:8px;margin-bottom:8px;opacity:'+cardOpacity+';">'
       + '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">'
-        + '<div style="font-size:13px;"><b>Hab. '+(c.habitacion||'—')+'</b> · '+(c.huesped_nombre||'—')+' '+sysBadge+'</div>'
+        + '<div style="font-size:13px;"><b>Hab. '+(c.habitacion||'—')+'</b> · '+(c.huesped_nombre||'—')+' '+sysBadge+' '+estadoBadge+'</div>'
         + '<div style="font-family:var(--font-mono);font-weight:700;color:var(--text);">'+(parseFloat(c.importe)||0).toFixed(2).replace('.',',')+' €</div>'
       + '</div>'
       + '<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">'+(c.concepto||'')+' <span style="color:var(--text3);">· solicitado '+fmtDate(c.fecha)+diasTexto+' · pidió '+(c.solicitado_por_nombre||'')+'</span></div>'
-      + '<div style="display:flex;gap:6px;">'
-        + '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="confirmarCargoLab(\''+c.id+'\',\'cargado\')">✓ Cargado en MEWS</button>'
-        + '<button class="btn btn-sm btn-warn" onclick="confirmarCargoLab(\''+c.id+'\',\'no_cargado\')">✗ No cargado</button>'
-      + '</div>'
+      + confirmedInfo
+      + btns
       + '</div>';
-  }).join('');
+  }
+
+  var html = '';
+  // Pendientes primero
+  uniquePend.forEach(function(c){ html += _renderChargeCard(c, true); });
+  // Confirmados después (gris, readonly)
+  if(uniqueConf.length){
+    if(uniquePend.length) html += '<div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);letter-spacing:.1em;margin:8px 0 4px;text-transform:uppercase;">'+(isCorrectMode ? 'CONFIRMADOS (editable en corrección)' : 'CONFIRMADOS EN ESTE CIERRE')+'</div>';
+    uniqueConf.forEach(function(c){ html += _renderChargeCard(c, false); });
+  }
+  list.innerHTML = html;
 }
 
 async function confirmarCargoLab(id, nuevoEstado) {
@@ -1910,17 +1991,22 @@ async function confirmarCargoLab(id, nuevoEstado) {
     var coment = motivo || null;
   }
   try {
+    var patchBody = {
+      estado: nuevoEstado,
+      cargado_por: currentUser.nombre,
+      cargado_ts: localTs(),
+      comentario_recepcion: (typeof coment !== 'undefined') ? coment : null,
+      updated_at: localTs()
+    };
+    // Vincular al cierre si estamos editando uno existente
+    if(_recCajaEditId) patchBody.cierre_recepcion_id = _recCajaEditId;
     await syncroSupabaseFetch(SUPABASE_URL + '/rest/v1/syncrolab_room_charges?id=eq.' + encodeURIComponent(id), {
       method: 'PATCH',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({
-        estado: nuevoEstado,
-        cargado_por: currentUser.nombre,
-        cargado_ts: localTs(),
-        comentario_recepcion: (typeof coment !== 'undefined') ? coment : null,
-        updated_at: localTs()
-      })
+      body: JSON.stringify(patchBody)
     });
+    // Registrar ID confirmado en esta sesión
+    if(_recLabChargesConfirmed.indexOf(id) === -1) _recLabChargesConfirmed.push(id);
     invalidateCache('syncrolab_room_charges');
     if(typeof auditLog === 'function') auditLog('LAB_CARGO_' + (nuevoEstado === 'cargado' ? 'CARGADO' : 'NO_CARGADO'), currentUser.nombre + ' marcó cargo SYNCROLAB ' + id + ' como ' + nuevoEstado);
     toast(nuevoEstado === 'cargado' ? 'Cargo confirmado en MEWS' : 'Cargo marcado como no cargado', 'ok');
