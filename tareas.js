@@ -97,6 +97,11 @@ async function createTask(data){
     toast('No se pudo crear la tarea asociada al turno. Inténtalo de nuevo.','err');
     return null;
   }
+  // ── Empleado: no puede asignar tarea a su propio departamento ──
+  if(currentUser && currentUser.rol === 'empleado'
+    && normalizeDeptName(data.dept_destino||'') === normalizeDeptName(currentUser.area||'')){
+    toast('No puedes asignar una tarea a tu propio departamento.','err'); return null;
+  }
   var dlCheck=validateTaskDeadline(data.deadline);
   if(!dlCheck.ok){ toast(dlCheck.msg,'err'); return null; }
   const task={
@@ -133,6 +138,17 @@ function openTaskModal(){
   var deptEl=document.getElementById('task-dept');  if(deptEl) deptEl.value='';
   var prioEl=document.getElementById('task-prio');  if(prioEl) prioEl.value='';
   var origenEl=document.getElementById('task-dept-origen'); if(origenEl) origenEl.value=currentUser.area||'Cocina';
+
+  // ── Empleado: no puede asignar tareas a su propio departamento ──
+  if(deptEl){
+    var isEmp = currentUser && currentUser.rol === 'empleado';
+    var myDept = normalizeDeptName(currentUser.area||'');
+    Array.from(deptEl.options).forEach(function(opt){
+      if(!opt.value){ opt.disabled=false; return; } // placeholder
+      opt.disabled = isEmp && normalizeDeptName(opt.value) === myDept;
+    });
+  }
+
   document.getElementById('modal-tarea').classList.add('open');
 }
 
@@ -142,6 +158,10 @@ async function saveTask(){
   const dead=document.getElementById('task-deadline').value;
   const desc=(document.getElementById('task-desc')||{}).value||'';
   if(!dept || !prio){ toast('Departamento y prioridad son obligatorios','err'); return; }
+  // ── Empleado: no puede asignar tarea a su propio departamento ──
+  if(currentUser.rol === 'empleado' && normalizeDeptName(dept) === normalizeDeptName(currentUser.area||'')){
+    toast('No puedes asignar una tarea a tu propio departamento. Las tareas son inter-departamento.','err'); return;
+  }
   var dlCheck=validateTaskDeadline(dead);
   if(!dlCheck.ok){ toast(dlCheck.msg,'err'); return; }
   const titulo='Tarea Manual — '+new Date().toLocaleDateString('es-ES')+' — '+dept;
