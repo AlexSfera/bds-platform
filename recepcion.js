@@ -1865,16 +1865,36 @@ async function renderRecLabCharges() {
                  .sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
   if(!pend.length){ block.style.display = 'none'; return; }
   block.style.display = 'block';
-  list.innerHTML = pend.map(function(c){
+  // Deduplicar cargos por habitacion+concepto+importe+fecha (protección contra doble-save)
+  var seen = {};
+  var uniquePend = pend.filter(function(c){
+    var key = (c.habitacion||'')+'|'+(c.concepto||'')+'|'+(c.importe||'')+'|'+(c.fecha||'');
+    if(seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+  if(!uniquePend.length){ block.style.display = 'none'; return; }
+
+  list.innerHTML = uniquePend.map(function(c){
     var sysBadge = c.sistema === 'VirtuGym'
       ? '<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid #10b981;">VirtuGym</span>'
       : '<span class="badge" style="background:rgba(99,102,241,.15);color:#6366f1;border:1px solid #6366f1;">Nubimed</span>';
+    // Calcular días desde la solicitud para que Recepción sepa la antigüedad
+    var diasTexto = '';
+    if(c.fecha){
+      var hoy = new Date(today()+'T12:00:00');
+      var fCargo = new Date(c.fecha+'T12:00:00');
+      var diffDias = Math.round((hoy - fCargo) / 86400000);
+      if(diffDias === 0) diasTexto = ' (hoy)';
+      else if(diffDias === 1) diasTexto = ' (ayer)';
+      else if(diffDias > 1) diasTexto = ' (hace '+diffDias+' días)';
+    }
     return '<div style="padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">'
       + '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">'
         + '<div style="font-size:13px;"><b>Hab. '+(c.habitacion||'—')+'</b> · '+(c.huesped_nombre||'—')+' '+sysBadge+'</div>'
         + '<div style="font-family:var(--font-mono);font-weight:700;color:var(--text);">'+(parseFloat(c.importe)||0).toFixed(2).replace('.',',')+' €</div>'
       + '</div>'
-      + '<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">'+(c.concepto||'')+' <span style="color:var(--text3);">· '+fmtDate(c.fecha)+' · pidió '+(c.solicitado_por_nombre||'')+'</span></div>'
+      + '<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">'+(c.concepto||'')+' <span style="color:var(--text3);">· solicitado '+fmtDate(c.fecha)+diasTexto+' · pidió '+(c.solicitado_por_nombre||'')+'</span></div>'
       + '<div style="display:flex;gap:6px;">'
         + '<button class="btn btn-sm" style="background:var(--green);color:#fff;" onclick="confirmarCargoLab(\''+c.id+'\',\'cargado\')">✓ Cargado en MEWS</button>'
         + '<button class="btn btn-sm btn-warn" onclick="confirmarCargoLab(\''+c.id+'\',\'no_cargado\')">✗ No cargado</button>'
