@@ -66,14 +66,16 @@ async function renderFollowupList() {
       && g.estado !== 'Cerrada';
   }).filter(function(g){ return g.estado !== 'Cerrada'; });
 
-  // ── TAREAS: empleados del dpto destino + empleado que la creó + admin ──
+  // ── TAREAS: empleados ven tareas de/para su departamento ──
   var tareas = allTareas.filter(function(t){
     if(!isTaskOpen(t)) return false;
     if(isAdmin(currentUser) || isSupervisorUser) return sameDept(t);
-    // Empleado: dpto destino O quien la creó
-    var esDeptDestino = normalizeDeptName(t.dept_destino||'') === normalizeDeptName(dept);
+    // Empleado: dpto destino O dpto origen O quien la creó
+    var myDeptNorm = normalizeDeptName(dept);
+    var esDeptDestino = normalizeDeptName(t.dept_destino||'') === myDeptNorm;
+    var esDeptOrigen  = normalizeDeptName(t.dept_origen||'')  === myDeptNorm;
     var esCreador = t.creado_por === currentUser.nombre || t.employee_id === currentUser.id;
-    return esDeptDestino || esCreador;
+    return esDeptDestino || esDeptOrigen || esCreador;
   });
 
   // ── INCIDENCIAS: empleado ve solo las suyas y solo hasta que se cierren ──
@@ -102,7 +104,7 @@ async function renderFollowupList() {
 
   function buildTaskRows(list){
     if(!list.length) return '<div style="font-size:12px;color:var(--text3);padding:6px 0;">Ninguna</div>';
-    return '<table><tr><th>Deadline</th><th>Estado</th><th>Descripción</th><th>Destino</th><th>Creado por</th><th>Acciones</th></tr>'
+    return '<table><tr><th>Deadline</th><th>Estado</th><th>Descripción</th><th>Origen</th><th>Destino</th><th>Creado por</th><th>Acciones</th></tr>'
       + list.map(function(row){
         var acciones = '';
         var st = normalizeTaskState(row.estado);
@@ -113,11 +115,16 @@ async function renderFollowupList() {
           acciones += '<button class="btn btn-secondary btn-sm" onclick="advanceTask(\''+row.id+'\',\'En proceso\')">▶ En proceso</button> ';
         if((isAdmin(currentUser) || isSupervisorUser || (esDeptDestino && st === TASK_STATES.EN_PROCESO)) && st === TASK_STATES.EN_PROCESO)
           acciones += '<button class="btn btn-secondary btn-sm" onclick="advanceTask(\''+row.id+'\',\'Cerrada\')">✓ Cerrar</button>';
+        // Indicador visual: entrante (→ mi dpto) vs saliente (mi dpto →)
+        var dirTag = esDeptDestino
+          ? '<span style="font-size:9px;color:var(--blue);font-weight:700;">⬇ ENTRANTE</span>'
+          : '<span style="font-size:9px;color:var(--amber);font-weight:700;">⬆ SALIENTE</span>';
         return '<tr>'
           + '<td style="font-family:var(--font-mono);font-size:11px;'+(isOverdue(row.deadline)?'color:var(--red);font-weight:700':'')+'">'
-          + fmtDate(row.deadline) + (isOverdue(row.deadline)?' ⚠':'') + '</td>'
+          + fmtDate(row.deadline) + (isOverdue(row.deadline)?' ⚠':'') + '<br>' + dirTag + '</td>'
           + '<td>'+bTaskEstado(row.estado)+'</td>'
           + '<td style="font-size:12px;max-width:220px;">'+formatDisplayValue(row.descripcion||row.titulo)+'</td>'
+          + '<td>'+deptBadge(row.dept_origen||'—')+'</td>'
           + '<td>'+deptBadge(row.dept_destino)+'</td>'
           + '<td style="font-size:12px;">'+formatDisplayValue(row.creado_por)+'</td>'
           + '<td>'+(acciones||'—')+'</td>'
