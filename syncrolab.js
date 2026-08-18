@@ -7,7 +7,6 @@
 // today, currentUser, _doSaveTurno, auditLog, invalidateCache, dbGetAll, toast (globales).
 // ═══════════════════════════════════════════════════════════════════════
 var LAB_TABLE = 'syncrolab_cash_closures';
-var _labSubmitting = false; // anti doble-click
 var LAB_CHARGES_TABLE = 'syncrolab_room_charges';
 var _labTipoTurno = null;
 var _labTraspasoEditId = null;
@@ -128,8 +127,12 @@ function _labChargesValid(){
   }
   return true;
 }
+var _labChargesSaving = false; // guard contra doble-click
 async function _labSaveCharges(syncrolabCashId, fecha){
   if(!_labCharges.length) return;
+  if(_labChargesSaving){ console.warn('_labSaveCharges ya en curso, ignorando doble-click'); return; }
+  _labChargesSaving = true;
+  try {
   var ts = localTs();
   var url = SUPABASE_URL + '/rest/v1/' + LAB_CHARGES_TABLE;
   for(var i=0;i<_labCharges.length;i++){
@@ -146,6 +149,7 @@ async function _labSaveCharges(syncrolabCashId, fecha){
     await syncroSupabaseFetch(url, { method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify(rec) });
   }
   invalidateCache(LAB_CHARGES_TABLE);
+  } finally { _labChargesSaving = false; }
 }
 
 function _labEsDomingo(fechaStr){
@@ -403,7 +407,9 @@ function calcLabTraspaso(){
   if(difBlock) difBlock.style.display = cuadrado ? 'none' : 'block';
 }
 
+var _labSubmitting = false; // guard global contra doble-click en guardar
 async function submitLabTraspaso(){
+  if(_labSubmitting) return;
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value); }
   var errs=[];
   var turno=_labTipoTurno||_labCurrentTurno()||'';
@@ -422,17 +428,10 @@ async function submitLabTraspaso(){
   var errEl=document.getElementById('lab-tras-err');
   if(errs.length){ if(errEl) errEl.textContent=errs.join(' · '); toast(errs[0],'err'); return; }
   if(errEl) errEl.textContent='';
-  if(!_labTraspasoEditId){
+  if(!_labTraspasoEditId && currentUser.rol!=='admin'){
     var dup=await getLabOpToday(turno);
-    if(dup){
-      if(currentUser.rol==='admin'){
-        if(!confirm('⚠ Ya existe un '+(dup.tipo==='traspaso'?'traspaso':'cierre')+' para turno '+turno+' hoy.\n\n¿Seguro que quieres crear OTRO registro?')) return;
-      } else {
-        var m='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=m; toast(m,'err'); return;
-      }
-    }
+    if(dup){ var m='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=m; toast(m,'err'); return; }
   }
-  if(_labSubmitting){ toast('Guardando…','info'); return; } _labSubmitting=true;
   var ts=localTs();
   var totalTras=(nReal||0)+(vReal||0);
   var record={
@@ -452,6 +451,7 @@ async function submitLabTraspaso(){
   // FIX-CIERRE-02: al editar, NO sobrescribir identidad del registro (fecha/turno/responsable).
   // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
   if(_labTraspasoEditId){ delete record.fecha; delete record.turno; delete record.shift_id; delete record.responsable_id; delete record.responsable_nombre; delete record.empleado_entrega_id; delete record.empleado_entrega_nombre; }
+  _labSubmitting = true;
   try{
     await _labSave(record,_labTraspasoEditId);
     if(!_labTraspasoEditId) await _labSaveCharges(record.id, record.fecha);
@@ -461,7 +461,8 @@ async function submitLabTraspaso(){
     toast('Caja SYNCROLAB guardada correctamente y pendiente de validación.','ok');
     if(typeof renderLabCajaList==='function') renderLabCajaList();
     _labAutoLogout();
-  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar traspaso','err'); }finally{ _labSubmitting=false; }
+  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar traspaso','err');
+  }finally{ _labSubmitting = false; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -561,6 +562,7 @@ async function corregirCajaLab(id){
 window.corregirCajaLab = corregirCajaLab;
 
 async function submitLabCierre(){
+  if(_labSubmitting) return;
   var _isCorrection = window._cajaCorrectMode; window._cajaCorrectMode = false;
   var _corrNote = window._cajaCorrectNote || ''; window._cajaCorrectNote = '';
   var turno=_labTipoTurno||_labCurrentTurno()||'';
@@ -569,17 +571,10 @@ async function submitLabCierre(){
   if(!_labCierreEditId && currentUser.rol!=='admin' && !_labPuedeCerrar(turno,today())){
     var mc='El turno '+turno+' no puede cerrar caja. Haz un traspaso.'; if(errEl) errEl.textContent=mc; toast(mc,'err'); return;
   }
-  if(!_labCierreEditId){
+  if(!_labCierreEditId && currentUser.rol!=='admin'){
     var dup=await getLabOpToday(turno);
-    if(dup){
-      if(currentUser.rol==='admin'){
-        if(!confirm('⚠ Ya existe un '+(dup.tipo==='traspaso'?'traspaso':'cierre')+' para turno '+turno+' hoy.\n\n¿Seguro que quieres crear OTRO registro?')) return;
-      } else {
-        var md='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=md; toast(md,'err'); return;
-      }
-    }
+    if(dup){ var md='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=md; toast(md,'err'); return; }
   }
-  if(_labSubmitting){ toast('Guardando…','info'); return; } _labSubmitting=true;
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
   var rec={};
   ['nub','vg'].forEach(function(sys){
@@ -616,6 +611,7 @@ async function submitLabCierre(){
   // Bug confirmado: editar una caja antigua le ponía fecha=today() y bloqueaba el turno de ese día.
   if(_labCierreEditId){ delete rec.fecha; delete rec.turno; delete rec.shift_id; delete rec.responsable_id; delete rec.responsable_nombre; }
   if(_isCorrection){ rec.corregida=true; rec.corrected_by=currentUser.nombre; rec.corrected_at=ts; rec.correction_note=_corrNote||null; if(_labPrevEstado==='validado') rec.estado='validado'; }
+  _labSubmitting = true;
   try{
     await _labSave(rec,_labCierreEditId);
     if(!_labCierreEditId) await _labSaveCharges(rec.id, rec.fecha);
@@ -625,7 +621,8 @@ async function submitLabCierre(){
     toast('Caja SYNCROLAB guardada correctamente y pendiente de validación.','ok');
     if(typeof renderLabCajaList==='function') renderLabCajaList();
     _labAutoLogout();
-  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar cierre','err'); }finally{ _labSubmitting=false; }
+  }catch(e){ if(errEl) errEl.textContent='Error al guardar: '+e.message; toast('Error al guardar cierre','err');
+  }finally{ _labSubmitting = false; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
