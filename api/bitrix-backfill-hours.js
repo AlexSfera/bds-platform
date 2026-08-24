@@ -17,9 +17,13 @@
 //     · 1 candidato manual → PATCH: añade horas + referencia Bitrix
 //                            (nunca toca checklist/KPIs/estado/declaraciones)
 //     · >1 candidato → marca `ambiguous` (revisión Admin)
-//     · 0 candidatos → AUTO-CREA turno mínimo `BXAUTO_*` estado 'Pendiente'
-//                      con horas Bitrix reales (start_ts / end_ts).
-//                      Empleado puede completar la declaración desde la app.
+//     · 0 candidatos → AUTO-CREA turno mínimo `BXAUTO_*` estado 'Validado'
+//                      con horas Bitrix reales (start_ts / end_ts),
+//                      firmado por 'system_backfill_hist'.
+//                      Datos históricos: no requieren validación humana
+//                      (a diferencia del cron nocturno, que crea BXAUTO_ en
+//                      'Pendiente' para que el empleado complete al día
+//                      siguiente).
 //
 //   Con esto, mayo/junio 2026 (y cualquier día previo al arranque del
 //   cron) quedan cubiertos igual que el proceso nocturno.
@@ -462,7 +466,8 @@ async function paseAsociacionBackfill(desde, hasta, DRY_RUN, empleadosById) {
                 horas:                 horasBx,
                 horas_bitrix:          horasBx,
                 horas_source:          'bitrix',
-                estado:                'Pendiente',
+                estado:                'Validado',
+                validado_por:          'system_backfill_hist',
                 responsable_id:        null,
                 responsable_nombre:    '',
                 follow_up:             'no',
