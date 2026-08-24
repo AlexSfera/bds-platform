@@ -593,8 +593,8 @@ function _hmAbrirBackfill(){
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
   overlay.innerHTML = '<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:24px;max-width:520px;width:100%;box-shadow:var(--shadow);">'
     + '<h2 style="font-family:var(--font-mono);font-size:14px;color:var(--amber);letter-spacing:.15em;text-transform:uppercase;margin-bottom:12px;">⚙ Backfill histórico</h2>'
-    + '<p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Va a importar todos los registros de Bitrix Timeman desde el <strong>1/1/2026</strong> hasta hoy a <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">bitrix_time_records</code>. Es idempotente (registros duplicados se ignoran).</p>'
-    + '<p style="font-size:12px;color:var(--text3);margin-bottom:16px;">• Duración estimada: 2-8 min<br>• No modifica la tabla <code>shifts</code><br>• Se puede pulsar más de una vez sin efectos</p>'
+    + '<p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.5;">Va a importar los registros de Bitrix Timeman desde el <strong>1/1/2026</strong> hasta hoy a <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">bitrix_time_records</code>, mes a mes, y crear los turnos <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">BXAUTO_</code> retroactivos donde falten.</p>'
+    + '<p style="font-size:12px;color:var(--text3);margin-bottom:16px;">• Se procesa un mes cada 15-40 s (progreso visible mes a mes)<br>• Idempotente: relanzable sin duplicar<br>• Si un mes falla, el resto sigue y puedes reintentar</p>'
     + '<div style="background:rgba(251,191,36,.08);border:1px solid var(--amber);border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--amber);">⚠ Para confirmar, escribe <strong>BACKFILL</strong> en el campo de abajo.</div>'
     + '<input type="text" id="hm-backfill-confirm" placeholder="Escribe BACKFILL" style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:13px;margin-bottom:16px;" autocomplete="off" oninput="_hmValidarConfirm()"/>'
     + '<div id="hm-backfill-log" style="max-height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-bottom:14px;display:none;"></div>'
@@ -621,6 +621,34 @@ function _hmCerrarBackfill(){
 }
 window._hmCerrarBackfill = _hmCerrarBackfill;
 
+// ─── BACKFILL MES A MES ──────────────────────────────────────────────
+// Se trocea el rango 2026-01-01→hoy en llamadas mensuales para evitar
+// FUNCTION_INVOCATION_TIMEOUT en Vercel. Cada mes ~15-40 s, cabe holgado
+// en el maxDuration de 300 s configurado en vercel.json.
+// Ventajas:
+//   · Progreso visible mes a mes en el log del modal.
+//   · Si un mes falla, el resto sigue (resiliente).
+//   · Idempotente: relanzable sin duplicar (ignore-duplicates + IDs
+//     deterministas).
+function _hmMesesBackfillDesde(ymDesde){
+  var out = [];
+  var hoy = new Date();
+  var hy = hoy.getFullYear(), hm = hoy.getMonth() + 1;
+  var partes = String(ymDesde).split('-');
+  var y = parseInt(partes[0], 10), m = parseInt(partes[1], 10);
+  while(y < hy || (y === hy && m <= hm)){
+    var mm = String(m).padStart(2,'0');
+    var ultimoDia = new Date(y, m, 0).getDate();      // día 0 del mes siguiente
+    var esUltimo = (y === hy && m === hm);
+    var hasta = esUltimo
+      ? (hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0') + '-' + String(hoy.getDate()).padStart(2,'0'))
+      : (y + '-' + mm + '-' + String(ultimoDia).padStart(2,'0'));
+    out.push({ ym: y + '-' + mm, desde: y + '-' + mm + '-01', hasta: hasta });
+    m++; if(m > 12){ m = 1; y++; }
+  }
+  return out;
+}
+
 async function _hmLanzarBackfill(){
   if(_hmBackfillEnCurso) return;
   _hmBackfillEnCurso = true;
@@ -630,47 +658,109 @@ async function _hmLanzarBackfill(){
   if(input) input.disabled = true;
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Ejecutando…'; btn.style.opacity = '.6'; }
   if(log){ log.style.display = 'block'; log.innerHTML = ''; }
-  function logLine(txt, color){
+  function logLine(txt, color, weight){
     if(!log) return;
     var d = document.createElement('div');
     if(color) d.style.color = color;
+    if(weight) d.style.fontWeight = weight;
     d.textContent = txt; log.appendChild(d); log.scrollTop = log.scrollHeight;
   }
-  logLine('▶ Enviando petición al servidor…', 'var(--text2)');
-  logLine('  (esto tarda 2-8 minutos; no cierres la ventana)', 'var(--text3)');
+
+  var meses = _hmMesesBackfillDesde('2026-01');
+  logLine('▶ Backfill mes a mes — ' + meses.length + ' meses a procesar', 'var(--text2)', '700');
+  logLine('  No cierres la ventana. Cada mes tarda 15-40 s aproximadamente.', 'var(--text3)');
+  logLine('', 'var(--text3)');
+
   var t0 = Date.now();
-  try {
-    var res = await syncroSupabaseFetch('/api/bitrix-backfill-hours?desde=2026-01-01', { method: 'POST' });
-    var body = await res.text();
-    var data = null;
-    try { data = JSON.parse(body); } catch(_) {}
-    if(!res.ok){
-      logLine('❌ Error HTTP ' + res.status, 'var(--red)');
-      logLine(body.slice(0, 400), 'var(--red)');
-      if(btn){ btn.textContent = 'Reintentar'; btn.disabled = false; btn.style.opacity = '1'; }
-      if(input){ input.disabled = false; }
-      _hmBackfillEnCurso = false;
-      _hmValidarConfirm();
-      return;
+  var acumulado = {
+    intervalos: 0, insercion: 0, matched: 0, autoCreados: 0,
+    ambiguous: 0, pending: 0, errores: 0, mesesOk: 0, mesesFallo: 0
+  };
+  var fallidos = [];
+
+  for(var i = 0; i < meses.length; i++){
+    var mes = meses[i];
+    var etiquetaMes = _hmMonthLabel(mes.ym);
+    logLine('[' + (i+1) + '/' + meses.length + '] ' + etiquetaMes + ' · procesando…', 'var(--text2)');
+    var tMes = Date.now();
+    try {
+      var url = '/api/bitrix-backfill-hours?desde=' + mes.desde + '&hasta=' + mes.hasta;
+      var res = await syncroSupabaseFetch(url, { method: 'POST' });
+      var body = await res.text();
+      var data = null;
+      try { data = JSON.parse(body); } catch(_) {}
+      var durMes = ((Date.now() - tMes) / 1000).toFixed(1);
+
+      if(!res.ok){
+        logLine('    ❌ HTTP ' + res.status + ' (' + durMes + ' s) — ' + body.slice(0, 200), 'var(--red)');
+        acumulado.mesesFallo++;
+        fallidos.push(etiquetaMes + ' (HTTP ' + res.status + ')');
+        continue;
+      }
+      if(!data){
+        logLine('    ⚠ Respuesta sin JSON (' + durMes + ' s)', 'var(--orange)');
+        acumulado.mesesFallo++;
+        fallidos.push(etiquetaMes + ' (sin JSON)');
+        continue;
+      }
+
+      var mIntervals   = data.intervalos_bitrix   || 0;
+      var mInserted    = data.insercion_intentos  || 0;
+      var mMatched     = data.shifts_matched      || 0;
+      var mAuto        = data.shifts_auto_creados || 0;
+      var mAmb         = data.shifts_ambiguous    || 0;
+      var mPend        = data.records_still_pending || 0;
+      var mErrs        = (data.errores && data.errores.length) || 0;
+
+      acumulado.intervalos  += mIntervals;
+      acumulado.insercion   += mInserted;
+      acumulado.matched     += mMatched;
+      acumulado.autoCreados += mAuto;
+      acumulado.ambiguous   += mAmb;
+      acumulado.pending     += mPend;
+      acumulado.errores     += mErrs;
+      acumulado.mesesOk++;
+
+      logLine('    ✓ ' + durMes + ' s · ' + mIntervals + ' intervalos · '
+            + mMatched + ' matched · ' + mAuto + ' auto · ' + mAmb + ' ambig'
+            + (mErrs ? ' · ' + mErrs + ' errs' : ''),
+            'var(--green)');
+    } catch (e) {
+      var durMes2 = ((Date.now() - tMes) / 1000).toFixed(1);
+      logLine('    ❌ Excepción (' + durMes2 + ' s): ' + (e.message || e), 'var(--red)');
+      acumulado.mesesFallo++;
+      fallidos.push(etiquetaMes + ' (excepción)');
     }
-    var durS = ((Date.now() - t0) / 1000).toFixed(1);
-    logLine('✓ Backfill completado en ' + durS + ' s', 'var(--green)');
-    if(data){
-      logLine('  Empleados procesados: ' + (data.empleados_procesados || '?'));
-      logLine('  Intervalos importados: ' + (data.intervalos_bitrix || '?'));
-      logLine('  Errores: ' + ((data.errores && data.errores.length) || 0));
-    }
+  }
+
+  var durTotalS = ((Date.now() - t0) / 1000).toFixed(1);
+  logLine('', 'var(--text3)');
+  if(acumulado.mesesFallo === 0){
+    logLine('✓ TERMINADO — todos los meses OK en ' + durTotalS + ' s', 'var(--green)', '700');
+  } else {
+    logLine('⚠ TERMINADO — ' + acumulado.mesesOk + ' meses OK, '
+          + acumulado.mesesFallo + ' con fallo (' + durTotalS + ' s)', 'var(--orange)', '700');
+    logLine('  Fallos: ' + fallidos.join(', '), 'var(--orange)');
+    logLine('  Puedes pulsar "Reintentar" — es idempotente, sólo procesará lo que falta.', 'var(--text3)');
+  }
+  logLine('  Intervalos importados: ' + acumulado.intervalos);
+  logLine('  Turnos manuales matcheados: ' + acumulado.matched);
+  logLine('  Turnos BXAUTO_ creados: ' + acumulado.autoCreados);
+  if(acumulado.ambiguous) logLine('  Ambigüedades (revisar en admin): ' + acumulado.ambiguous, 'var(--orange)');
+  if(acumulado.pending)   logLine('  Registros sin resolver: ' + acumulado.pending, 'var(--text3)');
+  if(acumulado.errores)   logLine('  Errores acumulados: ' + acumulado.errores, 'var(--red)');
+
+  if(acumulado.mesesFallo === 0){
     logLine('▶ Recargando panel con nuevos datos…', 'var(--text2)');
     if(btn){ btn.textContent = '✓ Hecho — Cerrar'; btn.disabled = false; btn.style.opacity = '1'; btn.onclick = _hmCerrarBackfillYRecargar; }
     if(typeof toast === 'function') toast('Backfill completado ✓', 'ok');
-    _hmBackfillEnCurso = false;
-  } catch (e) {
-    logLine('❌ Excepción: ' + (e.message || e), 'var(--red)');
-    if(btn){ btn.textContent = 'Reintentar'; btn.disabled = false; btn.style.opacity = '1'; }
+  } else {
+    if(btn){ btn.textContent = 'Reintentar meses fallidos'; btn.disabled = false; btn.style.opacity = '1'; }
     if(input){ input.disabled = false; }
-    _hmBackfillEnCurso = false;
-    _hmValidarConfirm();
+    if(typeof toast === 'function') toast('Backfill parcial — revisar log', 'err');
   }
+  _hmBackfillEnCurso = false;
+  _hmValidarConfirm();
 }
 window._hmLanzarBackfill = _hmLanzarBackfill;
 
