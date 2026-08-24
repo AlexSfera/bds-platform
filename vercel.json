@@ -15,5 +15,13 @@
       "path": "/api/bitrix-sync",
       "schedule": "0 23 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/bitrix-backfill-hours.js": {
+      "maxDuration": 300
+    },
+    "api/bitrix-sync.js": {
+      "maxDuration": 300
+    }
+  }
 }
