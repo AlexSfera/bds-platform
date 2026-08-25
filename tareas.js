@@ -86,6 +86,67 @@ function bTaskEstado(e){
   return '<span class="badge b-red">Abierta</span>';
 }
 
+// Badge clicable para las tablas de Validacion.
+function bTaskEstadoClick(e, taskId){
+  var inner=bTaskEstado(e);
+  return inner.replace('<span class="badge',
+    '<span data-task-state-id="'+taskId+'" style="cursor:pointer;" '
+    +'title="Clic para ver / gestionar" class="badge task-state-clickable');
+}
+
+async function openTaskStateModal(taskId){
+  invalidateCache('tareas');
+  var tareas=await getDB('tareas');
+  var task=(tareas||[]).find(function(t){ return t.id===taskId; });
+  if(!task){ toast('Tarea no encontrada','err'); return; }
+  var state=normalizeTaskState(task.estado);
+  var canStart=state===TASK_STATES.ABIERTA && canProgressTask(task);
+  var canClose=state===TASK_STATES.EN_PROCESO && canCloseTask(currentUser,task);
+  var canVerify=state===TASK_STATES.CERRADA && canValidateTask(currentUser,task);
+  var ov=document.getElementById('modal-task-state');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='modal-task-state';
+    ov.className='modal-overlay';
+    ov.innerHTML='<div class="modal" style="max-width:560px;">'
+      +'<div class="modal-h"><h3>🔗 Tarea</h3><button class="modal-x" onclick="closeModal(\'modal-task-state\')">✕</button></div>'
+      +'<div class="modal-b" id="task-state-body"></div><div class="modal-f" id="task-state-foot"></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(event){ if(event.target===ov) closeModal('modal-task-state'); });
+  }
+  document.getElementById('task-state-body').innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:10px;">'
+    +'<div><b>Estado:</b><br>'+bTaskEstado(state)+'</div>'
+    +'<div><b>Departamento:</b><br>'+deptBadge(task.dept_destino||'—')+'</div>'
+    +'<div><b>Prioridad:</b><br>'+bPrio(task.prioridad)+'</div>'
+    +'<div><b>Deadline:</b><br>'+fmtDate(task.deadline)+'</div></div>'
+    +'<div style="font-size:12px;"><b>'+formatDisplayValue(task.titulo||'Tarea')+'</b>'
+    +'<div style="background:var(--bg2);padding:8px;border-radius:6px;margin-top:4px;">'
+    +formatDisplayValue(task.descripcion||'Sin descripción')+'</div></div>';
+  var buttons=[];
+  if(canStart) buttons.push('<button class="btn btn-secondary" onclick="taskStateAction(\''+task.id+'\',\'En proceso\')">▶ En proceso</button>');
+  if(canClose) buttons.push('<button class="btn btn-primary" onclick="taskStateAction(\''+task.id+'\',\'Cerrada\')">✓ Cerrar</button>');
+  if(canVerify) buttons.push('<button class="btn btn-primary" onclick="taskStateAction(\''+task.id+'\',\'Validada\')">✅ Validar</button>');
+  buttons.push('<button class="btn btn-secondary" onclick="closeModal(\'modal-task-state\')">Cerrar</button>');
+  document.getElementById('task-state-foot').innerHTML=buttons.join(' ');
+  ov.classList.add('open');
+}
+window.openTaskStateModal=openTaskStateModal;
+
+async function taskStateAction(taskId,newState){
+  await advanceTask(taskId,newState);
+  closeModal('modal-task-state');
+  if(typeof rerenderActiveScreen==='function') rerenderActiveScreen();
+}
+window.taskStateAction=taskStateAction;
+
+document.addEventListener('click',function(event){
+  var el=event.target.closest&&event.target.closest('.task-state-clickable');
+  if(!el) return;
+  event.preventDefault(); event.stopPropagation();
+  openTaskStateModal(el.getAttribute('data-task-state-id'));
+});
+
 // ── UI HELPERS — generación rápida de tareas desde Mi Turno ───────────
 function showTaskGen(type){ var el=document.getElementById('task-gen-'+type); if(!el) return; el.classList.add('visible'); setDeadlineLimits(); }
 function hideTaskGen(type){ var el=document.getElementById('task-gen-'+type); if(!el) return; el.classList.remove('visible'); }

@@ -2165,7 +2165,7 @@ function valGestRenderTable(){
       +'<td style="font-size:12px">'+(g.nombre_empleado||g.employee_name||g.nombre||'—')+'</td>'
       +'<td>'+deptBadge(g.departamento||g.area||'—')+'</td>'
       +'<td style="max-width:260px;font-size:12px">'+(g.descripcion||g.description||'—').slice(0,80)+'</td>'
-      +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(g.estado):bEstado(g.estado))+'</td>'
+      +'<td>'+(typeof bGestionEstadoClick==='function'?bGestionEstadoClick(g.estado||'Abierta',g.id):(typeof bGestionEstado==='function'?bGestionEstado(g.estado):bEstado(g.estado)))+'</td>'
       +'</tr>';
   });
   gestEl.innerHTML=h+'</table>';
@@ -2203,7 +2203,7 @@ function valTaskRenderTable(){
       +'<td style="font-size:12px;font-weight:600">'+(t.titulo||'—').slice(0,60)+'</td>'
       +'<td>'+deptBadge(t.dept_destino||'—')+'</td>'
       +'<td style="font-family:var(--font-mono);font-size:11px;'+dlStyle+'">'+(t.deadline?fmtDate(t.deadline):'—')+'</td>'
-      +'<td>'+(typeof bGestionEstado==='function'?bGestionEstado(t.estado):bEstado(t.estado))+'</td>'
+      +'<td>'+(typeof bTaskEstadoClick==='function'?bTaskEstadoClick(t.estado,t.id):(typeof bTaskEstado==='function'?bTaskEstado(t.estado):bEstado(t.estado)))+'</td>'
       +'</tr>';
   });
   tarEl.innerHTML=h+'</table>';

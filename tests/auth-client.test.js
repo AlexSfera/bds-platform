@@ -32,7 +32,7 @@ test('legacy transport remains available if the cutover flag is rolled back', as
 
 test('all audited browser Supabase fetches use the central authenticated transport', async () => {
   const files = [
-    'adjuntos.js', 'caja.js', 'dashboard.js', 'faults.js', 'incentivos.js',
+    'caja.js', 'dashboard.js', 'faults.js', 'incentivos.js',
     'informes.js', 'mantenimiento.js', 'merma.js', 'mi_rendimiento.js',
     'posmews_ventas.js', 'recepcion.js', 'syncrolab.js', 'tareas.js',
     'validacion.js'
@@ -43,10 +43,36 @@ test('all audited browser Supabase fetches use the central authenticated transpo
     assert.match(source, /syncroSupabaseFetch\s*\(/, file);
   }
 
+  const attachments = await readFile(new URL('../adjuntos.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(attachments, /(^|[^A-Za-z0-9_])fetch\s*\(/);
+  assert.match(attachments, /SyncroAuth\.uploadAttachment\(/);
+  assert.match(attachments, /SyncroAuth\.attachmentUrl\(/);
+  assert.match(attachments, /SyncroAuth\.deleteAttachment\(/);
+
   const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
   const directFetches = shared.match(/(^|[^A-Za-z0-9_])fetch\s*\(/gm) || [];
   assert.equal(directFetches.length, 2, 'shared.js sólo conserva los dos POST internos de correo');
   assert.match(shared, /syncroSupabaseFetch\s*\(/);
   assert.match(shared, /table === 'employees'.*SyncroAuth\.enabled/s);
   assert.match(shared, /SyncroAuth\.employees\(\)/);
+});
+
+test('validation exposes management actions for gestiones and tareas', async () => {
+  const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
+  const tareas = await readFile(new URL('../tareas.js', import.meta.url), 'utf8');
+  assert.match(shared, /bGestionEstadoClick\(g\.estado\|\|'Abierta',g\.id\)/);
+  assert.match(shared, /bTaskEstadoClick\(t\.estado,t\.id\)/);
+  assert.match(tareas, /function openTaskStateModal\(taskId\)/);
+  assert.match(tareas, /async function taskStateAction\(taskId,newState\)/);
+});
+
+test('gestion modal renders attachments and legacy records are patched compatibly', async () => {
+  const attachments = await readFile(new URL('../adjuntos.js', import.meta.url), 'utf8');
+  assert.match(attachments, /window\.openItemModal = async function\(type, id\)/);
+  assert.match(attachments, /data-adj-viewer/);
+  assert.match(attachments, /adjuntoRenderViewer\(adjuntos, table, id, editable\)/);
+  assert.match(attachments, /window\.openTaskStateModal = async function\(taskId\)/);
+  assert.match(attachments, /adjuntoGetFromRecord\('tareas', taskId\)/);
+  assert.match(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\) \}\)/);
+  assert.doesNotMatch(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\), updated_at:/);
 });

@@ -54,6 +54,8 @@
 //        [&skip_asoc=1]   → sólo importar records, sin crear turnos
 // ═══════════════════════════════════════════════════════════════════════
 
+import { authzVersionFromAccessToken } from '../lib/auth-server.js';
+
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const BITRIX_WEBHOOK       = process.env.BITRIX_WEBHOOK;
@@ -296,7 +298,9 @@ async function sbGetAllPaged(pathBase, pageSize) {
 }
 
 // ─── AUTH: validar sesión y consultar rol ────────────────────────────
-async function validarSesionAdmin(bearerToken) {
+// Verifica el Bearer token contra Supabase Auth y luego busca el rol del
+// empleado en employees. Devuelve el rol o null si algo falla.
+export async function validarSesionAdmin(bearerToken) {
   if (!bearerToken) return null;
   try {
     const authRes = await fetch(SUPABASE_URL + '/auth/v1/user', {
@@ -311,18 +315,19 @@ async function validarSesionAdmin(bearerToken) {
 
     const identRows = await sb('GET',
       'syncro_auth_identities?auth_user_id=eq.' + encodeURIComponent(authUser.id)
-      + '&select=employee_id,active&limit=1'
+      + '&select=employee_id,active,force_pin_change,authz_version&limit=1'
     );
     const ident = (identRows && identRows[0]) || null;
-    if (!ident || ident.active === false) return null;
+    if (!ident || ident.active !== true || ident.force_pin_change === true) return null;
+    const tokenVersion = authzVersionFromAccessToken(bearerToken);
+    if (tokenVersion === null || tokenVersion !== ident.authz_version) return null;
 
     const empRows = await sb('GET',
       'employees?id=eq.' + encodeURIComponent(ident.employee_id)
       + '&select=id,rol,estado&limit=1'
     );
     const emp = (empRows && empRows[0]) || null;
-    if (!emp) return null;
-    if (emp.estado === 'Baja') return null;
+    if (!emp || emp.estado !== 'Activo') return null;
     return emp.rol || null;
   } catch (_) {
     return null;
@@ -512,6 +517,10 @@ async function paseAsociacionBackfill(desde, hasta, DRY_RUN, empleadosById) {
 
 // ─── HANDLER ─────────────────────────────────────────────────────────
 export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'method_not_allowed' });
+  }
   // Auth dual:
   //   A) Bearer CRON_SECRET  → autorización de sistema
   //   B) Bearer <access_token> de sesión + rol=admin → botón del panel
