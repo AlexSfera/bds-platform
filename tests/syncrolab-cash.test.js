@@ -39,6 +39,10 @@ test('SYNCROLAB keeps independent guards and blocks duplicate operations for eve
   assert.match(source, /async function submitLabCierre\(\)\{\s*if\(_labSubmitting\) return;/);
   assert.match(source, /if\(!_labTraspasoEditId\)\{\s*var dup=await getLabOpToday\(turno\);/);
   assert.match(source, /if\(!_labCierreEditId\)\{\s*var dup=await getLabOpToday\(turno\);/);
+  assert.match(source, /var _labMissingTransferHistory = \{ nubimed:false, virtugym:false \}/);
+  assert.match(source, /No hay efectivo traspasado anterior para/);
+  assert.match(source, /if\(!_labTraspasoEditId && \(_labMissingTransferHistory\.nubimed \|\| _labMissingTransferHistory\.virtugym\)\)/);
+  assert.match(source, /if\(!_labCierreEditId && \(_labMissingTransferHistory\.nubimed \|\| _labMissingTransferHistory\.virtugym\)\)/);
   assert.match(source, /lab-tras-aviso/);
   assert.match(source, /lab-c-aviso/);
 });
