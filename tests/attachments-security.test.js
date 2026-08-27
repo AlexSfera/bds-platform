@@ -3,10 +3,13 @@ import { readFile } from 'node:fs/promises';
 import { afterEach, beforeEach, test } from 'node:test';
 
 import objectHandler from '../api/attachments/object.js';
+import metadataHandler from '../api/attachments/metadata.js';
 import signDownloadHandler from '../api/attachments/sign-download.js';
 import signUploadHandler from '../api/attachments/sign-upload.js';
 import {
   ATTACHMENT_MAX_SIZE,
+  canManageRecordAttachments,
+  normalizeAttachmentMetadata,
   normalizeAttachmentPath,
   normalizeAttachmentTarget,
   normalizeUploadRequest
@@ -41,7 +44,10 @@ function token(version = 1) {
   return encode({ alg: 'none' }) + '.' + encode({ app_metadata: { syncro_authz_version: version } }) + '.sig';
 }
 
-function mockAuthenticatedStorage() {
+function mockAuthenticatedStorage(profile = {
+  id: 'emp1', nombre: 'Empleado', area: 'Sala', puesto: 'Camarero',
+  rol: 'empleado', estado: 'Activo'
+}) {
   const calls = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
@@ -51,13 +57,25 @@ function mockAuthenticatedStorage() {
       employee_id: 'emp1', auth_user_id: 'auth-user', active: true,
       force_pin_change: false, authz_version: 1
     }]);
-    if (url.includes('/rest/v1/employees?')) return json([{
-      id: 'emp1', nombre: 'Empleado', area: 'Sala', puesto: 'Camarero',
-      rol: 'empleado', estado: 'Activo'
-    }]);
-    if (url.includes('/rest/v1/tareas?')) return json([{
-      id: 'task1', adjuntos: [], updated_at: '2026-08-14T00:00:00Z'
-    }]);
+    if (url.includes('/rest/v1/employees?')) return json([profile]);
+    if (url.includes('/rest/v1/tareas?')) {
+      if (init.method === 'PATCH') return json([{ id: 'task1' }]);
+      return json([{
+        id: 'task1', employee_id: 'emp1', dept_destino: 'Sala', adjuntos: []
+      }]);
+    }
+    if (url.includes('/rest/v1/gestiones?')) {
+      if (init.method === 'PATCH') return json([{ id: 'gestion1' }]);
+      return json([{
+        id: 'gestion1', employee_id: 'emp1', departamento: 'Sala', area: 'Sala', adjuntos: []
+      }]);
+    }
+    if (url.includes('/rest/v1/incidencias?')) {
+      if (init.method === 'PATCH') return json([{ id: 'incidencia1' }]);
+      return json([{
+        id: 'incidencia1', employee_id: 'emp1', departamento: 'Sala', area: 'Sala', adjuntos: []
+      }]);
+    }
     if (url.includes('/storage/v1/object/upload/sign/')) return json({
       url: '/object/upload/sign/adjuntos/tareas/task1/file.jpg?token=signed-token',
       token: 'signed-token'
@@ -98,6 +116,33 @@ test('upload signing rejects oversized and unapproved content types', () => {
   assert.match(accepted.path, /^tareas\/task1\/[0-9a-f-]+\.jpg$/);
 });
 
+test('attachment metadata is restricted to the selected parent record', () => {
+  const target = normalizeAttachmentTarget('incidencias', 'incidencia1');
+  const valid = normalizeAttachmentMetadata({
+    name: 'captura.png', path: 'incidencias/incidencia1/file.png',
+    type: 'image/png', size: 1024
+  }, target, { nombre: 'Responsable' });
+  assert.equal(valid.path, 'incidencias/incidencia1/file.png');
+  assert.equal(valid.uploaded_by, 'Responsable');
+  assert.equal(normalizeAttachmentMetadata({
+    name: 'captura.png', path: 'gestiones/gestion1/file.png',
+    type: 'image/png', size: 1024
+  }, target, { nombre: 'Responsable' }), null);
+});
+
+test('only management roles can mutate attachment metadata', () => {
+  const employee = { id: 'emp1', rol: 'empleado', area: 'Sala', puesto: 'Camarero' };
+  const manager = { id: 'manager1', rol: 'jefe', area: 'Sala', puesto: 'Jefe de Sala' };
+  assert.equal(canManageRecordAttachments(employee,
+    { table: 'gestiones' }, { employee_id: 'emp1', departamento: 'Sala' }), false);
+  assert.equal(canManageRecordAttachments(employee,
+    { table: 'tareas' }, { employee_id: 'emp1', dept_destino: 'Sala' }), false);
+  assert.equal(canManageRecordAttachments(employee,
+    { table: 'incidencias' }, { employee_id: 'other', departamento: 'Sala' }), false);
+  assert.equal(canManageRecordAttachments(manager,
+    { table: 'gestiones' }, { employee_id: 'emp1', departamento: 'Sala' }), true);
+});
+
 test('state-changing attachment endpoints require the application origin', async () => {
   const req = new Request('https://syncro.example/api/attachments/sign-upload', {
     method: 'POST',
@@ -112,6 +157,13 @@ test('state-changing attachment endpoints require the application origin', async
     body: '{}'
   });
   assert.equal((await objectHandler(deleteReq)).status, 403);
+
+  const metadataReq = new Request('https://syncro.example/api/attachments/metadata', {
+    method: 'POST',
+    headers: { origin: 'https://attacker.example', authorization: 'Bearer fake' },
+    body: '{}'
+  });
+  assert.equal((await metadataHandler(metadataReq)).status, 403);
 });
 
 test('attachment endpoints reject missing sessions before contacting Storage', async () => {
@@ -121,8 +173,11 @@ test('attachment endpoints reject missing sessions before contacting Storage', a
   assert.equal((await signUploadHandler(req)).status, 401);
 });
 
-test('authenticated endpoints return absolute signed Storage URLs after checking the parent record', async () => {
-  const calls = mockAuthenticatedStorage();
+test('management endpoints return absolute signed Storage URLs after checking the parent record', async () => {
+  const calls = mockAuthenticatedStorage({
+    id: 'emp1', nombre: 'Responsable', area: 'Sala', puesto: 'Jefe de Sala',
+    rol: 'jefe', estado: 'Activo'
+  });
   const accessToken = token();
   const uploadReq = new Request('https://syncro.example/api/attachments/sign-upload', {
     method: 'POST',
@@ -147,12 +202,41 @@ test('authenticated endpoints return absolute signed Storage URLs after checking
 
   assert.equal(calls.some(call => call.url.includes('/rest/v1/tareas?')), true);
   const recordChecks = calls.filter(call => call.url.includes('/rest/v1/tareas?'));
-  assert.equal(recordChecks.every(call => call.url.includes('select=id&limit=1')), true);
+  assert.equal(recordChecks.some(call => call.url.includes('select=id&limit=1')), true);
+  assert.equal(recordChecks.some(call => call.url.includes('select=id,employee_id,dept_destino&limit=1')), true);
   assert.equal(recordChecks.some(call => call.url.includes('updated_at')), false);
 });
 
-test('attachment deletion succeeds when the secondary audit write fails', async () => {
+test('employees cannot mutate attachments, including their own records', async () => {
   const calls = mockAuthenticatedStorage();
+  const accessToken = token();
+  const uploadReq = new Request('https://syncro.example/api/attachments/sign-upload', {
+    method: 'POST',
+    headers: { origin: 'https://syncro.example', authorization: 'Bearer ' + accessToken },
+    body: JSON.stringify({
+      table: 'tareas', record_id: 'task1', name: 'evidence.jpg',
+      type: 'image/jpeg', size: 1024
+    })
+  });
+  assert.equal((await signUploadHandler(uploadReq)).status, 403);
+
+  const metadataReq = new Request('https://syncro.example/api/attachments/metadata', {
+    method: 'POST',
+    headers: { origin: 'https://syncro.example', authorization: 'Bearer ' + accessToken },
+    body: JSON.stringify({
+      action: 'add', table: 'tareas', record_id: 'task1',
+      attachments: [{ name: 'evidence.jpg', path: 'tareas/task1/file.jpg', type: 'image/jpeg', size: 1024 }]
+    })
+  });
+  assert.equal((await metadataHandler(metadataReq)).status, 403);
+  assert.equal(calls.some(call => call.url.includes('/storage/v1/object/upload/sign/')), false);
+});
+
+test('attachment deletion succeeds when the secondary audit write fails', async () => {
+  const calls = mockAuthenticatedStorage({
+    id: 'emp1', nombre: 'Responsable', area: 'Sala', puesto: 'Jefe de Sala',
+    rol: 'jefe', estado: 'Activo'
+  });
   const req = new Request('https://syncro.example/api/attachments/object', {
     method: 'DELETE',
     headers: { origin: 'https://syncro.example', authorization: 'Bearer ' + token() },
@@ -162,6 +246,35 @@ test('attachment deletion succeeds when the secondary audit write fails', async 
   assert.equal(response.status, 200);
   assert.equal((await response.json()).deleted, true);
   assert.equal(calls.some(call => call.url.includes('/storage/v1/object/adjuntos/')), true);
+});
+
+test('management metadata writes work consistently for all three operational tables', async () => {
+  const calls = mockAuthenticatedStorage({
+    id: 'emp1', nombre: 'Responsable', area: 'Sala', puesto: 'Jefe de Sala',
+    rol: 'jefe', estado: 'Activo'
+  });
+  const records = [
+    ['gestiones', 'gestion1'],
+    ['incidencias', 'incidencia1'],
+    ['tareas', 'task1']
+  ];
+  for (const [table, recordId] of records) {
+    const path = table + '/' + recordId + '/file.png';
+    const req = new Request('https://syncro.example/api/attachments/metadata', {
+      method: 'POST',
+      headers: { origin: 'https://syncro.example', authorization: 'Bearer ' + token() },
+      body: JSON.stringify({
+        action: 'add', table, record_id: recordId,
+        attachments: [{ name: 'captura.png', path, type: 'image/png', size: 1024 }]
+      })
+    });
+    const response = await metadataHandler(req);
+    assert.equal(response.status, 200, table);
+    const body = await response.json();
+    assert.equal(body.attachments.length, 1, table);
+    assert.equal(body.attachments[0].path, path, table);
+  }
+  assert.equal(calls.filter(call => call.init.method === 'PATCH').length, 3);
 });
 
 test('migration makes adjuntos private with limits and keeps a reconstructable rollback', async () => {

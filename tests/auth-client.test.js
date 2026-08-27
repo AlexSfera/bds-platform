@@ -48,6 +48,8 @@ test('all audited browser Supabase fetches use the central authenticated transpo
   assert.match(attachments, /SyncroAuth\.uploadAttachment\(/);
   assert.match(attachments, /SyncroAuth\.attachmentUrl\(/);
   assert.match(attachments, /SyncroAuth\.deleteAttachment\(/);
+  assert.match(attachments, /SyncroAuth\.addAttachmentMetadata\(/);
+  assert.match(attachments, /SyncroAuth\.removeAttachmentMetadata\(/);
 
   const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
   const directFetches = shared.match(/(^|[^A-Za-z0-9_])fetch\s*\(/gm) || [];
@@ -66,13 +68,13 @@ test('validation exposes management actions for gestiones and tareas', async () 
   assert.match(tareas, /async function taskStateAction\(taskId,newState\)/);
 });
 
-test('gestion modal renders attachments and legacy records are patched compatibly', async () => {
+test('gestion modal renders attachments through authenticated metadata APIs', async () => {
   const attachments = await readFile(new URL('../adjuntos.js', import.meta.url), 'utf8');
   assert.match(attachments, /window\.openItemModal = async function\(type, id\)/);
   assert.match(attachments, /data-adj-viewer/);
   assert.match(attachments, /adjuntoRenderViewer\(adjuntos, table, id, editable\)/);
   assert.match(attachments, /window\.openTaskStateModal = async function\(taskId\)/);
   assert.match(attachments, /adjuntoGetFromRecord\('tareas', taskId\)/);
-  assert.match(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\) \}\)/);
-  assert.doesNotMatch(attachments, /dbUpdate\(table, recordId, \{ adjuntos: JSON\.stringify\(adjuntosArray\), updated_at:/);
+  assert.doesNotMatch(attachments, /dbUpdate\(table, recordId, \{ adjuntos:/);
+  assert.match(attachments, /result !== null && row && row\.id/);
 });

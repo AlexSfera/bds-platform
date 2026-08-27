@@ -3,7 +3,7 @@ import {
   requireMethod, requireSameOrigin, sessionProfile
 } from '../../lib/auth-server.js';
 import {
-  absoluteStorageUrl, createSignedUpload, normalizeUploadRequest, requireReadableRecord
+  absoluteStorageUrl, createSignedUpload, normalizeUploadRequest, requireManageableRecord
 } from '../../lib/attachments-server.js';
 
 export const config = { runtime: 'edge' };
@@ -22,7 +22,7 @@ export default async function handler(req) {
     if (!session || session.forcePinChange) return jsonResponse({ error: 'Unauthorized' }, 401);
     const upload = normalizeUploadRequest(await readJson(req, 2048));
     if (!upload) return jsonResponse({ error: 'Invalid attachment' }, 400);
-    if (!await requireReadableRecord(token, upload)) return jsonResponse({ error: 'Forbidden' }, 403);
+    if (!await requireManageableRecord(token, upload, session.profile)) return jsonResponse({ error: 'Forbidden' }, 403);
     const signed = await createSignedUpload(upload.path);
     const rawUrl = signed?.url || signed?.signedURL || signed?.signedUrl || null;
     return jsonResponse({ path: upload.path, token: signed?.token || null, url: absoluteStorageUrl(rawUrl) });

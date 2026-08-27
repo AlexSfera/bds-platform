@@ -110,12 +110,18 @@ async function adjuntoGetFromRecord(table, recordId){
   return Array.isArray(adj) ? adj : [];
 }
 
-async function adjuntoSaveToRecord(table, recordId, adjuntosArray){
-  // Algunas gestiones legacy no tienen updated_at. El adjunto sólo requiere
-  // actualizar su propio campo; añadir columnas opcionales rompe todo el PATCH.
-  var result = await dbUpdate(table, recordId, { adjuntos: JSON.stringify(adjuntosArray) });
-  if(result === null) throw new Error('No se pudieron guardar los metadatos del adjunto');
+async function adjuntoAddToRecord(table, recordId, attachments){
+  if(!window.SyncroAuth || !window.SyncroAuth.enabled) throw new Error('Se requiere una sesión válida');
+  var result = await window.SyncroAuth.addAttachmentMetadata(table, recordId, attachments);
   invalidateCache(table);
+  return result && Array.isArray(result.attachments) ? result.attachments : [];
+}
+
+async function adjuntoRemoveMetadata(table, recordId, path){
+  if(!window.SyncroAuth || !window.SyncroAuth.enabled) throw new Error('Se requiere una sesión válida');
+  var result = await window.SyncroAuth.removeAttachmentMetadata(table, recordId, path);
+  invalidateCache(table);
+  return result && Array.isArray(result.attachments) ? result.attachments : [];
 }
 
 // ── UPLOAD BATCH ──────────────────────────────────────────────────────
@@ -137,8 +143,8 @@ async function adjuntoUploadBatch(files, table, recordId){
     catch(e){ toast('Error subiendo ' + f.name + ': ' + e.message, 'err'); }
   }
   if(!newAdj.length) return existing;
-  var merged = existing.concat(newAdj);
-  try { await adjuntoSaveToRecord(table, recordId, merged); }
+  var merged;
+  try { merged = await adjuntoAddToRecord(table, recordId, newAdj); }
   catch(error){
     for(var j = 0; j < newAdj.length; j++){
       try { await adjuntoRemove(newAdj[j].path, table, recordId); } catch(_cleanupError){}
@@ -152,11 +158,11 @@ async function adjuntoUploadBatch(files, table, recordId){
 
 async function adjuntoRemoveFromRecord(table, recordId, path){
   var existing = await adjuntoGetFromRecord(table, recordId);
-  var filtered = existing.filter(function(a){ return a.path !== path; });
-  await adjuntoSaveToRecord(table, recordId, filtered);
+  var filtered = await adjuntoRemoveMetadata(table, recordId, path);
   try { await adjuntoRemove(path, table, recordId); }
   catch(error){
-    try { await adjuntoSaveToRecord(table, recordId, existing); } catch(_restoreError){}
+    var restore = existing.filter(function(a){ return a.path === path; });
+    try { if(restore.length) await adjuntoAddToRecord(table, recordId, restore); } catch(_restoreError){}
     throw error;
   }
   auditLog('ADJUNTO_DELETE', table + '/' + recordId + ' — ' + path.split('/').pop());
@@ -379,7 +385,7 @@ function _adjFileIcon(mimeType, name){
   var _origDbInsert = window.dbInsert;
   window.dbInsert = async function(table, row){
     var result = await _origDbInsert.apply(this, arguments);
-    if(table === 'gestiones' || table === 'incidencias' || table === 'tareas'){
+    if(result !== null && row && row.id && (table === 'gestiones' || table === 'incidencias' || table === 'tareas')){
       window._adjLastInserted = { table: table, id: row.id, ts: Date.now() };
     }
     return result;

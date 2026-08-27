@@ -198,6 +198,18 @@
     });
   }
 
+  async function addAttachmentMetadata(table, recordId, attachments){
+    return attachmentApi('metadata', 'POST', {
+      action:'add', table:table, record_id:recordId, attachments:attachments
+    });
+  }
+
+  async function removeAttachmentMetadata(table, recordId, path){
+    return attachmentApi('metadata', 'POST', {
+      action:'remove', table:table, record_id:recordId, path:path
+    });
+  }
+
   async function supabaseFetch(input, init){
     if(!AUTH_ENABLED) return nativeFetch(input, init);
     var token = await getAccessToken(false);
@@ -227,6 +239,8 @@
     uploadAttachment:uploadAttachment,
     attachmentUrl:attachmentUrl,
     deleteAttachment:deleteAttachment,
+    addAttachmentMetadata:addAttachmentMetadata,
+    removeAttachmentMetadata:removeAttachmentMetadata,
     logout:logout,
     refresh:refresh,
     restore:restore,

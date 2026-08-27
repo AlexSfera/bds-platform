@@ -4,7 +4,7 @@ import {
 } from '../../lib/auth-server.js';
 import {
   deleteAttachmentObject, normalizeAttachmentPath, normalizeAttachmentTarget,
-  recordAttachmentEvent, requireReadableRecord
+  recordAttachmentEvent, requireManageableRecord
 } from '../../lib/attachments-server.js';
 
 export const config = { runtime: 'edge' };
@@ -25,7 +25,7 @@ export default async function handler(req) {
     const target = normalizeAttachmentTarget(payload.table, payload.record_id);
     const path = normalizeAttachmentPath(payload.path, target);
     if (!target || !path) return jsonResponse({ error: 'Invalid attachment' }, 400);
-    if (!await requireReadableRecord(token, target)) return jsonResponse({ error: 'Forbidden' }, 403);
+    if (!await requireManageableRecord(token, target, session.profile)) return jsonResponse({ error: 'Forbidden' }, 403);
     await deleteAttachmentObject(path);
     try {
       await recordAttachmentEvent('ATTACHMENT_OBJECT_DELETE', session.profile, target, { path });
