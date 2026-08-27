@@ -325,6 +325,22 @@ async function _labSave(record, editId){
   invalidateCache(LAB_TABLE);
 }
 
+// Cada caja conserva su propia cadena de custodia. Un fondo sólo se hereda
+// de un efectivo realmente traspasado de esa misma caja, nunca de un cierre.
+function _labUltimoFondoTraspasado(rows, sistema){
+  var campo = sistema === 'nubimed'
+    ? 'efectivo_traspasado_nubimed'
+    : 'efectivo_traspasado_virtugym';
+  var ultimo = (rows || []).slice().sort(function(a,b){
+    return (b.fecha||'').localeCompare(a.fecha||'')
+      || (b.created_at||'').localeCompare(a.created_at||'');
+  }).find(function(r){
+    return r[campo] !== null && r[campo] !== undefined && r[campo] !== ''
+      && isFinite(parseFloat(r[campo]));
+  });
+  return ultimo ? parseFloat(ultimo[campo]) : null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // TRASPASO (solo efectivo · 2 cajas: Nubimed + VirtuGym · sin retiro)
 // ═══════════════════════════════════════════════════════════════════════
@@ -338,22 +354,25 @@ function openLabTraspasoModal(existingId){
   if(difBlock) difBlock.style.display = 'none';
   var errEl = document.getElementById('lab-tras-err'); if(errEl) errEl.textContent = '';
   var label = document.getElementById('lab-tras-turno-label');
+  var aviso = document.getElementById('lab-tras-aviso');
+  if(aviso){ aviso.style.display='none'; aviso.textContent=''; }
 
   _labCharges = []; renderLabCharges('lab-tras-charges');
   if(!existingId){
     if(label) label.textContent = _labTipoTurno || '—';
     invalidateCache(LAB_TABLE);
     dbGetAll(LAB_TABLE).then(function(rows){
-      var sorted = rows.slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.created_at||'').localeCompare(a.created_at||''); });
-      var ultimoNub = sorted.find(function(r){ return r.efectivo_traspasado_nubimed != null || r.fondo_recibido_nubimed != null; });
-      var ultimoVg  = sorted.find(function(r){ return r.efectivo_traspasado_virtugym != null || r.fondo_recibido_virtugym != null; });
+      var ultimoNub = _labUltimoFondoTraspasado(rows, 'nubimed');
+      var ultimoVg  = _labUltimoFondoTraspasado(rows, 'virtugym');
       var fN = document.getElementById('lab-tras-nub-fondo');
       var fV = document.getElementById('lab-tras-vg-fondo');
-      if(fN && ultimoNub) fN.value = parseFloat(ultimoNub.efectivo_traspasado_nubimed || 0).toFixed(2);
-      if(fV && ultimoVg) fV.value = parseFloat(ultimoVg.efectivo_traspasado_virtugym || 0).toFixed(2);
-      if(!ultimoNub && !ultimoVg){
-        var av = document.getElementById('lab-tras-aviso');
-        if(av){ av.style.display='block'; av.textContent = 'No hay fondo recibido desde turno anterior. Revisa con responsable.'; }
+      if(fN && ultimoNub !== null) fN.value = ultimoNub.toFixed(2);
+      if(fV && ultimoVg !== null) fV.value = ultimoVg.toFixed(2);
+      if(ultimoNub === null || ultimoVg === null){
+        var faltan = [];
+        if(ultimoNub === null) faltan.push('Nubimed');
+        if(ultimoVg === null) faltan.push('VirtuGym');
+        if(aviso){ aviso.style.display='block'; aviso.textContent = 'No hay efectivo traspasado anterior para '+faltan.join(' y ')+'. Revisa con responsable.'; }
       }
       calcLabTraspaso();
     });
@@ -428,7 +447,7 @@ async function submitLabTraspaso(){
   var errEl=document.getElementById('lab-tras-err');
   if(errs.length){ if(errEl) errEl.textContent=errs.join(' · '); toast(errs[0],'err'); return; }
   if(errEl) errEl.textContent='';
-  if(!_labTraspasoEditId && currentUser.rol!=='admin'){
+  if(!_labTraspasoEditId){
     var dup=await getLabOpToday(turno);
     if(dup){ var m='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=m; toast(m,'err'); return; }
   }
@@ -485,17 +504,24 @@ function openLabCierreModal(existingId){
   var difBlock=document.getElementById('lab-c-dif-block'); if(difBlock) difBlock.style.display='none';
   var errEl=document.getElementById('lab-c-err'); if(errEl) errEl.textContent='';
   var label=document.getElementById('lab-c-turno-label'); if(label) label.textContent=_labTipoTurno||'—';
+  var aviso=document.getElementById('lab-c-aviso');
+  if(aviso){ aviso.style.display='none'; aviso.textContent=''; }
   _labCharges = []; renderLabCharges('lab-c-charges');
   if(typeof resetCajaFotos === 'function') resetCajaFotos('lab-c-fotos', []);
 
   if(!existingId){
     invalidateCache(LAB_TABLE);
     dbGetAll(LAB_TABLE).then(function(rows){
-      var sorted=rows.slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'')||(b.created_at||'').localeCompare(a.created_at||''); });
-      var uN=sorted.find(function(r){ return r.efectivo_traspasado_nubimed!=null||r.fondo_recibido_nubimed!=null; });
-      var uV=sorted.find(function(r){ return r.efectivo_traspasado_virtugym!=null||r.fondo_recibido_virtugym!=null; });
-      if(fN&&uN) fN.value=parseFloat(uN.efectivo_traspasado_nubimed||0).toFixed(2);
-      if(fV&&uV) fV.value=parseFloat(uV.efectivo_traspasado_virtugym||0).toFixed(2);
+      var uN=_labUltimoFondoTraspasado(rows,'nubimed');
+      var uV=_labUltimoFondoTraspasado(rows,'virtugym');
+      if(fN&&uN!==null) fN.value=uN.toFixed(2);
+      if(fV&&uV!==null) fV.value=uV.toFixed(2);
+      if(uN===null || uV===null){
+        var faltan=[];
+        if(uN===null) faltan.push('Nubimed');
+        if(uV===null) faltan.push('VirtuGym');
+        if(aviso){ aviso.style.display='block'; aviso.textContent='No hay efectivo traspasado anterior para '+faltan.join(' y ')+'. Revisa con responsable.'; }
+      }
       calcLabCierre();
     });
   } else {
@@ -571,7 +597,7 @@ async function submitLabCierre(){
   if(!_labCierreEditId && currentUser.rol!=='admin' && !_labPuedeCerrar(turno,today())){
     var mc='El turno '+turno+' no puede cerrar caja. Haz un traspaso.'; if(errEl) errEl.textContent=mc; toast(mc,'err'); return;
   }
-  if(!_labCierreEditId && currentUser.rol!=='admin'){
+  if(!_labCierreEditId){
     var dup=await getLabOpToday(turno);
     if(dup){ var md='El turno '+turno+' ya registró '+(dup.tipo==='traspaso'?'un traspaso':'un cierre')+' hoy. Solo una operación por turno.'; if(errEl) errEl.textContent=md; toast(md,'err'); return; }
   }
@@ -714,6 +740,7 @@ async function submitLabCierre(){
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#a855f7;letter-spacing:.2em;margin-bottom:6px;">SYNCROLAB · CIERRE DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Cierre — <span id="lab-c-turno-label">Turno</span></div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Rellena primero Nubimed/Clínica y luego VirtuGym/Fitness. La diferencia se calcula sola (real − sistema).</div>
+    <div id="lab-c-aviso" style="display:none;background:rgba(245,158,11,.1);border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--amber);margin-bottom:12px;"></div>
     ${_bloqueCierre('nub','🩺 Nubimed / Clínica','#6366f1')}
     ${_bloqueCierre('vg','🏋 VirtuGym / Fitness','#10b981')}
     <div style="border:1px dashed #f59e0b;border-radius:10px;padding:12px;margin-bottom:12px;">
