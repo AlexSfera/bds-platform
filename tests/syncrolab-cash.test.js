@@ -3,18 +3,24 @@ import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-function loadLastTransferredFund() {
+function loadCashRules() {
   const source = fs.readFileSync(new URL('../syncrolab.js', import.meta.url), 'utf8');
-  const start = source.indexOf('function _labUltimoFondoTraspasado');
-  const end = source.indexOf('\n}\n', start) + 2;
+  const start = source.indexOf('function _labFondoFinal');
+  const fundHelper = source.indexOf('function _labUltimoFondoTraspasado');
+  const end = source.indexOf('\n}\n', fundHelper) + 2;
   assert.ok(start >= 0 && end > start, 'helper de fondo no encontrado');
   const context = vm.createContext({ isFinite, parseFloat });
-  vm.runInContext(source.slice(start, end) + '\nthis.pickFund = _labUltimoFondoTraspasado;', context);
-  return context.pickFund;
+  vm.runInContext(
+    'var LAB_FONDOS_FINALES = { nubimed:120, virtugym:215 };\n'
+      + source.slice(start, end)
+      + '\nthis.pickFund = _labUltimoFondoTraspasado; this.cashClose = _labResumenCierreEfectivo;',
+    context
+  );
+  return { pickFund: context.pickFund, cashClose: context.cashClose };
 }
 
 test('SYNCROLAB uses the latest actual transfer for each separate cash register', () => {
-  const pickFund = loadLastTransferredFund();
+  const { pickFund } = loadCashRules();
   const rows = [
     { fecha: '2026-08-20', created_at: '2026-08-20T20:00:00Z', efectivo_traspasado_nubimed: 50, efectivo_traspasado_virtugym: 30 },
     { fecha: '2026-08-21', created_at: '2026-08-21T20:00:00Z', fondo_recibido_nubimed: 999, fondo_recibido_virtugym: 999 },
@@ -25,10 +31,32 @@ test('SYNCROLAB uses the latest actual transfer for each separate cash register'
 });
 
 test('SYNCROLAB reports missing transfer history instead of using a received-fund field', () => {
-  const pickFund = loadLastTransferredFund();
+  const { pickFund } = loadCashRules();
   assert.equal(pickFund([
     { fecha: '2026-08-22', fondo_recibido_nubimed: 100, fondo_recibido_virtugym: 100 }
   ], 'nubimed'), null);
+});
+
+test('SYNCROLAB starts after a closure with the fixed fund, not the cash withdrawal', () => {
+  const { pickFund } = loadCashRules();
+  const rows = [
+    { fecha: '2026-08-27', created_at: '2026-08-27T08:00:00Z', tipo: 'traspaso', efectivo_traspasado_nubimed: 620, efectivo_traspasado_virtugym: 173 },
+    { fecha: '2026-08-27', created_at: '2026-08-27T21:00:00Z', tipo: 'cierre', efectivo_traspasado_nubimed: 500, efectivo_traspasado_virtugym: 0 }
+  ];
+  assert.equal(pickFund(rows, 'nubimed'), 120);
+  assert.equal(pickFund(rows, 'virtugym'), 215);
+});
+
+test('SYNCROLAB calculates end-of-day cash withdrawal after retaining each fixed fund', () => {
+  const { cashClose } = loadCashRules();
+  assert.deepEqual(
+    { ...cashClose(335, 285, 620, 120) },
+    { esperado: 620, diferencia: 0, retiro: 500, fondo_final: 120 }
+  );
+  assert.deepEqual(
+    { ...cashClose(173, 0, 173, 215) },
+    { esperado: 173, diferencia: 0, retiro: -42, fondo_final: 215 }
+  );
 });
 
 test('SYNCROLAB keeps independent guards and blocks duplicate operations for every role', () => {
@@ -45,4 +73,8 @@ test('SYNCROLAB keeps independent guards and blocks duplicate operations for eve
   assert.match(source, /if\(!_labCierreEditId && \(_labMissingTransferHistory\.nubimed \|\| _labMissingTransferHistory\.virtugym\)\)/);
   assert.match(source, /lab-tras-aviso/);
   assert.match(source, /lab-c-aviso/);
+  assert.match(source, /var LAB_FONDOS_FINALES = \{ nubimed:120, virtugym:215 \}/);
+  assert.match(source, /Fondo final que queda en caja/);
+  assert.match(source, /rec\.efectivo_traspasado_nubimed=Math\.max\(0,retiros\.nubimed\|\|0\)/);
+  assert.match(source, /No hay efectivo suficiente para dejar el fondo final/);
 });

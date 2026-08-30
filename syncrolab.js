@@ -14,6 +14,8 @@ var _labCierreEditId = null;
 var _labPrevEstado = null; // estado del registro al abrir en edición
 var _labCharges = [];   // cargos a habitación vía MEWS (pendientes de conciliar en Recepción)
 var _labMissingTransferHistory = { nubimed:false, virtugym:false };
+// Regla operativa confirmada: al cerrar el día queda este fondo fijo en cada caja.
+var LAB_FONDOS_FINALES = { nubimed:120, virtugym:215 };
 
 // ── Editor de cargos a habitación (MEWS) ─────────────────────────────────
 function renderLabCharges(containerId){
@@ -326,20 +328,42 @@ async function _labSave(record, editId){
   invalidateCache(LAB_TABLE);
 }
 
-// Cada caja conserva su propia cadena de custodia. Un fondo sólo se hereda
-// de un efectivo realmente traspasado de esa misma caja, nunca de un cierre.
+function _labFondoFinal(sistema){
+  return LAB_FONDOS_FINALES[sistema] || 0;
+}
+
+function _labResumenCierreEfectivo(fondoRecibido, ventasSistema, efectivoReal, fondoFinal){
+  var fondo = parseFloat(fondoRecibido) || 0;
+  var ventas = parseFloat(ventasSistema) || 0;
+  var real = parseFloat(efectivoReal) || 0;
+  var final = parseFloat(fondoFinal) || 0;
+  var esperado = fondo + ventas;
+  return {
+    esperado: esperado,
+    diferencia: real - esperado,
+    retiro: real - final,
+    fondo_final: final
+  };
+}
+
+// Cada caja conserva su propia cadena de custodia. Un traspaso hereda todo
+// el efectivo entregado al siguiente turno; tras un cierre, el día siguiente
+// empieza con el fondo fijo, aunque el retiro quede auditado en el registro.
 function _labUltimoFondoTraspasado(rows, sistema){
   var campo = sistema === 'nubimed'
     ? 'efectivo_traspasado_nubimed'
     : 'efectivo_traspasado_virtugym';
-  var ultimo = (rows || []).slice().sort(function(a,b){
+  var ordenados = (rows || []).slice().sort(function(a,b){
     return (b.fecha||'').localeCompare(a.fecha||'')
       || (b.created_at||'').localeCompare(a.created_at||'');
-  }).find(function(r){
-    return r[campo] !== null && r[campo] !== undefined && r[campo] !== ''
-      && isFinite(parseFloat(r[campo]));
   });
-  return ultimo ? parseFloat(ultimo[campo]) : null;
+  for(var i=0;i<ordenados.length;i++){
+    var row=ordenados[i];
+    if(row.tipo === 'cierre') return _labFondoFinal(sistema);
+    if(row[campo] !== null && row[campo] !== undefined && row[campo] !== ''
+      && isFinite(parseFloat(row[campo]))) return parseFloat(row[campo]);
+  }
+  return null;
 }
 
 function _labMissingTransferHistoryMessage(){
@@ -497,7 +521,7 @@ async function submitLabTraspaso(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// CIERRE (2 sistemas · efectivo/tarjeta/Stripe/transferencia · diferencia = real − sistema)
+// CIERRE (2 sistemas · el efectivo incluye el fondo recibido · deja fondo fijo)
 // ═══════════════════════════════════════════════════════════════════════
 var _LAB_C_FIELDS = ['efectivo','tarjeta','stripe','transferencia'];
 function _labCG(sys, campo, tipo){ return parseFloat((document.getElementById('lab-c-'+sys+'-'+campo+'-'+tipo)||{}).value)||0; }
@@ -572,9 +596,13 @@ function closeLabCierreModal(){ var m=document.getElementById('modal-lab-cierre'
 function calcLabCierre(){
   var difTotalGeneral=0;
   ['nub','vg'].forEach(function(sys){
+    var pre=sys==='nub'?'nubimed':'virtugym';
+    var fondoRecibido=parseFloat((document.getElementById('lab-c-'+sys+'-fondo')||{}).value)||0;
     var difSys=0;
     _LAB_C_FIELDS.forEach(function(c){
-      var d=_labCG(sys,c,'real')-_labCG(sys,c,'sistema');
+      var sistema=_labCG(sys,c,'sistema'), real=_labCG(sys,c,'real');
+      var d=real-sistema;
+      if(c==='efectivo') d=_labResumenCierreEfectivo(fondoRecibido,sistema,real,_labFondoFinal(pre)).diferencia;
       var cell=document.getElementById('lab-c-'+sys+'-'+c+'-dif');
       if(cell){ cell.textContent=(d>=0?'+':'')+d.toFixed(2).replace('.',',')+'€'; cell.style.color=Math.abs(d)<0.01?'var(--green)':'var(--red)'; }
       difSys+=d;
@@ -582,6 +610,24 @@ function calcLabCierre(){
     var difSysEl=document.getElementById('lab-c-'+sys+'-dif-total');
     if(difSysEl){ difSysEl.textContent=(difSys>=0?'+':'')+difSys.toFixed(2).replace('.',',')+'€'; difSysEl.style.color=Math.abs(difSys)<0.01?'var(--green)':'var(--red)'; }
     difTotalGeneral+=difSys;
+
+    var retiroEl=document.getElementById('lab-c-'+sys+'-retiro');
+    var efectivoRaw=(document.getElementById('lab-c-'+sys+'-efectivo-real')||{value:''}).value;
+    if(retiroEl){
+      if(String(efectivoRaw).trim()===''){
+        retiroEl.textContent='Introduce el efectivo contado';
+        retiroEl.style.color='var(--text3)';
+      } else {
+        var resumen=_labResumenCierreEfectivo(fondoRecibido,_labCG(sys,'efectivo','sistema'),_labCG(sys,'efectivo','real'),_labFondoFinal(pre));
+        if(resumen.retiro>=-0.01){
+          retiroEl.textContent='Retiro calculado: '+Math.max(0,resumen.retiro).toFixed(2).replace('.',',')+' €';
+          retiroEl.style.color='var(--green)';
+        } else {
+          retiroEl.textContent='Faltan '+Math.abs(resumen.retiro).toFixed(2).replace('.',',')+' € para dejar el fondo';
+          retiroEl.style.color='var(--red)';
+        }
+      }
+    }
   });
   var totEl=document.getElementById('lab-c-dif-total-syncrolab');
   if(totEl){ totEl.textContent=(difTotalGeneral>=0?'+':'')+difTotalGeneral.toFixed(2).replace('.',',')+' €'; totEl.style.color=Math.abs(difTotalGeneral)<0.01?'var(--green)':'var(--red)'; }
@@ -619,18 +665,38 @@ async function submitLabCierre(){
   }
   function gv(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
   var rec={};
+  var retiros={};
   ['nub','vg'].forEach(function(sys){
     var pre=sys==='nub'?'nubimed':'virtugym';
+    var fondoRecibido=gv('lab-c-'+sys+'-fondo');
     var difSys=0,totSis=0,totReal=0;
     _LAB_C_FIELDS.forEach(function(c){
       var s=_labCG(sys,c,'sistema'), r=_labCG(sys,c,'real'), d=r-s;
+      if(c==='efectivo'){
+        var resumen=_labResumenCierreEfectivo(fondoRecibido,s,r,_labFondoFinal(pre));
+        d=resumen.diferencia;
+        retiros[pre]=resumen.retiro;
+        totSis+=resumen.esperado;
+      } else {
+        totSis+=s;
+      }
       rec[c+'_'+pre+'_sistema']=s; rec[c+'_'+pre+'_real']=r; rec['diferencia_'+c+'_'+pre]=d;
-      difSys+=d; totSis+=s; totReal+=r;
+      difSys+=d; totReal+=r;
     });
     rec['diferencia_total_'+pre]=difSys;
     rec['total_sistema_'+pre]=totSis; rec['total_real_'+pre]=totReal;
-    rec['fondo_recibido_'+pre]=gv('lab-c-'+sys+'-fondo');
+    rec['fondo_recibido_'+pre]=fondoRecibido;
   });
+  if(retiros.nubimed < -0.01 || retiros.virtugym < -0.01){
+    var faltantes=[];
+    if(retiros.nubimed < -0.01) faltantes.push('Clínica '+Math.abs(retiros.nubimed).toFixed(2).replace('.',',')+' €');
+    if(retiros.virtugym < -0.01) faltantes.push('Fitness '+Math.abs(retiros.virtugym).toFixed(2).replace('.',',')+' €');
+    var mr='No hay efectivo suficiente para dejar el fondo final: '+faltantes.join(' · ');
+    if(errEl) errEl.textContent=mr; toast(mr,'err'); return;
+  }
+  rec.efectivo_traspasado_nubimed=Math.max(0,retiros.nubimed||0);
+  rec.efectivo_traspasado_virtugym=Math.max(0,retiros.virtugym||0);
+  rec.efectivo_total_traspasado=rec.efectivo_traspasado_nubimed+rec.efectivo_traspasado_virtugym;
   rec.total_sistema_syncrolab=rec.total_sistema_nubimed+rec.total_sistema_virtugym;
   rec.total_real_syncrolab=rec.total_real_nubimed+rec.total_real_virtugym;
   rec.diferencia_total_syncrolab=rec.total_real_syncrolab-rec.total_sistema_syncrolab;
@@ -680,15 +746,18 @@ async function submitLabCierre(){
       + '</tr>';
   }
   function _bloqueCierre(sys, titulo, color){
+    var fondoFinal=sys==='nub' ? LAB_FONDOS_FINALES.nubimed : LAB_FONDOS_FINALES.virtugym;
     return '<div style="border:1px solid '+color+';border-radius:10px;padding:14px;margin-bottom:14px;">'
       + '<div style="font-weight:700;color:'+color+';margin-bottom:8px;">'+titulo+'</div>'
       + '<div class="fg" style="margin-bottom:8px;"><label>Fondo recibido (€)</label><input type="text" id="lab-c-'+sys+'-fondo" value="0.00" readonly style="color:#111827;background:#fff;opacity:.6;cursor:not-allowed;width:120px;"></div>'
+      + '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 9px;margin:-2px 0 8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.35);border-radius:6px;font-size:12px;"><span>Fondo final que queda en caja</span><b>'+fondoFinal.toFixed(2).replace('.',',')+' €</b></div>'
       + '<table style="width:100%;border-collapse:collapse;"><tr style="font-size:10px;color:var(--text3);text-transform:uppercase;"><th style="text-align:left;padding:2px 6px;"></th><th style="text-align:left;padding:2px;">Según sistema</th><th style="text-align:left;padding:2px;">Real contado</th><th style="text-align:left;padding:2px 6px;">Δ</th></tr>'
       + _campoCierre(sys,'efectivo','Efectivo')
       + _campoCierre(sys,'tarjeta','Tarjeta / TPV')
       + _campoCierre(sys,'stripe','Stripe')
       + _campoCierre(sys,'transferencia','Transferencia')
       + '</table>'
+      + '<div id="lab-c-'+sys+'-retiro" style="text-align:right;margin-top:8px;font-size:12px;font-family:var(--font-mono);color:var(--text3);">Introduce el efectivo contado</div>'
       + '<div style="text-align:right;margin-top:8px;font-size:12px;font-family:var(--font-mono);">Δ '+titulo+': <span id="lab-c-'+sys+'-dif-total" style="font-weight:700;color:var(--text3);">0.00€</span></div>'
       + '</div>';
   }
@@ -755,7 +824,7 @@ async function submitLabCierre(){
   <div style="background:var(--bg2);border:2px solid #a855f7;border-radius:14px;padding:24px;width:100%;max-width:640px;margin:40px auto;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#a855f7;letter-spacing:.2em;margin-bottom:6px;">SYNCROLAB · CIERRE DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Cierre — <span id="lab-c-turno-label">Turno</span></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Rellena primero Nubimed/Clínica y luego VirtuGym/Fitness. La diferencia se calcula sola (real − sistema).</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Cuenta el efectivo antes de retirarlo. Al final del día el sistema calcula el retiro y deja 120 € en Clínica y 215 € en Fitness.</div>
     <div id="lab-c-aviso" style="display:none;background:rgba(245,158,11,.1);border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--amber);margin-bottom:12px;"></div>
     ${_bloqueCierre('nub','🩺 Nubimed / Clínica','#6366f1')}
     ${_bloqueCierre('vg','🏋 VirtuGym / Fitness','#10b981')}
