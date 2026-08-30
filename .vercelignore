@@ -1,0 +1,4 @@
+# Instrucciones y configuración local: no forman parte de la aplicación publicada.
+AGENTS.md
+.claude/
+supabase/.temp/
