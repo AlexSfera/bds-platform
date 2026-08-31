@@ -165,6 +165,15 @@ function _labPuedeCerrar(turno, fecha){
   return turno === 'Tarde';
 }
 
+// Regla operativa sin excepciones para el personal: una única operación
+// correcta por turno. Evita que un traspaso en Tarde rompa el fondo del cierre.
+function _labOperacionRequerida(turno, fecha){
+  if(!turno) return null;
+  if(_labEsDomingo(fecha) || turno === 'Tarde') return 'cierre';
+  if(turno === 'Mañana') return 'traspaso';
+  return null;
+}
+
 function _labCurrentTurno(){
   var sel = document.querySelector('input[name="servicio-lab"]:checked');
   if(sel) return sel.value;
@@ -212,9 +221,12 @@ async function lockLabTurnoIfCajaToday(){
 // ═══════════════════════════════════════════════════════════════════════
 function openLabCajaChoice(){
   _labTipoTurno = _labCurrentTurno();
+  _labTipoConfirmado = false;
   var fixedBox = document.getElementById('lab-tipo-turno-fixed');
   var pickBox  = document.getElementById('lab-tipo-turno-pick');
   var lblFixed = document.getElementById('lab-tipo-turno-label');
+  var confirm = document.getElementById('lab-tipo-confirm');
+  if(confirm) confirm.checked = false;
   document.querySelectorAll('#lab-tipo-turno-pick .tbtn').forEach(function(b){ b.classList.remove('t-si'); });
   if(_labTipoTurno){
     if(fixedBox) fixedBox.style.display = 'block';
@@ -244,11 +256,17 @@ function setLabTipoTurno(t, btn){
   }
   evalLabCajaChoice();
 }
+var _labTipoConfirmado = false;
+function setLabTipoConfirmado(input){
+  _labTipoConfirmado = !!(input && input.checked);
+  evalLabCajaChoice();
+}
 function setLabTipoBtns(traspasoOn, cierreOn){
   var bt = document.getElementById('lab-tipo-btn-traspaso');
   var bc = document.getElementById('lab-tipo-btn-cierre');
-  if(bt){ bt.disabled = !traspasoOn; bt.style.opacity = traspasoOn?'1':'.4'; bt.style.cursor = traspasoOn?'pointer':'not-allowed'; }
-  if(bc){ bc.disabled = !cierreOn;   bc.style.opacity = cierreOn?'1':'.4';   bc.style.cursor = cierreOn?'pointer':'not-allowed'; }
+  var canContinue = _labTipoConfirmado;
+  if(bt){ var canTraspaso = traspasoOn && canContinue; bt.disabled = !canTraspaso; bt.style.opacity = canTraspaso?'1':'.4'; bt.style.cursor = canTraspaso?'pointer':'not-allowed'; }
+  if(bc){ var canCierre = cierreOn && canContinue; bc.disabled = !canCierre;   bc.style.opacity = canCierre?'1':'.4';   bc.style.cursor = canCierre?'pointer':'not-allowed'; }
 }
 function setLabSkipBtn(mode, opTipo){
   var b = document.getElementById('lab-tipo-btn-skip');
@@ -274,18 +292,23 @@ async function evalLabCajaChoice(){
     setLabTipoBtns(false, false); setLabSkipBtn('mate'); return;
   }
   setLabSkipBtn('none');
-  var puedeCerrar = _labPuedeCerrar(_labTipoTurno, today());
-  setLabTipoBtns(true, puedeCerrar);
+  var requerida = _labOperacionRequerida(_labTipoTurno, today());
+  // Administración conserva ambas vías para resolver una excepción auditada;
+  // para el personal solo se habilita la operación que corresponde al turno.
+  setLabTipoBtns(isAdminU || requerida === 'traspaso', isAdminU || requerida === 'cierre');
   if(msg){
     if(dup && isAdminU){ msg.textContent = '⚠ Ya existe una operación de este turno hoy. Como admin puedes duplicar — revisa antes de guardar.'; msg.style.color = 'var(--amber)'; }
-    else if(!puedeCerrar){ msg.textContent = 'Turno '+_labTipoTurno+': solo traspaso. El cierre lo hace el turno de Tarde (o el turno único del domingo).'; msg.style.color = 'var(--text3)'; }
-    else { msg.textContent = ''; }
+    else if(requerida === 'traspaso'){ msg.textContent = 'REGLA DEL TURNO: Mañana registra solo traspaso. El cierre lo realiza Tarde.'; msg.style.color = 'var(--amber)'; }
+    else if(requerida === 'cierre'){ msg.textContent = _labEsDomingo(today()) ? 'REGLA DEL TURNO: domingo es cierre único de caja.' : 'REGLA DEL TURNO: Tarde registra el cierre de caja; no hagas un traspaso.'; msg.style.color = 'var(--amber)'; }
   }
 }
 function startLabTraspaso(){
   var b = document.getElementById('lab-tipo-btn-traspaso');
   if(b && b.disabled) return;
   if(!_labTipoTurno){ toast('Selecciona tu turno','err'); return; }
+  if(currentUser.rol !== 'admin' && _labOperacionRequerida(_labTipoTurno, today()) !== 'traspaso'){
+    toast('El turno de '+_labTipoTurno+' debe registrar un cierre, no un traspaso.','err'); return;
+  }
   closeLabCajaChoice();
   openLabTraspasoModal();
 }
@@ -468,6 +491,9 @@ async function submitLabTraspaso(){
   var nFondo=gv('lab-tras-nub-fondo')||0, nVentas=gv('lab-tras-nub-ventas'), nReal=gv('lab-tras-nub-real');
   var vFondo=gv('lab-tras-vg-fondo')||0,  vVentas=gv('lab-tras-vg-ventas'),  vReal=gv('lab-tras-vg-real');
   if(!turno) errs.push('Selecciona turno');
+  if(!_labTraspasoEditId && currentUser.rol !== 'admin' && _labOperacionRequerida(turno, today()) !== 'traspaso'){
+    errs.push('El turno de '+turno+' debe registrar un cierre, no un traspaso');
+  }
   if(!_labTraspasoEditId && (_labMissingTransferHistory.nubimed || _labMissingTransferHistory.virtugym)){
     errs.push(_labMissingTransferHistoryMessage());
   }
@@ -768,10 +794,19 @@ async function submitLabCierre(){
   <div style="background:var(--bg2);border:2px solid #a855f7;border-radius:14px;padding:24px;width:100%;max-width:460px;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#a855f7;letter-spacing:.2em;margin-bottom:6px;">SYNCROLAB · OPERACIÓN DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">¿Traspaso o cierre de caja?</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Dos cajas: Nubimed/Clínica y VirtuGym/Fitness. El cierre lo hace el turno de Tarde (o el turno único del domingo). Mañana entre semana solo traspasa. Una operación por turno y día.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Dos cajas independientes: Nubimed/Clínica y VirtuGym/Fitness. Una operación correcta por turno y día mantiene la cadena de custodia.</div>
+    <div style="background:rgba(245,158,11,.12);border:1px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.45;color:var(--text);">
+      <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.08em;margin-bottom:5px;">ANTES DE ELEGIR · REGLA OBLIGATORIA</div>
+      <div><b>Mañana (lunes–sábado):</b> traspaso. <b>Tarde:</b> cierre. <b>Domingo:</b> cierre único.</div>
+      <div style="margin-top:5px;color:var(--text2);">En un cierre, el efectivo real es el total físico antes del retiro: incluye el fondo recibido y las ventas. No selecciones la otra operación: rompe el fondo del turno siguiente.</div>
+    </div>
     <div class="fg" id="lab-tipo-turno-fixed" style="margin-bottom:12px;display:none;"><label>Turno</label><div id="lab-tipo-turno-label" style="font-size:16px;font-weight:700;color:var(--text);padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;">—</div></div>
     <div class="fg" id="lab-tipo-turno-pick" style="margin-bottom:12px;display:none;"><label>Turno <span class="req">*</span></label><div style="font-size:11px;color:var(--text3);margin:2px 0 6px;">Indica tu turno:</div><div style="display:flex;gap:8px;"><button class="tbtn" onclick="setLabTipoTurno('Mañana',this)">🌅 Mañana</button><button class="tbtn" onclick="setLabTipoTurno('Tarde',this)">🌆 Tarde</button></div></div>
     <div id="lab-tipo-msg" style="font-size:12px;color:var(--text3);min-height:18px;margin-bottom:12px;font-family:var(--font-mono);"></div>
+    <label style="display:flex;gap:8px;align-items:flex-start;padding:9px 10px;margin-bottom:12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);cursor:pointer;">
+      <input id="lab-tipo-confirm" type="checkbox" onchange="setLabTipoConfirmado(this)" style="margin-top:2px;accent-color:#a855f7;">
+      <span>Confirmo que he leído la regla de mi turno y voy a registrar únicamente la operación indicada.</span>
+    </label>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button id="lab-tipo-btn-traspaso" onclick="startLabTraspaso()" disabled style="width:100%;padding:14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">🔁 Traspaso de caja al siguiente turno</button>
       <button id="lab-tipo-btn-cierre" onclick="startLabCierre()" disabled style="width:100%;padding:14px;background:#a855f7;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (Tarde / domingo)</button>

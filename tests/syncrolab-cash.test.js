@@ -19,6 +19,19 @@ function loadCashRules() {
   return { pickFund: context.pickFund, cashClose: context.cashClose };
 }
 
+function loadOperationRule() {
+  const source = fs.readFileSync(new URL('../syncrolab.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function _labEsDomingo');
+  const end = source.indexOf('\n}\n', source.indexOf('function _labOperacionRequerida')) + 2;
+  assert.ok(start >= 0 && end > start, 'regla de operación por turno no encontrada');
+  const context = vm.createContext({ Date });
+  vm.runInContext(
+    source.slice(start, end) + '\nthis.requiredOperation = _labOperacionRequerida;',
+    context
+  );
+  return context.requiredOperation;
+}
+
 test('SYNCROLAB uses the latest actual transfer for each separate cash register', () => {
   const { pickFund } = loadCashRules();
   const rows = [
@@ -59,6 +72,14 @@ test('SYNCROLAB calculates end-of-day cash withdrawal after retaining each fixed
   );
 });
 
+test('SYNCROLAB requires exactly one cash operation for each normal shift', () => {
+  const requiredOperation = loadOperationRule();
+  assert.equal(requiredOperation('Mañana', '2026-08-31'), 'traspaso');
+  assert.equal(requiredOperation('Tarde', '2026-08-31'), 'cierre');
+  assert.equal(requiredOperation('Mañana', '2026-08-30'), 'cierre');
+  assert.equal(requiredOperation('Tarde', '2026-08-30'), 'cierre');
+});
+
 test('SYNCROLAB keeps independent guards and blocks duplicate operations for every role', () => {
   const source = fs.readFileSync(new URL('../syncrolab.js', import.meta.url), 'utf8');
   assert.match(source, /var _labChargesSaving = false/);
@@ -77,4 +98,8 @@ test('SYNCROLAB keeps independent guards and blocks duplicate operations for eve
   assert.match(source, /Fondo final que queda en caja/);
   assert.match(source, /rec\.efectivo_traspasado_nubimed=Math\.max\(0,retiros\.nubimed\|\|0\)/);
   assert.match(source, /No hay efectivo suficiente para dejar el fondo final/);
+  assert.match(source, /function _labOperacionRequerida\(turno, fecha\)/);
+  assert.match(source, /REGLA OBLIGATORIA/);
+  assert.match(source, /Confirmo que he leído la regla de mi turno/);
+  assert.match(source, /El turno de .+ debe registrar un cierre, no un traspaso/);
 });
