@@ -40,7 +40,7 @@ var INF_DEPT_CATALOG = [
   { key:'Recepción',    label:'Recepción Hotel',        icon:'🏨', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
   { key:'SYNCROLAB',    label:'Recepción SyncroLab',   icon:'🔬', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
   { key:'Entrenadores', label:'Entrenadores',           icon:'🏋', subtabs:['kpi','incentivos','informe-jefe'], special:'entrenadores' },
-  { key:'Housekeeping', label:'Housekeeping',           icon:'🧹', subtabs:['kpi','incentivos','informe-jefe'] },
+  { key:'Housekeeping', label:'Housekeeping',           icon:'🧹', subtabs:['kpi','premio-semestral','liquidacion','informe-jefe'] },
   { key:'Mantenimiento',label:'Mantenimiento',          icon:'🔧', subtabs:['horas-extra','informe-jefe'] },
   { key:'RRHH',         label:'Dirección / RR.HH.',    icon:'👥', subtabs:['rrhh'], special:'rrhh' },
   { key:'Fisioterapeutas', label:'Fisioterapeutas',     icon:'🩺', subtabs:[], coming:true },
@@ -52,6 +52,8 @@ var INF_SUBTAB_LABELS = {
   'kpi'         : '📊 KPI',
   'ventas'      : '💶 Ventas / Datos',
   'incentivos'  : '⚙️ Incentivos',
+  'premio-semestral': '🏅 Premio semestral',
+  'liquidacion' : '💶 Liquidación',
   'informe-jefe': '📋 Informe de Jefe',
   'horas-extra' : '⏱ Horas Extra',
   'rrhh'        : '👥 RR.HH.'
@@ -302,6 +304,26 @@ async function _infRenderSubTab(){
     tc.innerHTML='<div id="incentivos-content"></div>';
     if(typeof renderIncentivos==='function') await renderIncentivos();
     else tc.innerHTML='<div class="card"><p style="color:var(--text3);padding:20px 0;">💰 Módulo de incentivos no cargado.</p></div>';
+    return;
+  }
+
+  // ── PREMIO SEMESTRAL HOUSEKEEPING ─────────────────────────────────
+  if(sub==='premio-semestral'){
+    if(dept==='Housekeeping' && typeof renderHousekeepingPremioSemestral==='function') {
+      await renderHousekeepingPremioSemestral(tc);
+    } else {
+      tc.innerHTML='<div class="card"><p style="color:var(--text3);padding:20px 0;">🏅 Módulo de premio semestral no cargado.</p></div>';
+    }
+    return;
+  }
+
+  // ── LIQUIDACIÓN HOUSEKEEPING ──────────────────────────────────────
+  if(sub==='liquidacion'){
+    if(dept==='Housekeeping' && typeof renderHousekeepingLiquidacion==='function') {
+      await renderHousekeepingLiquidacion(tc);
+    } else {
+      tc.innerHTML='<div class="card"><p style="color:var(--text3);padding:20px 0;">💶 Módulo de liquidación no cargado.</p></div>';
+    }
     return;
   }
 
