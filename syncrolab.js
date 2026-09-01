@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 // SYNCROLAB.JS — CAJA SYNCROLAB (Nubimed/Clínica + VirtuGym/Fitness)
 // Patrón traspaso/cierre como Sala. 2 cajas físicas de efectivo + 2 sistemas.
-// Reglas: Tarde cierra · domingo (cualquier turno) cierra · Mañana entre semana solo traspasa.
+// Reglas: SYNCROLAB trabaja con dos turnos: Mañana traspasa · Tarde cierra.
 // Una operación por turno+fecha. Traspaso solo efectivo, sin retiro.
 // Tabla: syncrolab_cash_closures. Requiere SUPABASE_URL/KEY, genId, localTs,
 // today, currentUser, _doSaveTurno, auditLog, invalidateCache, dbGetAll, toast (globales).
@@ -13,6 +13,7 @@ var _labTraspasoEditId = null;
 var _labCierreEditId = null;
 var _labPrevEstado = null; // estado del registro al abrir en edición
 var _labCharges = [];   // cargos a habitación vía MEWS (pendientes de conciliar en Recepción)
+var _labCierreChargesPrevios = []; // cargos del traspaso de Mañana, solo consulta en el cierre
 var _labMissingTransferHistory = { nubimed:false, virtugym:false };
 // Regla operativa confirmada: al cerrar el día queda este fondo fijo en cada caja.
 var LAB_FONDOS_FINALES = { nubimed:120, virtugym:215 };
@@ -62,6 +63,44 @@ function renderLabCharges(containerId){
   }).join('');
   var total = _labCharges.reduce(function(s,ch){ return s + (parseFloat(ch.importe)||0); }, 0);
   c.innerHTML = rows + '<div id="lab-total-'+containerId+'" style="text-align:right;font-size:12px;font-family:var(--font-mono);color:var(--text2);margin-top:4px;">Total cargos a habitación: <b>'+total.toFixed(2).replace('.',',')+' €</b></div>';
+}
+
+function _labEsc(value){
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Los nombres de la clave variaron en versiones previas. La columna vigente
+// es syncrolab_cash_id, pero se sigue leyendo el histórico sin duplicarlo.
+function _labCargoPerteneceAOperacion(cargo, operacionId){
+  return cargo && (cargo.syncrolab_cash_id === operacionId
+    || cargo.syncrolab_cash_closure_id === operacionId
+    || cargo.cash_closure_id === operacionId);
+}
+
+function _labCargosTraspasoDeFecha(rows, charges, fecha){
+  var ids = (rows || []).filter(function(row){
+    return row.tipo === 'traspaso' && row.fecha === fecha && row.id;
+  }).map(function(row){ return row.id; });
+  return (charges || []).filter(function(cargo){
+    return ids.some(function(id){ return _labCargoPerteneceAOperacion(cargo, id); });
+  });
+}
+
+function renderLabCierreChargesPrevios(containerId){
+  var c = document.getElementById(containerId);
+  if(!c) return;
+  if(!_labCierreChargesPrevios.length){
+    c.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:4px 0;">Sin cargos registrados en el traspaso de Mañana.</div>';
+    return;
+  }
+  var total = _labCierreChargesPrevios.reduce(function(suma, cargo){ return suma + (parseFloat(cargo.importe) || 0); }, 0);
+  c.innerHTML = _labCierreChargesPrevios.map(function(cargo){
+    var detalle = [cargo.sistema || '—', cargo.habitacion ? 'Hab. '+cargo.habitacion : '', cargo.huesped_nombre || cargo.huesped || '', cargo.concepto || ''].filter(Boolean).map(_labEsc).join(' · ');
+    return '<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 8px;margin-bottom:5px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-size:12px;">'
+      + '<span>'+detalle+'</span><b style="white-space:nowrap;">'+(parseFloat(cargo.importe)||0).toFixed(2).replace('.',',')+' €</b></div>';
+  }).join('') + '<div style="text-align:right;font-size:12px;font-family:var(--font-mono);color:var(--text2);margin-top:5px;">Total ya registrado en el traspaso: <b>'+total.toFixed(2).replace('.',',')+' €</b></div>';
 }
 function _labChargeAdd(containerId){
   var defSys = _labTipoTurno ? 'Nubimed' : 'Nubimed';
@@ -161,7 +200,6 @@ function _labEsDomingo(fechaStr){
 }
 function _labPuedeCerrar(turno, fecha){
   if(currentUser && currentUser.rol === 'admin') return true;
-  if(_labEsDomingo(fecha)) return true;   // domingo turno único cierra
   return turno === 'Tarde';
 }
 
@@ -169,7 +207,7 @@ function _labPuedeCerrar(turno, fecha){
 // correcta por turno. Evita que un traspaso en Tarde rompa el fondo del cierre.
 function _labOperacionRequerida(turno, fecha){
   if(!turno) return null;
-  if(_labEsDomingo(fecha) || turno === 'Tarde') return 'cierre';
+  if(turno === 'Tarde') return 'cierre';
   if(turno === 'Mañana') return 'traspaso';
   return null;
 }
@@ -414,6 +452,26 @@ function _labUltimoFondoTraspasado(rows, sistema){
   return null;
 }
 
+// El cierre de Tarde siempre arranca del fondo con el que empezó el día,
+// no del total físico entregado en el traspaso de Mañana. Si el último cierre
+// registró una falta, ese efectivo real menor es el fondo inicial válido.
+function _labFondoInicialCierre(rows, sistema){
+  var pre = sistema === 'nubimed' ? 'nubimed' : 'virtugym';
+  var ordenados = (rows || []).slice().sort(function(a,b){
+    return (b.fecha||'').localeCompare(a.fecha||'')
+      || (b.created_at||'').localeCompare(a.created_at||'');
+  });
+  for(var i=0;i<ordenados.length;i++){
+    var row = ordenados[i];
+    if(row.tipo === 'cierre') return _labFondoSiguienteTrasCierre(row, sistema);
+    if(row.tipo === 'traspaso'){
+      var fondo = row['fondo_recibido_'+pre];
+      if(fondo !== null && fondo !== undefined && fondo !== '' && isFinite(parseFloat(fondo))) return parseFloat(fondo);
+    }
+  }
+  return null;
+}
+
 function _labMissingTransferHistoryMessage(){
   var faltan=[];
   if(_labMissingTransferHistory.nubimed) faltan.push('Nubimed');
@@ -475,7 +533,7 @@ function openLabTraspasoModal(existingId){
       calcLabTraspaso();
       // Cargar cargos MEWS vinculados
       dbGetAll(LAB_CHARGES_TABLE).then(function(charges){
-        _labCharges = charges.filter(function(c){ return c.syncrolab_cash_closure_id === existingId || c.cash_closure_id === existingId; });
+        _labCharges = charges.filter(function(c){ return _labCargoPerteneceAOperacion(c, existingId); });
         renderLabCharges('lab-tras-charges');
       });
     });
@@ -577,6 +635,22 @@ async function submitLabTraspaso(){
 var _LAB_C_FIELDS = ['efectivo','tarjeta','stripe','transferencia'];
 function _labCG(sys, campo, tipo){ return parseFloat((document.getElementById('lab-c-'+sys+'-'+campo+'-'+tipo)||{}).value)||0; }
 
+function _labCargarCargosCierre(rows, fecha, cierreId){
+  dbGetAll(LAB_CHARGES_TABLE).then(function(charges){
+    _labCierreChargesPrevios = _labCargosTraspasoDeFecha(rows, charges, fecha);
+    if(cierreId) _labCharges = charges.filter(function(cargo){ return _labCargoPerteneceAOperacion(cargo, cierreId); });
+    renderLabCierreChargesPrevios('lab-c-charges-previos');
+    renderLabCharges('lab-c-charges');
+  });
+}
+
+function _labMissingFondoInicialCierreMessage(){
+  var faltan=[];
+  if(_labMissingTransferHistory.nubimed) faltan.push('Nubimed');
+  if(_labMissingTransferHistory.virtugym) faltan.push('VirtuGym');
+  return 'No hay historial verificable del fondo inicial para '+faltan.join(' y ')+'. Registra primero el traspaso de Mañana.';
+}
+
 function openLabCierreModal(existingId){
   _labCierreEditId = existingId || null;
   _labMissingTransferHistory = existingId
@@ -596,21 +670,25 @@ function openLabCierreModal(existingId){
   var label=document.getElementById('lab-c-turno-label'); if(label) label.textContent=_labTipoTurno||'—';
   var aviso=document.getElementById('lab-c-aviso');
   if(aviso){ aviso.style.display='none'; aviso.textContent=''; }
-  _labCharges = []; renderLabCharges('lab-c-charges');
+  _labCharges = [];
+  _labCierreChargesPrevios = [];
+  renderLabCierreChargesPrevios('lab-c-charges-previos');
+  renderLabCharges('lab-c-charges');
   if(typeof resetCajaFotos === 'function') resetCajaFotos('lab-c-fotos', []);
 
   if(!existingId){
     invalidateCache(LAB_TABLE);
     dbGetAll(LAB_TABLE).then(function(rows){
-      var uN=_labUltimoFondoTraspasado(rows,'nubimed');
-      var uV=_labUltimoFondoTraspasado(rows,'virtugym');
+      var uN=_labFondoInicialCierre(rows,'nubimed');
+      var uV=_labFondoInicialCierre(rows,'virtugym');
       _labMissingTransferHistory = { nubimed:uN===null, virtugym:uV===null };
       if(fN&&uN!==null) fN.value=uN.toFixed(2);
       if(fV&&uV!==null) fV.value=uV.toFixed(2);
       if(uN===null || uV===null){
-        if(aviso){ aviso.style.display='block'; aviso.textContent=_labMissingTransferHistoryMessage(); }
+        if(aviso){ aviso.style.display='block'; aviso.textContent=_labMissingFondoInicialCierreMessage(); }
       }
       calcLabCierre();
+      _labCargarCargosCierre(rows, today(), null);
     });
   } else {
     dbGetAll(LAB_TABLE).then(function(rows){
@@ -633,11 +711,7 @@ function openLabCierreModal(existingId){
         resetCajaFotos('lab-c-fotos', _ex);
       }
       calcLabCierre();
-      // Cargar cargos MEWS vinculados
-      dbGetAll(LAB_CHARGES_TABLE).then(function(charges){
-        _labCharges = charges.filter(function(c){ return c.syncrolab_cash_closure_id === existingId || c.cash_closure_id === existingId; });
-        renderLabCharges('lab-c-charges');
-      });
+      _labCargarCargosCierre(rows, row.fecha || today(), existingId);
     });
   }
   var m=document.getElementById('modal-lab-cierre'); if(m) m.style.display='flex';
@@ -719,7 +793,7 @@ async function submitLabCierre(){
     var mc='El turno '+turno+' no puede cerrar caja. Haz un traspaso.'; if(errEl) errEl.textContent=mc; toast(mc,'err'); return;
   }
   if(!_labCierreEditId && (_labMissingTransferHistory.nubimed || _labMissingTransferHistory.virtugym)){
-    var mh=_labMissingTransferHistoryMessage(); if(errEl) errEl.textContent=mh; toast(mh,'err'); return;
+    var mh=_labMissingFondoInicialCierreMessage(); if(errEl) errEl.textContent=mh; toast(mh,'err'); return;
   }
   if(!_labCierreEditId){
     var dup=await getLabOpToday(turno);
@@ -806,11 +880,11 @@ async function submitLabCierre(){
     var fondoFinal=sys==='nub' ? LAB_FONDOS_FINALES.nubimed : LAB_FONDOS_FINALES.virtugym;
     return '<div style="border:1px solid '+color+';border-radius:10px;padding:14px;margin-bottom:14px;">'
       + '<div style="font-weight:700;color:'+color+';margin-bottom:8px;">'+titulo+'</div>'
-      + '<div class="fg" style="margin-bottom:8px;"><label>Fondo recibido (€)</label><input type="text" id="lab-c-'+sys+'-fondo" value="0.00" readonly style="color:#111827;background:#fff;opacity:.6;cursor:not-allowed;width:120px;"></div>'
+      + '<div class="fg" style="margin-bottom:8px;"><label>Fondo inicial del día (€)</label><input type="text" id="lab-c-'+sys+'-fondo" value="0.00" readonly style="color:#111827;background:#fff;opacity:.6;cursor:not-allowed;width:120px;"></div>'
       + '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 9px;margin:-2px 0 8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.35);border-radius:6px;font-size:12px;"><span>Fondo final que queda en caja</span><b>'+fondoFinal.toFixed(2).replace('.',',')+' €</b></div>'
       + '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 9px;margin:0 0 8px;background:rgba(59,130,246,.09);border:1px solid rgba(59,130,246,.35);border-radius:6px;font-size:12px;"><span>Efectivo físico esperado <span style="color:var(--text3);">(fondo + ventas)</span></span><b id="lab-c-'+sys+'-efectivo-esperado">0,00 €</b></div>'
       + '<table style="width:100%;border-collapse:collapse;"><tr style="font-size:10px;color:var(--text3);text-transform:uppercase;"><th style="text-align:left;padding:2px 6px;"></th><th style="text-align:left;padding:2px;">Según sistema</th><th style="text-align:left;padding:2px;">Real contado</th><th style="text-align:left;padding:2px 6px;">Δ</th></tr>'
-      + _campoCierre(sys,'efectivo','Efectivo (ventas)')
+      + _campoCierre(sys,'efectivo','Efectivo (ventas acumuladas del día)')
       + _campoCierre(sys,'tarjeta','Tarjeta / TPV')
       + _campoCierre(sys,'stripe','Stripe')
       + _campoCierre(sys,'transferencia','Transferencia')
@@ -829,8 +903,8 @@ async function submitLabCierre(){
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Dos cajas independientes: Nubimed/Clínica y VirtuGym/Fitness. Una operación correcta por turno y día mantiene la cadena de custodia.</div>
     <div style="background:rgba(245,158,11,.12);border:1px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.45;color:var(--text);">
       <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.08em;margin-bottom:5px;">ANTES DE ELEGIR · REGLA OBLIGATORIA</div>
-      <div><b>Mañana (lunes–sábado):</b> traspaso. <b>Tarde:</b> cierre. <b>Domingo:</b> cierre único.</div>
-      <div style="margin-top:5px;color:var(--text2);">En un cierre, el efectivo real es el total físico antes del retiro: incluye el fondo recibido y las ventas. No selecciones la otra operación: rompe el fondo del turno siguiente.</div>
+      <div><b>Mañana:</b> traspaso. <b>Tarde:</b> cierre. SYNCROLAB solo trabaja con estos dos turnos.</div>
+      <div style="margin-top:5px;color:var(--text2);">En el cierre, el efectivo real es el total físico: fondo inicial + ventas acumuladas del día. No sumes el traspaso de Mañana otra vez: ya está incluido en ese total.</div>
     </div>
     <div class="fg" id="lab-tipo-turno-fixed" style="margin-bottom:12px;display:none;"><label>Turno</label><div id="lab-tipo-turno-label" style="font-size:16px;font-weight:700;color:var(--text);padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;">—</div></div>
     <div class="fg" id="lab-tipo-turno-pick" style="margin-bottom:12px;display:none;"><label>Turno <span class="req">*</span></label><div style="font-size:11px;color:var(--text3);margin:2px 0 6px;">Indica tu turno:</div><div style="display:flex;gap:8px;"><button class="tbtn" onclick="setLabTipoTurno('Mañana',this)">🌅 Mañana</button><button class="tbtn" onclick="setLabTipoTurno('Tarde',this)">🌆 Tarde</button></div></div>
@@ -841,7 +915,7 @@ async function submitLabCierre(){
     </label>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button id="lab-tipo-btn-traspaso" onclick="startLabTraspaso()" disabled style="width:100%;padding:14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">🔁 Traspaso de caja al siguiente turno</button>
-      <button id="lab-tipo-btn-cierre" onclick="startLabCierre()" disabled style="width:100%;padding:14px;background:#a855f7;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (Tarde / domingo)</button>
+      <button id="lab-tipo-btn-cierre" onclick="startLabCierre()" disabled style="width:100%;padding:14px;background:#a855f7;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (Tarde)</button>
       <button id="lab-tipo-btn-skip" onclick="skipLabCajaOp()" style="width:100%;padding:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">✓ Cerrar turno sin caja (la gestiona mi compañero/a)</button>
       <button onclick="closeLabCajaChoice()" style="width:100%;padding:10px;background:transparent;color:var(--text3);border:none;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
     </div>
@@ -853,7 +927,7 @@ async function submitLabCierre(){
   <div style="background:var(--bg2);border:2px solid #0891b2;border-radius:14px;padding:24px;width:100%;max-width:560px;margin:40px auto;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#0891b2;letter-spacing:.2em;margin-bottom:6px;">SYNCROLAB · TRASPASO DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Traspaso — <span id="lab-tras-turno-label">Turno</span></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">Traspaso solo de efectivo de las dos cajas. Sin retiro. El fondo recibido viene del último cierre/traspaso (no editable).</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">Traspaso de Mañana: efectivo y cargos MEWS. Sin retiro. El efectivo físico se entrega completo al turno de Tarde.</div>
     <div id="lab-tras-aviso" style="display:none;background:rgba(245,158,11,.1);border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--amber);margin-bottom:12px;"></div>
     <div style="border:1px solid #6366f1;border-radius:10px;padding:12px;margin-bottom:12px;">
       <div style="font-weight:700;color:#6366f1;margin-bottom:8px;">🩺 Nubimed / Clínica</div>
@@ -891,16 +965,20 @@ async function submitLabCierre(){
   <div style="background:var(--bg2);border:2px solid #a855f7;border-radius:14px;padding:24px;width:100%;max-width:640px;margin:40px auto;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#a855f7;letter-spacing:.2em;margin-bottom:6px;">SYNCROLAB · CIERRE DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Cierre — <span id="lab-c-turno-label">Turno</span></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Cuenta el efectivo total antes de retirarlo: fondo recibido + ventas. Si falta efectivo, introduce el importe físico real; se guardará como incidencia con explicación obligatoria y sin retiro.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Cuenta el efectivo total antes de retirarlo: fondo inicial + ventas acumuladas del día. No añadas el traspaso de Mañana otra vez. Si falta efectivo, introduce el importe físico real; se guardará como incidencia con explicación obligatoria y sin retiro.</div>
     <div id="lab-c-aviso" style="display:none;background:rgba(245,158,11,.1);border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--amber);margin-bottom:12px;"></div>
     ${_bloqueCierre('nub','🩺 Nubimed / Clínica','#6366f1')}
     ${_bloqueCierre('vg','🏋 VirtuGym / Fitness','#10b981')}
     <div style="border:1px dashed #f59e0b;border-radius:10px;padding:12px;margin-bottom:12px;">
+      <div style="font-weight:700;color:#f59e0b;font-size:13px;margin-bottom:5px;">🏨 Cargos registrados en el traspaso de Mañana (MEWS)</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Solo consulta: ya quedaron registrados en el traspaso y no se duplicarán al guardar este cierre.</div>
+      <div id="lab-c-charges-previos"></div>
+      <div style="border-top:1px solid var(--border);margin:10px 0;"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-weight:700;color:#f59e0b;font-size:13px;">🏨 Cargos a habitación (MEWS)</div>
+        <div style="font-weight:700;color:#f59e0b;font-size:13px;">Añadir nuevos cargos de este cierre</div>
         <button onclick="_labChargeAdd('lab-c-charges')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">+ Añadir cargo</button>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Cobros contra factura de huésped. Recepción los carga en MEWS y los confirma. No cuentan como ingreso de tu caja.</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Cobros contra factura de huésped realizados ahora. Recepción los carga en MEWS y los confirma. No cuentan como ingreso de tu caja.</div>
       <div id="lab-c-charges"></div>
     </div>
     <div style="text-align:right;font-size:15px;font-family:var(--font-mono);margin-bottom:3px;border-top:1px solid var(--border);padding-top:10px;">Diferencia total de caja: <span id="lab-c-dif-total-syncrolab" style="font-weight:700;color:var(--text3);">0.00 €</span></div>

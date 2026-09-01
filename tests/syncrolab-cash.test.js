@@ -6,17 +6,17 @@ import vm from 'node:vm';
 function loadCashRules() {
   const source = fs.readFileSync(new URL('../syncrolab.js', import.meta.url), 'utf8');
   const start = source.indexOf('function _labFondoFinal');
-  const fundHelper = source.indexOf('function _labUltimoFondoTraspasado');
+  const fundHelper = source.indexOf('function _labFondoInicialCierre');
   const end = source.indexOf('\n}\n', fundHelper) + 2;
   assert.ok(start >= 0 && end > start, 'helper de fondo no encontrado');
   const context = vm.createContext({ isFinite, parseFloat });
   vm.runInContext(
     'var LAB_FONDOS_FINALES = { nubimed:120, virtugym:215 };\n'
       + source.slice(start, end)
-      + '\nthis.pickFund = _labUltimoFondoTraspasado; this.cashClose = _labResumenCierreEfectivo;',
+      + '\nthis.pickFund = _labUltimoFondoTraspasado; this.closingFund = _labFondoInicialCierre; this.cashClose = _labResumenCierreEfectivo;',
     context
   );
-  return { pickFund: context.pickFund, cashClose: context.cashClose };
+  return { pickFund: context.pickFund, closingFund: context.closingFund, cashClose: context.cashClose };
 }
 
 function loadOperationRule() {
@@ -30,6 +30,16 @@ function loadOperationRule() {
     context
   );
   return context.requiredOperation;
+}
+
+function loadChargeRules() {
+  const source = fs.readFileSync(new URL('../syncrolab.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function _labCargoPerteneceAOperacion');
+  const end = source.indexOf('\n}\n', source.indexOf('function _labCargosTraspasoDeFecha')) + 2;
+  assert.ok(start >= 0 && end > start, 'reglas de cargos no encontradas');
+  const context = vm.createContext({});
+  vm.runInContext(source.slice(start, end) + '\nthis.transferCharges = _labCargosTraspasoDeFecha;', context);
+  return context.transferCharges;
 }
 
 test('SYNCROLAB uses the latest actual transfer for each separate cash register', () => {
@@ -85,12 +95,43 @@ test('SYNCROLAB calculates end-of-day cash withdrawal after retaining each fixed
   );
 });
 
+test('SYNCROLAB closes Tarde with the opening fund, not the total delivered in Mañana transfer', () => {
+  const { closingFund, cashClose } = loadCashRules();
+  const rows = [
+    { fecha: '2026-08-30', created_at: '2026-08-30T21:00:00Z', tipo: 'cierre', fondo_recibido_nubimed: 120, efectivo_nubimed_sistema: 0, total_sistema_nubimed: 120, efectivo_nubimed_real: 120 },
+    { fecha: '2026-08-31', created_at: '2026-08-31T13:00:00Z', tipo: 'traspaso', fondo_recibido_nubimed: 120, efectivo_traspasado_nubimed: 450 }
+  ];
+  assert.equal(closingFund(rows, 'nubimed'), 120);
+  assert.deepEqual(
+    { ...cashClose(200, 470, 670, 200) },
+    { esperado: 670, diferencia: 0, retiro: 470, fondo_final: 200 }
+  );
+});
+
+test('SYNCROLAB shows charges from Mañana transfer in Tarde closure without taking closure charges', () => {
+  const transferCharges = loadChargeRules();
+  const rows = [
+    { id: 'morning-transfer', fecha: '2026-08-31', tipo: 'traspaso' },
+    { id: 'afternoon-close', fecha: '2026-08-31', tipo: 'cierre' }
+  ];
+  const charges = [
+    { id: 'one', syncrolab_cash_id: 'morning-transfer', importe: 20 },
+    { id: 'two', syncrolab_cash_closure_id: 'morning-transfer', importe: 30 },
+    { id: 'three', cash_closure_id: 'afternoon-close', importe: 40 }
+  ];
+  assert.deepEqual(
+    transferCharges(rows, charges, '2026-08-31').map((charge) => charge.id),
+    ['one', 'two']
+  );
+});
+
 test('SYNCROLAB requires exactly one cash operation for each normal shift', () => {
   const requiredOperation = loadOperationRule();
   assert.equal(requiredOperation('Mañana', '2026-08-31'), 'traspaso');
   assert.equal(requiredOperation('Tarde', '2026-08-31'), 'cierre');
-  assert.equal(requiredOperation('Mañana', '2026-08-30'), 'cierre');
+  assert.equal(requiredOperation('Mañana', '2026-08-30'), 'traspaso');
   assert.equal(requiredOperation('Tarde', '2026-08-30'), 'cierre');
+  assert.equal(requiredOperation('Noche', '2026-08-31'), null);
 });
 
 test('SYNCROLAB keeps independent guards and blocks duplicate operations for every role', () => {
@@ -115,6 +156,14 @@ test('SYNCROLAB keeps independent guards and blocks duplicate operations for eve
   assert.match(source, /Se guardará con retiro 0 € y explicación obligatoria/);
   assert.doesNotMatch(source, /No hay efectivo suficiente para dejar el fondo final/);
   assert.match(source, /function _labOperacionRequerida\(turno, fecha\)/);
+  assert.match(source, /if\(turno === 'Tarde'\) return 'cierre';/);
+  assert.match(source, /function _labFondoInicialCierre\(rows, sistema\)/);
+  assert.match(source, /var _labCierreChargesPrevios = \[\]/);
+  assert.match(source, /Cargos registrados en el traspaso de Mañana/);
+  assert.match(source, /Añadir nuevos cargos de este cierre/);
+  assert.match(source, /syncrolab_cash_id === operacionId/);
+  assert.match(source, /_labCargosTraspasoDeFecha\(rows, charges, fecha\)/);
+  assert.match(source, /No sumes el traspaso de Mañana otra vez/);
   assert.match(source, /REGLA OBLIGATORIA/);
   assert.match(source, /Confirmo que he leído la regla de mi turno/);
   assert.match(source, /El turno de .+ debe registrar un cierre, no un traspaso/);
