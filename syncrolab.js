@@ -369,9 +369,34 @@ function _labResumenCierreEfectivo(fondoRecibido, ventasSistema, efectivoReal, f
   };
 }
 
+// Los cierres previos a la regla de efectivo total guardaban el sistema sin
+// sumar el fondo. Se mantienen con el fondo fijo para no reinterpretar datos
+// históricos. Los cierres nuevos con incidencia sí entregan el efectivo físico
+// contado al siguiente turno.
+function _labCierreUsaEfectivoTotal(row, sistema){
+  var pre = sistema === 'nubimed' ? 'nubimed' : 'virtugym';
+  var total = parseFloat(row['total_sistema_'+pre]);
+  if(!isFinite(total)) return false;
+  var campos = ['efectivo','tarjeta','stripe','transferencia'];
+  var sistemaSinFondo = campos.reduce(function(suma, campo){
+    return suma + (parseFloat(row[campo+'_'+pre+'_sistema']) || 0);
+  }, 0);
+  var fondo = parseFloat(row['fondo_recibido_'+pre]) || 0;
+  return Math.abs(total - (sistemaSinFondo + fondo)) < 0.01;
+}
+
+function _labFondoSiguienteTrasCierre(row, sistema){
+  var pre = sistema === 'nubimed' ? 'nubimed' : 'virtugym';
+  var fondoFinal = _labFondoFinal(sistema);
+  if(!_labCierreUsaEfectivoTotal(row, sistema)) return fondoFinal;
+  var efectivoReal = parseFloat(row['efectivo_'+pre+'_real']);
+  if(isFinite(efectivoReal) && efectivoReal < fondoFinal - 0.01) return Math.max(0, efectivoReal);
+  return fondoFinal;
+}
+
 // Cada caja conserva su propia cadena de custodia. Un traspaso hereda todo
-// el efectivo entregado al siguiente turno; tras un cierre, el día siguiente
-// empieza con el fondo fijo, aunque el retiro quede auditado en el registro.
+// el efectivo entregado al siguiente turno. Tras un cierre correcto empieza
+// con el fondo fijo; si existe una falta registrada, hereda el efectivo real.
 function _labUltimoFondoTraspasado(rows, sistema){
   var campo = sistema === 'nubimed'
     ? 'efectivo_traspasado_nubimed'
@@ -382,7 +407,7 @@ function _labUltimoFondoTraspasado(rows, sistema){
   });
   for(var i=0;i<ordenados.length;i++){
     var row=ordenados[i];
-    if(row.tipo === 'cierre') return _labFondoFinal(sistema);
+    if(row.tipo === 'cierre') return _labFondoSiguienteTrasCierre(row, sistema);
     if(row[campo] !== null && row[campo] !== undefined && row[campo] !== ''
       && isFinite(parseFloat(row[campo]))) return parseFloat(row[campo]);
   }
@@ -621,6 +646,7 @@ function closeLabCierreModal(){ var m=document.getElementById('modal-lab-cierre'
 
 function calcLabCierre(){
   var difTotalGeneral=0;
+  var difPorCaja={ nubimed:0, virtugym:0 };
   ['nub','vg'].forEach(function(sys){
     var pre=sys==='nub'?'nubimed':'virtugym';
     var fondoRecibido=parseFloat((document.getElementById('lab-c-'+sys+'-fondo')||{}).value)||0;
@@ -636,6 +662,11 @@ function calcLabCierre(){
     var difSysEl=document.getElementById('lab-c-'+sys+'-dif-total');
     if(difSysEl){ difSysEl.textContent=(difSys>=0?'+':'')+difSys.toFixed(2).replace('.',',')+'€'; difSysEl.style.color=Math.abs(difSys)<0.01?'var(--green)':'var(--red)'; }
     difTotalGeneral+=difSys;
+    difPorCaja[pre]=difSys;
+
+    var efectivoEsperado=fondoRecibido+_labCG(sys,'efectivo','sistema');
+    var esperadoEl=document.getElementById('lab-c-'+sys+'-efectivo-esperado');
+    if(esperadoEl) esperadoEl.textContent=efectivoEsperado.toFixed(2).replace('.',',')+' €';
 
     var retiroEl=document.getElementById('lab-c-'+sys+'-retiro');
     var efectivoRaw=(document.getElementById('lab-c-'+sys+'-efectivo-real')||{value:''}).value;
@@ -649,7 +680,7 @@ function calcLabCierre(){
           retiroEl.textContent='Retiro calculado: '+Math.max(0,resumen.retiro).toFixed(2).replace('.',',')+' €';
           retiroEl.style.color='var(--green)';
         } else {
-          retiroEl.textContent='Faltan '+Math.abs(resumen.retiro).toFixed(2).replace('.',',')+' € para dejar el fondo';
+          retiroEl.textContent='Incidencia: faltan '+Math.abs(resumen.retiro).toFixed(2).replace('.',',')+' € para el fondo mínimo. Se guardará con retiro 0 € y explicación obligatoria.';
           retiroEl.style.color='var(--red)';
         }
       }
@@ -657,6 +688,11 @@ function calcLabCierre(){
   });
   var totEl=document.getElementById('lab-c-dif-total-syncrolab');
   if(totEl){ totEl.textContent=(difTotalGeneral>=0?'+':'')+difTotalGeneral.toFixed(2).replace('.',',')+' €'; totEl.style.color=Math.abs(difTotalGeneral)<0.01?'var(--green)':'var(--red)'; }
+  var detailEl=document.getElementById('lab-c-dif-total-detalle');
+  if(detailEl){
+    var fmt=function(v){ return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' €'; };
+    detailEl.textContent='Clínica '+fmt(difPorCaja.nubimed)+' · Fitness '+fmt(difPorCaja.virtugym);
+  }
   var difBlock=document.getElementById('lab-c-dif-block');
   if(difBlock) difBlock.style.display = Math.abs(difTotalGeneral)<0.01 ? 'none' : 'block';
 }
@@ -713,13 +749,8 @@ async function submitLabCierre(){
     rec['total_sistema_'+pre]=totSis; rec['total_real_'+pre]=totReal;
     rec['fondo_recibido_'+pre]=fondoRecibido;
   });
-  if(retiros.nubimed < -0.01 || retiros.virtugym < -0.01){
-    var faltantes=[];
-    if(retiros.nubimed < -0.01) faltantes.push('Clínica '+Math.abs(retiros.nubimed).toFixed(2).replace('.',',')+' €');
-    if(retiros.virtugym < -0.01) faltantes.push('Fitness '+Math.abs(retiros.virtugym).toFixed(2).replace('.',',')+' €');
-    var mr='No hay efectivo suficiente para dejar el fondo final: '+faltantes.join(' · ');
-    if(errEl) errEl.textContent=mr; toast(mr,'err'); return;
-  }
+  // Una falta de efectivo no bloquea el cierre: se guarda el importe físico
+  // real, el retiro queda en 0 y la diferencia exige explicación para validar.
   rec.efectivo_traspasado_nubimed=Math.max(0,retiros.nubimed||0);
   rec.efectivo_traspasado_virtugym=Math.max(0,retiros.virtugym||0);
   rec.efectivo_total_traspasado=rec.efectivo_traspasado_nubimed+rec.efectivo_traspasado_virtugym;
@@ -777,8 +808,9 @@ async function submitLabCierre(){
       + '<div style="font-weight:700;color:'+color+';margin-bottom:8px;">'+titulo+'</div>'
       + '<div class="fg" style="margin-bottom:8px;"><label>Fondo recibido (€)</label><input type="text" id="lab-c-'+sys+'-fondo" value="0.00" readonly style="color:#111827;background:#fff;opacity:.6;cursor:not-allowed;width:120px;"></div>'
       + '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 9px;margin:-2px 0 8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.35);border-radius:6px;font-size:12px;"><span>Fondo final que queda en caja</span><b>'+fondoFinal.toFixed(2).replace('.',',')+' €</b></div>'
+      + '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 9px;margin:0 0 8px;background:rgba(59,130,246,.09);border:1px solid rgba(59,130,246,.35);border-radius:6px;font-size:12px;"><span>Efectivo físico esperado <span style="color:var(--text3);">(fondo + ventas)</span></span><b id="lab-c-'+sys+'-efectivo-esperado">0,00 €</b></div>'
       + '<table style="width:100%;border-collapse:collapse;"><tr style="font-size:10px;color:var(--text3);text-transform:uppercase;"><th style="text-align:left;padding:2px 6px;"></th><th style="text-align:left;padding:2px;">Según sistema</th><th style="text-align:left;padding:2px;">Real contado</th><th style="text-align:left;padding:2px 6px;">Δ</th></tr>'
-      + _campoCierre(sys,'efectivo','Efectivo')
+      + _campoCierre(sys,'efectivo','Efectivo (ventas)')
       + _campoCierre(sys,'tarjeta','Tarjeta / TPV')
       + _campoCierre(sys,'stripe','Stripe')
       + _campoCierre(sys,'transferencia','Transferencia')
@@ -859,7 +891,7 @@ async function submitLabCierre(){
   <div style="background:var(--bg2);border:2px solid #a855f7;border-radius:14px;padding:24px;width:100%;max-width:640px;margin:40px auto;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#a855f7;letter-spacing:.2em;margin-bottom:6px;">SYNCROLAB · CIERRE DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Cierre — <span id="lab-c-turno-label">Turno</span></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Cuenta el efectivo antes de retirarlo. Al final del día el sistema calcula el retiro y deja 120 € en Clínica y 215 € en Fitness.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Cuenta el efectivo total antes de retirarlo: fondo recibido + ventas. Si falta efectivo, introduce el importe físico real; se guardará como incidencia con explicación obligatoria y sin retiro.</div>
     <div id="lab-c-aviso" style="display:none;background:rgba(245,158,11,.1);border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--amber);margin-bottom:12px;"></div>
     ${_bloqueCierre('nub','🩺 Nubimed / Clínica','#6366f1')}
     ${_bloqueCierre('vg','🏋 VirtuGym / Fitness','#10b981')}
@@ -871,7 +903,8 @@ async function submitLabCierre(){
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Cobros contra factura de huésped. Recepción los carga en MEWS y los confirma. No cuentan como ingreso de tu caja.</div>
       <div id="lab-c-charges"></div>
     </div>
-    <div style="text-align:right;font-size:15px;font-family:var(--font-mono);margin-bottom:8px;border-top:1px solid var(--border);padding-top:10px;">Diferencia total SYNCROLAB: <span id="lab-c-dif-total-syncrolab" style="font-weight:700;color:var(--text3);">0.00 €</span></div>
+    <div style="text-align:right;font-size:15px;font-family:var(--font-mono);margin-bottom:3px;border-top:1px solid var(--border);padding-top:10px;">Diferencia total de caja: <span id="lab-c-dif-total-syncrolab" style="font-weight:700;color:var(--text3);">0.00 €</span></div>
+    <div id="lab-c-dif-total-detalle" style="text-align:right;font-size:11px;font-family:var(--font-mono);color:var(--text3);margin-bottom:8px;">Clínica 0,00 € · Fitness 0,00 €</div>
     <div id="lab-c-dif-block" style="display:none;"><div class="fg" style="margin-bottom:8px;"><label>Explicación de la diferencia <span class="req">*</span></label><textarea id="lab-c-dif-exp" rows="2" style="color:#111827;background:#fff;"></textarea></div></div>
     <div id="lab-c-err" style="color:var(--red);font-size:12px;min-height:18px;margin-bottom:8px;font-family:var(--font-mono);"></div>
     <div class="fg" style="margin-bottom:12px;">

@@ -60,6 +60,19 @@ test('SYNCROLAB starts after a closure with the fixed fund, not the cash withdra
   assert.equal(pickFund(rows, 'virtugym'), 215);
 });
 
+test('SYNCROLAB passes the counted physical cash to the next shift after a recorded shortage', () => {
+  const { pickFund } = loadCashRules();
+  const rows = [{
+    fecha: '2026-08-31', created_at: '2026-08-31T21:00:00Z', tipo: 'cierre',
+    fondo_recibido_nubimed: 120,
+    efectivo_nubimed_sistema: 60,
+    efectivo_nubimed_real: 60,
+    total_sistema_nubimed: 180,
+    efectivo_traspasado_nubimed: 0
+  }];
+  assert.equal(pickFund(rows, 'nubimed'), 60);
+});
+
 test('SYNCROLAB calculates end-of-day cash withdrawal after retaining each fixed fund', () => {
   const { cashClose } = loadCashRules();
   assert.deepEqual(
@@ -97,7 +110,10 @@ test('SYNCROLAB keeps independent guards and blocks duplicate operations for eve
   assert.match(source, /var LAB_FONDOS_FINALES = \{ nubimed:120, virtugym:215 \}/);
   assert.match(source, /Fondo final que queda en caja/);
   assert.match(source, /rec\.efectivo_traspasado_nubimed=Math\.max\(0,retiros\.nubimed\|\|0\)/);
-  assert.match(source, /No hay efectivo suficiente para dejar el fondo final/);
+  assert.match(source, /Efectivo físico esperado/);
+  assert.match(source, /Diferencia total de caja/);
+  assert.match(source, /Se guardará con retiro 0 € y explicación obligatoria/);
+  assert.doesNotMatch(source, /No hay efectivo suficiente para dejar el fondo final/);
   assert.match(source, /function _labOperacionRequerida\(turno, fecha\)/);
   assert.match(source, /REGLA OBLIGATORIA/);
   assert.match(source, /Confirmo que he leído la regla de mi turno/);
