@@ -24,6 +24,8 @@ Una **incidencia operativa** es un problema real ocurrido durante el turno que r
 | `servicio` | TEXT | ✅ | Turno: Mañana · Tarde · Noche (o auto-asignado) |
 | `categoria` | TEXT | ✅ | `'Incidencia operativa'` |
 | `tipo_incidencia` | TEXT | ✅ | De `incidencia_tipos.js` → `INCIDENCIA_TIPOS` |
+| `room` | TEXT | — | Habitación afectada normalizada; necesaria para el informe de Mantenimiento |
+| `visible_companeros` | BOOLEAN | ✅ | `false` por defecto; el empleado decide si sus compañeros del mismo departamento pueden verla mientras esté activa |
 | `descripcion` | TEXT | ✅ | Qué ocurrió |
 | `accion_inmediata` | TEXT | — | Qué se hizo en el momento |
 | `accion_tomada` | TEXT | — | Obligatoria al cerrar |
@@ -56,7 +58,7 @@ El empleado **NO puede cambiar estado** — solo registra.
 
 ## 4. Visibilidad de incidencias y staff implicado
 
-`adjuntos.js` extiende la visibilidad: una incidencia también es visible para empleados del departamento de los `staff_implicado_ids`, no solo del departamento creador. Función `canCloseIncident` en `adjuntos.js` añade check de staff implicado.
+`adjuntos.js` extiende la visibilidad: una incidencia también es visible para empleados del departamento de los `staff_implicado_ids`, no solo del departamento creador. Si `visible_companeros=true`, los compañeros del mismo departamento la ven en Mi Turno mientras permanezca activa. La opción es voluntaria y las incidencias históricas permanecen privadas por defecto.
 
 ---
 

@@ -41,6 +41,75 @@ var MANT_PLAN_COLS = [
 var _mantDragId  = null;
 var _mantModalId = null;
 
+function _mantRoomOf(record){
+  var raw=record && (record.room || record.habitacion);
+  if(typeof normalizeIncidentRoom === 'function') return normalizeIncidentRoom(raw);
+  return String(raw==null?'':raw).trim().toUpperCase();
+}
+
+function _mantRoomItemLabel(item, kind){
+  if(kind === 'incidencia') return item.tipo_incidencia || item.categoria || 'Incidencia sin tipo';
+  return item.tipo || item.titulo || 'Tarea sin tipo';
+}
+
+function _mantRoomReport(tareas, incidencias){
+  var rooms={};
+  function ensure(room){
+    if(!rooms[room]) rooms[room]={room:room,tareas:[],incidencias:[],repetidas:{}};
+    return rooms[room];
+  }
+  function register(room, item, kind){
+    if(!room) return;
+    var row=ensure(room);
+    row[kind === 'incidencia' ? 'incidencias' : 'tareas'].push(item);
+    var label=_mantRoomItemLabel(item, kind);
+    var key=kind+'|'+label;
+    if(!row.repetidas[key]) row.repetidas[key]={kind:kind,label:label,total:0};
+    row.repetidas[key].total++;
+  }
+
+  (tareas||[]).forEach(function(t){ register(_mantRoomOf(t), t, 'tarea'); });
+  (incidencias||[]).forEach(function(i){ register(_mantRoomOf(i), i, 'incidencia'); });
+
+  var rows=Object.keys(rooms).map(function(room){
+    var row=rooms[room];
+    row.tareasAbiertas=row.tareas.filter(function(t){ return typeof isTaskOpen==='function' ? isTaskOpen(t) : t.estado!=='Cerrada'; }).length;
+    row.incidenciasAbiertas=row.incidencias.filter(function(i){ return typeof isIncidentOpen==='function' ? isIncidentOpen(i) : i.estado!=='Cerrada'; }).length;
+    row.repetidas=Object.keys(row.repetidas).map(function(key){ return row.repetidas[key]; }).filter(function(item){ return item.total >= 2; });
+    row.total=row.tareas.length+row.incidencias.length;
+    return row;
+  });
+  rows.sort(function(a,b){
+    if(Boolean(b.repetidas.length)!==Boolean(a.repetidas.length)) return b.repetidas.length-a.repetidas.length;
+    if(b.total!==a.total) return b.total-a.total;
+    return a.room.localeCompare(b.room,undefined,{numeric:true});
+  });
+
+  var recurrentes=rows.filter(function(row){ return row.repetidas.length; }).length;
+  var html='<div style="margin-top:18px;background:var(--bg3);border:1px solid var(--border);border-top:3px solid #f97316;border-radius:10px;padding:14px;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px;">'
+    + '<div style="font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.06em;color:#f97316;">🚪 INFORME POR HABITACIÓN</div>'
+    + '<div style="font-size:11px;color:var(--text3);">'+rows.length+' habitación'+(rows.length===1?'':'es')+' con histórico · '+recurrentes+' con reincidencia</div>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.4;">Reincidencia: el mismo tipo de incidencia o tarea aparece dos o más veces en la misma habitación.</div>';
+  if(!rows.length){
+    return html+'<div class="empty" style="padding:20px 0;"><div class="empty-text">Sin incidencias ni tareas con habitación registrada</div></div></div>';
+  }
+  html += '<div style="overflow-x:auto;"><table><tr><th>Habitación</th><th>Incidencias</th><th>Tareas Mantenimiento</th><th>Reincidencias detectadas</th></tr>'
+    + rows.map(function(row){
+      var reps=row.repetidas.length ? row.repetidas.map(function(rep){
+        return '<div style="margin-bottom:3px;"><span class="badge b-orange">🔁 '+rep.total+'×</span> '+_mantEsc(rep.label)+'</div>';
+      }).join('') : '<span style="color:var(--text3);">—</span>';
+      return '<tr>'
+        + '<td style="font-family:var(--font-mono);font-weight:700;">🚪 '+_mantEsc(row.room)+'</td>'
+        + '<td><b>'+row.incidencias.length+'</b><span style="color:var(--text3);font-size:11px;"> · '+row.incidenciasAbiertas+' abiertas</span></td>'
+        + '<td><b>'+row.tareas.length+'</b><span style="color:var(--text3);font-size:11px;"> · '+row.tareasAbiertas+' abiertas</span></td>'
+        + '<td style="font-size:11px;min-width:180px;">'+reps+'</td>'
+        + '</tr>';
+    }).join('') + '</table></div></div>';
+  return html;
+}
+
 // ── Permiso: ¿el usuario opera el tablero de Mantenimiento? ──────────────
 function _mantCanOperate(user){
   if(!user) return false;
@@ -92,6 +161,11 @@ async function renderMantenimientoMod(){
 
   var tareas = await getDB('tareas');
   tareas = tareas.filter(function(t){ return String(t.dept_destino || '') === 'Mantenimiento'; });
+  var incidenciasHabitacion=[];
+  try {
+    var todasIncidencias=await getDB('incidencias');
+    incidenciasHabitacion=(todasIncidencias||[]).filter(function(i){ return !!_mantRoomOf(i); });
+  } catch(e){}
 
   if(sub){
     var abiertas = tareas.filter(function(t){ return typeof isTaskOpen === 'function' ? isTaskOpen(t) : (t.estado === 'Abierta' || t.estado === 'En proceso'); }).length;
@@ -155,7 +229,8 @@ async function renderMantenimientoMod(){
     + '</style>'
     + '<div class="mant-scroll" style="display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:8px;">'
     + cols
-    + '</div>';
+    + '</div>'
+    + _mantRoomReport(tareas, incidenciasHabitacion);
 }
 
 // ── TARJETA ───────────────────────────────────────────────────────────────

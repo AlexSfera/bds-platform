@@ -31,6 +31,18 @@ function isIncidentOpen(i){
   return s===INCIDENT_STATES.ABIERTA || s===INCIDENT_STATES.EN_PROCESO;
 }
 
+function normalizeIncidentRoom(value){
+  var raw=String(value==null?'':value).trim();
+  if(!raw) return '';
+  var match=raw.match(/(?:hab(?:itaci[oó]n)?\.?\s*)?([a-z]?\d+[a-z]?)/i);
+  return match ? String(match[1]).toUpperCase() : raw.slice(0,30).toUpperCase();
+}
+
+function isIncidentVisibleToColleagues(incident){
+  var value=incident && incident.visible_companeros;
+  return value===true || value===1 || value==='1' || String(value).toLowerCase()==='true';
+}
+
 // Distingue incidencia operativa de gestión pendiente (usado por dashboard)
 function _isOperationalIncident(i) {
   var cat = normalizeDeptName(i && i.categoria);
@@ -85,6 +97,8 @@ function bIncidentEstadoClick(e, iid){
 function buildInciObj(shiftId,fecha,servicio,ts){
   var descEl=document.getElementById('i-desc');
   var accionEl=document.getElementById('i-accion');
+  var roomEl=document.getElementById('i-room');
+  var visibleEl=document.getElementById('i-visible-companeros');
   var staff=getStaffImplicado();
   return {
     id:genId(), shift_id:shiftId, employee_id:currentUser.id, nombre:currentUser.nombre,
@@ -95,6 +109,8 @@ function buildInciObj(shiftId,fecha,servicio,ts){
     severidad:'Pendiente revision',
     descripcion: descEl ? descEl.value.trim() : '',
     accion_inmediata: accionEl ? accionEl.value.trim() : '',
+    room: normalizeIncidentRoom(roomEl ? roomEl.value : '') || null,
+    visible_companeros: !!(visibleEl && visibleEl.checked),
     staff_implicado_ids: JSON.stringify(staff.ids),
     staff_implicado_nombres: JSON.stringify(staff.nombres),
     tipo_incidencia: (document.getElementById('i-tipo-incidencia')||{}).value || '',
@@ -170,7 +186,7 @@ function _renderIncidencias(incis, shiftMap) {
   if (!el) return;
 
   var diDept   = (document.getElementById('di-dept')   || {}).value || '';
-  var diCat    = (document.getElementById('di-cat')    || {}).value || '';
+  var diTipo   = (document.getElementById('di-cat')    || {}).value || '';
   var diSev    = (document.getElementById('di-sev')    || {}).value || '';
   var diEstado = (document.getElementById('di-estado') || {}).value || '';
 
@@ -179,7 +195,7 @@ function _renderIncidencias(incis, shiftMap) {
     var s = shiftMap && shiftMap[i.shift_id];
     return ((s && s.area) || i.area || '') === diDept;
   });
-  if (diCat)    filtered = filtered.filter(function(i) { return i.categoria === diCat; });
+  if (diTipo)   filtered = filtered.filter(function(i) { return i.tipo_incidencia === diTipo; });
   if (diSev)    filtered = filtered.filter(function(i) { return i.severidad === diSev; });
   if (diEstado) filtered = filtered.filter(function(i) { return normalizeIncidentState(i.estado) === diEstado; });
 
@@ -221,7 +237,7 @@ function _renderIncidencias(incis, shiftMap) {
         + '<td style="font-family:var(--font-mono);font-size:11px">' + fmtDate(i.fecha) + '</td>'
         + '<td style="font-family:var(--font-mono);font-size:11px">' + hora + '</td>'
         + '<td>' + deptBadge(iDept) + '</td>'
-        + '<td style="font-size:12px">' + formatDisplayValue(i.categoria) + '</td>'
+        + '<td style="font-size:12px">' + formatDisplayValue(i.tipo_incidencia || i.categoria) + '</td>'
         + '<td><span class="badge ' + sevColor + '">' + formatDisplayValue(i.severidad) + '</span></td>'
         + '<td style="max-width:180px;font-size:12px">' + formatDisplayValue(i.descripcion) + '</td>'
         + '<td style="max-width:160px;font-size:12px;color:var(--text3)">' + accionTomada + '</td>'

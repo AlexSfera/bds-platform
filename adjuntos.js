@@ -950,9 +950,12 @@ function _adjGetStaffDeptsSync(inci, empMap){
     } else {
       incidencias = allIncis.filter(function(i){
         var esSuya = i.employee_id === currentUser.id || i.nombre === currentUser.nombre;
+        var esVisibleParaMi = typeof isIncidentVisibleToColleagues === 'function'
+          && isIncidentVisibleToColleagues(i)
+          && normalizeDeptName(i.departamento||i.area||'') === normalizeDeptName(dept);
         var abierta = normalizeIncidentState(i.estado) === INCIDENT_STATES.ABIERTA
                    || normalizeIncidentState(i.estado) === INCIDENT_STATES.EN_PROCESO;
-        return esSuya && abierta;
+        return (esSuya || esVisibleParaMi) && abierta;
       });
     }
 
@@ -999,7 +1002,7 @@ function _adjGetStaffDeptsSync(inci, empMap){
           var deptInfo = deptBadge(i.departamento||i.area||'—');
           if(staffDepts.length) deptInfo += '<span style="font-size:9px;color:var(--text3);display:block;">impl: '+staffDepts.join(', ')+'</span>';
           return '<tr>'
-            + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+'</td>'
+          + '<td style="font-size:12px;">'+formatDisplayValue(i.tipo_incidencia||i.categoria)+(typeof isIncidentVisibleToColleagues==='function' && isIncidentVisibleToColleagues(i)?'<br><span style="font-size:9px;color:var(--blue);font-weight:700;">👁 EQUIPO</span>':'')+'</td>'
             + '<td style="font-size:12px;max-width:200px;">'+formatDisplayValue(i.descripcion).slice(0,70)+(i.descripcion&&i.descripcion.length>70?'...':'')+'</td>'
             + '<td style="font-size:12px;">'+formatDisplayValue(i.nombre)+'</td>'
             + '<td>'+deptInfo+'</td>'

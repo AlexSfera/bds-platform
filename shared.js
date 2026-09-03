@@ -1550,10 +1550,12 @@ function clearTurnoForm(){
   window._editingShiftServicioOriginal = ''; // FEAT-TURNO-AUTO
   const modeEl=document.getElementById('turno-form-mode'); if(modeEl) modeEl.textContent='NUEVO';
   const saveBtn=document.getElementById('btn-save-turno'); if(saveBtn) saveBtn.textContent='💾 Guardar Turno';
-  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
+  ['t-fecha','t-servicio','t-horas','t-obs','i-desc','i-accion','i-room','g-desc','g-tipo','g-reserva','i-tipo-incidencia','it-dept','it-prio','it-titulo','it-deadline','it-desc','mt-dept','mt-prio','mt-titulo','mt-deadline','mt-desc'].forEach(id=>{
     const el=document.getElementById(id); if(!el) return;
     if(el.tagName==='SELECT') el.value=''; else el.value=el.type==='date'?today():'';
   });
+  var visibleCompaneros=document.getElementById('i-visible-companeros');
+  if(visibleCompaneros) visibleCompaneros.checked=false;
   const fechaInput = document.getElementById('t-fecha');
   // FIX-CENA-MEDIANOCHE: turnos nocturnos que cruzan medianoche usan fecha = ayer
   // Sala: Cena hasta las 2 AM · Recepción: Noche hasta las 7 AM
@@ -1663,6 +1665,8 @@ async function loadForCorrection(shiftId){
     var eSev=document.getElementById('i-sev'); if(eSev) eSev.value=inci.severidad||'';
     var eDesc=document.getElementById('i-desc'); if(eDesc) eDesc.value=inci.descripcion||'';
     var eAcc=document.getElementById('i-accion'); if(eAcc) eAcc.value=inci.accion_inmediata||'';
+    var eRoom=document.getElementById('i-room'); if(eRoom) eRoom.value=inci.room||'';
+    var eVisible=document.getElementById('i-visible-companeros'); if(eVisible) eVisible.checked=typeof isIncidentVisibleToColleagues==='function' && isIncidentVisibleToColleagues(inci);
     setT('reqform',inci.requiere_formacion==='Sí'?'si':'no');
     setT('reqdisc',inci.requiere_disciplina==='Sí'?'si':'no');
   }
@@ -5493,8 +5497,10 @@ function openNewIncidenciaStandalone(){
       + '<button class="modal-x" onclick="closeModal(\'modal-new-inci\')">✕</button></div>'
       + '<div class="modal-b">'
       + '<div class="fg"><label>Tipo</label><select id="ni-tipo"></select></div>'
+      + '<div class="fg"><label>Habitación afectada <span style="color:var(--text3);font-weight:400;">(si aplica)</span></label><input id="ni-room" type="text" inputmode="numeric" maxlength="12" placeholder="Ej. 304"></div>'
       + '<div class="fg"><label>Descripción</label><textarea id="ni-desc" rows="3" placeholder="Detalle de la incidencia..."></textarea></div>'
       + '<div class="fg"><label>Acción inmediata (opcional)</label><textarea id="ni-accion" rows="2" placeholder="¿Se hizo algo de inmediato?"></textarea></div>'
+      + '<div class="fg"><label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:500;line-height:1.35;"><input id="ni-visible-companeros" type="checkbox" style="width:auto;margin-top:2px;"><span>Visible para compañeros del departamento<br><span style="color:var(--text3);font-weight:400;font-size:11px;">Actívalo si deben tenerla en cuenta.</span></span></label></div>'
       + '</div>'
       + '<div class="modal-f">'
       + '<button class="btn btn-secondary" onclick="closeModal(\'modal-new-inci\')">Cancelar</button>'
@@ -5515,6 +5521,8 @@ function openNewIncidenciaStandalone(){
   }
   ov.querySelector('#ni-desc').value = '';
   ov.querySelector('#ni-accion').value = '';
+  ov.querySelector('#ni-room').value = '';
+  ov.querySelector('#ni-visible-companeros').checked = false;
   ov.classList.add('open');
 }
 window.openNewIncidenciaStandalone = openNewIncidenciaStandalone;
@@ -5523,6 +5531,8 @@ async function saveNewIncidenciaStandalone(){
   var tipo = (document.getElementById('ni-tipo')||{}).value || '';
   var desc = ((document.getElementById('ni-desc')||{}).value || '').trim();
   var accion = ((document.getElementById('ni-accion')||{}).value || '').trim();
+  var room = (document.getElementById('ni-room')||{}).value || '';
+  var visibleCompaneros = !!((document.getElementById('ni-visible-companeros')||{}).checked);
   if(!desc){ toast('Descripción obligatoria','err'); return; }
   var rec = {
     id: genId(),
@@ -5535,6 +5545,8 @@ async function saveNewIncidenciaStandalone(){
     categoria: tipo || 'Otro',
     descripcion: desc,
     accion_inmediata: accion,
+    room: typeof normalizeIncidentRoom==='function' ? (normalizeIncidentRoom(room)||null) : (room.trim()||null),
+    visible_companeros: visibleCompaneros,
     estado: INCIDENT_STATES.ABIERTA,
     created_at: localTs()
   };

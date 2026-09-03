@@ -1309,6 +1309,14 @@ tr:hover td{background:rgba(96,165,250,.06);}
                     <option value="">— Seleccionar (opcional) —</option>
                   </select>
                 </div>
+                <div class="fg"><label>Habitación afectada <span style="color:var(--text3);font-weight:400;">(si aplica)</span></label>
+                  <input id="i-room" type="text" inputmode="numeric" maxlength="12" placeholder="Ej. 304"></div>
+                <div class="fg" style="align-self:end;">
+                  <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:500;line-height:1.35;">
+                    <input id="i-visible-companeros" type="checkbox" style="width:auto;margin-top:2px;">
+                    <span>Visible para compañeros del departamento<br><span style="color:var(--text3);font-weight:400;font-size:11px;">Úsalo si necesitan tenerla en cuenta.</span></span>
+                  </label>
+                </div>
                 <div class="fg"><label>¿Informado al responsable de turno?</label>
                   <div class="toggle-group">
                     <button class="tbtn" id="informresp-si" onclick="setT('informresp','si')">SÍ</button>
@@ -1587,7 +1595,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
           <div class="fg"><label>Departamento</label>
             <select id="di-dept" onchange="renderDashboard()"><option value="">Todos</option><option>Cocina</option><option>Sala</option><option>Friegue</option><option>Recepción</option><option>F&amp;B</option></select></div>
           <div class="fg"><label>Tipo</label>
-            <select id="di-cat" onchange="renderDashboard()"><option value="">Todos</option><option>Incidencia operativa</option><option>Reportada por empleado</option></select></div>
+            <select id="di-cat" onchange="renderDashboard()"><option value="">Todos los tipos</option></select></div>
           <div class="fg"><label>Severidad</label>
             <select id="di-sev" onchange="renderDashboard()"><option value="">Todas</option><option>Crítica</option><option>Alta</option><option>Media</option><option>Baja</option></select></div>
           <div class="fg"><label>Estado</label>

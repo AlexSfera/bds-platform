@@ -137,7 +137,13 @@ Prioridad descendente (Alta > Media > Baja), luego fecha_ejecucion/deadline asce
 
 ---
 
-## 10. QA
+## 10. Informe por habitación
+
+Debajo del Kanban se muestra un informe que combina las tareas con destino `Mantenimiento` y todas las incidencias que tienen `room` registrado. Agrupa por habitación, indica totales y abiertas, y marca una **reincidencia** cuando el mismo tipo de incidencia o tarea aparece dos o más veces para la misma habitación. El histórico anterior sin `room` no se infiere ni se altera.
+
+---
+
+## 11. QA
 
 ```
 □ Kanban solo visible para Mantenimiento y Admin

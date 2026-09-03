@@ -817,6 +817,10 @@ async function hkGuardarIncidencia(){
     severidad: 'Media',
     descripcion: desc,
     accion_inmediata: accion,
+    room: a.tipo_objeto === 'habitacion' && typeof normalizeIncidentRoom === 'function'
+      ? (normalizeIncidentRoom(a.objeto_nombre || '') || null)
+      : null,
+    visible_companeros: false,
     staff_implicado_ids: '[]',
     staff_implicado_nombres: '[]',
     tipo_incidencia: tipo,

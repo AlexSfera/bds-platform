@@ -1251,7 +1251,9 @@ async function _dashShowDetail(id, table) {
       var hora = _localHora(rec.created_at);
       html += row('Fecha', fmtDate(rec.fecha) + (hora !== '—' ? ' · ' + hora : ''));
       html += row('Departamento', rec.area || '—');
-      html += row('Tipo / Categoría', rec.categoria || '—');
+      html += row('Tipo', rec.tipo_incidencia || rec.categoria || '—');
+      html += row('Habitación', rec.room || '—');
+      html += row('Visible para compañeros', typeof isIncidentVisibleToColleagues==='function' && isIncidentVisibleToColleagues(rec) ? 'Sí' : 'No');
       html += row('Severidad', rec.severidad || '—');
       html += row('Descripción', formatDisplayValue(rec.descripcion));
       html += row('Acción tomada', formatDisplayValue(rec.accion_inmediata));
