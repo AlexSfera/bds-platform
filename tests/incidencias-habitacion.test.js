@@ -38,6 +38,19 @@ test('normaliza la habitación y conserva la visibilidad elegida por el empleado
   assert.equal(context.isIncidentVisibleToColleagues({ visible_companeros: false }), false);
 });
 
+test('prepara tipos únicos para el filtro de incidencias', () => {
+  const context = loadScripts();
+  const tipos = context.getIncidentTypesForFilter([
+    { tipo_incidencia: 'Queja de cliente' },
+    { tipo_incidencia: 'Avería' },
+    { tipo_incidencia: 'Queja de cliente' },
+    { categoria: 'Otro' },
+    {},
+  ]);
+
+  assert.deepEqual([...tipos], ['Avería', 'Otro', 'Queja de cliente']);
+});
+
 test('el informe de Mantenimiento agrupa por habitación y detecta reincidencias', () => {
   const context = loadScripts();
   context.isTaskOpen = (task) => task.estado !== 'Cerrada';

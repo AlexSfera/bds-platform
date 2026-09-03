@@ -31,6 +31,17 @@ function isIncidentOpen(i){
   return s===INCIDENT_STATES.ABIERTA || s===INCIDENT_STATES.EN_PROCESO;
 }
 
+function getIncidentTypesForFilter(incidents){
+  var seen={};
+  return (incidents||[]).map(function(incident){
+    return (incident && (incident.tipo_incidencia||incident.categoria)||'').trim();
+  }).filter(function(tipo){
+    if(!tipo || seen[tipo]) return false;
+    seen[tipo]=true;
+    return true;
+  }).sort(function(a,b){ return a.localeCompare(b,'es'); });
+}
+
 function normalizeIncidentRoom(value){
   var raw=String(value==null?'':value).trim();
   if(!raw) return '';

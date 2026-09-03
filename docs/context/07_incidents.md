@@ -76,6 +76,7 @@ El empleado **NO puede cambiar estado** — solo registra.
 - El tiempo de gestión se calcula y graba en BD al cerrar
 - Semáforo: ≤24h 🟢 · ≤48h 🟡 · >48h 🔴
 - Permanece en follow-up y dashboard hasta cierre
+- En la vista de Incidencias para jefes y Admin se puede filtrar la lista de incidencias activas por `tipo_incidencia`.
 
 ---
 
