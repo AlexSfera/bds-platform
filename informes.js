@@ -881,45 +881,66 @@ function _infSalaCosteUsuario(costData,detalle,nombre){
   return costData[nombre]||null;
 }
 
-// ── Guardar producción semanal en tabla sala_produccion_semanal ──
-window._infSalaGuardar=async function(){
-  if(!_infSalaData||!_infSalaData.fechas.length){ toast('No hay datos para guardar','err'); return; }
-  var data=_infSalaData, fechas=data.fechas;
-  var fechaMin=fechas[0], fechaMax=fechas[fechas.length-1];
+// ── Persistencia de producción semanal de Sala ────────────────────────
+// El periodo POSMEWS procede del nombre validado del archivo (dom→sáb),
+// no de la presentación de fechas del CSV. Así KPI y Ventas/Datos consultan
+// exactamente la misma semana.
+window._infPersistSalaSemana=async function(data,week,opts){
+  opts=opts||{};
+  if(!data||!data.fechas||!data.fechas.length||!data.usuarios||!data.usuarios.length){
+    return {ok:false,message:'No hay facturación por empleado para guardar'};
+  }
+  var fechaMin=(week&&week.inicio)||data.fechas[0];
+  var fechaMax=(week&&week.fin)||data.fechas[data.fechas.length-1];
   var periodo=fechaMin+'_'+fechaMax;
-  // Comprobar duplicados
   try{
     var chk=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo)+'&select=id,nombre',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-    if(chk.ok){
-      var prev=await chk.json();
-      if(prev.length>0&&!confirm('⚠ Ya existen '+prev.length+' registros para '+periodo+'. ¿Sobreescribir?')) return;
-      if(prev.length>0){
-        await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
-          {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-      }
+    if(!chk.ok) throw new Error('No se pudo comprobar la producción existente (HTTP '+chk.status+')');
+    var prev=await chk.json();
+    if(prev.length&&!opts.replaceExisting){
+      // La carga automática no puede destruir un cálculo ya consolidado.
+      return {ok:true,alreadySaved:true,rowCount:prev.length,periodo:periodo};
     }
-  }catch(e){}
-  var rows=data.usuarios.map(function(u){
-    var d=data.porUsuario[u];
-    return {
-      employee_id:d.employee_id||null, nombre:u, csv_nombre:d.csvNombre||u,
-      semana_inicio:fechaMin, semana_fin:fechaMax, periodo:periodo,
-      produccion_bruta:+d.totalBruto.toFixed(2), facturas:d.facturas,
-      detalle_diario:d.fechas,
-      subido_por:currentUser?currentUser.nombre:'?', subido_ts:localTs()
-    };
-  });
-  try{
+    if(prev.length){
+      var del=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal?periodo=eq.'+encodeURIComponent(periodo),
+        {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+      if(!del.ok) throw new Error('No se pudo reemplazar la producción existente (HTTP '+del.status+')');
+    }
+    var rows=data.usuarios.map(function(u){
+      var d=data.porUsuario[u];
+      return {
+        employee_id:d.employee_id||null, nombre:u, csv_nombre:d.csvNombre||u,
+        semana_inicio:fechaMin, semana_fin:fechaMax, periodo:periodo,
+        produccion_bruta:+d.totalBruto.toFixed(2), facturas:d.facturas,
+        detalle_diario:d.fechas,
+        subido_por:currentUser?currentUser.nombre:'?', subido_ts:localTs()
+      };
+    });
     var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/sala_produccion_semanal',{
       method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
       'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(rows)});
     if(!res.ok){ var txt=await res.text(); throw new Error('HTTP '+res.status+' '+txt); }
     invalidateCache('sala_produccion_semanal');
-    toast('✅ Guardado: '+rows.length+' camareros · '+periodo,'ok');
-    var btn=document.getElementById('inf-sala-guardar');
-    if(btn){ btn.disabled=true; btn.textContent='✅ Guardado'; }
-  }catch(e){ toast('Error al guardar: '+e.message,'err'); }
+    return {ok:true,rowCount:rows.length,periodo:periodo,replaced:prev.length>0};
+  }catch(e){ return {ok:false,message:e.message||'Error al guardar la producción'}; }
+};
+
+// ── Guardar o reemplazar desde el preview manual ─────────────────────
+window._infSalaGuardar=async function(){
+  if(!_infSalaData||!_infSalaData.fechas.length){ toast('No hay datos para guardar','err'); return; }
+  var data=_infSalaData;
+  var week=data._posmewsWeek||null;
+  var saved=await window._infPersistSalaSemana(data,week);
+  if(saved.ok&&saved.alreadySaved){
+    if(!confirm('⚠ Ya existen '+saved.rowCount+' registros para '+saved.periodo+'. ¿Sobreescribir?')) return;
+    saved=await window._infPersistSalaSemana(data,week,{replaceExisting:true});
+  }
+  if(!saved.ok){ toast('Error al guardar: '+saved.message,'err'); return; }
+  invalidateCache('sala_produccion_semanal');
+  toast(saved.replaced?'✅ Producción reemplazada: '+saved.rowCount+' camareros · '+saved.periodo:'✅ Guardado: '+saved.rowCount+' camareros · '+saved.periodo,'ok');
+  var btn=document.getElementById('inf-sala-guardar');
+  if(btn){ btn.disabled=true; btn.textContent='✅ Guardado'; }
 };
 
 // ── Eliminar producción semanal (solo admin) ──────────────────────────

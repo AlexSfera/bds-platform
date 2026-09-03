@@ -93,3 +93,73 @@ test('saved KPI weeks request labor using the selected ISO week, not legacy deta
   assert.match(requestedUrl, /hasta=2026-05-09/);
   assert.doesNotMatch(requestedUrl, /03%2F05%2F2026/);
 });
+
+test('POSMEWS persists production under the validated filename week before KPI reads it', async () => {
+  const requests = [];
+  const context = loadInformes({
+    currentUser: { nombre: 'BOSS' },
+    localTs: () => '2026-09-03T10:00:00+02:00',
+    invalidateCache: () => {},
+    syncroSupabaseFetch: async (url, init = {}) => {
+      requests.push({ url, init });
+      if ((init.method || 'GET') === 'GET') return { ok: true, json: async () => [] };
+      return { ok: true, text: async () => '' };
+    }
+  });
+  const data = {
+    fechas: ['05/07/2026', '06/07/2026'],
+    usuarios: ['Mey Redondo'],
+    porUsuario: {
+      'Mey Redondo': {
+        employee_id: 'mey', csvNombre: 'Mey Redondo', totalBruto: 3250.5,
+        facturas: 18, fechas: { '05/07/2026': 1500, '06/07/2026': 1750.5 }
+      }
+    }
+  };
+  const result = await context.window._infPersistSalaSemana(data, {
+    inicio: '2026-07-05', fin: '2026-07-11'
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.periodo, '2026-07-05_2026-07-11');
+  const insert = requests.find(request => request.init.method === 'POST');
+  assert.ok(insert);
+  const rows = JSON.parse(insert.init.body);
+  assert.equal(rows[0].periodo, '2026-07-05_2026-07-11');
+  assert.equal(rows[0].semana_inicio, '2026-07-05');
+  assert.equal(rows[0].semana_fin, '2026-07-11');
+  assert.equal(rows[0].produccion_bruta, 3250.5);
+});
+
+test('automatic POSMEWS persistence preserves an existing saved week', async () => {
+  const requests = [];
+  const context = loadInformes({
+    currentUser: { nombre: 'BOSS' },
+    localTs: () => '2026-09-03T10:00:00+02:00',
+    invalidateCache: () => {},
+    syncroSupabaseFetch: async (url, init = {}) => {
+      requests.push({ url, init });
+      return { ok: true, json: async () => [{ id: 'saved-week' }] };
+    }
+  });
+  const data = {
+    fechas: ['05/07/2026'], usuarios: ['Mey Redondo'],
+    porUsuario: { 'Mey Redondo': { totalBruto: 100, facturas: 1, fechas: {} } }
+  };
+  const result = await context.window._infPersistSalaSemana(data, {
+    inicio: '2026-07-05', fin: '2026-07-11'
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.alreadySaved, true);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].init.method || 'GET', 'GET');
+});
+
+test('POSMEWS waits for employee production persistence before recording Facturas as valid', () => {
+  const source = fs.readFileSync(new URL('../posmews_ventas.js', import.meta.url), 'utf8');
+  const persistAt = source.indexOf('persisted=await window._infPersistSalaSemana');
+  const fileOkAt = source.indexOf("await _pvSaveFile(type.key,file.name,'ok',null,parsed?parsed.usuarios.length:null)");
+  assert.ok(persistAt >= 0);
+  assert.ok(fileOkAt > persistAt);
+});

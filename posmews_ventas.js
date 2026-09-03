@@ -244,34 +244,40 @@ async function _pvSaveFile(typeKey,filename,status,errorMsg,rowCount){
   };
   try{
     // Upsert: delete existing for this batch+type, then insert
-    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batchId)+'&report_type=eq.'+encodeURIComponent(typeKey),
+    var del=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batchId)+'&report_type=eq.'+encodeURIComponent(typeKey),
       {method:'DELETE',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-    await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files',{
+    if(!del.ok) throw new Error('No se pudo sustituir el archivo anterior (HTTP '+del.status+')');
+    var ins=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files',{
       method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
       'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(row)});
+    if(!ins.ok) throw new Error('No se pudo guardar el archivo validado (HTTP '+ins.status+')');
     invalidateCache('posmews_upload_files');
-  }catch(e){ console.error('Error guardando archivo:',e); }
+  }catch(e){ console.error('Error guardando archivo:',e); throw e; }
   // Comprobar si todos los archivos están OK → marcar batch complete
-  _pvCheckBatchComplete(batchId);
+  await _pvCheckBatchComplete(batchId);
+  return batchId;
 }
 
 async function _pvCheckBatchComplete(batchId){
   try{
     var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_files?batch_id=eq.'+encodeURIComponent(batchId)+'&status=eq.ok&select=report_type',
       {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-    if(!res.ok) return;
+    if(!res.ok) throw new Error('No se pudo comprobar los archivos del lote (HTTP '+res.status+')');
     var files=await res.json();
     var okTypes=files.map(function(f){return f.report_type;});
     var allOk=_PV_FILE_TYPES.every(function(t){return okTypes.indexOf(t.key)>=0;});
+    var patch=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?id=eq.'+encodeURIComponent(batchId),{
+      method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
+      'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(
+        allOk?{status:'complete',processed_at:localTs()}:{status:'pending',processed_at:null}
+      )});
+    if(!patch.ok) throw new Error('No se pudo actualizar el estado del lote (HTTP '+patch.status+')');
+    invalidateCache('posmews_upload_batches');
     if(allOk){
-      await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/posmews_upload_batches?id=eq.'+encodeURIComponent(batchId),{
-        method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,
-        'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:'complete',processed_at:localTs()})});
-      invalidateCache('posmews_upload_batches');
       var statusEl=document.getElementById('pv-batch-status');
       if(statusEl) statusEl.innerHTML='<span style="font-size:10px;font-family:var(--font-mono);color:var(--green);border:1px solid var(--green);border-radius:4px;padding:2px 8px;">✅ BATCH COMPLETO</span>';
     }
-  }catch(e){}
+  }catch(e){ console.error('Error actualizando estado del batch:',e); throw e; }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -339,7 +345,7 @@ async function _pvValidateFile(file){
     toast(type.label+': formato incorrecto. Esperado .'+type.fmt+', recibido .'+ext,'err');
     _pvFileTicks[type.key]={ok:false,filename:file.name,error:'Formato .'+ext+' ≠ .'+type.fmt};
     _pvRenderControlBody();
-    _pvSaveFile(type.key,file.name,'error','Formato incorrecto');
+    try{ await _pvSaveFile(type.key,file.name,'error','Formato incorrecto'); }catch(e){}
     return;
   }
 
@@ -350,7 +356,7 @@ async function _pvValidateFile(file){
     toast(type.label+': '+msg,'err');
     _pvFileTicks[type.key]={ok:false,filename:file.name,error:msg};
     _pvRenderControlBody();
-    _pvSaveFile(type.key,file.name,'error',msg);
+    try{ await _pvSaveFile(type.key,file.name,'error',msg); }catch(e){}
     return;
   }
 
@@ -359,7 +365,7 @@ async function _pvValidateFile(file){
     toast(type.label+': periodo no coincide con semana seleccionada','err');
     _pvFileTicks[type.key]={ok:false,filename:file.name,error:'Periodo no coincide'};
     _pvRenderControlBody();
-    _pvSaveFile(type.key,file.name,'error','Periodo no coincide');
+    try{ await _pvSaveFile(type.key,file.name,'error','Periodo no coincide'); }catch(e){}
     return;
   }
 
@@ -373,48 +379,70 @@ async function _pvValidateFile(file){
         toast(type.label+': archivo no es XLSX válido','err');
         _pvFileTicks[type.key]={ok:false,filename:file.name,error:'No es XLSX válido'};
         _pvRenderControlBody();
-        _pvSaveFile(type.key,file.name,'error','No es XLSX válido');
+        try{ await _pvSaveFile(type.key,file.name,'error','No es XLSX válido'); }catch(e){}
         return;
       }
     }catch(e){}
   }
 
-  // ── 6. OK ──
-  _pvFileTicks[type.key]={ok:true,filename:file.name,ts:localTs()};
-  _pvRenderControlBody();
-  _pvSaveFile(type.key,file.name,'ok',null);
-  toast('✅ '+type.label+' validado','ok');
-
-  // ── 7. Alimentar tabla legacy sala_informes_control (compatibilidad) ──
-  _pvSaveLegacyTick(type.key,file.name,dates);
-
-  // ── 8. Facturas → auto-parse producción por camarero ──
+  // ── 6. Facturas → parsear y persistir producción por camarero ───────
+  // Un CSV validado no cuenta como completo hasta que KPI puede leerlo.
+  var parsed=null, persisted=null;
   if(type.feedsParser&&file._text){
     try{
       var employees=typeof _infGetEmployees==='function'?await _infGetEmployees():[];
-      var parsed=typeof _infParsePOSMEWS==='function'?_infParsePOSMEWS(file._text,employees):null;
-      if(parsed){
-        _pvParsedData=parsed;
-        var costData={};
-        if(parsed.fechas.length){
-          try{ costData=typeof _infSalaCostLaboral==='function'?await _infSalaCostLaboral(parsed.fechas[0],parsed.fechas[parsed.fechas.length-1]):{};  }catch(x){}
-        }
-        _pvParsedData._costData=costData;
-        // Reutilizar _infSalaData para que el botón Guardar funcione
-        if(typeof _infSalaData!=='undefined') window._infSalaData=parsed;
-        window._infSalaData=parsed;
-        window._infSalaData._costData=costData;
-        // Asegurar que #inf-sala-result existe (fallback a #pv-result)
-        if(!document.getElementById('inf-sala-result')){
-          var pvr=document.getElementById('pv-result');
-          if(pvr && !pvr.querySelector('#inf-sala-result')){
-            var d=document.createElement('div'); d.id='inf-sala-result'; pvr.appendChild(d);
-          }
-        }
-        if(typeof _renderSalaTabla==='function') _renderSalaTabla(parsed,costData);
+      parsed=typeof _infParsePOSMEWS==='function'?_infParsePOSMEWS(file._text,employees):null;
+      if(!parsed||!parsed.usuarios||!parsed.usuarios.length) throw new Error('No se detectó facturación válida por empleado');
+      parsed._posmewsWeek={inicio:dates.inicio,fin:dates.fin};
+      _pvParsedData=parsed;
+      var costData={};
+      if(parsed.fechas.length){
+        try{ costData=typeof _infSalaCostLaboral==='function'?await _infSalaCostLaboral(dates.inicio,dates.fin):{};  }catch(x){}
       }
-    }catch(e){ console.error('Auto-parse Facturas:',e); }
+      _pvParsedData._costData=costData;
+      // Reutilizar _infSalaData para permitir reemplazo manual si procede.
+      window._infSalaData=parsed;
+      window._infSalaData._costData=costData;
+      // Asegurar que #inf-sala-result existe (fallback a #pv-result)
+      if(!document.getElementById('inf-sala-result')){
+        var pvr=document.getElementById('pv-result');
+        if(pvr && !pvr.querySelector('#inf-sala-result')){
+          var d=document.createElement('div'); d.id='inf-sala-result'; pvr.appendChild(d);
+        }
+      }
+      if(typeof _renderSalaTabla==='function') _renderSalaTabla(parsed,costData);
+      if(typeof window._infPersistSalaSemana!=='function') throw new Error('Persistencia de producción no disponible');
+      persisted=await window._infPersistSalaSemana(parsed,parsed._posmewsWeek);
+      if(!persisted||!persisted.ok) throw new Error((persisted&&persisted.message)||'No se pudo guardar la producción por empleado');
+      var saveBtn=document.getElementById('inf-sala-guardar');
+      if(saveBtn){ saveBtn.textContent=persisted.alreadySaved?'↻ Reemplazar semana':'✅ Guardada automáticamente'; }
+    }catch(e){
+      var persistMsg='Facturación por empleado no guardada: '+(e.message||'error desconocido');
+      console.error('Auto-parse Facturas:',e);
+      _pvFileTicks[type.key]={ok:false,filename:file.name,error:persistMsg};
+      _pvRenderControlBody();
+      try{ await _pvSaveFile(type.key,file.name,'error',persistMsg); }catch(x){}
+      toast('❌ '+persistMsg,'err');
+      return;
+    }
   }
+
+  // ── 7. Archivo validado y, para Facturas, producción ya persistida ──
+  _pvFileTicks[type.key]={ok:true,filename:file.name,ts:localTs()};
+  _pvRenderControlBody();
+  try{
+    await _pvSaveFile(type.key,file.name,'ok',null,parsed?parsed.usuarios.length:null);
+  }catch(e){
+    var saveMsg='No se pudo registrar el archivo validado: '+(e.message||'error desconocido');
+    _pvFileTicks[type.key]={ok:false,filename:file.name,error:saveMsg};
+    _pvRenderControlBody();
+    toast('❌ '+saveMsg,'err');
+    return;
+  }
+
+  // ── 8. Alimentar tabla legacy sala_informes_control (compatibilidad) ──
+  await _pvSaveLegacyTick(type.key,file.name,dates);
+  toast('✅ '+type.label+(persisted&&!persisted.alreadySaved?' validado y producción guardada':' validado'),'ok');
 }
 
 // ── Compatibilidad: guardar tick en sala_informes_control ──
