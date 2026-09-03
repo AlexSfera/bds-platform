@@ -1174,7 +1174,12 @@ function setT(name,val){
   if(name==='incidencia'){
     const blk=document.getElementById('block-incidencia');
     if(blk) val==='si'?blk.classList.add('visible'):blk.classList.remove('visible');
-    if(val==='si') loadStaffImplicado();
+    if(val==='si'){
+      loadStaffImplicado();
+      if(typeof poblarSelectorHabitacion==='function'){
+        poblarSelectorHabitacion(document.getElementById('i-room'), '');
+      }
+    }
   }
 }
 function resetToggles(){
@@ -1665,7 +1670,11 @@ async function loadForCorrection(shiftId){
     var eSev=document.getElementById('i-sev'); if(eSev) eSev.value=inci.severidad||'';
     var eDesc=document.getElementById('i-desc'); if(eDesc) eDesc.value=inci.descripcion||'';
     var eAcc=document.getElementById('i-accion'); if(eAcc) eAcc.value=inci.accion_inmediata||'';
-    var eRoom=document.getElementById('i-room'); if(eRoom) eRoom.value=inci.room||'';
+    var eRoom=document.getElementById('i-room');
+    if(eRoom){
+      if(typeof poblarSelectorHabitacion==='function') await poblarSelectorHabitacion(eRoom, inci.room||'');
+      else eRoom.value=inci.room||'';
+    }
     var eVisible=document.getElementById('i-visible-companeros'); if(eVisible) eVisible.checked=typeof isIncidentVisibleToColleagues==='function' && isIncidentVisibleToColleagues(inci);
     setT('reqform',inci.requiere_formacion==='Sí'?'si':'no');
     setT('reqdisc',inci.requiere_disciplina==='Sí'?'si':'no');
@@ -5519,7 +5528,7 @@ function openNewIncidenciaStandalone(){
       + '<button class="modal-x" onclick="closeModal(\'modal-new-inci\')">✕</button></div>'
       + '<div class="modal-b">'
       + '<div class="fg"><label>Tipo</label><select id="ni-tipo"></select></div>'
-      + '<div class="fg"><label>Habitación afectada <span style="color:var(--text3);font-weight:400;">(si aplica)</span></label><input id="ni-room" type="text" inputmode="numeric" maxlength="12" placeholder="Ej. 304"></div>'
+      + '<div class="fg"><label>Habitación afectada <span style="color:var(--text3);font-weight:400;">(si aplica)</span></label><select id="ni-room"><option value="">— Sin habitación —</option></select></div>'
       + '<div class="fg"><label>Descripción</label><textarea id="ni-desc" rows="3" placeholder="Detalle de la incidencia..."></textarea></div>'
       + '<div class="fg"><label>Acción inmediata (opcional)</label><textarea id="ni-accion" rows="2" placeholder="¿Se hizo algo de inmediato?"></textarea></div>'
       + '<div class="fg"><label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:500;line-height:1.35;"><input id="ni-visible-companeros" type="checkbox" style="width:auto;margin-top:2px;"><span>Visible para compañeros del departamento<br><span style="color:var(--text3);font-weight:400;font-size:11px;">Actívalo si deben tenerla en cuenta.</span></span></label></div>'
@@ -5543,7 +5552,8 @@ function openNewIncidenciaStandalone(){
   }
   ov.querySelector('#ni-desc').value = '';
   ov.querySelector('#ni-accion').value = '';
-  ov.querySelector('#ni-room').value = '';
+  if(typeof poblarSelectorHabitacion==='function') poblarSelectorHabitacion(ov.querySelector('#ni-room'), '');
+  else ov.querySelector('#ni-room').value = '';
   ov.querySelector('#ni-visible-companeros').checked = false;
   ov.classList.add('open');
 }

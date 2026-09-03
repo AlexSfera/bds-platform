@@ -59,6 +59,24 @@ test('el render final de incidencias conserva el filtro por tipo', () => {
   assert.match(source, /setIncidenciasScreenTipo\(this\.value\)/);
 });
 
+test('la habitación se elige del catálogo y permite dejarla sin asignar', () => {
+  const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const sharedSource = readFileSync(new URL('../shared.js', import.meta.url), 'utf8');
+
+  assert.match(indexSource, /<select id="i-room">\s*<option value="">— Sin habitación —<\/option>/);
+  assert.match(sharedSource, /<select id="ni-room"><option value="">— Sin habitación —<\/option><\/select>/);
+  assert.match(sharedSource, /poblarSelectorHabitacion\(document\.getElementById\('i-room'\), ''\)/);
+  assert.match(sharedSource, /poblarSelectorHabitacion\(ov\.querySelector\('#ni-room'\), ''\)/);
+});
+
+test('Administración conserva el tipo de incidencia de housekeeping y mantenimiento', () => {
+  const source = readFileSync(new URL('../incidencia_tipos.js', import.meta.url), 'utf8');
+  const start = source.indexOf("'Administración': [");
+  const adminCatalog = source.slice(start, source.indexOf('\n  ]\n\n};', start));
+
+  assert.match(adminCatalog, /Problema con housekeeping \/ mantenimiento/);
+});
+
 test('el informe de Mantenimiento agrupa por habitación y detecta reincidencias', () => {
   const context = loadScripts();
   context.isTaskOpen = (task) => task.estado !== 'Cerrada';

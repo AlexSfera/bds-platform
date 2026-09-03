@@ -190,6 +190,7 @@ var INCIDENCIA_TIPOS = {
     'Incidencia disciplinaria / conflicto interno',
     'Proveedor / presupuesto pendiente',
     'Comunicación interna pendiente',
+    'Problema con housekeeping / mantenimiento',
     'Revisión de desempeño',
     'Formación pendiente',
     'Acceso / sistema pendiente',

@@ -24,7 +24,7 @@ Una **incidencia operativa** es un problema real ocurrido durante el turno que r
 | `servicio` | TEXT | ✅ | Turno: Mañana · Tarde · Noche (o auto-asignado) |
 | `categoria` | TEXT | ✅ | `'Incidencia operativa'` |
 | `tipo_incidencia` | TEXT | ✅ | De `incidencia_tipos.js` → `INCIDENCIA_TIPOS` |
-| `room` | TEXT | — | Habitación afectada normalizada; necesaria para el informe de Mantenimiento |
+| `room` | TEXT | — | Habitación afectada elegida del catálogo activo de Housekeeping; puede quedar sin habitación y alimenta el informe de Mantenimiento |
 | `visible_companeros` | BOOLEAN | ✅ | `false` por defecto; el empleado decide si sus compañeros del mismo departamento pueden verla mientras esté activa |
 | `descripcion` | TEXT | ✅ | Qué ocurrió |
 | `accion_inmediata` | TEXT | — | Qué se hizo en el momento |
