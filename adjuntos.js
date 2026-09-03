@@ -821,11 +821,20 @@ function canViewIncidencia(user, inci, empMap){
     });
     list.sort(function(a,b){ return (b.created_at||'').localeCompare(a.created_at||''); });
 
+    var tipos = typeof getIncidentTypesForFilter==='function'
+      ? getIncidentTypesForFilter(list)
+      : [];
+    if(typeof _inciScreenTipo==='undefined') window._inciScreenTipo='';
+    if(_inciScreenTipo && tipos.indexOf(_inciScreenTipo)===-1) _inciScreenTipo='';
+    var listFiltrada = _inciScreenTipo
+      ? list.filter(function(i){ return (i.tipo_incidencia||i.categoria||'')===_inciScreenTipo; })
+      : list;
+
     var cards;
-    if(!list.length){
+    if(!listFiltrada.length){
       cards = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-text">Sin incidencias pendientes</div></div>';
     } else {
-      cards = list.map(function(i){
+      cards = listFiltrada.map(function(i){
         var fecha = i.created_at ? new Date(i.created_at) : null;
         var fechaStr = fecha ? fecha.toLocaleDateString('es-ES')+' · '+fecha.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '—';
         // Mostrar dept del staff implicado si la incidencia no es del dept del jefe
@@ -853,9 +862,15 @@ function canViewIncidencia(user, inci, empMap){
 
     el.innerHTML = '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;">'
       + '<div><div class="page-title">⚠ Incidencias pendientes</div>'
-      + '<div class="page-sub">' + deptLabel + ' · ' + list.length + ' activas</div></div>'
+      + '<div class="page-sub">' + deptLabel + ' · ' + listFiltrada.length + (listFiltrada.length!==list.length?' de '+list.length:'') + ' activas</div></div>'
       + '<button class="btn btn-primary" onclick="openNewIncidenciaStandalone()">+ Nueva incidencia</button>'
       + '</div>'
+      + '<div class="filter-bar" style="margin-bottom:14px;">'
+      + '<div class="fg" style="min-width:260px;"><label for="inci-screen-tipo">Filtrar por tipo de incidencia</label>'
+      + '<select id="inci-screen-tipo" onchange="setIncidenciasScreenTipo(this.value)">'
+      + '<option value="">Todos los tipos</option>'
+      + tipos.map(function(tipo){ return '<option value="'+tipo+'"'+(tipo===_inciScreenTipo?' selected':'')+'>'+tipo+'</option>'; }).join('')
+      + '</select></div></div>'
       + '<div>'+cards+'</div>';
 
     // Re-inyectar inputs de adjuntos

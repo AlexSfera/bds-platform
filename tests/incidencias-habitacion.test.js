@@ -51,6 +51,14 @@ test('prepara tipos únicos para el filtro de incidencias', () => {
   assert.deepEqual([...tipos], ['Avería', 'Otro', 'Queja de cliente']);
 });
 
+test('el render final de incidencias conserva el filtro por tipo', () => {
+  const source = readFileSync(new URL('../adjuntos.js', import.meta.url), 'utf8');
+
+  assert.match(source, /getIncidentTypesForFilter\(list\)/);
+  assert.match(source, /Filtrar por tipo de incidencia/);
+  assert.match(source, /setIncidenciasScreenTipo\(this\.value\)/);
+});
+
 test('el informe de Mantenimiento agrupa por habitación y detecta reincidencias', () => {
   const context = loadScripts();
   context.isTaskOpen = (task) => task.estado !== 'Cerrada';

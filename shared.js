@@ -4938,7 +4938,7 @@ var _inciScreenTipo = '';
 
 function setIncidenciasScreenTipo(tipo){
   _inciScreenTipo=tipo||'';
-  renderIncidenciasScreen();
+  if(typeof window.renderIncidenciasScreen==='function') window.renderIncidenciasScreen();
 }
 window.setIncidenciasScreenTipo = setIncidenciasScreenTipo;
 

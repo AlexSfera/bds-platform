@@ -34,7 +34,8 @@ function isIncidentOpen(i){
 function getIncidentTypesForFilter(incidents){
   var seen={};
   return (incidents||[]).map(function(incident){
-    return (incident && (incident.tipo_incidencia||incident.categoria)||'').trim();
+    var tipo=incident && (incident.tipo_incidencia||incident.categoria);
+    return typeof tipo==='string' ? tipo.trim() : String(tipo||'').trim();
   }).filter(function(tipo){
     if(!tipo || seen[tipo]) return false;
     seen[tipo]=true;
