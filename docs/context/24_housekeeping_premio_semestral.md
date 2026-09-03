@@ -40,11 +40,11 @@ Si `fecha_alta` no está registrada en el Maestro, el sistema no calcula premio:
 
 ## Flujo en la plataforma
 
-1. Abrir **Informes → Housekeeping → Premio semestral**.
-2. Seleccionar el semestre y registrar los días de baja de cada empleada.
+1. Abrir **Liquidaciones → Departamento → Housekeeping**.
+2. Seleccionar el semestre y registrar los días de baja de cada empleada en **Datos de bajas para liquidación**.
 3. El sistema calcula antigüedad, elegibilidad, nivel e importe.
-4. Abrir **Informes → Housekeeping → Liquidación**.
-5. Dirección revisa el total y confirma individualmente cada liquidación. Tras confirmarla, los días de ese período quedan bloqueados.
+4. En la misma pantalla, revisar **Liquidación semestral** y el total pendiente.
+5. Dirección confirma individualmente cada liquidación. Tras confirmarla, los días de ese período quedan bloqueados.
 
 ## Datos iniciales del informe de junio de 2026
 
