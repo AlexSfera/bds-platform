@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import {
   calculateHousekeepingAward,
   isTenureEligible,
-  parseSemesterPeriod
+  parseSemesterPeriod,
+  singleRpcRecord
 } from '../api/housekeeping-semester-incentives.js';
 
 test('identifica períodos semestrales válidos', () => {
@@ -37,6 +38,12 @@ test('reinicia el premio cuando se supera el máximo de bajas', () => {
   }), { tenureEligible: true, absenceEligible: true, level: 1, amount: 250 });
 });
 
+test('acepta la respuesta única de las funciones de guardado', () => {
+  assert.deepEqual(singleRpcRecord([{ id: 'premio-1' }]), { id: 'premio-1' });
+  assert.deepEqual(singleRpcRecord({ id: 'premio-1' }), { id: 'premio-1' });
+  assert.equal(singleRpcRecord([]), null);
+});
+
 test('la interfaz presenta la entrada de bajas y la liquidación semestral', async () => {
   const source = await readFile(new URL('../housekeeping_incentivos.js', import.meta.url), 'utf8');
   const context = vm.createContext({ window: {}, document: {}, console, Date, JSON, Math, Number, String, Array });
@@ -54,9 +61,20 @@ test('la interfaz presenta la entrada de bajas y la liquidación semestral', asy
 
   const report = context._hkReportHtml(data);
   const liquidation = context._hkLiquidationHtml(data);
-  assert.match(report, /Premio semestral/);
+  assert.match(report, /Datos de bajas para liquidación/);
   assert.match(report, /Días de baja/);
   assert.match(report, /400,00 €/);
   assert.match(liquidation, /Liquidación semestral/);
   assert.match(liquidation, /Liquidar/);
+});
+
+test('la pantalla de liquidaciones incluye el departamento Housekeeping', async () => {
+  const source = await readFile(new URL('../housekeeping_incentivos.js', import.meta.url), 'utf8');
+  const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(source, /renderLiquidacionesPorDepartamento/);
+  assert.match(source, /Departamento/);
+  assert.match(source, /Housekeeping/);
+  assert.match(shared, /id:'liquidaciones'/);
+  assert.match(html, /screen-liquidaciones/);
 });

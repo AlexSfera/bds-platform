@@ -65,6 +65,13 @@ export function calculateHousekeepingAward({ period, fechaAlta, absenceDays, pre
   };
 }
 
+// PostgREST devuelve una fila compuesta de RPC como objeto en algunas
+// configuraciones y como lista en otras. Ambas respuestas son válidas.
+export function singleRpcRecord(value) {
+  if (Array.isArray(value)) return value[0] || null;
+  return value && typeof value === 'object' ? value : null;
+}
+
 function isHousekeepingArea(area) {
   const normalized = normalizeDepartment(area);
   return normalized === normalizeDepartment('Housekeeping')
@@ -196,11 +203,11 @@ export default async function handler(req) {
           p_actor_nombre: actor.profile.nombre || actor.profile.id
         })
       });
-      const record = Array.isArray(rows) ? rows[0] : null;
+      const record = singleRpcRecord(rows);
       if (!record) throw new Error('EMPTY_RESULT');
       return jsonResponse({ ok: true, record });
     } catch (_) {
-      return jsonResponse({ error: 'No se pudo guardar. El período puede estar ya liquidado.' }, 409);
+      return jsonResponse({ error: 'No se pudieron guardar los días de baja. Actualiza la pantalla e inténtalo de nuevo.' }, 409);
     }
   }
 
@@ -219,7 +226,7 @@ export default async function handler(req) {
           p_notas: notes || null
         })
       });
-      const record = Array.isArray(rows) ? rows[0] : null;
+      const record = singleRpcRecord(rows);
       if (!record) throw new Error('EMPTY_RESULT');
       return jsonResponse({ ok: true, record });
     } catch (_) {
