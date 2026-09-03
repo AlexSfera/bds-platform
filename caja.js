@@ -275,6 +275,43 @@ function _salaFechaOperativa(){
   return today();
 }
 
+// Admite importes escritos con formato español y evita que, por ejemplo,
+// "2.077,15" se guarde como "2,08" al usar parseFloat directamente.
+function parseCajaAmount(value){
+  if(typeof value === 'number') return isFinite(value) ? value : 0;
+  var raw = String(value == null ? '' : value).trim().replace(/[^0-9,.-]/g, '');
+  if(!raw || raw === '-' || raw === ',' || raw === '.') return 0;
+
+  var sign = raw.charAt(0) === '-' ? -1 : 1;
+  if(sign < 0) raw = raw.slice(1);
+  var comma = raw.lastIndexOf(',');
+  var dot = raw.lastIndexOf('.');
+  var decimalAt = -1;
+
+  if(comma >= 0 && dot >= 0){
+    decimalAt = Math.max(comma, dot);
+  } else {
+    var separator = comma >= 0 ? ',' : (dot >= 0 ? '.' : '');
+    if(separator){
+      var first = raw.indexOf(separator);
+      var last = raw.lastIndexOf(separator);
+      var decimals = raw.length - last - 1;
+      // Un único separador con tres dígitos posteriores se interpreta como miles.
+      if(first !== last || decimals !== 3) decimalAt = last;
+    }
+  }
+
+  var normalized;
+  if(decimalAt >= 0){
+    normalized = raw.slice(0, decimalAt).replace(/[.,]/g, '') + '.'
+      + raw.slice(decimalAt + 1).replace(/[.,]/g, '');
+  } else {
+    normalized = raw.replace(/[.,]/g, '');
+  }
+  var amount = Number(normalized);
+  return isFinite(amount) ? sign * amount : 0;
+}
+
 function initCajaForm() {
   renderCajaList();
 }
@@ -339,11 +376,20 @@ function openCajaForm(existingId) {
       var row = rows.find(function(r){ return r.id === existingId; });
       if(!row) return;
       window._cajaPrevEstado = row.estado || null;
-      if(fondoIniEl && row.fondo_inicial != null) fondoIniEl.value = parseFloat(row.fondo_inicial).toFixed(2);
+      if(fondoIniEl && row.fondo_inicial != null) fondoIniEl.value = parseCajaAmount(row.fondo_inicial).toFixed(2);
       var prevEl2 = document.getElementById('caja-ef-posmews-prev');
-      if(prevEl2) prevEl2.value = parseFloat(row.cash_posmews_traspaso_previo || 0).toFixed(2);
-      // Precarga de cargos y conceptos internos
+      if(prevEl2) prevEl2.value = parseCajaAmount(row.cash_posmews_traspaso_previo || 0).toFixed(2);
+      // Precarga completa: una corrección no puede partir de campos vacíos.
       function setV(id,v){ var e=document.getElementById(id); if(e&&v!=null) e.value=v; }
+      setV('caja-ef-posmews', row.efectivo_posmews);
+      setV('caja-ef-real', row.efectivo_real);
+      setV('caja-retiro', row.retiro_caja_fuerte);
+      setV('caja-tar-posmews', row.tarjeta_posmews);
+      setV('caja-tar-tpv', row.tarjeta_tpv);
+      setV('caja-propinas-tpv', row.propinas_tpv);
+      setV('caja-propinas-ef', row.propinas != null ? row.propinas : row.propinas_efectivo);
+      setV('caja-str-posmews', row.stripe_posmews);
+      setV('caja-str-real', row.stripe_real);
       setV('caja-room', row.room_charge);
       setV('caja-syncrolab', row.syncrolab_charge);
       setV('caja-alexander', row.cargo_alexander);
@@ -401,7 +447,7 @@ function setCajaInformado(val){
 function calcCajaTotal() { calcCajaDifs(); }
 
 function calcCajaDifs() {
-  function getV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  function getV(id){ return parseCajaAmount((document.getElementById(id)||{}).value); }
   function setColor(el, val) {
     if(!el) return;
     var abs = Math.abs(val);
@@ -491,8 +537,8 @@ function calcCajaDifs() {
 }
 
 function checkCajaDiferencia() {
-  var mediosTmp=(parseFloat((document.getElementById('caja-efectivo')||{}).value)||0)+(parseFloat((document.getElementById('caja-tarjeta')||{}).value)||0)+(parseFloat((document.getElementById('caja-room')||{}).value)||0)+(parseFloat((document.getElementById('caja-alexander')||{}).value)||0);
-  var posmewsTmp=parseFloat((document.getElementById('caja-posmews-bruto')||{}).value)||0;
+  var mediosTmp=parseCajaAmount((document.getElementById('caja-efectivo')||{}).value)+parseCajaAmount((document.getElementById('caja-tarjeta')||{}).value)+parseCajaAmount((document.getElementById('caja-room')||{}).value)+parseCajaAmount((document.getElementById('caja-alexander')||{}).value);
+  var posmewsTmp=parseCajaAmount((document.getElementById('caja-posmews-bruto')||{}).value);
   var dif = posmewsTmp>0?mediosTmp-posmewsTmp:0;
   var alert = document.getElementById('caja-diferencia-alert');
   if(alert) alert.style.display = Math.abs(dif) > 5 ? 'block' : 'none';
@@ -521,14 +567,14 @@ async function saveCajaForm() {
   }
   // servicios auto-filled
   // Calculate diferencia operativa from current form values
-  var _efR=parseFloat((document.getElementById('caja-ef-real')||{}).value)||0;
-  var _efP=parseFloat((document.getElementById('caja-ef-posmews')||{}).value)||0;
-  var _foI=parseFloat((document.getElementById('caja-fondo-ini')||{}).value)||0;
-  var _tTP=parseFloat((document.getElementById('caja-tar-tpv')||{}).value)||0;
-  var _tPS=parseFloat((document.getElementById('caja-tar-posmews')||{}).value)||0;
-  var _pTV=parseFloat((document.getElementById('caja-propinas-tpv')||{}).value)||0;
-  var _sR=parseFloat((document.getElementById('caja-str-real')||{}).value)||0;
-  var _sP=parseFloat((document.getElementById('caja-str-posmews')||{}).value)||0;
+  var _efR=parseCajaAmount((document.getElementById('caja-ef-real')||{}).value);
+  var _efP=parseCajaAmount((document.getElementById('caja-ef-posmews')||{}).value);
+  var _foI=parseCajaAmount((document.getElementById('caja-fondo-ini')||{}).value);
+  var _tTP=parseCajaAmount((document.getElementById('caja-tar-tpv')||{}).value);
+  var _tPS=parseCajaAmount((document.getElementById('caja-tar-posmews')||{}).value);
+  var _pTV=parseCajaAmount((document.getElementById('caja-propinas-tpv')||{}).value);
+  var _sR=parseCajaAmount((document.getElementById('caja-str-real')||{}).value);
+  var _sP=parseCajaAmount((document.getElementById('caja-str-posmews')||{}).value);
   var _dEf = _efR - (_foI + _efP);
   var _dTar = (_tTP - _pTV) - _tPS;
   var _dStr = _sR - _sP;
@@ -540,7 +586,7 @@ async function saveCajaForm() {
     return;
   }
 
-  function getCV(id){ return parseFloat((document.getElementById(id)||{}).value)||0; }
+  function getCV(id){ return parseCajaAmount((document.getElementById(id)||{}).value); }
   var efReal    = getCV('caja-ef-real');
   var efPosmews = getCV('caja-ef-posmews');
   var efPosmewsPrev = getCV('caja-ef-posmews-prev');
@@ -557,10 +603,10 @@ async function saveCajaForm() {
   var difOperativa = difEf + difTar + difStr;
   var fondoFinalTraspasar = efReal - retiro;
   var mediosPago = efReal + tarTpv + strReal;
-  var bruto = parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0;
-  var ajustes=(parseFloat((document.getElementById('caja-desc-imp')||{}).value)||0)
-             +(parseFloat((document.getElementById('caja-anul-imp')||{}).value)||0)
-             +(parseFloat((document.getElementById('caja-inv-imp')||{}).value)||0);
+  var bruto = parseCajaAmount((document.getElementById('caja-total-bruto-manual')||{}).value);
+  var ajustes=parseCajaAmount((document.getElementById('caja-desc-imp')||{}).value)
+             +parseCajaAmount((document.getElementById('caja-anul-imp')||{}).value)
+             +parseCajaAmount((document.getElementById('caja-inv-imp')||{}).value);
 
   var closure = {
     id: _editingCajaId || genId(),
@@ -581,7 +627,7 @@ async function saveCajaForm() {
     tarjeta_posmews: tarPosmews,
     tarjeta_tpv: tarTpv,
     propinas_tpv: propinasTpv,
-    propinas: parseFloat((document.getElementById('caja-propinas')||{}).value)||0,
+    propinas: getCV('caja-propinas-ef'),
     diferencia_tarjeta: difTar,
     stripe_posmews: strPosmews,
     stripe_real: strReal,
@@ -597,8 +643,8 @@ async function saveCajaForm() {
     eur_pension_desayuno: getCV('caja-eur-pension-desayuno'),
     eur_pension_comidacena: getCV('caja-eur-pension-comidacena'),
     // Totals (manual entry)
-    subtotal_neto: parseFloat((document.getElementById('caja-total-neto-manual')||{}).value)||0,
-    total_bruto: parseFloat((document.getElementById('caja-total-bruto-manual')||{}).value)||0,
+    subtotal_neto: parseCajaAmount((document.getElementById('caja-total-neto-manual')||{}).value),
+    total_bruto: parseCajaAmount((document.getElementById('caja-total-bruto-manual')||{}).value),
     total_medios_pago: mediosPago,
     total_ajustes: ajustes,
     comentario: comentario,
@@ -1596,11 +1642,8 @@ async function submitSalaTraspaso() {
 // renderCostTable() — defined in dashboard.js (respects _dashCurrentDept)
 
 function fixLeadingZeros(el) {
-  var v = el.value.replace(',', '.');
-  el.value = v;
-  if(v.length > 1 && v[0] === '0' && v[1] !== '.') {
-    el.value = parseFloat(v) || 0;
-  }
+  var v = el.value;
+  if(/^0\d/.test(v)) el.value = v.replace(/^0+(?=\d)/, '');
 }
 
 function switchDept(newDept) {
