@@ -243,7 +243,11 @@ join lateral (
   select min(employee.id) as id, min(employee.nombre) as nombre
   from public.employees employee
   where lower(coalesce(employee.area, '')) in ('housekeeping', 'limpieza', 'hk')
-    and employee.nombre ilike '%' || seed.nombre_ref || '%'
+    and (
+      employee.nombre ilike '%' || seed.nombre_ref || '%'
+      -- El informe usa "KRISTINA" y el directorio operativo registra "Cristina".
+      or (seed.nombre_ref = 'KRISTINA' and employee.nombre ilike '%CRISTINA%')
+    )
   having count(*) = 1
 ) matched on matched.id is not null
 on conflict (employee_id, periodo) do nothing;
