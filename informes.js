@@ -35,7 +35,7 @@ var _infEmployeesCache = null;
 // coming    = true → chip deshabilitado (próximamente)
 // special   = 'entrenadores' | 'rrhh' (lógica de acceso no estándar)
 var INF_DEPT_CATALOG = [
-  { key:'Sala',         label:'Sala',                  icon:'🍽', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
+  { key:'Sala',         label:'Sala',                  icon:'🍽', subtabs:['ventas','incentivos','informe-jefe'] },
   { key:'Cocina',       label:'Cocina',                icon:'🍳', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
   { key:'Recepción',    label:'Recepción Hotel',        icon:'🏨', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
   { key:'SYNCROLAB',    label:'Recepción SyncroLab',   icon:'🔬', subtabs:['kpi','ventas','incentivos','informe-jefe'] },
@@ -686,6 +686,24 @@ function _infShiftKpiWeek(dir){
 }
 
 // Cargar producción semanal desde sala_produccion_semanal
+function _infSalaDataFromRows(rows){
+  var fechasSet={}, porUsuario={};
+  (rows||[]).forEach(function(r){
+    var detalle=r.detalle_diario||{};
+    porUsuario[r.nombre]={
+      fechas:detalle,
+      totalBruto:parseFloat(r.produccion_bruta)||0,
+      facturas:parseInt(r.facturas)||0,
+      csvNombre:r.csv_nombre||r.nombre,
+      employee_id:r.employee_id
+    };
+    Object.keys(detalle).forEach(function(f){ fechasSet[f]=true; });
+  });
+  var fechas=Object.keys(fechasSet).sort();
+  var usuarios=Object.keys(porUsuario).sort(function(a,b){ return porUsuario[b].totalBruto-porUsuario[a].totalBruto; });
+  return {fechas:fechas,usuarios:usuarios,porUsuario:porUsuario,rangoDias:fechas.length,tipo:'semanal',matchLog:[]};
+}
+
 async function _infLoadSalaFromDB(){
   var w=_infControlWeek||_infGetWeekOf();
   var periodo=w.inicio+'_'+w.fin;
@@ -702,22 +720,7 @@ async function _infLoadSalaFromDB(){
         +'</div>';
       return;
     }
-    // Reconstruir estructura compatible con _renderSalaTabla
-    var fechasSet={}, porUsuario={};
-    rows.forEach(function(r){
-      var detalle=r.detalle_diario||{};
-      porUsuario[r.nombre]={
-        fechas:detalle,
-        totalBruto:parseFloat(r.produccion_bruta)||0,
-        facturas:parseInt(r.facturas)||0,
-        csvNombre:r.csv_nombre||r.nombre,
-        employee_id:r.employee_id
-      };
-      Object.keys(detalle).forEach(function(f){ fechasSet[f]=true; });
-    });
-    var fechas=Object.keys(fechasSet).sort();
-    var usuarios=Object.keys(porUsuario).sort(function(a,b){ return porUsuario[b].totalBruto-porUsuario[a].totalBruto; });
-    var data={fechas:fechas,usuarios:usuarios,porUsuario:porUsuario,rangoDias:fechas.length,tipo:'semanal',matchLog:[]};
+    var data=_infSalaDataFromRows(rows);
     var costData={};
     // La semana seleccionada es la fuente fiable del rango. Algunas cargas
     // antiguas guardaron las claves de detalle_diario en formato dd/mm/yyyy.
@@ -989,7 +992,7 @@ window._infDeleteSemana=async function(periodoOverride){
 function _renderSalaTabla(data,costData,opts){
   costData=costData||{};
   opts=opts||{};
-  var el=document.getElementById('inf-sala-result');
+  var el=opts.el||document.getElementById('inf-sala-result');
   if(!el) return;
   var {usuarios,fechas,porUsuario,matchLog}=data;
   if(!usuarios.length){

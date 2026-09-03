@@ -280,7 +280,7 @@ async function renderDashboard() {
 
   // Bloque específico por departamento
   if (_dashCurrentDept === 'Cocina') _renderKpiCocina(shifts, mermas);
-  else if (_dashCurrentDept === 'Sala') _renderKpiSala(shifts);
+  else if (_dashCurrentDept === 'Sala') await _renderKpiSala(shifts);
   else if (_dashCurrentDept === 'FnB') _renderKpiFnB(allShifts, allMermas, allIncis, desde);
   else if (_dashCurrentDept === 'Recepción') _renderKpiRecepcion(shifts);
 
@@ -849,7 +849,84 @@ async function _renderKpiSala(shifts) {
           + '<td style="font-family:var(--font-mono);color:' + difColor + '">' + ((c.diferencia_caja || 0) >= 0 ? '+' : '') + (c.diferencia_caja || 0).toFixed(2) + '€</td>'
           + '<td>' + bCajaEstado(c.estado || 'Pendiente Sala') + '</td>'
           + '</tr>';
-      }).join('') + '</table>' : '<div class="empty"><div class="empty-text">Sin cierres en el periodo</div></div>');
+      }).join('') + '</table>' : '<div class="empty"><div class="empty-text">Sin cierres en el periodo</div></div>')
+    + '<div style="border-top:1px solid var(--border);margin-top:18px;padding-top:16px;">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
+    +     '<div><div style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text);">📊 RENDIMIENTO POR CAMARERO</div>'
+    +     '<div style="font-size:10.5px;color:var(--text3);margin-top:3px;">Facturación POSMEWS, horas y coste laboral de la semana.</div></div>'
+    +     '<div style="display:flex;align-items:center;gap:6px;">'
+    +       '<button onclick="window._dashSalaRendPrev()" title="Semana anterior" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;">◄</button>'
+    +       '<span id="dash-sala-rend-week" style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;"></span>'
+    +       '<button onclick="window._dashSalaRendNext()" title="Semana siguiente" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;">►</button>'
+    +       +(typeof isAdmin==='function'&&isAdmin(currentUser)
+          ? '<button onclick="window._dashSalaRendDelete()" title="Eliminar producción de esta semana" style="background:var(--bg4);border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:11px;font-family:var(--font-mono);padding:5px 8px;cursor:pointer;">Eliminar</button>'
+          : '')
+    +     '</div>'
+    +   '</div>'
+    +   '<div id="dash-sala-rendimiento-body"><div style="color:var(--text3);text-align:center;padding:20px;">Cargando…</div></div>'
+    + '</div>';
+  await _renderDashSalaRendimiento();
+}
+
+// ── RENDIMIENTO POR CAMARERO · DASHBOARD SALA ─────────────────
+// La carga de archivos permanece en Informes > Sala > Ventas / Datos.
+var _dashSalaRendimientoWeek = null;
+
+function _dashSalaRendWeekOf(dateStr){
+  var d=dateStr?new Date(dateStr+'T12:00:00'):new Date();
+  var sunday=new Date(d);
+  sunday.setDate(sunday.getDate()-sunday.getDay());
+  var saturday=new Date(sunday);
+  saturday.setDate(saturday.getDate()+6);
+  return {inicio:sunday.toISOString().slice(0,10),fin:saturday.toISOString().slice(0,10)};
+}
+function _dashSalaRendFmt(iso){
+  var p=(iso||'').split('-');
+  return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';
+}
+function _dashSalaRendWeekCurrent(){
+  if(!_dashSalaRendimientoWeek) _dashSalaRendimientoWeek=_dashSalaRendWeekOf();
+  return _dashSalaRendimientoWeek;
+}
+function _dashSalaRendShift(dir){
+  var week=_dashSalaRendWeekCurrent();
+  var d=new Date(week.inicio+'T12:00:00');
+  d.setDate(d.getDate()+(dir*7));
+  _dashSalaRendimientoWeek=_dashSalaRendWeekOf(d.toISOString().slice(0,10));
+  _renderDashSalaRendimiento();
+}
+window._dashSalaRendPrev=function(){ _dashSalaRendShift(-1); };
+window._dashSalaRendNext=function(){ _dashSalaRendShift(1); };
+window._dashSalaRendDelete=async function(){
+  if(typeof window._infDeleteSemana!=='function') return;
+  var week=_dashSalaRendWeekCurrent();
+  var deleted=await window._infDeleteSemana(week.inicio+'_'+week.fin);
+  if(deleted) _renderDashSalaRendimiento();
+};
+
+async function _renderDashSalaRendimiento(){
+  var el=document.getElementById('dash-sala-rendimiento-body');
+  var week=_dashSalaRendWeekCurrent();
+  var label=document.getElementById('dash-sala-rend-week');
+  if(label) label.textContent=_dashSalaRendFmt(week.inicio)+' — '+_dashSalaRendFmt(week.fin);
+  if(!el) return;
+  try{
+    var rows=await getDB('sala_produccion_semanal');
+    rows=(rows||[]).filter(function(r){ return r.periodo===week.inicio+'_'+week.fin; });
+    if(!rows.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin facturación por camarero para esta semana.</div><div style="font-size:11px;color:var(--text3);margin-top:6px;">Cárgala en Informes → Sala → Ventas / Datos.</div></div>';
+      return;
+    }
+    if(typeof _infSalaDataFromRows!=='function'||typeof _renderSalaTabla!=='function'){
+      throw new Error('El módulo de rendimiento no está disponible');
+    }
+    var data=_infSalaDataFromRows(rows);
+    var costData={};
+    try{ costData=typeof _infSalaCostLaboral==='function'?await _infSalaCostLaboral(week.inicio,week.fin):{}; }catch(e){}
+    _renderSalaTabla(data,costData,{readOnly:true,el:el});
+  }catch(e){
+    el.innerHTML='<div class="empty"><div class="empty-text" style="color:var(--red);">Error cargando rendimiento: '+(typeof _escHtml==='function'?_escHtml(e.message):e.message)+'</div></div>';
+  }
 }
 
 // ── KPI ESPECÍFICO F&B CONSOLIDADO ────────────────────────────

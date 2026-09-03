@@ -163,3 +163,11 @@ test('POSMEWS waits for employee production persistence before recording Factura
   assert.ok(persistAt >= 0);
   assert.ok(fileOkAt > persistAt);
 });
+
+test('Sala keeps POSMEWS upload in Informes and exposes waiter performance in Dashboard', () => {
+  const informesSource = fs.readFileSync(new URL('../informes.js', import.meta.url), 'utf8');
+  const dashboardSource = fs.readFileSync(new URL('../dashboard.js', import.meta.url), 'utf8');
+  assert.match(informesSource, /key:'Sala'.*subtabs:\['ventas','incentivos','informe-jefe'\]/);
+  assert.match(dashboardSource, /RENDIMIENTO POR CAMARERO/);
+  assert.match(dashboardSource, /getDB\('sala_produccion_semanal'\)/);
+});
