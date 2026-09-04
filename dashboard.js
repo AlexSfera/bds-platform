@@ -855,7 +855,7 @@ async function _renderKpiSala(shifts) {
     +     '<div><div style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text);">📊 RENDIMIENTO POR CAMARERO</div>'
     +     '<div style="font-size:10.5px;color:var(--text3);margin-top:3px;">Facturación POSMEWS, horas y coste laboral del periodo seleccionado.</div></div>'
     +   '</div>'
-    +   '<div id="dash-sala-rendimiento-controls" style="margin-bottom:12px;"></div>'
+    +   '<div id="dash-sala-rendimiento-controls" style="margin-bottom:10px;"></div>'
     +   '<div id="dash-sala-rendimiento-body"><div style="color:var(--text3);text-align:center;padding:20px;">Cargando…</div></div>'
     + '</div>';
   await _renderDashSalaRendimiento();
@@ -911,10 +911,11 @@ function _dashSalaRendSelectOption(value,label,selected){
 function _dashSalaRendRenderControls(periodos,months){
   var el=document.getElementById('dash-sala-rendimiento-controls');
   if(!el) return;
-  var selectStyle='background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:7px 9px;';
+  var selectStyle='width:auto;max-width:100%;min-width:160px;height:32px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:5px 30px 5px 9px;flex:0 1 auto;';
   var buttonStyle='background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:30px;height:30px;cursor:pointer;';
-  var html='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-    +'<label style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;">Periodo</label>'
+  var labelStyle='font-family:var(--font-mono);font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;';
+  var html='<div data-layout="compact-period-controls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 9px;">'
+    +'<label style="'+labelStyle+'">Vista</label>'
     +'<select aria-label="Tipo de periodo" onchange="window._dashSalaRendModeChange(this.value)" style="'+selectStyle+'">'
     +_dashSalaRendSelectOption('semana','Semana importada',_dashSalaRendimientoMode)
     +_dashSalaRendSelectOption('mes','Mes',_dashSalaRendimientoMode)
@@ -922,8 +923,9 @@ function _dashSalaRendRenderControls(periodos,months){
     +'</select>';
   if(_dashSalaRendimientoMode==='semana'){
     var idx=periodos.findIndex(function(p){ return p.periodo===_dashSalaRendimientoWeek; });
-    html+='<button onclick="window._dashSalaRendPrev()" title="Semana importada anterior"'+(idx<=0?' disabled':'')+' style="'+buttonStyle+(idx<=0?'opacity:.35;cursor:not-allowed;':'')+'">◄</button>'
-      +'<select aria-label="Semana importada" onchange="window._dashSalaRendWeekChange(this.value)" style="'+selectStyle+'">'
+    html+='<span style="'+labelStyle+'">Semana</span>'
+      +'<button onclick="window._dashSalaRendPrev()" title="Semana importada anterior"'+(idx<=0?' disabled':'')+' style="'+buttonStyle+(idx<=0?'opacity:.35;cursor:not-allowed;':'')+'">◄</button>'
+      +'<select aria-label="Semana importada" onchange="window._dashSalaRendWeekChange(this.value)" style="'+selectStyle+'min-width:205px;">'
       +periodos.slice().reverse().map(function(p){ return _dashSalaRendSelectOption(p.periodo,_dashSalaRendFmt(p.inicio)+' — '+_dashSalaRendFmt(p.fin),_dashSalaRendimientoWeek); }).join('')
       +'</select>'
       +'<button onclick="window._dashSalaRendNext()" title="Semana importada siguiente"'+(idx<0||idx>=periodos.length-1?' disabled':'')+' style="'+buttonStyle+(idx<0||idx>=periodos.length-1?'opacity:.35;cursor:not-allowed;':'')+'">►</button>';
@@ -931,15 +933,16 @@ function _dashSalaRendRenderControls(periodos,months){
       html+='<button onclick="window._dashSalaRendDelete()" title="Eliminar producción de esta semana" style="background:var(--bg4);border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:11px;font-family:var(--font-mono);padding:7px 9px;cursor:pointer;">Eliminar</button>';
     }
   }else if(_dashSalaRendimientoMode==='mes'){
-    html+='<select aria-label="Mes importado" onchange="window._dashSalaRendMonthChange(this.value)" style="'+selectStyle+'">'
+    html+='<span style="'+labelStyle+'">Mes</span>'
+      +'<select aria-label="Mes importado" onchange="window._dashSalaRendMonthChange(this.value)" style="'+selectStyle+'min-width:185px;">'
       +months.slice().reverse().map(function(m){ return _dashSalaRendSelectOption(m,_dashSalaRendMonthLabel(m),_dashSalaRendimientoMonth); }).join('')
       +'</select>';
   }else{
-    html+='<label style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-transform:uppercase;">Desde</label>'
+    html+='<label style="'+labelStyle+'">Desde</label>'
       +'<select aria-label="Mes inicial" onchange="window._dashSalaRendRangeChange(\'from\',this.value)" style="'+selectStyle+'">'
       +months.map(function(m){ return _dashSalaRendSelectOption(m,_dashSalaRendMonthLabel(m),_dashSalaRendimientoMonthFrom); }).join('')
       +'</select>'
-      +'<label style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-transform:uppercase;">Hasta</label>'
+      +'<label style="'+labelStyle+'">Hasta</label>'
       +'<select aria-label="Mes final" onchange="window._dashSalaRendRangeChange(\'to\',this.value)" style="'+selectStyle+'">'
       +months.map(function(m){ return _dashSalaRendSelectOption(m,_dashSalaRendMonthLabel(m),_dashSalaRendimientoMonthTo); }).join('')
       +'</select>';
@@ -1065,7 +1068,7 @@ async function _renderDashSalaRendimiento(){
     var costData={};
     try{ costData=await _dashSalaRendLabor(fechaMin,fechaMax); }catch(e){}
     if(requestId!==_dashSalaRendimientoRequest||document.getElementById('dash-sala-rendimiento-body')!==el) return;
-    _renderSalaTabla(data,costData,{readOnly:true,el:el,target:objetivo,targetLabel:objetivoLabel,compact:compact,periodLabel:periodLabel});
+    _renderSalaTabla(data,costData,{readOnly:true,el:el,target:objetivo,targetLabel:objetivoLabel,compact:compact,dense:true,periodLabel:periodLabel});
   }catch(e){
     if(requestId!==_dashSalaRendimientoRequest||document.getElementById('dash-sala-rendimiento-body')!==el) return;
     el.innerHTML='<div class="empty"><div class="empty-text" style="color:var(--red);">Error cargando rendimiento: '+(typeof _escHtml==='function'?_escHtml(e.message):e.message)+'</div></div>';

@@ -1078,12 +1078,31 @@ function _renderSalaTabla(data,costData,opts){
   var _pctCosteProd=totalGeneral>0?(_totCoste/totalGeneral*100):0;
   var _mediaCoste=_nConCoste?(_totCoste/_nConCoste):0;
   var _tarifaMedia=_totHoras>0?(_totCoste/_totHoras):0;
+  var dense=!!opts.dense;
   var kpiBox=function(label,val,color){
-    return '<div style="flex:1;min-width:130px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:center;">'
-      +'<div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">'+label+'</div>'
-      +'<div style="font-size:17px;font-weight:700;font-family:var(--font-mono);color:'+color+';">'+val+'</div>'
+    return '<div style="'+(dense
+      ? 'min-width:0;padding:8px 10px;border-left:2px solid '+color+';'
+      : 'flex:1;min-width:130px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:center;')+'">'
+      +'<div style="font-size:'+(dense?'8px':'10px')+';font-family:var(--font-mono);color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:'+(dense?'3px':'6px')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+label+'</div>'
+      +'<div style="font-size:'+(dense?'14px':'17px')+';font-weight:700;font-family:var(--font-mono);color:'+color+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+val+'</div>'
       +'</div>';
   };
+  var primaryKpis=[
+    kpiBox('Producción total',totalGeneral.toLocaleString('es-ES',{minimumFractionDigits:2})+'€','var(--amber)'),
+    kpiBox('Media por camarero',mediaProd.toLocaleString('es-ES',{minimumFractionDigits:2})+'€','var(--text)'),
+    kpiBox('Cumplen objetivo',nCumplen+' / '+nCam,nCumplen===nCam?'var(--green)':'var(--red)'),
+    kpiBox('% cumplimiento',pctCump+'%',pctCump>=80?'var(--green)':pctCump>=50?'var(--amber)':'var(--red)')
+  ];
+  var costKpis=_nConCoste?[
+    kpiBox('Horas totales',_totHoras.toFixed(1)+'h','var(--text)'),
+    kpiBox('Coste laboral',_totCoste.toFixed(2)+'€',_pctCosteProd>40?'var(--red)':'var(--text2)'),
+    kpiBox('% coste / producción',_pctCosteProd.toFixed(1)+'%',_pctCosteProd>40?'var(--red)':_pctCosteProd>25?'var(--amber)':'var(--green)'),
+    kpiBox('Coste medio/cam',_mediaCoste.toFixed(2)+'€','var(--text3)')
+  ]:[];
+  var kpiSummary=dense
+    ? '<div data-layout="compact-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px;">'+primaryKpis.concat(costKpis).join('')+'</div>'
+    : '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'+primaryKpis.join('')+'</div>'
+      +(costKpis.length?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'+costKpis.join('')+'</div>':'');
   // Banner de matches fuzzy
   var matchBanner='';
   if(matchLog&&matchLog.length){
@@ -1092,21 +1111,10 @@ function _renderSalaTabla(data,costData,opts){
       +'</div>';
   }
   el.innerHTML=matchBanner
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'
-    +  '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);">📅 Periodo: <strong style="color:var(--text2);">'+_escHtml(rangoLabel)+'</strong> &nbsp;·&nbsp; '+nCam+' camarero'+(nCam===1?'':'s')+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:'+(dense?'8px':'14px')+';">'
+    +  '<div style="font-family:var(--font-mono);font-size:'+(dense?'10px':'12px')+';color:var(--text3);">📅 <strong style="color:var(--text2);">'+_escHtml(rangoLabel)+'</strong> &nbsp;·&nbsp; '+nCam+' camarero'+(nCam===1?'':'s')+'</div>'
     +'</div>'
-    +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
-    +  kpiBox('Producción total',totalGeneral.toLocaleString('es-ES',{minimumFractionDigits:2})+'€','var(--amber)')
-    +  kpiBox('Media por camarero',mediaProd.toLocaleString('es-ES',{minimumFractionDigits:2})+'€','var(--text)')
-    +  kpiBox('Cumplen objetivo',nCumplen+' / '+nCam,nCumplen===nCam?'var(--green)':'var(--red)')
-    +  kpiBox('% cumplimiento',pctCump+'%',pctCump>=80?'var(--green)':pctCump>=50?'var(--amber)':'var(--red)')
-    +'</div>'
-    +(_nConCoste?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
-    +  kpiBox('Horas totales',_totHoras.toFixed(1)+'h','var(--text)')
-    +  kpiBox('Coste laboral',_totCoste.toFixed(2)+'€',_pctCosteProd>40?'var(--red)':'var(--text2)')
-    +  kpiBox('% coste / producción',_pctCosteProd.toFixed(1)+'%',_pctCosteProd>40?'var(--red)':_pctCosteProd>25?'var(--amber)':'var(--green)')
-    +  kpiBox('Coste medio/cam',_mediaCoste.toFixed(2)+'€','var(--text3)')
-    +'</div>':'')
+    +kpiSummary
     +(opts.readOnly?'':'<div style="display:flex;gap:8px;margin-bottom:14px;">'
     +  '<button id="inf-sala-guardar" onclick="window._infSalaGuardar()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;font-family:var(--font-mono);cursor:pointer;">💾 Guardar semana</button>'
     +  '<button onclick="window._infSalaData=null;_infRenderSubTab()" style="background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:5px 12px;cursor:pointer;">✕ Nuevo CSV</button>'
@@ -1133,7 +1141,7 @@ function _renderSalaTabla(data,costData,opts){
     +      '</tr>'
     +    '</tbody></table>'
     +'</div>'
-    +'<div style="margin-top:14px;padding:10px 14px;background:var(--bg2);border-radius:6px;border-left:3px solid var(--amber);font-size:11px;color:var(--text3);line-height:1.7;">'
+    +'<div style="margin-top:'+(dense?'8px':'14px')+';padding:'+(dense?'7px 10px':'10px 14px')+';background:var(--bg2);border-radius:6px;border-left:3px solid var(--amber);font-size:'+(dense?'9px':'11px')+';color:var(--text3);line-height:'+(dense?'1.45':'1.7')+';">'
     +  '📌 Producción bruta (IVA incluido) · Excluye cancelaciones y total ≤ 0 € · '
     +  'Objetivo aplicado ('+_escHtml(objetivoLabel)+'): <strong style="color:var(--amber);">'+objetivo.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</strong> · '
     +  '~ = nombre ajustado por coincidencia aproximada con BD'

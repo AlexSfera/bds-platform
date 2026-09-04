@@ -193,5 +193,10 @@ test('Sala keeps POSMEWS upload in Informes and exposes waiter performance in Da
   assert.match(dashboardSource, /Semana importada/);
   assert.match(dashboardSource, /Varios meses/);
   assert.match(dashboardSource, /_dashSalaRendimientoRequest/);
+  assert.match(dashboardSource, /data-layout="compact-period-controls"/);
+  assert.match(dashboardSource, /width:auto;max-width:100%;min-width:160px/);
+  assert.match(dashboardSource, /compact:compact,dense:true/);
+  assert.match(informesSource, /data-layout="compact-kpis"/);
+  assert.match(informesSource, /repeat\(auto-fit,minmax\(135px,1fr\)\)/);
   assert.doesNotMatch(dashboardSource, /\+\s*\+\(typeof isAdmin/);
 });
