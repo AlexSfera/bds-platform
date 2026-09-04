@@ -82,15 +82,6 @@ test('Administración conserva el tipo de incidencia de housekeeping y mantenimi
   assert.match(adminCatalog, /Problema con housekeeping \/ mantenimiento/);
 });
 
-test('Administrador puede abrir el Dashboard de Mantenimiento desde su menú', () => {
-  const source = readFileSync(new URL('../shared.js', import.meta.url), 'utf8');
-  const adminStart = source.indexOf('if(isAdminU){');
-  const adminEnd = source.indexOf('// ════════════════════════════════════════════════════════════════\n  // ADJUNTO DIRECTIVO', adminStart);
-  const adminNav = source.slice(adminStart, adminEnd);
-
-  assert.match(adminNav, /ITEMS\.validacion, ITEMS\.mantmod, ITEMS\.dashHK/);
-});
-
 test('el Dashboard de Mantenimiento calcula tareas asignadas y tiempo medio del periodo', () => {
   const context = loadScripts();
   const metrics = context._mantPeriodMetrics([

@@ -769,7 +769,7 @@ function getScreens(rol){
     return [
       ITEMS.gestiones, ITEMS.incidencias, ITEMS.tareas, ITEMS.hypoxic,
       {sep:true,label:'MI DEPARTAMENTO'},
-      ITEMS.validacion, ITEMS.mantmod, ITEMS.dashHK,
+      ITEMS.validacion, ITEMS.dashHK,
       {id:'liquidacion-entr', label:'💳 Liquidación'},
       {sep:true,label:'MANAGER BAR',dropdown:true},
       ITEMS.fichaje, ITEMS.dashboard,
