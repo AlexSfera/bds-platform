@@ -176,6 +176,8 @@ async function createTask(data){
     origen:data.origen||'manual',
     shift_id:data.shift_id||null,
     creado_por:data.creado_por||currentUser.nombre,
+    room:typeof normalizeIncidentRoom==='function' ? (normalizeIncidentRoom(data.room)||null) : (String(data.room||'').trim()||null),
+    tipo:data.tipo||null,
     estado:TASK_STATES.ABIERTA,
     completada_por:null,completada_ts:null,
     verificada_por:null,verificada_ts:null,
@@ -199,6 +201,9 @@ function openTaskModal(){
   var deptEl=document.getElementById('task-dept');  if(deptEl) deptEl.value='';
   var prioEl=document.getElementById('task-prio');  if(prioEl) prioEl.value='';
   var origenEl=document.getElementById('task-dept-origen'); if(origenEl) origenEl.value=currentUser.area||'Cocina';
+  var roomEl=document.getElementById('task-room');
+  if(typeof poblarSelectorHabitacion==='function') poblarSelectorHabitacion(roomEl,'');
+  else if(roomEl) roomEl.value='';
 
   // ── Empleado: no puede asignar tareas a su propio departamento ──
   if(deptEl){
@@ -218,6 +223,7 @@ async function saveTask(){
   const prio=document.getElementById('task-prio').value;
   const dead=document.getElementById('task-deadline').value;
   const desc=(document.getElementById('task-desc')||{}).value||'';
+  const room=(document.getElementById('task-room')||{}).value||'';
   if(!dept || !prio){ toast('Departamento y prioridad son obligatorios','err'); return; }
   // ── Empleado: no puede asignar tarea a su propio departamento ──
   if(currentUser.rol === 'empleado' && normalizeDeptName(dept) === normalizeDeptName(currentUser.area||'')){
@@ -233,6 +239,7 @@ async function saveTask(){
     prioridad:prio,
     deadline:dead,
     descripcion:desc,
+    room:room,
     origen:'manual',
     creado_por:currentUser.nombre
   });

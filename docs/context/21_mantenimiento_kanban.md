@@ -1,8 +1,8 @@
 # 21 — Mantenimiento — Kanban de Tareas
 
-**Actualizado:** 2026-07-31 — verificado contra `mantenimiento.js` (25 KB, ~10 fns)
+**Actualizado:** 2026-09-04 — verificado contra `mantenimiento.js`
 **Módulo JS:** `mantenimiento.js`
-**Tabla:** `tareas` (filtrado por `dept_destino='Mantenimiento'`)
+**Tablas leídas:** `tareas`, `incidencias`, `hypoxic_room_incidencias`, `housekeeping_rooms`
 
 ---
 
@@ -125,6 +125,7 @@ Prioridad descendente (Alta > Media > Baja), luego fecha_ejecucion/deadline asce
 | Función | Propósito |
 |---|---|
 | `renderMantenimientoMod()` | Render principal del Kanban |
+| `_mantApplyDashboardFilters()` | Aplica el periodo y la habitación seleccionada |
 | `_mantDragStart(ev, taskId)` | Inicio de arrastre |
 | `_mantDrop(ev, targetCol)` | Drop en columna destino |
 | `_mantOpenModal(taskId, opts)` | Modal de detalle/planificación |
@@ -137,13 +138,28 @@ Prioridad descendente (Alta > Media > Baja), luego fecha_ejecucion/deadline asce
 
 ---
 
-## 10. Informe por habitación
+## 10. Control por periodo
 
-Debajo del Kanban se muestra un informe que combina las tareas con destino `Mantenimiento` y todas las incidencias que tienen `room` registrado. Agrupa por habitación, indica totales y abiertas, y marca una **reincidencia** cuando el mismo tipo de incidencia o tarea aparece dos o más veces para la misma habitación. El histórico anterior sin `room` no se infiere ni se altera.
+El Dashboard abre por defecto con el mes actual y permite elegir fecha inicial y final. Los indicadores son:
 
----
+- **Tareas asignadas:** tareas con `dept_destino='Mantenimiento'` cuya `created_at` está dentro del periodo.
+- **Tiempo medio de solución:** media de `completada_ts - created_at` de las tareas cuyo cierre está dentro del periodo. Las tareas sin ambos timestamps válidos no participan en la media.
 
-## 11. QA
+El periodo no oculta tarjetas del Kanban operativo; afecta únicamente a los indicadores y al histórico por habitación.
+
+## 11. Reparaciones por habitación
+
+Debajo de los indicadores y antes del Kanban se muestra un selector construido con las habitaciones activas de `housekeeping_rooms` y, como respaldo histórico, habitaciones presentes en los registros. Al elegir una habitación aparece una lista cronológica que combina:
+
+- tareas con destino `Mantenimiento` y `room`;
+- incidencias generales con `room`;
+- incidencias de Hypoxic Room con `room_number`.
+
+Cada registro indica fuente, fecha, problema, descripción, estado y tiempo de solución cuando existe. Se marca una **reincidencia** cuando el mismo tipo y fuente aparecen dos o más veces para la habitación dentro del periodo. El histórico sin habitación registrada no se infiere ni se altera.
+
+Para alimentar el histórico futuro, el formulario de tarea manual incluye una habitación opcional del catálogo activo. Cuando una tarea se genera desde una incidencia, hereda automáticamente la habitación y el tipo de esa incidencia.
+
+## 12. QA
 
 ```
 □ Kanban solo visible para Mantenimiento y Admin
@@ -158,4 +174,12 @@ Debajo del Kanban se muestra un informe que combina las tareas con destino `Mant
 □ Responsive: columnas apiladas en móvil (<760px)
 □ Timestamps con localTs()
 □ invalidateCache('tareas') tras toda escritura
+□ Periodo inicial = mes actual
+□ Tareas asignadas se cuentan por created_at dentro del periodo
+□ Tiempo medio usa tareas cerradas en el periodo con created_at + completada_ts válidos
+□ Selector de habitación usa el catálogo activo y conserva habitaciones históricas
+□ Tarea manual permite habitación opcional y la guarda en room
+□ Tarea generada desde incidencia hereda room y tipo
+□ Histórico combina tarea + incidencia + Hypoxic y respeta habitación/periodo
+□ El periodo analítico no filtra las columnas operativas del Kanban
 ```

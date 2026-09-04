@@ -40,73 +40,218 @@ var MANT_PLAN_COLS = [
 // Drag state (id de la tarea arrastrada) + estado del modal
 var _mantDragId  = null;
 var _mantModalId = null;
+var _mantPeriodoDesde = '';
+var _mantPeriodoHasta = '';
+var _mantRoomSelected = '';
 
 function _mantRoomOf(record){
-  var raw=record && (record.room || record.habitacion);
+  var raw=record && (record.room || record.habitacion || record.room_number);
   if(typeof normalizeIncidentRoom === 'function') return normalizeIncidentRoom(raw);
   return String(raw==null?'':raw).trim().toUpperCase();
 }
 
 function _mantRoomItemLabel(item, kind){
   if(kind === 'incidencia') return item.tipo_incidencia || item.categoria || 'Incidencia sin tipo';
+  if(kind === 'hypoxic'){
+    var tipos=[];
+    if(Array.isArray(item.incident_types)) tipos=item.incident_types;
+    else {
+      try { tipos=item.incident_types ? JSON.parse(item.incident_types) : []; } catch(e){ tipos=item.incident_types ? [item.incident_types] : []; }
+    }
+    return (Array.isArray(tipos) && tipos.length) ? tipos.join(', ') : 'Incidencia Hypoxic';
+  }
   return item.tipo || item.titulo || 'Tarea sin tipo';
 }
 
-function _mantRoomReport(tareas, incidencias){
-  var rooms={};
-  function ensure(room){
-    if(!rooms[room]) rooms[room]={room:room,tareas:[],incidencias:[],repetidas:{}};
-    return rooms[room];
+function _mantRecordDate(record){
+  return _mantYMD(record && (record.created_at || record.fecha || record.created_ts));
+}
+
+function _mantInPeriod(record, desde, hasta){
+  var date=_mantRecordDate(record);
+  if(!date) return !desde && !hasta;
+  if(desde && date < desde) return false;
+  if(hasta && date > hasta) return false;
+  return true;
+}
+
+function _mantMinutesBetween(start, end){
+  if(!start || !end) return null;
+  var ms=new Date(end).getTime()-new Date(start).getTime();
+  if(!Number.isFinite(ms) || ms < 0) return null;
+  return Math.round(ms/60000);
+}
+
+function _mantResolutionMinutes(item, kind){
+  var stored;
+  if(kind === 'incidencia') stored=item.tiempo_gestion;
+  if(kind === 'hypoxic') stored=item.resolution_time_minutes;
+  if(stored !== null && stored !== undefined && stored !== ''){
+    var parsed=Number(stored);
+    if(Number.isFinite(parsed) && parsed >= 0) return Math.round(parsed);
   }
-  function register(room, item, kind){
-    if(!room) return;
-    var row=ensure(room);
-    row[kind === 'incidencia' ? 'incidencias' : 'tareas'].push(item);
-    var label=_mantRoomItemLabel(item, kind);
-    var key=kind+'|'+label;
-    if(!row.repetidas[key]) row.repetidas[key]={kind:kind,label:label,total:0};
-    row.repetidas[key].total++;
+  if(kind === 'tarea') return _mantMinutesBetween(item.created_at, item.completada_ts);
+  if(kind === 'incidencia') return _mantMinutesBetween(item.created_at, item.cerrado_ts || item.closed_at);
+  return _mantMinutesBetween(item.created_at, item.closed_at);
+}
+
+function _mantDurationText(minutes){
+  if(minutes === null || minutes === undefined || !Number.isFinite(Number(minutes))) return '—';
+  var mins=Math.max(0,Math.round(Number(minutes)));
+  var days=Math.floor(mins/1440);
+  var hours=Math.floor((mins%1440)/60);
+  var rest=mins%60;
+  if(days) return days+' d '+hours+' h';
+  if(hours) return hours+' h '+rest+' min';
+  return rest+' min';
+}
+
+function _mantPeriodMetrics(tareas, desde, hasta){
+  var assigned=(tareas||[]).filter(function(t){ return _mantInPeriod(t,desde,hasta); });
+  var solved=(tareas||[]).filter(function(t){
+    var closed=_mantYMD(t.completada_ts);
+    if(!closed) return false;
+    if(desde && closed < desde) return false;
+    if(hasta && closed > hasta) return false;
+    return true;
+  }).map(function(t){ return _mantResolutionMinutes(t,'tarea'); }).filter(function(v){ return v !== null; });
+  return {
+    assigned:assigned.length,
+    solved:solved.length,
+    avgResolutionMinutes:solved.length ? Math.round(solved.reduce(function(sum,v){ return sum+v; },0)/solved.length) : null
+  };
+}
+
+function _mantRoomsCatalog(tareas, incidencias, hypoxic, catalog){
+  var found={};
+  (catalog||[]).filter(function(r){ return r && r.activa !== false; }).forEach(function(r){
+    var room=_mantRoomOf({room:r.numero}); if(room) found[room]=true;
+  });
+  [tareas||[],incidencias||[],hypoxic||[]].forEach(function(list){
+    list.forEach(function(item){ var room=_mantRoomOf(item); if(room) found[room]=true; });
+  });
+  return Object.keys(found).sort(function(a,b){ return a.localeCompare(b,undefined,{numeric:true}); });
+}
+
+function _mantRoomHistory(tareas, incidencias, hypoxic, room, desde, hasta){
+  var normalizedRoom=_mantRoomOf({room:room});
+  if(!normalizedRoom) return [];
+  var history=[];
+  function add(item, kind){
+    if(_mantRoomOf(item)!==normalizedRoom || !_mantInPeriod(item,desde,hasta)) return;
+    var label=_mantRoomItemLabel(item,kind);
+    var title=kind==='tarea' ? (item.titulo || label) : label;
+    var description=kind==='hypoxic' ? (item.observaciones || '') : (item.descripcion || '');
+    history.push({
+      id:item.id,
+      kind:kind,
+      date:item.created_at || item.fecha || '',
+      ymd:_mantRecordDate(item),
+      title:title,
+      label:label,
+      description:description,
+      estado:item.estado || '—',
+      resolutionMinutes:_mantResolutionMinutes(item,kind)
+    });
   }
-
-  (tareas||[]).forEach(function(t){ register(_mantRoomOf(t), t, 'tarea'); });
-  (incidencias||[]).forEach(function(i){ register(_mantRoomOf(i), i, 'incidencia'); });
-
-  var rows=Object.keys(rooms).map(function(room){
-    var row=rooms[room];
-    row.tareasAbiertas=row.tareas.filter(function(t){ return typeof isTaskOpen==='function' ? isTaskOpen(t) : t.estado!=='Cerrada'; }).length;
-    row.incidenciasAbiertas=row.incidencias.filter(function(i){ return typeof isIncidentOpen==='function' ? isIncidentOpen(i) : i.estado!=='Cerrada'; }).length;
-    row.repetidas=Object.keys(row.repetidas).map(function(key){ return row.repetidas[key]; }).filter(function(item){ return item.total >= 2; });
-    row.total=row.tareas.length+row.incidencias.length;
-    return row;
+  (tareas||[]).forEach(function(t){ add(t,'tarea'); });
+  (incidencias||[]).forEach(function(i){ add(i,'incidencia'); });
+  (hypoxic||[]).forEach(function(h){ add(h,'hypoxic'); });
+  history.sort(function(a,b){
+    return String(b.date||b.ymd||'').localeCompare(String(a.date||a.ymd||''));
   });
-  rows.sort(function(a,b){
-    if(Boolean(b.repetidas.length)!==Boolean(a.repetidas.length)) return b.repetidas.length-a.repetidas.length;
-    if(b.total!==a.total) return b.total-a.total;
-    return a.room.localeCompare(b.room,undefined,{numeric:true});
-  });
+  return history;
+}
 
-  var recurrentes=rows.filter(function(row){ return row.repetidas.length; }).length;
+function _mantApplyDashboardFilters(){
+  var desdeEl=document.getElementById('mant-periodo-desde');
+  var hastaEl=document.getElementById('mant-periodo-hasta');
+  var roomEl=document.getElementById('mant-room-select');
+  var desde=desdeEl ? desdeEl.value : _mantPeriodoDesde;
+  var hasta=hastaEl ? hastaEl.value : _mantPeriodoHasta;
+  if(desde && hasta && desde > hasta){
+    if(typeof toast === 'function') toast('La fecha inicial no puede ser posterior a la fecha final','err');
+    return;
+  }
+  _mantPeriodoDesde=desde;
+  _mantPeriodoHasta=hasta;
+  _mantRoomSelected=roomEl ? roomEl.value : _mantRoomSelected;
+  renderMantenimientoMod();
+}
+
+function _mantDashboardSummary(tareas, desde, hasta){
+  var metrics=_mantPeriodMetrics(tareas,desde,hasta);
+  return '<div style="background:var(--bg3);border:1px solid var(--border);border-top:3px solid #22c55e;border-radius:10px;padding:14px;margin-bottom:18px;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
+    + '<div><div style="font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.06em;color:#22c55e;">📊 CONTROL DEL PERIODO</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Fecha de asignación = fecha de creación de la tarea</div></div>'
+    + '<div style="display:flex;align-items:end;gap:8px;flex-wrap:wrap;">'
+    + '<label style="font-size:10px;color:var(--text3);font-family:var(--font-mono);">DESDE<br><input id="mant-periodo-desde" class="input" type="date" value="'+_mantEsc(desde)+'" onchange="_mantApplyDashboardFilters()" style="margin-top:3px;max-width:165px;"></label>'
+    + '<label style="font-size:10px;color:var(--text3);font-family:var(--font-mono);">HASTA<br><input id="mant-periodo-hasta" class="input" type="date" value="'+_mantEsc(hasta)+'" onchange="_mantApplyDashboardFilters()" style="margin-top:3px;max-width:165px;"></label>'
+    + '</div></div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'
+    + '<div class="kpi k-blue"><div class="kpi-lbl">Tareas asignadas</div><div class="kpi-val">'+metrics.assigned+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px;">a Mantenimiento en el periodo</div></div>'
+    + '<div class="kpi k-green"><div class="kpi-lbl">Tiempo medio de solución</div><div class="kpi-val">'+_mantDurationText(metrics.avgResolutionMinutes)+'</div><div style="font-size:10px;color:var(--text3);margin-top:4px;">'+(metrics.solved ? metrics.solved+' tarea'+(metrics.solved===1?'':'s')+' cerrada'+(metrics.solved===1?'':'s')+' en el periodo' : 'Sin tareas cerradas con fechas')+'</div></div>'
+    + '</div></div>';
+}
+
+function _mantFormatHistoryDate(value){
+  if(!value) return 'Fecha no registrada';
+  if(String(value).length > 10 && typeof fmtTs === 'function') return fmtTs(value);
+  if(typeof fmtDate === 'function') return fmtDate(_mantYMD(value));
+  return String(value).slice(0,10);
+}
+
+function _mantRoomReport(tareas, incidencias, hypoxic, catalog, selectedRoom, desde, hasta){
+  var rooms=_mantRoomsCatalog(tareas,incidencias,hypoxic,catalog);
+  var selected=_mantRoomOf({room:selectedRoom});
+  var history=_mantRoomHistory(tareas,incidencias,hypoxic,selected,desde,hasta);
+  var sourceMeta={
+    tarea:{label:'TAREA',color:'#3b82f6'},
+    incidencia:{label:'INCIDENCIA',color:'#f97316'},
+    hypoxic:{label:'HYPOXIA',color:'#ef4444'}
+  };
+  var repetitions={};
+  history.forEach(function(row){ var key=row.kind+'|'+row.label; repetitions[key]=(repetitions[key]||0)+1; });
+  var repeated=Object.keys(repetitions).filter(function(key){ return repetitions[key]>=2; }).length;
+
   var html='<div style="margin-top:18px;background:var(--bg3);border:1px solid var(--border);border-top:3px solid #f97316;border-radius:10px;padding:14px;">'
-    + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px;">'
-    + '<div style="font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.06em;color:#f97316;">🚪 INFORME POR HABITACIÓN</div>'
-    + '<div style="font-size:11px;color:var(--text3);">'+rows.length+' habitación'+(rows.length===1?'':'es')+' con histórico · '+recurrentes+' con reincidencia</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
+    + '<div><div style="font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.06em;color:#f97316;">🚪 REPARACIONES POR HABITACIÓN</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Tareas, incidencias e incidencias Hypoxic del periodo seleccionado</div></div>'
+    + '<label style="font-size:10px;color:var(--text3);font-family:var(--font-mono);">HABITACIÓN<br><select id="mant-room-select" class="input" onchange="_mantApplyDashboardFilters()" style="margin-top:3px;min-width:220px;">'
+    + '<option value="">— Selecciona habitación —</option>'
+    + rooms.map(function(room){ return '<option value="'+_mantEsc(room)+'"'+(room===selected?' selected':'')+'>Habitación '+_mantEsc(room)+'</option>'; }).join('')
+    + '</select></label>'
     + '</div>'
-    + '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.4;">Reincidencia: el mismo tipo de incidencia o tarea aparece dos o más veces en la misma habitación.</div>';
-  if(!rows.length){
-    return html+'<div class="empty" style="padding:20px 0;"><div class="empty-text">Sin incidencias ni tareas con habitación registrada</div></div></div>';
+  if(!rooms.length){
+    return html+'<div class="empty" style="padding:20px 0;"><div class="empty-text">No hay habitaciones disponibles</div></div></div>';
   }
-  html += '<div style="overflow-x:auto;"><table><tr><th>Habitación</th><th>Incidencias</th><th>Tareas Mantenimiento</th><th>Reincidencias detectadas</th></tr>'
-    + rows.map(function(row){
-      var reps=row.repetidas.length ? row.repetidas.map(function(rep){
-        return '<div style="margin-bottom:3px;"><span class="badge b-orange">🔁 '+rep.total+'×</span> '+_mantEsc(rep.label)+'</div>';
-      }).join('') : '<span style="color:var(--text3);">—</span>';
-      return '<tr>'
-        + '<td style="font-family:var(--font-mono);font-weight:700;">🚪 '+_mantEsc(row.room)+'</td>'
-        + '<td><b>'+row.incidencias.length+'</b><span style="color:var(--text3);font-size:11px;"> · '+row.incidenciasAbiertas+' abiertas</span></td>'
-        + '<td><b>'+row.tareas.length+'</b><span style="color:var(--text3);font-size:11px;"> · '+row.tareasAbiertas+' abiertas</span></td>'
-        + '<td style="font-size:11px;min-width:180px;">'+reps+'</td>'
-        + '</tr>';
-    }).join('') + '</table></div></div>';
+  if(!selected){
+    return html+'<div class="empty" style="padding:24px 0;"><div class="empty-icon">🚪</div><div class="empty-text">Selecciona una habitación para consultar su histórico de problemas</div></div></div>';
+  }
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--text3);">'
+    + '<span class="badge b-orange">'+history.length+' registro'+(history.length===1?'':'s')+'</span>'
+    + (repeated ? '<span class="badge b-red">🔁 '+repeated+' tipo'+(repeated===1?'':'s')+' recurrente'+(repeated===1?'':'s')+'</span>' : '')
+    + '</div>';
+  if(!history.length){
+    return html+'<div class="empty" style="padding:20px 0;"><div class="empty-text">Sin problemas registrados para la habitación '+_mantEsc(selected)+' en el periodo seleccionado</div></div></div>';
+  }
+  html += '<div style="display:flex;flex-direction:column;gap:8px;">'+history.map(function(row){
+    var source=sourceMeta[row.kind];
+    var repCount=repetitions[row.kind+'|'+row.label]||0;
+    return '<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid '+source.color+';border-radius:8px;padding:11px 12px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'
+      + '<div><span class="badge" style="color:'+source.color+';border:1px solid '+source.color+';">'+source.label+'</span>'
+      + (repCount>=2 ? ' <span class="badge b-red">🔁 '+repCount+'×</span>' : '')+'</div>'
+      + '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">'+_mantEsc(_mantFormatHistoryDate(row.date||row.ymd))+'</span>'
+      + '</div>'
+      + '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">'+_mantEsc(row.title)+'</div>'
+      + (row.description ? '<div style="font-size:11px;color:var(--text2);line-height:1.4;white-space:pre-line;margin-bottom:6px;">'+_mantEsc(row.description)+'</div>' : '')
+      + '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">Estado: '+_mantEsc(row.estado)
+      + (row.resolutionMinutes !== null ? ' · Solución: '+_mantEsc(_mantDurationText(row.resolutionMinutes)) : '')+'</div>'
+      + '</div>';
+  }).join('')+'</div></div>';
   return html;
 }
 
@@ -150,6 +295,11 @@ async function renderMantenimientoMod(){
 
   _mantEnsureModal();
 
+  if(!_mantPeriodoHasta){
+    _mantPeriodoHasta=typeof today==='function' ? today() : new Date().toISOString().slice(0,10);
+  }
+  if(!_mantPeriodoDesde) _mantPeriodoDesde=_mantPeriodoHasta.slice(0,8)+'01';
+
   var sub = screen.querySelector('.page-sub');
 
   if(!_mantCanOperate(currentUser)){
@@ -159,13 +309,16 @@ async function renderMantenimientoMod(){
     return;
   }
 
-  var tareas = await getDB('tareas');
-  tareas = tareas.filter(function(t){ return String(t.dept_destino || '') === 'Mantenimiento'; });
-  var incidenciasHabitacion=[];
-  try {
-    var todasIncidencias=await getDB('incidencias');
-    incidenciasHabitacion=(todasIncidencias||[]).filter(function(i){ return !!_mantRoomOf(i); });
-  } catch(e){}
+  var datasets=await Promise.all([
+    getDB('tareas').catch(function(){ return []; }),
+    getDB('incidencias').catch(function(){ return []; }),
+    getDB('hypoxic_room_incidencias').catch(function(){ return []; }),
+    getDB('housekeeping_rooms').catch(function(){ return []; })
+  ]);
+  var tareas=(datasets[0]||[]).filter(function(t){ return String(t.dept_destino || '') === 'Mantenimiento'; });
+  var incidenciasHabitacion=(datasets[1]||[]).filter(function(i){ return !!_mantRoomOf(i); });
+  var hypoxicHabitacion=(datasets[2]||[]).filter(function(h){ return !!_mantRoomOf(h); });
+  var habitaciones=(datasets[3]||[]).filter(function(r){ return r && r.activa !== false; });
 
   if(sub){
     var abiertas = tareas.filter(function(t){ return typeof isTaskOpen === 'function' ? isTaskOpen(t) : (t.estado === 'Abierta' || t.estado === 'En proceso'); }).length;
@@ -227,10 +380,12 @@ async function renderMantenimientoMod(){
     + '.mant-card[draggable="true"]:active{cursor:grabbing;}'
     + '@media(max-width:760px){#mant-kanban .mant-scroll{flex-direction:column;}}'
     + '</style>'
+    + _mantDashboardSummary(tareas,_mantPeriodoDesde,_mantPeriodoHasta)
+    + _mantRoomReport(tareas,incidenciasHabitacion,hypoxicHabitacion,habitaciones,_mantRoomSelected,_mantPeriodoDesde,_mantPeriodoHasta)
+    + '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text2);margin:18px 0 8px 2px;">🗂 TABLERO OPERATIVO ACTUAL</div>'
     + '<div class="mant-scroll" style="display:flex;gap:12px;align-items:flex-start;overflow-x:auto;padding-bottom:8px;">'
     + cols
-    + '</div>'
-    + _mantRoomReport(tareas, incidenciasHabitacion);
+    + '</div>';
 }
 
 // ── TARJETA ───────────────────────────────────────────────────────────────
@@ -511,6 +666,7 @@ function _mantClearFecha(){
 
 // ── EXPORTS (todo en window) ──────────────────────────────────────────────
 window.renderMantenimientoMod = renderMantenimientoMod;
+window._mantApplyDashboardFilters = _mantApplyDashboardFilters;
 window._mantDragStart        = _mantDragStart;
 window._mantDrop             = _mantDrop;
 window._mantOpenModal        = _mantOpenModal;

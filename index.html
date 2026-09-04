@@ -1820,7 +1820,7 @@ tr:hover td{background:rgba(96,165,250,.06);}
 
     <!-- ══ MANTENIMIENTO (módulo Kanban) ══ -->
     <div class="screen" id="screen-mant-mod">
-      <div class="page-header"><div class="page-title">🗂 Kanban Tareas</div><div class="page-sub">Cargando...</div></div>
+      <div class="page-header"><div class="page-title">📊 Dashboard de Mantenimiento</div><div class="page-sub">Cargando...</div></div>
       <div id="mant-kanban" style="padding:0 16px 80px;"></div>
     </div>
 
@@ -2395,6 +2395,8 @@ tr:hover td{background:rgba(96,165,250,.06);}
       <div class="fg"><label>Deadline <span class="req">*</span></label><input type="date" id="task-deadline" min=""></div>
       <div class="fg"><label>Departamento origen</label>
         <select id="task-dept-origen"><option value="Cocina">Cocina</option><option value="Sala">Sala</option><option value="Mantenimiento">Mantenimiento</option><option value="Recepción">Recepción</option><option value="Administración">Administración</option><option value="Economato">Economato</option><option value="Limpieza">Limpieza</option></select></div>
+      <div class="fg"><label>Habitación afectada <span style="color:var(--text3);font-weight:400;">(si aplica)</span></label>
+        <select id="task-room"><option value="">— Sin habitación —</option></select></div>
       <div class="fg sp2"><label>Descripción detallada</label><textarea id="task-desc" rows="3" placeholder="Qué debe hacer el departamento destinatario, con qué materiales, etc."></textarea></div>
     </div>
     <div class="modal-footer">

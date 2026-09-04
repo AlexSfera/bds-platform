@@ -748,7 +748,7 @@ function getScreens(rol){
     ruta:        {id:'ruta-mod',    label:'🧹 Mi Ruta'},
     cajaRec:     {id:'rec-caja-op', label:'💰 Caja', action:'openRecCajaChoice'},
     cajaLab:     {id:'lab-caja-op', label:'💰 Caja', action:'openLabCajaChoice'},
-    mantmod:     {id:'mant-mod',    label:'🗂 Kanban Tareas'},
+    mantmod:     {id:'mant-mod',    label:'📊 Mantenimiento'},
     hkPlan:      {id:'hk-plan',     label:'📅 Planificación'},
     hkZonas:     {id:'hk-zonas',    label:'🧽 Zonas públicas'},
     hkConfig:    {id:'hk-config',   label:'⚙ Configuración HK'},
@@ -897,7 +897,7 @@ function buildNav(){
     'hypoxic':   _svg('<path d="M12 2a3 3 0 0 0-3 3c0 1.5 1 2.5 1 4v3a4 4 0 0 1-2 3.5L7 16a3 3 0 0 0 0 4.5 3 3 0 0 0 4 0l1-1 1 1a3 3 0 0 0 4 0 3 3 0 0 0 0-4.5l-1-.5a4 4 0 0 1-2-3.5V9c0-1.5 1-2.5 1-4a3 3 0 0 0-3-3z"/>'),
     'rec-caja-op': _svg('<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 10h.01"/><path d="M2 10h20"/>')
   };
-  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Kanban'};
+  const SHORT={'readme':'Info','turno':'Turno','tareas':'Tareas','validacion':'Valid.','dashboard':'Panel','maestro':'Equipo','export':'Export','gestiones':'Gestiones','incidencias':'Incid.','hypoxic':'Hypoxic','caja':'Caja','rec-caja':'Caja Rec.','rec-caja-op':'Caja','merma-mod':'Merma','ajustes-mod':'Aj.Caja','ruta-mod':'Ruta','rec-mod':'Recep.','mant-mod':'Mant.'};
 
   // Pintar sidebar (escritorio) + bottom nav (móvil) + topbar legacy oculto
   const sideb = document.getElementById('sidebar-nav');
@@ -2009,6 +2009,8 @@ async function _doSaveTurno() {
       prioridad:   (document.getElementById('it-prio') || {}).value || 'media',
       deadline:    (document.getElementById('it-deadline') || {}).value || '',
       descripcion: (document.getElementById('it-desc') || {}).value || '',
+      room:         (document.getElementById('i-room') || {}).value || '',
+      tipo:         (document.getElementById('i-tipo-incidencia') || {}).value || '',
       origen:      'incidencia',
       shift_id:    shiftId,
       creado_por:  currentUser.nombre

@@ -62,11 +62,16 @@ test('el render final de incidencias conserva el filtro por tipo', () => {
 test('la habitación se elige del catálogo y permite dejarla sin asignar', () => {
   const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const sharedSource = readFileSync(new URL('../shared.js', import.meta.url), 'utf8');
+  const taskSource = readFileSync(new URL('../tareas.js', import.meta.url), 'utf8');
 
   assert.match(indexSource, /<select id="i-room">\s*<option value="">— Sin habitación —<\/option>/);
+  assert.match(indexSource, /<select id="task-room"><option value="">— Sin habitación —<\/option><\/select>/);
   assert.match(sharedSource, /<select id="ni-room"><option value="">— Sin habitación —<\/option><\/select>/);
   assert.match(sharedSource, /poblarSelectorHabitacion\(document\.getElementById\('i-room'\), ''\)/);
   assert.match(sharedSource, /poblarSelectorHabitacion\(ov\.querySelector\('#ni-room'\), ''\)/);
+  assert.match(sharedSource, /room:\s*\(document\.getElementById\('i-room'\)/);
+  assert.match(taskSource, /poblarSelectorHabitacion\(roomEl,''\)/);
+  assert.match(taskSource, /room:typeof normalizeIncidentRoom/);
 });
 
 test('Administración conserva el tipo de incidencia de housekeeping y mantenimiento', () => {
@@ -77,25 +82,61 @@ test('Administración conserva el tipo de incidencia de housekeeping y mantenimi
   assert.match(adminCatalog, /Problema con housekeeping \/ mantenimiento/);
 });
 
-test('el informe de Mantenimiento agrupa por habitación y detecta reincidencias', () => {
+test('el Dashboard de Mantenimiento calcula tareas asignadas y tiempo medio del periodo', () => {
   const context = loadScripts();
-  context.isTaskOpen = (task) => task.estado !== 'Cerrada';
+  const metrics = context._mantPeriodMetrics([
+    { created_at: '2026-09-02T08:00:00Z', completada_ts: '2026-09-02T10:00:00Z' },
+    { created_at: '2026-09-03T08:00:00Z', completada_ts: '2026-09-03T09:00:00Z' },
+    { created_at: '2026-09-04T08:00:00Z', completada_ts: null },
+    { created_at: '2026-08-31T08:00:00Z', completada_ts: '2026-08-31T08:30:00Z' },
+    { created_at: '2026-08-31T23:30:00Z', completada_ts: '2026-09-01T00:00:00Z' },
+  ], '2026-09-01', '2026-09-03');
+
+  assert.equal(metrics.assigned, 2);
+  assert.equal(metrics.solved, 3);
+  assert.equal(metrics.avgResolutionMinutes, 70);
+  assert.equal(context._mantDurationText(metrics.avgResolutionMinutes), '1 h 10 min');
+});
+
+test('el histórico por habitación combina tareas, incidencias e Hypoxic', () => {
+  const context = loadScripts();
+  const history = context._mantRoomHistory(
+    [{ id: 't1', room: '304', titulo: 'Revisar grifo', tipo: 'Fontanería', created_at: '2026-09-01T08:00:00Z', completada_ts: '2026-09-01T10:00:00Z', estado: 'Cerrada' }],
+    [{ id: 'i1', room: '304', tipo_incidencia: 'Fuga de agua', descripcion: 'Agua bajo lavabo', created_at: '2026-09-02T08:00:00Z', estado: 'Abierta' }],
+    [{ id: 'h1', room_number: '304', incident_types: '["CO2 alto"]', observaciones: 'Revisar sensor', created_at: '2026-09-03T08:00:00Z', estado: 'En proceso' }],
+    '304', '2026-09-01', '2026-09-30',
+  );
+
+  assert.equal(history.length, 3);
+  assert.equal(history.map((row) => row.kind).join(','), 'hypoxic,incidencia,tarea');
+  assert.equal(history[0].title, 'CO2 alto');
+  assert.equal(history[2].resolutionMinutes, 120);
+});
+
+test('el informe de Mantenimiento permite seleccionar habitación y marca reincidencias', () => {
+  const context = loadScripts();
 
   const html = context._mantRoomReport(
     [
-      { room: '304', tipo: 'Fontanería', titulo: 'Revisar grifo', estado: 'Abierta' },
-      { room: '304', tipo: 'Fontanería', titulo: 'Cambiar grifo', estado: 'Cerrada' },
-      { room: '305', tipo: 'Electricidad', titulo: 'Revisar luz', estado: 'Abierta' },
+      { room: '304', tipo: 'Fontanería', titulo: 'Revisar grifo', estado: 'Abierta', created_at: '2026-09-01T08:00:00Z' },
+      { room: '304', tipo: 'Fontanería', titulo: 'Cambiar grifo', estado: 'Cerrada', created_at: '2026-09-02T08:00:00Z' },
     ],
     [
-      { room: '304', tipo_incidencia: 'Avería habitación', estado: 'Abierta' },
-      { room: '304', tipo_incidencia: 'Avería habitación', estado: 'Cerrada' },
+      { room: '304', tipo_incidencia: 'Avería habitación', estado: 'Abierta', created_at: '2026-09-03T08:00:00Z' },
     ],
+    [{ room_number: '304', incident_types: '["CO2 alto"]', estado: 'Cerrada', created_at: '2026-09-04T08:00:00Z', resolution_time_minutes: 45 }],
+    [{ numero: '304', activa: true }, { numero: '305', activa: true }],
+    '304',
+    '2026-09-01',
+    '2026-09-30',
   );
 
-  assert.match(html, /INFORME POR HABITACIÓN/);
-  assert.match(html, /🚪 304/);
-  assert.match(html, /🔁 2×.*Fontanería/);
-  assert.match(html, /🔁 2×.*Avería habitación/);
-  assert.match(html, /🚪 305/);
+  assert.match(html, /REPARACIONES POR HABITACIÓN/);
+  assert.match(html, /Habitación 304/);
+  assert.match(html, /TAREA/);
+  assert.match(html, /INCIDENCIA/);
+  assert.match(html, /HYPOXIA/);
+  assert.match(html, /🔁 2×/);
+  assert.match(html, /CO2 alto/);
+  assert.match(html, /Solución: 45 min/);
 });
