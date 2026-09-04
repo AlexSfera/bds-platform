@@ -156,6 +156,26 @@ test('automatic POSMEWS persistence preserves an existing saved week', async () 
   assert.equal(requests[0].init.method || 'GET', 'GET');
 });
 
+test('Sala aggregates imported weeks for monthly and multi-month performance', () => {
+  const context = loadInformes();
+  const data = context._infSalaDataFromRows([
+    {
+      periodo: '2026-08-02_2026-08-08', nombre: 'Mey Redondo', employee_id: 'mey',
+      produccion_bruta: 1200, facturas: 8, detalle_diario: { '2026-08-02': 500, '2026-08-03': 700 }
+    },
+    {
+      periodo: '2026-08-09_2026-08-15', nombre: 'Mey Redondo', employee_id: 'mey',
+      produccion_bruta: 1800, facturas: 10, detalle_diario: { '2026-08-09': 800, '2026-08-10': 1000 }
+    }
+  ]);
+
+  assert.deepEqual(Array.from(data.usuarios), ['Mey Redondo']);
+  assert.equal(data.porUsuario['Mey Redondo'].totalBruto, 3000);
+  assert.equal(data.porUsuario['Mey Redondo'].facturas, 18);
+  assert.equal(data.porUsuario['Mey Redondo'].fechas['2026-08-10'], 1000);
+  assert.equal(data.tipo, 'mensual');
+});
+
 test('POSMEWS waits for employee production persistence before recording Facturas as valid', () => {
   const source = fs.readFileSync(new URL('../posmews_ventas.js', import.meta.url), 'utf8');
   const persistAt = source.indexOf('persisted=await window._infPersistSalaSemana');
@@ -170,4 +190,8 @@ test('Sala keeps POSMEWS upload in Informes and exposes waiter performance in Da
   assert.match(informesSource, /key:'Sala'.*subtabs:\['ventas','incentivos','informe-jefe'\]/);
   assert.match(dashboardSource, /RENDIMIENTO POR CAMARERO/);
   assert.match(dashboardSource, /getDB\('sala_produccion_semanal'\)/);
+  assert.match(dashboardSource, /Semana importada/);
+  assert.match(dashboardSource, /Varios meses/);
+  assert.match(dashboardSource, /_dashSalaRendimientoRequest/);
+  assert.doesNotMatch(dashboardSource, /\+\s*\+\(typeof isAdmin/);
 });

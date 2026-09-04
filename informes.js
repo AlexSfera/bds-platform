@@ -687,21 +687,35 @@ function _infShiftKpiWeek(dir){
 
 // Cargar producción semanal desde sala_produccion_semanal
 function _infSalaDataFromRows(rows){
-  var fechasSet={}, porUsuario={};
+  var fechasSet={},periodosSet={},porUsuario={};
   (rows||[]).forEach(function(r){
     var detalle=r.detalle_diario||{};
-    porUsuario[r.nombre]={
-      fechas:detalle,
-      totalBruto:parseFloat(r.produccion_bruta)||0,
-      facturas:parseInt(r.facturas)||0,
-      csvNombre:r.csv_nombre||r.nombre,
-      employee_id:r.employee_id
-    };
-    Object.keys(detalle).forEach(function(f){ fechasSet[f]=true; });
+    if(r.periodo) periodosSet[r.periodo]=true;
+    var nombre=r.nombre||r.csv_nombre||'Sin nombre';
+    if(!porUsuario[nombre]){
+      porUsuario[nombre]={
+        fechas:{},totalBruto:0,facturas:0,
+        csvNombre:r.csv_nombre||nombre,employee_id:r.employee_id||null
+      };
+    }
+    var usuario=porUsuario[nombre];
+    usuario.totalBruto+=parseFloat(r.produccion_bruta)||0;
+    usuario.facturas+=parseInt(r.facturas)||0;
+    if(!usuario.employee_id&&r.employee_id) usuario.employee_id=r.employee_id;
+    Object.keys(detalle).forEach(function(f){
+      usuario.fechas[f]=(usuario.fechas[f]||0)+(parseFloat(detalle[f])||0);
+      fechasSet[f]=true;
+    });
   });
-  var fechas=Object.keys(fechasSet).sort();
+  var fechaOrden=function(f){
+    var iso=String(f||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(iso) return iso[1]+'-'+iso[2]+'-'+iso[3];
+    var es=String(f||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    return es?es[3]+'-'+es[2]+'-'+es[1]:String(f||'');
+  };
+  var fechas=Object.keys(fechasSet).sort(function(a,b){ return fechaOrden(a).localeCompare(fechaOrden(b)); });
   var usuarios=Object.keys(porUsuario).sort(function(a,b){ return porUsuario[b].totalBruto-porUsuario[a].totalBruto; });
-  return {fechas:fechas,usuarios:usuarios,porUsuario:porUsuario,rangoDias:fechas.length,tipo:'semanal',matchLog:[]};
+  return {fechas:fechas,usuarios:usuarios,porUsuario:porUsuario,rangoDias:fechas.length,tipo:Object.keys(periodosSet).length>1||fechas.length>7?'mensual':'semanal',matchLog:[]};
 }
 
 async function _infLoadSalaFromDB(){
@@ -999,23 +1013,32 @@ function _renderSalaTabla(data,costData,opts){
     el.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px;">Sin datos válidos en el archivo.</div>';
     return;
   }
-  var fmt=function(f){ return f?f.slice(8)+'/'+f.slice(5,7)+'/'+f.slice(0,4):''; };
+  var fmt=function(f){
+    if(!f) return '';
+    if(/^\d{4}-\d{2}-\d{2}$/.test(f)) return f.slice(8)+'/'+f.slice(5,7)+'/'+f.slice(0,4);
+    return f;
+  };
   var f0=fechas[0]||'',fN=fechas[fechas.length-1]||'';
-  var rangoLabel=f0===fN?fmt(f0):fmt(f0)+' — '+fmt(fN);
+  var rangoLabel=opts.periodLabel||(f0===fN?fmt(f0):fmt(f0)+' — '+fmt(fN));
+  var objetivoRaw=opts.target!==undefined?parseFloat(opts.target):(data.tipo==='mensual'?_infSalaObjMes:_infSalaObjSem);
+  var objetivo=isFinite(objetivoRaw)?objetivoRaw:_infSalaObjSem;
+  var objetivoLabel=opts.targetLabel||(data.tipo==='mensual'?'mes':'semana');
+  var fechasVisibles=opts.compact?[]:fechas;
   var totalsDia={};
   fechas.forEach(function(f){ totalsDia[f]=0; });
   usuarios.forEach(function(u){ fechas.forEach(function(f){ totalsDia[f]+=(porUsuario[u].fechas[f]||0); }); });
   var totalGeneral=usuarios.reduce(function(s,u){ return s+porUsuario[u].totalBruto; },0);
-  var thFechas=fechas.map(function(f){
-    return '<th style="text-align:right;font-family:var(--font-mono);font-size:10px;white-space:nowrap;padding:8px 10px;">'+f.slice(8)+'/'+f.slice(5,7)+'</th>';
+  var thFechas=fechasVisibles.map(function(f){
+    var fechaFmt=fmt(f);
+    return '<th style="text-align:right;font-family:var(--font-mono);font-size:10px;white-space:nowrap;padding:8px 10px;">'+fechaFmt.slice(0,5)+'</th>';
   }).join('');
   var rows=usuarios.map(function(u,idx){
     var d=porUsuario[u],total=d.totalBruto;
-    var cumple=total>=_infSalaObjSem;
-    var statusBadge=cumple?'✅ Cumple':'❌ Falta '+((_infSalaObjSem-total).toLocaleString('es-ES',{maximumFractionDigits:0}))+'€';
+    var cumple=total>=objetivo;
+    var statusBadge=cumple?'✅ Cumple':'❌ Falta '+((objetivo-total).toLocaleString('es-ES',{maximumFractionDigits:0}))+'€';
     var statusColor=cumple?'var(--green)':'var(--red)';
     var rowBg=idx%2===0?'var(--bg3)':'var(--bg4)';
-    var celdas=fechas.map(function(f){
+    var celdas=fechasVisibles.map(function(f){
       var v=d.fechas[f]||0;
       return '<td style="text-align:right;font-family:var(--font-mono);font-size:12px;padding:8px 10px;color:'+(v>0?'var(--text)':'var(--text3)')+';">'+(v>0?v.toLocaleString('es-ES',{minimumFractionDigits:2})+'€':'—')+'</td>';
     }).join('');
@@ -1041,11 +1064,11 @@ function _renderSalaTabla(data,costData,opts){
       +'<td style="text-align:center;padding:8px 12px;"><span style="font-size:11px;font-weight:700;color:'+statusColor+';">'+statusBadge+'</span></td>'
       +'</tr>';
   }).join('');
-  var celdaTotDia=fechas.map(function(f){
+  var celdaTotDia=fechasVisibles.map(function(f){
     var v=totalsDia[f];
     return '<td style="text-align:right;font-family:var(--font-mono);font-size:12px;padding:8px 10px;font-weight:700;color:var(--text2);">'+(v>0?v.toLocaleString('es-ES',{minimumFractionDigits:2})+'€':'—')+'</td>';
   }).join('');
-  var nCumplen=usuarios.filter(function(u){ return porUsuario[u].totalBruto>=_infSalaObjSem; }).length;
+  var nCumplen=usuarios.filter(function(u){ return porUsuario[u].totalBruto>=objetivo; }).length;
   var pctCump=usuarios.length?Math.round(nCumplen/usuarios.length*100):0;
   var mediaProd=usuarios.length?totalGeneral/usuarios.length:0;
   var nCam=usuarios.length;
@@ -1070,7 +1093,7 @@ function _renderSalaTabla(data,costData,opts){
   }
   el.innerHTML=matchBanner
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'
-    +  '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);">📅 Periodo: <strong style="color:var(--text2);">'+rangoLabel+'</strong> &nbsp;·&nbsp; '+nCam+' camarero'+(nCam===1?'':'s')+'</div>'
+    +  '<div style="font-family:var(--font-mono);font-size:12px;color:var(--text3);">📅 Periodo: <strong style="color:var(--text2);">'+_escHtml(rangoLabel)+'</strong> &nbsp;·&nbsp; '+nCam+' camarero'+(nCam===1?'':'s')+'</div>'
     +'</div>'
     +'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">'
     +  kpiBox('Producción total',totalGeneral.toLocaleString('es-ES',{minimumFractionDigits:2})+'€','var(--amber)')
@@ -1098,7 +1121,7 @@ function _renderSalaTabla(data,costData,opts){
     +      '<th style="text-align:right;padding:10px 8px;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">€/h</th>'
     +      '<th style="text-align:right;padding:10px 8px;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">Coste</th>'
     +      '<th style="text-align:right;padding:10px 8px;font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);">% coste/prod.</th>'
-    +      '<th style="text-align:center;padding:10px 12px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);">Obj. '+_infSalaObjSem.toLocaleString('es-ES',{maximumFractionDigits:0})+'€</th>'
+    +      '<th style="text-align:center;padding:10px 12px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);">Obj. '+_escHtml(objetivoLabel)+' '+objetivo.toLocaleString('es-ES',{maximumFractionDigits:0})+'€</th>'
     +    '</tr></thead>'
     +    '<tbody>'+rows
     +      '<tr style="background:var(--bg2);border-top:2px solid var(--border2);">'
@@ -1112,8 +1135,7 @@ function _renderSalaTabla(data,costData,opts){
     +'</div>'
     +'<div style="margin-top:14px;padding:10px 14px;background:var(--bg2);border-radius:6px;border-left:3px solid var(--amber);font-size:11px;color:var(--text3);line-height:1.7;">'
     +  '📌 Producción bruta (IVA incluido) · Excluye cancelaciones y total ≤ 0 € · '
-    +  'Obj. semana: <strong style="color:var(--amber);">'+_infSalaObjSem.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</strong> · '
-    +  'Obj. mes: <strong style="color:var(--amber);">'+_infSalaObjMes.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</strong> · '
+    +  'Objetivo aplicado ('+_escHtml(objetivoLabel)+'): <strong style="color:var(--amber);">'+objetivo.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</strong> · '
     +  '~ = nombre ajustado por coincidencia aproximada con BD'
     +'</div>';
 }

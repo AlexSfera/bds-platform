@@ -853,16 +853,9 @@ async function _renderKpiSala(shifts) {
     + '<div style="border-top:1px solid var(--border);margin-top:18px;padding-top:16px;">'
     +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
     +     '<div><div style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text);">📊 RENDIMIENTO POR CAMARERO</div>'
-    +     '<div style="font-size:10.5px;color:var(--text3);margin-top:3px;">Facturación POSMEWS, horas y coste laboral de la semana.</div></div>'
-    +     '<div style="display:flex;align-items:center;gap:6px;">'
-    +       '<button onclick="window._dashSalaRendPrev()" title="Semana anterior" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;">◄</button>'
-    +       '<span id="dash-sala-rend-week" style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;"></span>'
-    +       '<button onclick="window._dashSalaRendNext()" title="Semana siguiente" style="background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:28px;height:28px;cursor:pointer;">►</button>'
-    +       +(typeof isAdmin==='function'&&isAdmin(currentUser)
-          ? '<button onclick="window._dashSalaRendDelete()" title="Eliminar producción de esta semana" style="background:var(--bg4);border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:11px;font-family:var(--font-mono);padding:5px 8px;cursor:pointer;">Eliminar</button>'
-          : '')
-    +     '</div>'
+    +     '<div style="font-size:10.5px;color:var(--text3);margin-top:3px;">Facturación POSMEWS, horas y coste laboral del periodo seleccionado.</div></div>'
     +   '</div>'
+    +   '<div id="dash-sala-rendimiento-controls" style="margin-bottom:12px;"></div>'
     +   '<div id="dash-sala-rendimiento-body"><div style="color:var(--text3);text-align:center;padding:20px;">Cargando…</div></div>'
     + '</div>';
   await _renderDashSalaRendimiento();
@@ -870,61 +863,211 @@ async function _renderKpiSala(shifts) {
 
 // ── RENDIMIENTO POR CAMARERO · DASHBOARD SALA ─────────────────
 // La carga de archivos permanece en Informes > Sala > Ventas / Datos.
+var _dashSalaRendimientoMode = 'semana';
 var _dashSalaRendimientoWeek = null;
+var _dashSalaRendimientoMonth = null;
+var _dashSalaRendimientoMonthFrom = null;
+var _dashSalaRendimientoMonthTo = null;
+var _dashSalaRendimientoRequest = 0;
 
-function _dashSalaRendWeekOf(dateStr){
-  var d=dateStr?new Date(dateStr+'T12:00:00'):new Date();
-  var sunday=new Date(d);
-  sunday.setDate(sunday.getDate()-sunday.getDay());
-  var saturday=new Date(sunday);
-  saturday.setDate(saturday.getDate()+6);
-  return {inicio:sunday.toISOString().slice(0,10),fin:saturday.toISOString().slice(0,10)};
-}
 function _dashSalaRendFmt(iso){
   var p=(iso||'').split('-');
   return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';
 }
-function _dashSalaRendWeekCurrent(){
-  if(!_dashSalaRendimientoWeek) _dashSalaRendimientoWeek=_dashSalaRendWeekOf();
-  return _dashSalaRendimientoWeek;
+function _dashSalaRendMonthLabel(month){
+  if(!/^\d{4}-\d{2}$/.test(month||'')) return '';
+  var label=new Date(month+'-01T12:00:00').toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+  return label.charAt(0).toUpperCase()+label.slice(1);
+}
+function _dashSalaRendRowPeriod(row){
+  var parts=String(row.periodo||'').split('_');
+  var inicio=row.semana_inicio||parts[0]||'';
+  var fin=row.semana_fin||parts[1]||'';
+  return {periodo:inicio&&fin?inicio+'_'+fin:'',inicio:inicio,fin:fin};
+}
+function _dashSalaRendPeriodos(rows){
+  var seen={},periodos=[];
+  (rows||[]).forEach(function(row){
+    var p=_dashSalaRendRowPeriod(row);
+    if(!p.periodo||seen[p.periodo]) return;
+    seen[p.periodo]=true;
+    periodos.push(p);
+  });
+  return periodos.sort(function(a,b){ return a.inicio.localeCompare(b.inicio); });
+}
+function _dashSalaRendMonths(periodos){
+  var seen={};
+  (periodos||[]).forEach(function(p){ if(p.inicio) seen[p.inicio.slice(0,7)]=true; });
+  return Object.keys(seen).sort();
+}
+function _dashSalaRendMonthCount(from,to){
+  var a=(from||'').split('-'),b=(to||'').split('-');
+  if(a.length!==2||b.length!==2) return 1;
+  return Math.max(1,(parseInt(b[0])-parseInt(a[0]))*12+parseInt(b[1])-parseInt(a[1])+1);
+}
+function _dashSalaRendSelectOption(value,label,selected){
+  return '<option value="'+_escHtml(value)+'"'+(value===selected?' selected':'')+'>'+_escHtml(label)+'</option>';
+}
+function _dashSalaRendRenderControls(periodos,months){
+  var el=document.getElementById('dash-sala-rendimiento-controls');
+  if(!el) return;
+  var selectStyle='background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-family:var(--font-mono);padding:7px 9px;';
+  var buttonStyle='background:var(--bg4);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;width:30px;height:30px;cursor:pointer;';
+  var html='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+    +'<label style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;">Periodo</label>'
+    +'<select aria-label="Tipo de periodo" onchange="window._dashSalaRendModeChange(this.value)" style="'+selectStyle+'">'
+    +_dashSalaRendSelectOption('semana','Semana importada',_dashSalaRendimientoMode)
+    +_dashSalaRendSelectOption('mes','Mes',_dashSalaRendimientoMode)
+    +_dashSalaRendSelectOption('rango','Varios meses',_dashSalaRendimientoMode)
+    +'</select>';
+  if(_dashSalaRendimientoMode==='semana'){
+    var idx=periodos.findIndex(function(p){ return p.periodo===_dashSalaRendimientoWeek; });
+    html+='<button onclick="window._dashSalaRendPrev()" title="Semana importada anterior"'+(idx<=0?' disabled':'')+' style="'+buttonStyle+(idx<=0?'opacity:.35;cursor:not-allowed;':'')+'">◄</button>'
+      +'<select aria-label="Semana importada" onchange="window._dashSalaRendWeekChange(this.value)" style="'+selectStyle+'">'
+      +periodos.slice().reverse().map(function(p){ return _dashSalaRendSelectOption(p.periodo,_dashSalaRendFmt(p.inicio)+' — '+_dashSalaRendFmt(p.fin),_dashSalaRendimientoWeek); }).join('')
+      +'</select>'
+      +'<button onclick="window._dashSalaRendNext()" title="Semana importada siguiente"'+(idx<0||idx>=periodos.length-1?' disabled':'')+' style="'+buttonStyle+(idx<0||idx>=periodos.length-1?'opacity:.35;cursor:not-allowed;':'')+'">►</button>';
+    if(typeof isAdmin==='function'&&isAdmin(currentUser)&&_dashSalaRendimientoWeek){
+      html+='<button onclick="window._dashSalaRendDelete()" title="Eliminar producción de esta semana" style="background:var(--bg4);border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:11px;font-family:var(--font-mono);padding:7px 9px;cursor:pointer;">Eliminar</button>';
+    }
+  }else if(_dashSalaRendimientoMode==='mes'){
+    html+='<select aria-label="Mes importado" onchange="window._dashSalaRendMonthChange(this.value)" style="'+selectStyle+'">'
+      +months.slice().reverse().map(function(m){ return _dashSalaRendSelectOption(m,_dashSalaRendMonthLabel(m),_dashSalaRendimientoMonth); }).join('')
+      +'</select>';
+  }else{
+    html+='<label style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-transform:uppercase;">Desde</label>'
+      +'<select aria-label="Mes inicial" onchange="window._dashSalaRendRangeChange(\'from\',this.value)" style="'+selectStyle+'">'
+      +months.map(function(m){ return _dashSalaRendSelectOption(m,_dashSalaRendMonthLabel(m),_dashSalaRendimientoMonthFrom); }).join('')
+      +'</select>'
+      +'<label style="font-family:var(--font-mono);font-size:9px;color:var(--text3);text-transform:uppercase;">Hasta</label>'
+      +'<select aria-label="Mes final" onchange="window._dashSalaRendRangeChange(\'to\',this.value)" style="'+selectStyle+'">'
+      +months.map(function(m){ return _dashSalaRendSelectOption(m,_dashSalaRendMonthLabel(m),_dashSalaRendimientoMonthTo); }).join('')
+      +'</select>';
+  }
+  el.innerHTML=html+'</div>';
 }
 function _dashSalaRendShift(dir){
-  var week=_dashSalaRendWeekCurrent();
-  var d=new Date(week.inicio+'T12:00:00');
-  d.setDate(d.getDate()+(dir*7));
-  _dashSalaRendimientoWeek=_dashSalaRendWeekOf(d.toISOString().slice(0,10));
-  _renderDashSalaRendimiento();
+  getDB('sala_produccion_semanal').then(function(rows){
+    var periodos=_dashSalaRendPeriodos(rows||[]);
+    var idx=periodos.findIndex(function(p){ return p.periodo===_dashSalaRendimientoWeek; });
+    var next=idx+dir;
+    if(next<0||next>=periodos.length) return;
+    _dashSalaRendimientoWeek=periodos[next].periodo;
+    _renderDashSalaRendimiento();
+  });
 }
+window._dashSalaRendModeChange=function(mode){
+  if(['semana','mes','rango'].indexOf(mode)<0) return;
+  _dashSalaRendimientoMode=mode;
+  _renderDashSalaRendimiento();
+};
+window._dashSalaRendWeekChange=function(periodo){ _dashSalaRendimientoWeek=periodo;_renderDashSalaRendimiento(); };
+window._dashSalaRendMonthChange=function(month){ _dashSalaRendimientoMonth=month;_renderDashSalaRendimiento(); };
+window._dashSalaRendRangeChange=function(edge,month){
+  if(edge==='from') _dashSalaRendimientoMonthFrom=month;
+  else _dashSalaRendimientoMonthTo=month;
+  if(_dashSalaRendimientoMonthFrom>_dashSalaRendimientoMonthTo){
+    if(edge==='from') _dashSalaRendimientoMonthTo=month;
+    else _dashSalaRendimientoMonthFrom=month;
+  }
+  _renderDashSalaRendimiento();
+};
 window._dashSalaRendPrev=function(){ _dashSalaRendShift(-1); };
 window._dashSalaRendNext=function(){ _dashSalaRendShift(1); };
 window._dashSalaRendDelete=async function(){
   if(typeof window._infDeleteSemana!=='function') return;
-  var week=_dashSalaRendWeekCurrent();
-  var deleted=await window._infDeleteSemana(week.inicio+'_'+week.fin);
+  if(_dashSalaRendimientoMode!=='semana'||!_dashSalaRendimientoWeek) return;
+  var deleted=await window._infDeleteSemana(_dashSalaRendimientoWeek);
   if(deleted) _renderDashSalaRendimiento();
 };
 
+async function _dashSalaRendLabor(fechaMin,fechaMax){
+  var merged={};
+  if(!fechaMin||!fechaMax||typeof _infSalaCostLaboral!=='function') return {byId:{},byNombre:{},rows:[]};
+  var cursor=new Date(fechaMin+'T12:00:00'),last=new Date(fechaMax+'T12:00:00');
+  while(cursor<=last){
+    var chunkEnd=new Date(cursor);
+    chunkEnd.setDate(chunkEnd.getDate()+30);
+    if(chunkEnd>last) chunkEnd=new Date(last);
+    var desde=cursor.toISOString().slice(0,10),hasta=chunkEnd.toISOString().slice(0,10);
+    var part=await _infSalaCostLaboral(desde,hasta);
+    (part.rows||[]).forEach(function(row){
+      var key=row.employee_id?'id:'+row.employee_id:'nombre:'+_infNormNombre(row.nombre);
+      if(!merged[key]) merged[key]={employee_id:row.employee_id||null,nombre:row.nombre||'',horas:0,coste_total:0};
+      merged[key].horas+=parseFloat(row.horas)||0;
+      merged[key].coste_total+=parseFloat(row.coste_total)||0;
+    });
+    cursor=new Date(chunkEnd);
+    cursor.setDate(cursor.getDate()+1);
+  }
+  var result={byId:{},byNombre:{},rows:[]};
+  Object.keys(merged).forEach(function(key){
+    var row=merged[key];
+    row.coste_hora=row.horas>0?row.coste_total/row.horas:0;
+    if(row.employee_id) result.byId[row.employee_id]=row;
+    var nombreKey=_infNormNombre(row.nombre);
+    if(Object.prototype.hasOwnProperty.call(result.byNombre,nombreKey)) result.byNombre[nombreKey]=null;
+    else result.byNombre[nombreKey]=row;
+    result.rows.push(row);
+  });
+  return result;
+}
+
 async function _renderDashSalaRendimiento(){
   var el=document.getElementById('dash-sala-rendimiento-body');
-  var week=_dashSalaRendWeekCurrent();
-  var label=document.getElementById('dash-sala-rend-week');
-  if(label) label.textContent=_dashSalaRendFmt(week.inicio)+' — '+_dashSalaRendFmt(week.fin);
   if(!el) return;
+  var requestId=++_dashSalaRendimientoRequest;
+  el.innerHTML='<div style="color:var(--text3);text-align:center;padding:20px;">Cargando…</div>';
   try{
     var rows=await getDB('sala_produccion_semanal');
-    rows=(rows||[]).filter(function(r){ return r.periodo===week.inicio+'_'+week.fin; });
-    if(!rows.length){
-      el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin facturación por camarero para esta semana.</div><div style="font-size:11px;color:var(--text3);margin-top:6px;">Cárgala en Informes → Sala → Ventas / Datos.</div></div>';
+    if(requestId!==_dashSalaRendimientoRequest||document.getElementById('dash-sala-rendimiento-body')!==el) return;
+    rows=rows||[];
+    var periodos=_dashSalaRendPeriodos(rows),months=_dashSalaRendMonths(periodos);
+    if(periodos.length&&(!(_dashSalaRendimientoWeek)||!periodos.some(function(p){ return p.periodo===_dashSalaRendimientoWeek; }))){
+      _dashSalaRendimientoWeek=periodos[periodos.length-1].periodo;
+    }
+    if(months.length&&months.indexOf(_dashSalaRendimientoMonth)<0) _dashSalaRendimientoMonth=months[months.length-1];
+    if(months.length&&months.indexOf(_dashSalaRendimientoMonthFrom)<0) _dashSalaRendimientoMonthFrom=months[Math.max(0,months.length-3)];
+    if(months.length&&months.indexOf(_dashSalaRendimientoMonthTo)<0) _dashSalaRendimientoMonthTo=months[months.length-1];
+    _dashSalaRendRenderControls(periodos,months);
+    if(!periodos.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">No hay semanas de facturación importadas.</div><div style="font-size:11px;color:var(--text3);margin-top:6px;">Cárgalas en Informes → Sala → Ventas / Datos.</div></div>';
+      return;
+    }
+    var selected=[],periodLabel='',objetivo=_infSalaObjSem,objetivoLabel='semana',compact=false;
+    if(_dashSalaRendimientoMode==='semana'){
+      var selectedWeek=periodos.find(function(p){ return p.periodo===_dashSalaRendimientoWeek; });
+      selected=rows.filter(function(r){ return _dashSalaRendRowPeriod(r).periodo===_dashSalaRendimientoWeek; });
+      periodLabel=selectedWeek?_dashSalaRendFmt(selectedWeek.inicio)+' — '+_dashSalaRendFmt(selectedWeek.fin):'';
+    }else if(_dashSalaRendimientoMode==='mes'){
+      selected=rows.filter(function(r){ return _dashSalaRendRowPeriod(r).inicio.slice(0,7)===_dashSalaRendimientoMonth; });
+      periodLabel=_dashSalaRendMonthLabel(_dashSalaRendimientoMonth)+' · '+_dashSalaRendPeriodos(selected).length+' semanas importadas';
+      objetivo=_infSalaObjMes;objetivoLabel='mes';compact=true;
+    }else{
+      selected=rows.filter(function(r){
+        var month=_dashSalaRendRowPeriod(r).inicio.slice(0,7);
+        return month>=_dashSalaRendimientoMonthFrom&&month<=_dashSalaRendimientoMonthTo;
+      });
+      var meses=_dashSalaRendMonthCount(_dashSalaRendimientoMonthFrom,_dashSalaRendimientoMonthTo);
+      periodLabel=_dashSalaRendMonthLabel(_dashSalaRendimientoMonthFrom)+' — '+_dashSalaRendMonthLabel(_dashSalaRendimientoMonthTo)+' · '+_dashSalaRendPeriodos(selected).length+' semanas importadas';
+      objetivo=_infSalaObjMes*meses;objetivoLabel='periodo';compact=true;
+    }
+    if(!selected.length){
+      el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Sin facturación importada para este periodo.</div></div>';
       return;
     }
     if(typeof _infSalaDataFromRows!=='function'||typeof _renderSalaTabla!=='function'){
       throw new Error('El módulo de rendimiento no está disponible');
     }
-    var data=_infSalaDataFromRows(rows);
+    var data=_infSalaDataFromRows(selected);
+    var selectedPeriods=_dashSalaRendPeriodos(selected);
+    var fechaMin=selectedPeriods[0].inicio,fechaMax=selectedPeriods[selectedPeriods.length-1].fin;
     var costData={};
-    try{ costData=typeof _infSalaCostLaboral==='function'?await _infSalaCostLaboral(week.inicio,week.fin):{}; }catch(e){}
-    _renderSalaTabla(data,costData,{readOnly:true,el:el});
+    try{ costData=await _dashSalaRendLabor(fechaMin,fechaMax); }catch(e){}
+    if(requestId!==_dashSalaRendimientoRequest||document.getElementById('dash-sala-rendimiento-body')!==el) return;
+    _renderSalaTabla(data,costData,{readOnly:true,el:el,target:objetivo,targetLabel:objetivoLabel,compact:compact,periodLabel:periodLabel});
   }catch(e){
+    if(requestId!==_dashSalaRendimientoRequest||document.getElementById('dash-sala-rendimiento-body')!==el) return;
     el.innerHTML='<div class="empty"><div class="empty-text" style="color:var(--red);">Error cargando rendimiento: '+(typeof _escHtml==='function'?_escHtml(e.message):e.message)+'</div></div>';
   }
 }
