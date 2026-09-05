@@ -1065,10 +1065,15 @@ async function _renderDashSalaRendimiento(){
     var data=_infSalaDataFromRows(selected);
     var selectedPeriods=_dashSalaRendPeriodos(selected);
     var fechaMin=selectedPeriods[0].inicio,fechaMax=selectedPeriods[selectedPeriods.length-1].fin;
-    var costData={};
-    try{ costData=await _dashSalaRendLabor(fechaMin,fechaMax); }catch(e){}
+    var costData={},laborWarning='';
+    try{
+      costData=await _dashSalaRendLabor(fechaMin,fechaMax);
+      if(!costData.rows||!costData.rows.length) laborWarning='No hay fichajes de Bitrix24 para este periodo. Horas y coste laboral: [NO DATA].';
+    }catch(e){
+      laborWarning='No se pudieron cargar los fichajes de Bitrix24. Horas y coste laboral: [NO DATA].';
+    }
     if(requestId!==_dashSalaRendimientoRequest||document.getElementById('dash-sala-rendimiento-body')!==el) return;
-    _renderSalaTabla(data,costData,{readOnly:true,el:el,target:objetivo,targetLabel:objetivoLabel,compact:compact,dense:true,periodLabel:periodLabel});
+    _renderSalaTabla(data,costData,{readOnly:true,el:el,target:objetivo,targetLabel:objetivoLabel,compact:compact,dense:true,periodLabel:periodLabel,dataWarning:laborWarning});
   }catch(e){
     if(requestId!==_dashSalaRendimientoRequest||document.getElementById('dash-sala-rendimiento-body')!==el) return;
     el.innerHTML='<div class="empty"><div class="empty-text" style="color:var(--red);">Error cargando rendimiento: '+(typeof _escHtml==='function'?_escHtml(e.message):e.message)+'</div></div>';

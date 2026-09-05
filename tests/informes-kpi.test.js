@@ -17,6 +17,17 @@ function loadInformes(overrides = {}) {
   return context;
 }
 
+function loadDashboard(overrides = {}) {
+  const context = vm.createContext({
+    window: {},
+    document: { querySelectorAll: () => [], getElementById: () => null },
+    console,
+    ...overrides
+  });
+  vm.runInContext(fs.readFileSync(new URL('../dashboard.js', import.meta.url), 'utf8'), context);
+  return context;
+}
+
 test('Sala labor cost requests Bitrix hours for the selected week and joins by employee id', async () => {
   let requestedUrl = '';
   const context = loadInformes({
@@ -176,6 +187,79 @@ test('Sala aggregates imported weeks for monthly and multi-month performance', (
   assert.equal(data.tipo, 'mensual');
 });
 
+test('Sala keeps one employee row across periods when the saved name changes', () => {
+  const context = loadInformes();
+  const data = context._infSalaDataFromRows([
+    {
+      periodo: '2026-07-05_2026-07-11', semana_inicio: '2026-07-05',
+      nombre: 'Kevin Fuster', employee_id: 'kevin', produccion_bruta: 1000,
+      facturas: 5, detalle_diario: { '2026-07-05': 1000 }
+    },
+    {
+      periodo: '2026-08-02_2026-08-08', semana_inicio: '2026-08-02',
+      nombre: 'Kevin Fuster Matias', employee_id: 'kevin', produccion_bruta: 1500,
+      facturas: 7, detalle_diario: { '2026-08-02': 1500 }
+    }
+  ]);
+
+  assert.deepEqual(Array.from(data.usuarios), ['Kevin Fuster Matias']);
+  assert.equal(data.porUsuario['Kevin Fuster Matias'].totalBruto, 2500);
+  assert.equal(data.porUsuario['Kevin Fuster Matias'].facturas, 12);
+  assert.equal(data.porUsuario['Kevin Fuster Matias'].employee_id, 'kevin');
+});
+
+test('Sala does not merge different employee ids that share a display name', () => {
+  const context = loadInformes();
+  const data = context._infSalaDataFromRows([
+    { periodo: '2026-08-02_2026-08-08', nombre: 'Alex Sala', employee_id: 'alex-1', produccion_bruta: 500, facturas: 2, detalle_diario: {} },
+    { periodo: '2026-08-02_2026-08-08', nombre: 'Alex Sala', employee_id: 'alex-2', produccion_bruta: 700, facturas: 3, detalle_diario: {} }
+  ]);
+
+  assert.equal(data.usuarios.length, 2);
+  assert.deepEqual(Array.from(data.usuarios), ['Alex Sala (2)', 'Alex Sala']);
+  assert.equal(data.porUsuario['Alex Sala'].employee_id, 'alex-1');
+  assert.equal(data.porUsuario['Alex Sala (2)'].employee_id, 'alex-2');
+});
+
+test('Dashboard Sala builds week, month and multi-month periods only from imported rows', () => {
+  const context = loadDashboard();
+  const periodos = context._dashSalaRendPeriodos([
+    { periodo: '2026-08-09_2026-08-15' },
+    { semana_inicio: '2026-07-26', semana_fin: '2026-08-01' },
+    { periodo: '2026-08-09_2026-08-15' }
+  ]);
+
+  assert.deepEqual(Array.from(periodos, p => p.periodo), [
+    '2026-07-26_2026-08-01',
+    '2026-08-09_2026-08-15'
+  ]);
+  assert.deepEqual(Array.from(context._dashSalaRendMonths(periodos)), ['2026-07', '2026-08']);
+  assert.equal(context._dashSalaRendMonthCount('2026-07', '2026-09'), 3);
+});
+
+test('Dashboard Sala splits long labor ranges and aggregates every chunk by employee id', async () => {
+  const calls = [];
+  const context = loadDashboard({
+    _infNormNombre: value => String(value || '').toLowerCase(),
+    _infSalaCostLaboral: async (desde, hasta) => {
+      calls.push([desde, hasta]);
+      return { rows: [
+        { employee_id: 'mey', nombre: 'Mey Redondo', horas: 10, coste_total: 200 }
+      ] };
+    }
+  });
+
+  const result = await context._dashSalaRendLabor('2026-06-01', '2026-08-15');
+  assert.deepEqual(calls, [
+    ['2026-06-01', '2026-07-01'],
+    ['2026-07-02', '2026-08-01'],
+    ['2026-08-02', '2026-08-15']
+  ]);
+  assert.equal(result.byId.mey.horas, 30);
+  assert.equal(result.byId.mey.coste_total, 600);
+  assert.equal(result.byId.mey.coste_hora, 20);
+});
+
 test('POSMEWS waits for employee production persistence before recording Facturas as valid', () => {
   const source = fs.readFileSync(new URL('../posmews_ventas.js', import.meta.url), 'utf8');
   const persistAt = source.indexOf('persisted=await window._infPersistSalaSemana');
@@ -198,5 +282,8 @@ test('Sala keeps POSMEWS upload in Informes and exposes waiter performance in Da
   assert.match(dashboardSource, /compact:compact,dense:true/);
   assert.match(informesSource, /data-layout="compact-kpis"/);
   assert.match(informesSource, /repeat\(auto-fit,minmax\(135px,1fr\)\)/);
+  assert.match(informesSource, /data-status="partial-data"/);
+  assert.match(informesSource, /data-status="partial-labor"/);
+  assert.match(dashboardSource, /Horas y coste laboral: \[NO DATA\]/);
   assert.doesNotMatch(dashboardSource, /\+\s*\+\(typeof isAdmin/);
 });
