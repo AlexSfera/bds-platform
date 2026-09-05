@@ -112,3 +112,16 @@ test('hay una sola pantalla de Liquidación con Entrenadores y Housekeeping', as
   assert.match(migration, /set estado = 'publicado', ts = now\(\)/);
   assert.match(migration, /incentive\.origen = 'informe_junio_2026'/);
 });
+
+test('Informe de Jefe de Housekeeping muestra la plantilla y captura bajas por fechas', async () => {
+  const informes = await readFile(new URL('../informes.js', import.meta.url), 'utf8');
+  assert.match(informes, /Registrar bajas laborales/);
+  assert.match(informes, /emps\.forEach\(function\(employee\)/);
+  assert.match(informes, /window\._infAddHkAbsence/);
+  assert.match(informes, /Inicio de baja/);
+  assert.match(informes, /Fin de baja/);
+  assert.match(informes, /Días calculados:/);
+  assert.match(informes, /\+ Añadir otra baja/);
+  assert.match(informes, /_infIsHousekeeping\(e\.area\)/);
+  assert.match(informes, /rol==='gobernante'/);
+});

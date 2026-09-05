@@ -111,8 +111,8 @@ function _infDeptsVisibles(u){
   // Recepción hotel
   if(area==='Recepción' || rol==='jefe_recepcion') return ['Recepción'];
 
-  // Housekeeping
-  if(area==='Housekeeping') return ['Housekeeping'];
+  // Housekeeping (compatibilidad con las denominaciones históricas del área)
+  if(_infIsHousekeeping(area)||rol==='gobernante'||rol==='subgobernante') return ['Housekeeping'];
 
   // Mantenimiento
   if(area==='Mantenimiento') return ['Mantenimiento'];
@@ -1132,7 +1132,15 @@ async function _renderInformeJefeLista(el){
       +(r.estado==='borrador'?'<button onclick="event.stopPropagation();window._infOpenEditar(\''+r.id+'\')" style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:11px;padding:4px 10px;cursor:pointer;margin-right:4px;">✏ Editar</button>':'')
       +'</td></tr>';
   }).join('');
-  el.innerHTML=''
+  var hkEntry=_infIsHousekeeping(_infDept)
+    ? '<div class="card" style="margin-bottom:14px;border:1px solid var(--accent);">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">'
+      +  '<div><div style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text);margin-bottom:5px;">🏥 Bajas laborales de Housekeeping</div>'
+      +  '<div style="font-size:12px;color:var(--text3);line-height:1.6;">Introduce las fechas de baja de cada empleada. Los días se calculan automáticamente y pasan a Liquidación.</div></div>'
+      +  '<button onclick="window._infOpenNuevo()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:12px;font-weight:700;font-family:var(--font-mono);cursor:pointer;">Registrar bajas laborales</button>'
+      +'</div></div>'
+    : '';
+  el.innerHTML=hkEntry
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">'
     +  '<div style="font-family:var(--font-mono);font-size:11px;color:var(--text3);">'+(_infJefeList.length)+' informe'+(_infJefeList.length===1?'':'s')+'</div>'
     +  '<button onclick="window._infOpenNuevo()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;font-family:var(--font-mono);cursor:pointer;">+ Nuevo informe</button>'
@@ -1194,6 +1202,13 @@ async function _renderInformeJefeForm(el){
     +    '<div class="fg"><label>Tipo</label><select id="inf-f-tipo">'+tipoOpts+'</select></div>'
     +    '<div class="fg"><label>Periodo</label><input id="inf-f-periodo" type="text" placeholder="Semana 24 · 2026" value="'+_escHtml(existing?existing.periodo||'':'')+'"></div>'
     +  '</div>'
+
+    // ── BLOQUE RR.HH. visible antes de los campos operativos ──
+    +  '<div id="inf-rrhh-title" style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:18px;">🏥 Estado RR.HH. del equipo</div>'
+    +  '<div id="inf-rrhh-help" style="font-size:11px;color:var(--text3);margin-bottom:10px;">Indica quién está de baja médica o vacaciones. Esta información se usará para la previsión de turnos y el cálculo de incentivos.</div>'
+    +  '<div id="inf-rrhh-rows" style="margin-bottom:10px;"></div>'
+    +  '<button id="inf-rrhh-add" onclick="window._infAddRrhhRow()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:11px;padding:6px 12px;cursor:pointer;font-family:var(--font-mono);">+ Añadir empleado</button>'
+
     +  '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;">📊 KPIs del periodo</div>'
     +  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px;">'
     +    _infNumField('inf-f-ventas','Ventas €',cj.ventas)
@@ -1207,12 +1222,6 @@ async function _renderInformeJefeForm(el){
     +  '<textarea id="inf-f-resumen" rows="4" placeholder="Incidencias relevantes, cambios de equipo, eventos especiales…" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:var(--font-ui);resize:vertical;">'+_escHtml(cj.resumen||'')+'</textarea>'
     +  '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:18px;">👤 Evaluación manual de empleados <span style="font-weight:400;text-transform:none;color:var(--text3);font-size:10px;">(opcional)</span></div>'
     +  '<textarea id="inf-f-eval" rows="3" placeholder="García: buen rendimiento · Martínez: ausencia no justificada" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:var(--font-ui);resize:vertical;">'+_escHtml(cj.evaluacion_empleados||'')+'</textarea>'
-
-    // ── BLOQUE RR.HH. ──
-    +  '<div id="inf-rrhh-title" style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:18px;">🏥 Estado RR.HH. del equipo</div>'
-    +  '<div id="inf-rrhh-help" style="font-size:11px;color:var(--text3);margin-bottom:10px;">Indica quién está de baja médica o vacaciones. Esta información se usará para la previsión de turnos y el cálculo de incentivos.</div>'
-    +  '<div id="inf-rrhh-rows" style="margin-bottom:10px;"></div>'
-    +  '<button id="inf-rrhh-add" onclick="window._infAddRrhhRow()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:11px;padding:6px 12px;cursor:pointer;font-family:var(--font-mono);">+ Añadir empleado</button>'
 
     +  '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:18px;">📅 Previsión semana siguiente</div>'
     +  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px;">'
@@ -1237,10 +1246,14 @@ window._infLoadRrhhRows = async function(){
   var dept=(document.getElementById('inf-f-dept')||{}).value||'';
   var employees=await _infGetEmployees();
   var empDept=(employees||[]).filter(function(e){
-    return e.estado==='Activo'&&(e.area===dept||(dept==='FnB'&&(e.area==='Sala'||e.area==='Cocina')));
+    var active=String(e.estado||'').toLowerCase()==='activo';
+    var sameDept=_infIsHousekeeping(dept)
+      ? _infIsHousekeeping(e.area)
+      : (e.area===dept||(dept==='FnB'&&(e.area==='Sala'||e.area==='Cocina')));
+    return active&&sameDept;
   });
   window._infEmpDept=empDept;
-  var isHk=dept==='Housekeeping'||dept==='HK'||dept==='Limpieza';
+  var isHk=_infIsHousekeeping(dept);
   var title=document.getElementById('inf-rrhh-title');
   var help=document.getElementById('inf-rrhh-help');
   var add=document.getElementById('inf-rrhh-add');
@@ -1248,7 +1261,21 @@ window._infLoadRrhhRows = async function(){
   if(help) help.textContent=isHk
     ? 'Registra cada baja con fecha de inicio y fin. Usa + para añadir otra baja de la misma empleada. Los días se asignarán automáticamente al semestre correspondiente.'
     : 'Indica quién está de baja médica o vacaciones. Esta información se usará para la previsión de turnos.';
-  if(add) add.textContent=isHk?'+ Añadir empleada con baja':'+ Añadir empleado';
+  if(add){
+    add.textContent=isHk?'+ Añadir baja':'+ Añadir empleado';
+    add.style.display=isHk?'none':'';
+  }
+  _infRenderRrhhRows();
+};
+
+window._infAddHkAbsence=function(employeeId){
+  var employee=(window._infEmpDept||[]).find(function(item){ return item.id===employeeId; });
+  if(!employee){ toast('No se encontró la empleada activa de Housekeeping','warn'); return; }
+  if(!window._infRrhhRows) window._infRrhhRows=[];
+  window._infRrhhRows.push({
+    employee_id:employee.id,nombre:employee.nombre||'',tipo:'baja_medica',
+    fecha_inicio:'',fecha_fin:'',notas:''
+  });
   _infRenderRrhhRows();
 };
 
@@ -1292,52 +1319,69 @@ function _infRenderRrhhRows(){
   var empOpts='<option value="">— Seleccionar —</option>'
     +emps.map(function(e){ return '<option value="'+_escHtml(e.id)+'">'+_escHtml(e.nombre)+'</option>'; }).join('');
 
-  if(!rows.length){
-    var selectedDept=(document.getElementById('inf-f-dept')||{}).value||'';
-    var emptyText=(selectedDept==='Housekeeping'||selectedDept==='HK'||selectedDept==='Limpieza')
-      ? 'Sin bajas registradas en este informe.'
-      : 'Sin registros. Pulsa "+ Añadir empleado" si hay bajas o vacaciones.';
-    el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0;">'+emptyText+'</div>';
-    return;
-  }
   var dept=(document.getElementById('inf-f-dept')||{}).value||'';
-  var isHk=dept==='Housekeeping'||dept==='HK'||dept==='Limpieza';
+  var isHk=_infIsHousekeeping(dept);
   if(isHk){
     var groups=[];
+    emps.forEach(function(employee){
+      groups.push({key:employee.id,employee:employee,indices:[]});
+    });
     rows.forEach(function(row,index){
       var key=row.employee_id||('__new_'+index);
       var group=groups.find(function(item){ return item.key===key; });
-      if(!group){ group={key:key,indices:[],row:row};groups.push(group); }
+      if(!group){
+        group={
+          key:key,
+          employee:row.employee_id?{id:row.employee_id,nombre:row.nombre||'[NO DATA]'}:null,
+          indices:[]
+        };
+        groups.push(group);
+      }
       group.indices.push(index);
     });
+    if(!groups.length){
+      el.innerHTML='<div style="padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text3);font-size:12px;">[NO DATA] No hay empleadas activas de Housekeeping para mostrar.</div>';
+      return;
+    }
     el.innerHTML=groups.map(function(group){
-      var selectedId=group.row.employee_id||'';
-      var options='<option value="">— Seleccionar empleada —</option>'
-        +emps.map(function(employee){
-          return '<option value="'+_escHtml(employee.id)+'"'+(employee.id===selectedId?' selected':'')+'>'+_escHtml(employee.nombre)+'</option>';
-        }).join('');
+      var selectedId=group.employee&&group.employee.id||'';
+      var employeeName=group.employee&&group.employee.nombre||'Empleada sin seleccionar';
       var periods=group.indices.map(function(index,position){
         var row=rows[index];
-        var days='';
+        var days='<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">Completa las fechas</span>';
         if(row.fecha_inicio&&row.fecha_fin){
           var start=new Date(row.fecha_inicio+'T00:00:00Z');
           var end=new Date(row.fecha_fin+'T00:00:00Z');
           var duration=Math.round((end-start)/86400000)+1;
-          if(duration>0) days='<span style="font-family:var(--font-mono);font-size:11px;color:var(--accent);">'+duration+' día'+(duration===1?'':'s')+'</span>';
+          if(duration>0) days='<span style="font-family:var(--font-mono);font-size:11px;color:var(--accent);">Días calculados: '+duration+'</span>';
         }
-        return '<div style="display:grid;grid-template-columns:minmax(145px,1fr) minmax(145px,1fr) auto auto;gap:8px;align-items:end;margin-top:8px;">'
+        return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end;margin-top:8px;">'
           +'<div class="fg" style="margin:0;"><label>Inicio de baja '+(position+1)+'</label><input type="date" value="'+_escHtml(row.fecha_inicio||'')+'" onchange="window._infRrhhRows['+index+'].fecha_inicio=this.value;_infRenderRrhhRows()"></div>'
           +'<div class="fg" style="margin:0;"><label>Fin de baja '+(position+1)+'</label><input type="date" value="'+_escHtml(row.fecha_fin||'')+'" onchange="window._infRrhhRows['+index+'].fecha_fin=this.value;_infRenderRrhhRows()"></div>'
-          +'<div style="padding:8px 2px;min-width:55px;">'+days+'</div>'
-          +'<button type="button" aria-label="Eliminar baja" onclick="window._infRemoveRrhhRow('+index+')" style="background:transparent;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:8px;">✕</button>'
+          +'<div style="padding:8px 2px;min-width:145px;">'+days+'</div>'
+          +'<button type="button" aria-label="Eliminar baja" onclick="window._infRemoveRrhhRow('+index+')" style="justify-self:start;background:transparent;border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:11px;cursor:pointer;padding:7px 10px;">✕ Eliminar baja</button>'
           +'</div>';
       }).join('');
+      var status=group.indices.length
+        ? '<span style="font-family:var(--font-mono);font-size:10px;color:var(--amber);">'+group.indices.length+' baja'+(group.indices.length===1?'':'s')+'</span>'
+        : '<span style="font-family:var(--font-mono);font-size:10px;color:var(--green);">Sin bajas registradas</span>';
+      var employeeHeader=group.employee
+        ? '<div><div style="font-size:13px;font-weight:700;color:var(--text);">'+_escHtml(employeeName)+'</div>'+status+'</div>'
+        : '<div class="fg" style="margin:0;max-width:420px;"><label>Empleada</label><select onchange="window._infSetHkEmployee(\''+group.indices.join(',')+'\',this.value,this.options[this.selectedIndex].text)"><option value="">— Seleccionar empleada —</option>'+emps.map(function(employee){ return '<option value="'+_escHtml(employee.id)+'">'+_escHtml(employee.nombre)+'</option>'; }).join('')+'</select></div>';
+      var addAction=selectedId
+        ? "window._infAddHkAbsence("+JSON.stringify(selectedId)+")"
+        : "window._infAddRrhhForEmployee("+(group.indices[0]||0)+")";
+      var addLabel=group.indices.length?'+ Añadir otra baja de esta empleada':'+ Añadir baja';
       return '<div style="padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">'
-        +'<div class="fg" style="margin:0 0 4px;max-width:420px;"><label>Empleada</label><select onchange="window._infSetHkEmployee(\''+group.indices.join(',')+'\',this.value,this.options[this.selectedIndex].text)">'+options+'</select></div>'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+employeeHeader
+        +'<button type="button" onclick=\''+addAction+'\' style="background:transparent;border:1px solid var(--accent);border-radius:5px;color:var(--accent);font-size:11px;padding:7px 11px;cursor:pointer;font-family:var(--font-mono);">'+addLabel+'</button></div>'
         +periods
-        +'<button type="button" onclick="window._infAddRrhhForEmployee('+group.indices[0]+')" style="margin-top:10px;background:transparent;border:1px solid var(--accent);border-radius:5px;color:var(--accent);font-size:11px;padding:6px 10px;cursor:pointer;font-family:var(--font-mono);">+ Añadir otra baja de esta empleada</button>'
         +'</div>';
     }).join('');
+    return;
+  }
+  if(!rows.length){
+    el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0;">Sin registros. Pulsa "+ Añadir empleado" si hay bajas o vacaciones.</div>';
     return;
   }
   el.innerHTML=rows.map(function(r,i){
