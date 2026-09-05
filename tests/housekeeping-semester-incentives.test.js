@@ -152,6 +152,31 @@ test('Informe de Jefe de Housekeeping muestra la plantilla y captura bajas por f
   assert.match(elements['inf-rrhh-rows'].innerHTML, /Inicio de baja 1/);
   assert.match(elements['inf-rrhh-rows'].innerHTML, /Fin de baja 1/);
   assert.match(elements['inf-rrhh-rows'].innerHTML, /type="date"/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /DD\/MM\/AAAA/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /min="2000-01-01"/);
+  assert.equal(context._infIsValidHkDate('0022-05-03'), false);
+  assert.equal(context._infIsValidHkDate('2026-05-03'), true);
+  assert.match(
+    context._infHkDateIssue({ fecha_inicio: '2026-05-04', fecha_fin: '2026-05-03' }, false),
+    /inicio no puede ser posterior/
+  );
+  assert.equal(
+    context._infHkDateIssue({ fecha_inicio: '2026-05-03', fecha_fin: '2026-05-03' }, false),
+    ''
+  );
+  assert.equal(context._infValidateHkAbsences([
+    { employee_id: 'HK-1', fecha_inicio: '0022-05-03', fecha_fin: '2026-05-04' }
+  ], true).ok, false);
+  assert.equal(context._infValidateHkAbsences([
+    { employee_id: 'HK-1', fecha_inicio: '2026-05-04', fecha_fin: '2026-05-03' }
+  ], true).ok, false);
+  assert.equal(context._infValidateHkAbsences([
+    { employee_id: 'HK-1', fecha_inicio: '2026-05-03', fecha_fin: '2026-05-03' }
+  ], true).ok, true);
+  context.window._infRrhhRows[0].fecha_inicio = '0022-05-03';
+  context._infRenderRrhhRows();
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Fecha no válida/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /aria-invalid="true"/);
   assert.match(informes, /Registrar bajas laborales/);
   assert.match(informes, /emps\.forEach\(function\(employee\)/);
   assert.match(informes, /window\._infAddHkAbsence/);
@@ -161,4 +186,6 @@ test('Informe de Jefe de Housekeeping muestra la plantilla y captura bajas por f
   assert.match(informes, /\+ Añadir otra baja/);
   assert.match(informes, /_infIsHousekeeping\(e\.area\)/);
   assert.match(informes, /rol==='gobernante'/);
+  assert.match(informes, /id="inf-operational-kpis"/);
+  assert.match(informes, /kpis\.style\.display=isHk\?'none'/);
 });

@@ -1209,6 +1209,7 @@ async function _renderInformeJefeForm(el){
     +  '<div id="inf-rrhh-rows" style="margin-bottom:10px;"></div>'
     +  '<button id="inf-rrhh-add" onclick="window._infAddRrhhRow()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:11px;padding:6px 12px;cursor:pointer;font-family:var(--font-mono);">+ Añadir empleado</button>'
 
+    +  '<div id="inf-operational-kpis" style="'+(_infIsHousekeeping(defaultDept)?'display:none;':'')+'">'
     +  '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;">📊 KPIs del periodo</div>'
     +  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px;">'
     +    _infNumField('inf-f-ventas','Ventas €',cj.ventas)
@@ -1217,6 +1218,7 @@ async function _renderInformeJefeForm(el){
     +    _infNumField('inf-f-labor-pct','Labor cost %',cj.labor_pct)
     +    _infNumField('inf-f-fios','FIO activos',cj.fios_activos)
     +    _infNumField('inf-f-ocup','Ocupación hotel % (manual)',cj.ocupacion_hotel)
+    +  '</div>'
     +  '</div>'
     +  '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;">📝 Resumen operativo</div>'
     +  '<textarea id="inf-f-resumen" rows="4" placeholder="Incidencias relevantes, cambios de equipo, eventos especiales…" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:var(--font-ui);resize:vertical;">'+_escHtml(cj.resumen||'')+'</textarea>'
@@ -1257,14 +1259,16 @@ window._infLoadRrhhRows = async function(){
   var title=document.getElementById('inf-rrhh-title');
   var help=document.getElementById('inf-rrhh-help');
   var add=document.getElementById('inf-rrhh-add');
+  var kpis=document.getElementById('inf-operational-kpis');
   if(title) title.textContent=isHk?'🏥 Bajas laborales de Housekeeping':'🏥 Estado RR.HH. del equipo';
   if(help) help.textContent=isHk
-    ? 'Registra cada baja con fecha de inicio y fin. Usa + para añadir otra baja de la misma empleada. Los días se asignarán automáticamente al semestre correspondiente.'
+    ? 'Registra cada baja con fecha de inicio y fin en formato DD/MM/AAAA. Usa + para añadir otra baja de la misma empleada. Los días se asignarán automáticamente al semestre correspondiente.'
     : 'Indica quién está de baja médica o vacaciones. Esta información se usará para la previsión de turnos.';
   if(add){
     add.textContent=isHk?'+ Añadir baja':'+ Añadir empleado';
     add.style.display=isHk?'none':'';
   }
+  if(kpis) kpis.style.display=isHk?'none':'';
   _infRenderRrhhRows();
 };
 
@@ -1311,6 +1315,15 @@ window._infRemoveRrhhRow=function(idx){
   _infRenderRrhhRows();
 };
 
+window._infSetHkDate=function(index,field,value){
+  var row=(window._infRrhhRows||[])[index];
+  if(!row||['fecha_inicio','fecha_fin'].indexOf(field)<0) return;
+  row[field]=value;
+  var issue=_infHkDateIssue(row,false);
+  if(issue) toast(issue,'err');
+  _infRenderRrhhRows();
+};
+
 function _infRenderRrhhRows(){
   var el=document.getElementById('inf-rrhh-rows');
   if(!el) return;
@@ -1348,16 +1361,21 @@ function _infRenderRrhhRows(){
       var employeeName=group.employee&&group.employee.nombre||'Empleada sin seleccionar';
       var periods=group.indices.map(function(index,position){
         var row=rows[index];
+        var issue=_infHkDateIssue(row,false);
+        var validStart=_infIsValidHkDate(row.fecha_inicio||'');
+        var validEnd=_infIsValidHkDate(row.fecha_fin||'');
         var days='<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);">Completa las fechas</span>';
-        if(row.fecha_inicio&&row.fecha_fin){
+        if(issue){
+          days='<span role="alert" style="font-family:var(--font-mono);font-size:10px;color:var(--red);line-height:1.5;">'+_escHtml(issue)+'</span>';
+        } else if(row.fecha_inicio&&row.fecha_fin){
           var start=new Date(row.fecha_inicio+'T00:00:00Z');
           var end=new Date(row.fecha_fin+'T00:00:00Z');
           var duration=Math.round((end-start)/86400000)+1;
           if(duration>0) days='<span style="font-family:var(--font-mono);font-size:11px;color:var(--accent);">Días calculados: '+duration+'</span>';
         }
         return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;align-items:end;margin-top:8px;">'
-          +'<div class="fg" style="margin:0;"><label>Inicio de baja '+(position+1)+'</label><input type="date" value="'+_escHtml(row.fecha_inicio||'')+'" onchange="window._infRrhhRows['+index+'].fecha_inicio=this.value;_infRenderRrhhRows()"></div>'
-          +'<div class="fg" style="margin:0;"><label>Fin de baja '+(position+1)+'</label><input type="date" value="'+_escHtml(row.fecha_fin||'')+'" onchange="window._infRrhhRows['+index+'].fecha_fin=this.value;_infRenderRrhhRows()"></div>'
+          +'<div class="fg" style="margin:0;"><label>Inicio de baja '+(position+1)+' · DD/MM/AAAA</label><input type="date" lang="es-ES" min="2000-01-01" max="'+_escHtml(validEnd?row.fecha_fin:'2099-12-31')+'" value="'+_escHtml(row.fecha_inicio||'')+'" aria-invalid="'+(issue?'true':'false')+'" onchange="window._infSetHkDate('+index+',\'fecha_inicio\',this.value)"></div>'
+          +'<div class="fg" style="margin:0;"><label>Fin de baja '+(position+1)+' · DD/MM/AAAA</label><input type="date" lang="es-ES" min="'+_escHtml(validStart?row.fecha_inicio:'2000-01-01')+'" max="2099-12-31" value="'+_escHtml(row.fecha_fin||'')+'" aria-invalid="'+(issue?'true':'false')+'" onchange="window._infSetHkDate('+index+',\'fecha_fin\',this.value)"></div>'
           +'<div style="padding:8px 2px;min-width:145px;">'+days+'</div>'
           +'<button type="button" aria-label="Eliminar baja" onclick="window._infRemoveRrhhRow('+index+')" style="justify-self:start;background:transparent;border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:11px;cursor:pointer;padding:7px 10px;">✕ Eliminar baja</button>'
           +'</div>';
@@ -1413,21 +1431,39 @@ function _infIsHousekeeping(dept){
   return dept==='Housekeeping'||dept==='HK'||dept==='Limpieza';
 }
 
-function _infValidateHkAbsences(rows){
+function _infIsValidHkDate(value){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value||'')) return false;
+  var parts=value.split('-').map(Number);
+  if(parts[0]<2000||parts[0]>2099) return false;
+  var date=new Date(value+'T00:00:00Z');
+  return !isNaN(date.getTime())
+    &&date.getUTCFullYear()===parts[0]
+    &&date.getUTCMonth()+1===parts[1]
+    &&date.getUTCDate()===parts[2];
+}
+
+function _infHkDateIssue(row,requireComplete){
+  var start=(row&&row.fecha_inicio)||'';
+  var end=(row&&row.fecha_fin)||'';
+  if(requireComplete&&(!start||!end)) return 'Completa la fecha de inicio y fin de cada baja de Housekeeping.';
+  if((start&&!_infIsValidHkDate(start))||(end&&!_infIsValidHkDate(end))){
+    return 'Fecha no válida. Usa DD/MM/AAAA y un año entre 2000 y 2099.';
+  }
+  if(start&&end&&start>end) return 'La fecha de inicio no puede ser posterior a la fecha final.';
+  return '';
+}
+
+function _infValidateHkAbsences(rows,requireComplete){
+  var mustComplete=requireComplete!==false;
   var absences=[];
   for(var i=0;i<(rows||[]).length;i++){
     var row=rows[i]||{};
     if(!row.employee_id){
       return {ok:false,message:'Selecciona la empleada en cada baja de Housekeeping.'};
     }
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_inicio||'')||!/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_fin||'')){
-      return {ok:false,message:'Completa la fecha de inicio y fin de cada baja de Housekeeping.'};
-    }
-    var start=new Date(row.fecha_inicio+'T00:00:00Z');
-    var end=new Date(row.fecha_fin+'T00:00:00Z');
-    if(isNaN(start.getTime())||isNaN(end.getTime())||end<start){
-      return {ok:false,message:'La fecha de fin no puede ser anterior al inicio de la baja.'};
-    }
+    var issue=_infHkDateIssue(row,mustComplete);
+    if(issue) return {ok:false,message:issue};
+    if(!row.fecha_inicio||!row.fecha_fin) continue;
     absences.push({
       employee_id:row.employee_id,
       fecha_inicio:row.fecha_inicio,
@@ -1451,7 +1487,7 @@ window._infGuardarInforme=async function(estado){
 
   var plantillaRrhh=window._infRrhhRows||[];
   var isHk=_infIsHousekeeping(dept);
-  var hkValidation=isHk&&estado==='publicado'?_infValidateHkAbsences(plantillaRrhh):{ok:true,absences:[]};
+  var hkValidation=isHk?_infValidateHkAbsences(plantillaRrhh,estado==='publicado'):{ok:true,absences:[]};
   if(!hkValidation.ok){ toast(hkValidation.message,'err'); return; }
 
   var payload={

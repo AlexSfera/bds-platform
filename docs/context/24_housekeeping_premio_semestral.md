@@ -19,7 +19,9 @@ Gestionar el reconocimiento semestral por continuidad y compromiso del Departame
 4. El sistema muestra los días calculados. Si la misma empleada tiene otra baja, pulsar **+ Añadir otra baja de esta empleada**.
 5. Publicar el informe. Un borrador no modifica la liquidación.
 
-Las fechas son inclusivas: una baja del 10 al 10 cuenta como 1 día. Si un intervalo cruza el 30 de junio o el 31 de diciembre, el sistema reparte automáticamente los días entre los dos semestres. Los intervalos solapados de una misma empleada no duplican días.
+Las fechas se introducen en formato **DD/MM/AAAA**, con un año entre 2000 y 2099. La fecha inicial no puede ser posterior a la final. Las fechas son inclusivas: una baja del 10 al 10 cuenta como 1 día. Si un intervalo cruza el 30 de junio o el 31 de diciembre, el sistema reparte automáticamente los días entre los dos semestres. Los intervalos solapados de una misma empleada no duplican días.
+
+El bloque comercial de Ventas, covers, ticket medio y demás KPI genéricos no se muestra en el informe de Housekeeping porque no corresponde a este departamento.
 
 Una vez liquidado un semestre, no se admiten cambios de bajas que afecten a ese semestre. Si la sincronización no puede completarse, el informe permanece como borrador para su corrección.
 
