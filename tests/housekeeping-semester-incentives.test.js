@@ -135,6 +135,7 @@ test('hay una sola pantalla de Liquidación con Entrenadores y Housekeeping', as
   assert.match(migration, /count\(distinct day_value\)/);
   assert.match(migration, /set estado = 'publicado', ts = now\(\)/);
   assert.match(migration, /incentive\.origen = 'informe_junio_2026'/);
+  assert.match(migration, /employee_status_source_report_id_idx/);
 });
 
 test('Informe de Jefe de Housekeeping muestra la plantilla y captura bajas por fechas', async () => {

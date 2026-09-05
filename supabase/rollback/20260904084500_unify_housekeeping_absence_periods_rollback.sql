@@ -17,6 +17,7 @@ drop function if exists public.sync_housekeeping_report_absences(text, jsonb, te
 drop function if exists public.refresh_housekeeping_semester_incentives(text, text, text);
 drop function if exists public.hk_recalculate_employee_period(text, text, text, text);
 
+drop index if exists public.employee_status_source_report_id_idx;
 drop index if exists public.employee_status_source_absence_id_key;
 
 alter table public.employee_status

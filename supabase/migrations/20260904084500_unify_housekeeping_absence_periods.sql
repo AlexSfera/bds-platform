@@ -50,6 +50,10 @@ create unique index if not exists employee_status_source_absence_id_key
   on public.employee_status (source_absence_id)
   where source_absence_id is not null;
 
+create index if not exists employee_status_source_report_id_idx
+  on public.employee_status (source_report_id)
+  where source_report_id is not null;
+
 alter table public.housekeeping_semester_incentives
   drop constraint if exists housekeeping_semester_incentives_origen_check;
 alter table public.housekeeping_semester_incentives
