@@ -115,6 +115,43 @@ test('hay una sola pantalla de Liquidación con Entrenadores y Housekeeping', as
 
 test('Informe de Jefe de Housekeeping muestra la plantilla y captura bajas por fechas', async () => {
   const informes = await readFile(new URL('../informes.js', import.meta.url), 'utf8');
+  const elements = {
+    'inf-rrhh-rows': { innerHTML: '' },
+    'inf-f-dept': { value: 'Housekeeping' }
+  };
+  const context = vm.createContext({
+    window: {
+      _infRrhhRows: [],
+      _infEmpDept: [
+        { id: 'HK-1', nombre: 'Empleada Uno', area: 'Limpieza', estado: 'Activo' },
+        { id: 'HK-2', nombre: 'Empleada Dos', area: 'HK', estado: 'Activo' }
+      ]
+    },
+    document: { getElementById: id => elements[id] || null },
+    _escHtml: value => String(value ?? ''),
+    toast: () => {},
+    console,
+    Date,
+    JSON,
+    Math,
+    Number,
+    String,
+    Array
+  });
+  vm.runInContext(informes, context);
+  context.window._infRrhhRows = [];
+  context.window._infEmpDept = [
+    { id: 'HK-1', nombre: 'Empleada Uno', area: 'Limpieza', estado: 'Activo' },
+    { id: 'HK-2', nombre: 'Empleada Dos', area: 'HK', estado: 'Activo' }
+  ];
+  context._infRenderRrhhRows();
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Empleada Uno/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Empleada Dos/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /\+ Añadir baja/);
+  context.window._infAddHkAbsence('HK-1');
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Inicio de baja 1/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Fin de baja 1/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /type="date"/);
   assert.match(informes, /Registrar bajas laborales/);
   assert.match(informes, /emps\.forEach\(function\(employee\)/);
   assert.match(informes, /window\._infAddHkAbsence/);
