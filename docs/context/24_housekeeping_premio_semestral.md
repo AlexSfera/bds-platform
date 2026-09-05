@@ -15,9 +15,10 @@ Gestionar el reconocimiento semestral por continuidad y compromiso del Departame
 
 1. Abrir **Informes** y seleccionar **Housekeeping**.
 2. Abrir **Informe de Jefe** y pulsar **Registrar bajas laborales** o crear/editar un informe.
-3. En **Bajas laborales de Housekeeping** aparece toda la plantilla activa del departamento. Pulsar **+ Añadir baja** en la empleada correspondiente e indicar inicio y fin.
-4. El sistema muestra los días calculados. Si la misma empleada tiene otra baja, pulsar **+ Añadir otra baja de esta empleada**.
-5. Publicar el informe. Un borrador no modifica la liquidación.
+3. El informe queda configurado automáticamente como **Semestral** y propone el semestre actual.
+4. En **Bajas laborales de Housekeeping** aparece toda la plantilla activa del departamento. Pulsar **+ Añadir baja** en la empleada correspondiente e indicar inicio y fin.
+5. El sistema muestra los días calculados. Si la misma empleada tiene otra baja, pulsar **+ Añadir otra baja de esta empleada**.
+6. Publicar el informe. Un borrador no modifica la liquidación.
 
 Las fechas se introducen en formato **DD/MM/AAAA**, con un año entre 2000 y 2099. La fecha inicial no puede ser posterior a la final. Las fechas son inclusivas: una baja del 10 al 10 cuenta como 1 día. Si un intervalo cruza el 30 de junio o el 31 de diciembre, el sistema reparte automáticamente los días entre los dos semestres. Los intervalos solapados de una misma empleada no duplican días.
 
@@ -33,6 +34,8 @@ Existe una sola pestaña **Liquidación**, basada en la anterior pantalla de Liq
 - **Housekeeping:** selección de período semestral, consulta de días calculados, nivel, importe, estado y fecha de liquidación.
 
 Dirección pulsa **Marcar liquidado** para cada persona. El sistema registra quién realizó la liquidación y la fecha. No se mezclan liquidaciones con la introducción de datos en Informes. Housekeeping solo permite liquidar semestres que ya han finalizado.
+
+Los registros marcados como **Histórico** son de consulta: no muestran el botón de liquidación. Cuando el informe de origen no aporta los días de baja, la tabla muestra **[NO DATA]** en lugar de inventar una cifra.
 
 ## Períodos de Housekeeping
 

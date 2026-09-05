@@ -81,6 +81,8 @@ export function singleRpcRecord(value) {
 
 function isValidIsoDate(value) {
   if (!DATE_RE.test(String(value || ''))) return false;
+  const year = Number(String(value).slice(0, 4));
+  if (!Number.isInteger(year) || year < 2000 || year > 2099) return false;
   const parsed = new Date(String(value) + 'T00:00:00Z');
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
@@ -119,11 +121,10 @@ function canReadHousekeeping(profile) {
   return supervisorDepartments(profile).some(isHousekeepingArea);
 }
 
-function canRecordAbsences(profile) {
+export function canRecordAbsences(profile) {
   if (!profile) return false;
   if (isAdminProfile(profile) || isAdjuntoProfile(profile)) return true;
-  if (profile.rol === 'gobernante') return true;
-  return profile.rol === 'jefe' && isHousekeepingArea(profile.area);
+  return supervisorDepartments(profile).some(isHousekeepingArea);
 }
 
 function canLiquidateHousekeeping(profile) {

@@ -1180,12 +1180,18 @@ async function _renderInformeJefeForm(el){
   var defaultDept=existing&&existing.departamento
     ? existing.departamento
     : (depts.indexOf(_infDept)>=0?_infDept:(depts[0]||''));
+  var defaultTipo=existing&&existing.tipo
+    ? existing.tipo
+    : (_infIsHousekeeping(defaultDept)?'semestral':'semanal');
+  var defaultPeriodo=existing&&existing.periodo
+    ? existing.periodo
+    : (_infIsHousekeeping(defaultDept)?_infCurrentHousekeepingPeriod():'');
   var deptOpts=depts.map(function(d){
     var sel=defaultDept===d?' selected':'';
     return '<option value="'+_escHtml(d)+'"'+sel+'>'+(INF_DEPT_LABELS[d]||d)+'</option>';
   }).join('');
-  var tipoOpts=['semanal','mensual','evento'].map(function(t){
-    return '<option value="'+t+'"'+(existing&&existing.tipo===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
+  var tipoOpts=['semanal','mensual','semestral','evento'].map(function(t){
+    return '<option value="'+t+'"'+(defaultTipo===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
   }).join('');
 
   // Plantilla RR.HH. existente
@@ -1199,8 +1205,8 @@ async function _renderInformeJefeForm(el){
     +  '</div>'
     +  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:16px;">'
     +    '<div class="fg"><label>Departamento</label><select id="inf-f-dept" onchange="window._infLoadRrhhRows()">'+deptOpts+'</select></div>'
-    +    '<div class="fg"><label>Tipo</label><select id="inf-f-tipo">'+tipoOpts+'</select></div>'
-    +    '<div class="fg"><label>Periodo</label><input id="inf-f-periodo" type="text" placeholder="Semana 24 · 2026" value="'+_escHtml(existing?existing.periodo||'':'')+'"></div>'
+    +    '<div class="fg"><label>Tipo</label><select id="inf-f-tipo"'+(_infIsHousekeeping(defaultDept)?' disabled':'')+'>'+tipoOpts+'</select></div>'
+    +    '<div class="fg"><label>Periodo</label><input id="inf-f-periodo" type="text" placeholder="'+(_infIsHousekeeping(defaultDept)?'2026-S2':'Semana 24 · 2026')+'" value="'+_escHtml(defaultPeriodo)+'"></div>'
     +  '</div>'
 
     // ── BLOQUE RR.HH. visible antes de los campos operativos ──
@@ -1260,6 +1266,8 @@ window._infLoadRrhhRows = async function(){
   var help=document.getElementById('inf-rrhh-help');
   var add=document.getElementById('inf-rrhh-add');
   var kpis=document.getElementById('inf-operational-kpis');
+  var reportType=document.getElementById('inf-f-tipo');
+  var reportPeriod=document.getElementById('inf-f-periodo');
   if(title) title.textContent=isHk?'🏥 Bajas laborales de Housekeeping':'🏥 Estado RR.HH. del equipo';
   if(help) help.textContent=isHk
     ? 'Registra cada baja con fecha de inicio y fin en formato DD/MM/AAAA. Usa + para añadir otra baja de la misma empleada. Los días se asignarán automáticamente al semestre correspondiente.'
@@ -1269,6 +1277,14 @@ window._infLoadRrhhRows = async function(){
     add.style.display=isHk?'none':'';
   }
   if(kpis) kpis.style.display=isHk?'none':'';
+  if(reportType){
+    reportType.disabled=isHk;
+    if(isHk) reportType.value='semestral';
+  }
+  if(reportPeriod){
+    reportPeriod.placeholder=isHk?'2026-S2':'Semana 24 · 2026';
+    if(isHk&&!reportPeriod.value) reportPeriod.value=_infCurrentHousekeepingPeriod();
+  }
   _infRenderRrhhRows();
 };
 
@@ -1429,6 +1445,11 @@ function _infNumField(id,label,val){
 
 function _infIsHousekeeping(dept){
   return dept==='Housekeeping'||dept==='HK'||dept==='Limpieza';
+}
+
+function _infCurrentHousekeepingPeriod(now){
+  var current=now instanceof Date?now:new Date();
+  return current.getFullYear()+'-S'+(current.getMonth()<6?'1':'2');
 }
 
 function _infIsValidHkDate(value){

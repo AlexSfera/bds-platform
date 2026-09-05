@@ -88,23 +88,38 @@ function _hkLiquidationHtml(data) {
   var totalPending = pending.reduce(function(total, record){ return total+parseFloat(record.importe_premio||0); },0);
   var totalLiquidated = payable.filter(function(record){ return record.estado==='liquidado'; }).reduce(function(total, record){ return total+parseFloat(record.importe_premio||0); },0);
   var rows = payable.map(function(record){
-    var status = record.estado==='liquidado'
+    var hasAward = parseFloat(record.importe_premio||0)>0;
+    var isHistorical = record.estado==='historico';
+    var status = isHistorical
+      ? _hkBadge('HISTÓRICO', 'background:var(--bg3);color:var(--text2);')
+      : record.estado==='liquidado'
       ? _hkBadge('LIQUIDADO', 'background:var(--green-dim);color:var(--green);')
-      : parseFloat(record.importe_premio||0)>0
+      : !record.elegible_antiguedad
+        ? _hkBadge('NO CUMPLE ANTIGÜEDAD', 'background:var(--bg3);color:var(--text3);')
+      : !record.elegible_baja
+        ? _hkBadge('SUPERA 10 DÍAS', 'background:var(--red-dim);color:var(--red);')
+      : hasAward
         ? _hkBadge('PENDIENTE', 'background:var(--amber-dim);color:var(--amber);')
         : _hkBadge('NO LIQUIDABLE', 'background:var(--bg3);color:var(--text3);');
     var liquidationDate = record.liquidado_at
       ? new Date(record.liquidado_at).toLocaleDateString('es-ES')
       : '—';
-    var action = record.estado==='liquidado'
+    var action = isHistorical
+      ? '<span style="font-size:11px;color:var(--text3);">Solo consulta</span>'
+      : record.estado==='liquidado'
       ? '<span style="font-size:11px;color:var(--text3);">Registrado</span>'
-      : canLiquidate && parseFloat(record.importe_premio||0)>0
+      : canLiquidate && record.estado==='pendiente' && hasAward
         ? '<button class="btn btn-xs" style="background:var(--green);color:#fff;" onclick=\'hkOpenLiquidation('+JSON.stringify(record.employee_id)+')\'>✓ Marcar liquidado</button>'
-        : '<span style="font-size:11px;color:var(--text3);">Revisión Dirección</span>';
+        : hasAward
+          ? '<span style="font-size:11px;color:var(--text3);">Revisión Dirección</span>'
+          : '<span style="font-size:11px;color:var(--text3);">Sin premio</span>';
+    var absenceDays = record.dias_baja == null
+      ? '<span style="color:var(--text3);">[NO DATA]</span>'
+      : _hkEscHtml(record.dias_baja);
     return '<tr><td><strong>'+_hkEscHtml(record.employee_nombre)+'</strong></td>'
       +'<td style="text-align:center;font-family:var(--font-mono);">'+(record.nivel_premio>0?record.nivel_premio+'º':'—')+'</td>'
-      +'<td style="text-align:center;font-family:var(--font-mono);">'+record.dias_baja+'</td>'
-      +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(parseFloat(record.importe_premio||0)>0?'var(--green)':'var(--text3)')+';">'+_hkFormatMoney(record.importe_premio)+'</td>'
+      +'<td style="text-align:center;font-family:var(--font-mono);">'+absenceDays+'</td>'
+      +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(hasAward?'var(--green)':'var(--text3)')+';">'+_hkFormatMoney(record.importe_premio)+'</td>'
       +'<td>'+status+'</td>'
       +'<td style="text-align:center;font-family:var(--font-mono);font-size:11px;">'+liquidationDate+'</td>'
       +'<td style="text-align:right;">'+action+'</td></tr>';

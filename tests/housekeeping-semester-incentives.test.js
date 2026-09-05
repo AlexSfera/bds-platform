@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import {
+  canRecordAbsences,
   calculateHousekeepingAward,
   isSemesterCompleted,
   isTenureEligible,
@@ -68,6 +69,16 @@ test('valida rangos de baja completos y elimina duplicados exactos', () => {
   assert.equal(normalizeAbsencePeriods([
     { employee_id: '', fecha_inicio: '2026-07-02', fecha_fin: '2026-07-03' }
   ]), null);
+  assert.equal(normalizeAbsencePeriods([
+    { employee_id: 'HK-1', fecha_inicio: '0022-07-02', fecha_fin: '2026-07-03' }
+  ]), null);
+});
+
+test('los responsables de Housekeeping pueden registrar bajas sin ampliar permisos a otros departamentos', () => {
+  assert.equal(canRecordAbsences({ rol: 'gobernante', area: 'Housekeeping' }), true);
+  assert.equal(canRecordAbsences({ rol: 'subgobernante', area: 'Limpieza' }), true);
+  assert.equal(canRecordAbsences({ rol: 'jefe', area: 'HK' }), true);
+  assert.equal(canRecordAbsences({ rol: 'chef', area: 'Cocina' }), false);
 });
 
 test('la liquidación de Housekeeping muestra datos calculados sin entrada manual', async () => {
@@ -91,6 +102,19 @@ test('la liquidación de Housekeeping muestra datos calculados sin entrada manua
   assert.match(liquidation, /400,00 €/);
   assert.match(liquidation, /Marcar liquidado/);
   assert.doesNotMatch(liquidation, /type="number"/);
+
+  const historical = context._hkLiquidationHtml({
+    records: [{
+      employee_id: 'HK-1', employee_nombre: 'Ana', periodo: '2025-S1', dias_baja: null,
+      elegible_antiguedad: true, elegible_baja: true, nivel_premio: 1,
+      importe_premio: 250, estado: 'historico'
+    }],
+    permissions: { can_liquidate: true }
+  });
+  assert.match(historical, /HISTÓRICO/);
+  assert.match(historical, /\[NO DATA\]/);
+  assert.match(historical, /Solo consulta/);
+  assert.doesNotMatch(historical, /Marcar liquidado/);
 });
 
 test('hay una sola pantalla de Liquidación con Entrenadores y Housekeeping', async () => {
@@ -188,4 +212,8 @@ test('Informe de Jefe de Housekeeping muestra la plantilla y captura bajas por f
   assert.match(informes, /rol==='gobernante'/);
   assert.match(informes, /id="inf-operational-kpis"/);
   assert.match(informes, /kpis\.style\.display=isHk\?'none'/);
+  assert.equal(context._infCurrentHousekeepingPeriod(new Date('2026-06-30T12:00:00Z')), '2026-S1');
+  assert.equal(context._infCurrentHousekeepingPeriod(new Date('2026-07-01T12:00:00Z')), '2026-S2');
+  assert.match(informes, /_infIsHousekeeping\(defaultDept\)\?'semestral':'semanal'/);
+  assert.match(informes, /if\(isHk\) reportType\.value='semestral'/);
 });
