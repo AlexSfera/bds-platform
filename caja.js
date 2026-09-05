@@ -1701,14 +1701,63 @@ function bCajaEstado(e){
   return '<span class="badge b-gray">'+e+'</span>';
 }
 
-async function corregirCajaSala(id){
-  if(typeof canCorrectCaja!=='function' || !canCorrectCaja('Sala')){ toast('Sin permiso para corregir esta caja','err'); return; }
-  var nota = prompt('Nota de corrección (obligatoria):');
-  if(nota===null) return;
-  if(!nota.trim()){ toast('La nota de corrección es obligatoria','err'); return; }
+function cerrarNotaCorreccionCaja(){
+  closeModal('modal-caja-correction-note');
+}
+
+function confirmarNotaCorreccionCaja(){
+  var modal = document.getElementById('modal-caja-correction-note');
+  var notaEl = document.getElementById('caja-correction-note');
+  var nota = (notaEl && notaEl.value || '').trim();
+  if(!nota){
+    toast('La nota de corrección es obligatoria','err');
+    if(notaEl) notaEl.focus();
+    return;
+  }
+  var id = modal && modal.dataset.cajaId;
+  if(!id){
+    toast('Cierre no encontrado','err');
+    return;
+  }
+  cerrarNotaCorreccionCaja();
   openCajaForm(id);
-  window._cajaCorrectMode = true; window._cajaCorrectNote = nota.trim();
+  window._cajaCorrectMode = true;
+  window._cajaCorrectNote = nota;
   toast('Modo corrección: edita los importes y guarda. La caja seguirá validada.','ok');
+}
+
+function abrirNotaCorreccionCaja(id){
+  var modal = document.getElementById('modal-caja-correction-note');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'modal-caja-correction-note';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = '<div class="modal" style="max-width:520px;">'
+      + '<div class="modal-title">✎ Corregir cierre de caja</div>'
+      + '<p style="margin:0 0 14px;color:var(--text2);font-size:13px;line-height:1.45;">'
+      + 'Indica el motivo antes de editar. La corrección quedará auditada y el cierre conservará su estado.'
+      + '</p>'
+      + '<div class="fg"><label for="caja-correction-note">Nota de corrección *</label>'
+      + '<textarea id="caja-correction-note" rows="4" placeholder="Describe qué se corrige y por qué"></textarea></div>'
+      + '<div class="modal-footer">'
+      + '<button type="button" class="btn btn-secondary" id="caja-correction-cancel">Cancelar</button>'
+      + '<button type="button" class="btn btn-primary" id="caja-correction-continue">Continuar a la corrección</button>'
+      + '</div></div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e){ if(e.target===modal) cerrarNotaCorreccionCaja(); });
+    document.getElementById('caja-correction-cancel').addEventListener('click', cerrarNotaCorreccionCaja);
+    document.getElementById('caja-correction-continue').addEventListener('click', confirmarNotaCorreccionCaja);
+  }
+  modal.dataset.cajaId = id;
+  var notaEl = document.getElementById('caja-correction-note');
+  if(notaEl) notaEl.value = '';
+  modal.classList.add('open');
+  if(notaEl) setTimeout(function(){ notaEl.focus(); }, 0);
+}
+
+function corregirCajaSala(id){
+  if(typeof canCorrectCaja!=='function' || !canCorrectCaja('Sala')){ toast('Sin permiso para corregir esta caja','err'); return; }
+  abrirNotaCorreccionCaja(id);
 }
 window.corregirCajaSala = corregirCajaSala;
 
