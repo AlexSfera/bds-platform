@@ -687,18 +687,25 @@ function _infShiftKpiWeek(dir){
 
 // Cargar producción semanal desde sala_produccion_semanal
 function _infSalaDataFromRows(rows){
-  var fechasSet={},periodosSet={},porUsuario={};
+  var fechasSet={},periodosSet={},grupos={};
   (rows||[]).forEach(function(r){
     var detalle=r.detalle_diario||{};
     if(r.periodo) periodosSet[r.periodo]=true;
     var nombre=r.nombre||r.csv_nombre||'Sin nombre';
-    if(!porUsuario[nombre]){
-      porUsuario[nombre]={
-        fechas:{},totalBruto:0,facturas:0,
-        csvNombre:r.csv_nombre||nombre,employee_id:r.employee_id||null
+    var groupKey=r.employee_id?'id:'+r.employee_id:'nombre:'+_infNormNombre(nombre);
+    var semana=r.semana_inicio||String(r.periodo||'').split('_')[0]||'';
+    if(!grupos[groupKey]){
+      grupos[groupKey]={
+        nombre:nombre,fechas:{},totalBruto:0,facturas:0,
+        csvNombre:r.csv_nombre||nombre,employee_id:r.employee_id||null,_ultimaSemana:semana
       };
     }
-    var usuario=porUsuario[nombre];
+    var usuario=grupos[groupKey];
+    if(semana>=usuario._ultimaSemana){
+      usuario.nombre=nombre;
+      usuario.csvNombre=r.csv_nombre||nombre;
+      usuario._ultimaSemana=semana;
+    }
     usuario.totalBruto+=parseFloat(r.produccion_bruta)||0;
     usuario.facturas+=parseInt(r.facturas)||0;
     if(!usuario.employee_id&&r.employee_id) usuario.employee_id=r.employee_id;
@@ -714,6 +721,15 @@ function _infSalaDataFromRows(rows){
     return es?es[3]+'-'+es[2]+'-'+es[1]:String(f||'');
   };
   var fechas=Object.keys(fechasSet).sort(function(a,b){ return fechaOrden(a).localeCompare(fechaOrden(b)); });
+  var porUsuario={};
+  Object.keys(grupos).forEach(function(groupKey){
+    var usuario=grupos[groupKey];
+    var base=usuario.nombre||'Sin nombre',display=base,n=2;
+    while(Object.prototype.hasOwnProperty.call(porUsuario,display)) display=base+' ('+(n++)+')';
+    delete usuario._ultimaSemana;
+    usuario.nombre=display;
+    porUsuario[display]=usuario;
+  });
   var usuarios=Object.keys(porUsuario).sort(function(a,b){ return porUsuario[b].totalBruto-porUsuario[a].totalBruto; });
   return {fechas:fechas,usuarios:usuarios,porUsuario:porUsuario,rangoDias:fechas.length,tipo:Object.keys(periodosSet).length>1||fechas.length>7?'mensual':'semanal',matchLog:[]};
 }
@@ -1034,6 +1050,7 @@ function _renderSalaTabla(data,costData,opts){
   }).join('');
   var rows=usuarios.map(function(u,idx){
     var d=porUsuario[u],total=d.totalBruto;
+    var nombreVisible=d.nombre||u;
     var cumple=total>=objetivo;
     var statusBadge=cumple?'✅ Cumple':'❌ Falta '+((objetivo-total).toLocaleString('es-ES',{maximumFractionDigits:0}))+'€';
     var statusColor=cumple?'var(--green)':'var(--red)';
@@ -1043,9 +1060,9 @@ function _renderSalaTabla(data,costData,opts){
       return '<td style="text-align:right;font-family:var(--font-mono);font-size:12px;padding:8px 10px;color:'+(v>0?'var(--text)':'var(--text3)')+';">'+(v>0?v.toLocaleString('es-ES',{minimumFractionDigits:2})+'€':'—')+'</td>';
     }).join('');
     // Indicador de match fuzzy
-    var matchInd=(d.csvNombre&&d.csvNombre!==u)?'<span title="CSV: '+_escHtml(d.csvNombre)+'" style="font-size:9px;color:var(--amber);margin-left:4px;cursor:help;">~</span>':'';
+    var matchInd=(d.csvNombre&&d.csvNombre!==nombreVisible)?'<span title="CSV: '+_escHtml(d.csvNombre)+'" style="font-size:9px;color:var(--amber);margin-left:4px;cursor:help;">~</span>':'';
     // Coste laboral
-    var c=_infSalaCosteUsuario(costData,d,u);
+    var c=_infSalaCosteUsuario(costData,d,nombreVisible);
     var hCell=c?c.horas.toFixed(1)+'h':'—';
     var rCell=c?c.coste_hora.toFixed(2)+'€':'—';
     var cCell=c?c.coste_total.toFixed(2)+'€':'—';
@@ -1054,7 +1071,7 @@ function _renderSalaTabla(data,costData,opts){
     var pColor=c&&total>0?(pVal>40?'var(--red)':pVal>25?'var(--amber)':'var(--green)'):'var(--text3)';
     var _cs='text-align:right;font-family:var(--font-mono);font-size:11px;padding:8px 8px;color:';
     return '<tr style="background:'+rowBg+';border-bottom:1px solid var(--border);">'
-      +'<td style="padding:8px 12px;font-size:13px;white-space:nowrap;font-weight:600;color:var(--text);">'+_escHtml(u)+matchInd+'</td>'
+      +'<td style="padding:8px 12px;font-size:13px;white-space:nowrap;font-weight:600;color:var(--text);">'+_escHtml(nombreVisible)+matchInd+'</td>'
       +celdas
       +'<td style="text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:700;padding:8px 12px;color:var(--amber);">'+total.toLocaleString('es-ES',{minimumFractionDigits:2})+'€</td>'
       +'<td style="'+_cs+'var(--text3);">'+hCell+'</td>'
@@ -1074,7 +1091,7 @@ function _renderSalaTabla(data,costData,opts){
   var nCam=usuarios.length;
   // Totales coste laboral
   var _totHoras=0,_totCoste=0,_nConCoste=0;
-  usuarios.forEach(function(u){ var c=_infSalaCosteUsuario(costData,porUsuario[u],u); if(c){_totHoras+=c.horas;_totCoste+=c.coste_total;_nConCoste++;} });
+  usuarios.forEach(function(u){ var d=porUsuario[u];var c=_infSalaCosteUsuario(costData,d,d.nombre||u); if(c){_totHoras+=c.horas;_totCoste+=c.coste_total;_nConCoste++;} });
   var _pctCosteProd=totalGeneral>0?(_totCoste/totalGeneral*100):0;
   var _mediaCoste=_nConCoste?(_totCoste/_nConCoste):0;
   var _tarifaMedia=_totHoras>0?(_totCoste/_totHoras):0;
@@ -1110,7 +1127,13 @@ function _renderSalaTabla(data,costData,opts){
       +'⚠ '+matchLog.length+' nombre(s) ajustado(s) por coincidencia aproximada: '+matchLog.map(_escHtml).join(' · ')
       +'</div>';
   }
-  el.innerHTML=matchBanner
+  var dataNotice='';
+  if(opts.dataWarning){
+    dataNotice='<div data-status="partial-data" role="status" style="margin-bottom:8px;padding:7px 10px;background:rgba(245,158,11,.10);border:1px solid var(--amber);border-radius:6px;font-size:10px;color:var(--amber);font-family:var(--font-mono);">⚠ '+_escHtml(opts.dataWarning)+'</div>';
+  }else if(_nConCoste>0&&_nConCoste<nCam){
+    dataNotice='<div data-status="partial-labor" role="status" style="margin-bottom:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;font-size:10px;color:var(--text3);font-family:var(--font-mono);">Cobertura laboral: '+_nConCoste+' de '+nCam+' camareros. Las filas sin fichajes no se incluyen en horas ni coste.</div>';
+  }
+  el.innerHTML=matchBanner+dataNotice
     +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:'+(dense?'8px':'14px')+';">'
     +  '<div style="font-family:var(--font-mono);font-size:'+(dense?'10px':'12px')+';color:var(--text3);">📅 <strong style="color:var(--text2);">'+_escHtml(rangoLabel)+'</strong> &nbsp;·&nbsp; '+nCam+' camarero'+(nCam===1?'':'s')+'</div>'
     +'</div>'
