@@ -755,6 +755,7 @@ function getScreens(rol){
     hkRevision:  {id:'hk-revision', label:'🔍 Revisión HK'},
     fichaje:     {id:'fichaje',     label:'📋 Alertas Fichaje'},
     incentivos:  {id:'incentivos',  label:'💰 Incentivos'},
+    liquidaciones: {id:'liquidaciones', label:'💳 Liquidación'},
     miRendimiento:{id:'mi-rendimiento', label:'📈 Mi Rendimiento'},
     informes:    {id:'informes',    label:'📊 Informes'},
     horasMes:    {id:'horas-mes',   label:'⏱ Horas Mensuales'},
@@ -769,8 +770,7 @@ function getScreens(rol){
     return [
       ITEMS.gestiones, ITEMS.incidencias, ITEMS.tareas, ITEMS.hypoxic,
       {sep:true,label:'MI DEPARTAMENTO'},
-      ITEMS.validacion, ITEMS.mantmod, ITEMS.dashHK,
-      {id:'liquidacion-entr', label:'💳 Liquidación'},
+      ITEMS.validacion, ITEMS.mantmod, ITEMS.dashHK, ITEMS.liquidaciones,
       {sep:true,label:'MANAGER BAR',dropdown:true},
       ITEMS.fichaje, ITEMS.dashboard,
       ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.informes,
@@ -786,7 +786,7 @@ function getScreens(rol){
       ITEMS.turno, ITEMS.gestiones, ITEMS.incidencias, ITEMS.tareas,
       ITEMS.misfio, ITEMS.fichaje, ITEMS.nota,
       {sep:true,label:'MI DEPARTAMENTO'},
-      ITEMS.validacion, ITEMS.dashHK,
+      ITEMS.validacion, ITEMS.dashHK, ITEMS.liquidaciones,
       {sep:true,label:'MANAGER BAR',dropdown:true},
       ITEMS.dashboard,
       ITEMS.maestro, ITEMS.export, ITEMS.fio, ITEMS.informes
@@ -1118,7 +1118,7 @@ async function showScreen(id){
   if(id==='fichaje'     && typeof renderFichaje==='function')          { _fichajeFilterPeriodo=''; renderFichaje(); }
   if(id==='incentivos'  && typeof renderIncentivos==='function')        renderIncentivos();
   if(id==='mi-rendimiento' && typeof renderMiRendimiento==='function')  renderMiRendimiento();
-  if(id==='liquidacion-entr' && typeof renderLiquidacionEntr==='function') renderLiquidacionEntr();
+  if(id==='liquidaciones' && typeof renderLiquidacionesPorDepartamento==='function') renderLiquidacionesPorDepartamento(document.getElementById('liquidaciones-departamento-content'));
   if(id==='informes'    && typeof renderInformes==='function')           renderInformes();
   if(id==='horas-mes'   && typeof renderHorasMensuales==='function')     renderHorasMensuales();
   updateDots();

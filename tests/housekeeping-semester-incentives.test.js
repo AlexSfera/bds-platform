@@ -3,9 +3,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import {
+  canRecordAbsences,
   calculateHousekeepingAward,
+  isSemesterCompleted,
   isTenureEligible,
-  parseSemesterPeriod
+  normalizeAbsencePeriods,
+  parseSemesterPeriod,
+  singleRpcRecord
 } from '../api/housekeeping-semester-incentives.js';
 
 test('identifica períodos semestrales válidos', () => {
@@ -20,6 +24,13 @@ test('exige más de seis meses al inicio del semestre', () => {
   assert.equal(isTenureEligible('2025-06-30', '2026-S1'), true);
   assert.equal(isTenureEligible('2025-07-01', '2026-S1'), false);
   assert.equal(isTenureEligible('', '2026-S1'), false);
+});
+
+test('solo permite liquidar semestres finalizados', () => {
+  const now = new Date('2026-09-05T08:00:00Z');
+  assert.equal(isSemesterCompleted('2026-S1', now), true);
+  assert.equal(isSemesterCompleted('2026-S2', now), false);
+  assert.equal(isSemesterCompleted('2025-S2', now), true);
 });
 
 test('calcula el tercer nivel con diez días o menos de baja', () => {
@@ -37,7 +48,40 @@ test('reinicia el premio cuando se supera el máximo de bajas', () => {
   }), { tenureEligible: true, absenceEligible: true, level: 1, amount: 250 });
 });
 
-test('la interfaz presenta la entrada de bajas y la liquidación semestral', async () => {
+test('acepta la respuesta única de las funciones de guardado', () => {
+  assert.deepEqual(singleRpcRecord([{ id: 'premio-1' }]), { id: 'premio-1' });
+  assert.deepEqual(singleRpcRecord({ id: 'premio-1' }), { id: 'premio-1' });
+  assert.equal(singleRpcRecord([]), null);
+});
+
+test('valida rangos de baja completos y elimina duplicados exactos', () => {
+  assert.deepEqual(normalizeAbsencePeriods([
+    { employee_id: 'HK-1', fecha_inicio: '2026-06-29', fecha_fin: '2026-07-02' },
+    { employee_id: 'HK-1', fecha_inicio: '2026-06-29', fecha_fin: '2026-07-02' },
+    { employee_id: 'HK-1', fecha_inicio: '2026-08-10', fecha_fin: '2026-08-10' }
+  ]), [
+    { employee_id: 'HK-1', fecha_inicio: '2026-06-29', fecha_fin: '2026-07-02' },
+    { employee_id: 'HK-1', fecha_inicio: '2026-08-10', fecha_fin: '2026-08-10' }
+  ]);
+  assert.equal(normalizeAbsencePeriods([
+    { employee_id: 'HK-1', fecha_inicio: '2026-07-02', fecha_fin: '2026-06-29' }
+  ]), null);
+  assert.equal(normalizeAbsencePeriods([
+    { employee_id: '', fecha_inicio: '2026-07-02', fecha_fin: '2026-07-03' }
+  ]), null);
+  assert.equal(normalizeAbsencePeriods([
+    { employee_id: 'HK-1', fecha_inicio: '0022-07-02', fecha_fin: '2026-07-03' }
+  ]), null);
+});
+
+test('los responsables de Housekeeping pueden registrar bajas sin ampliar permisos a otros departamentos', () => {
+  assert.equal(canRecordAbsences({ rol: 'gobernante', area: 'Housekeeping' }), true);
+  assert.equal(canRecordAbsences({ rol: 'subgobernante', area: 'Limpieza' }), true);
+  assert.equal(canRecordAbsences({ rol: 'jefe', area: 'HK' }), true);
+  assert.equal(canRecordAbsences({ rol: 'chef', area: 'Cocina' }), false);
+});
+
+test('la liquidación de Housekeeping muestra datos calculados sin entrada manual', async () => {
   const source = await readFile(new URL('../housekeeping_incentivos.js', import.meta.url), 'utf8');
   const context = vm.createContext({ window: {}, document: {}, console, Date, JSON, Math, Number, String, Array });
   vm.runInContext(source, context);
@@ -52,11 +96,124 @@ test('la interfaz presenta la entrada de bajas y la liquidación semestral', asy
     permissions: { can_record: true, can_liquidate: true }
   };
 
-  const report = context._hkReportHtml(data);
   const liquidation = context._hkLiquidationHtml(data);
-  assert.match(report, /Premio semestral/);
-  assert.match(report, /Días de baja/);
-  assert.match(report, /400,00 €/);
   assert.match(liquidation, /Liquidación semestral/);
-  assert.match(liquidation, /Liquidar/);
+  assert.match(liquidation, /Días baja/);
+  assert.match(liquidation, /400,00 €/);
+  assert.match(liquidation, /Marcar liquidado/);
+  assert.doesNotMatch(liquidation, /type="number"/);
+
+  const historical = context._hkLiquidationHtml({
+    records: [{
+      employee_id: 'HK-1', employee_nombre: 'Ana', periodo: '2025-S1', dias_baja: null,
+      elegible_antiguedad: true, elegible_baja: true, nivel_premio: 1,
+      importe_premio: 250, estado: 'historico'
+    }],
+    permissions: { can_liquidate: true }
+  });
+  assert.match(historical, /HISTÓRICO/);
+  assert.match(historical, /\[NO DATA\]/);
+  assert.match(historical, /Solo consulta/);
+  assert.doesNotMatch(historical, /Marcar liquidado/);
+});
+
+test('hay una sola pantalla de Liquidación con Entrenadores y Housekeeping', async () => {
+  const source = await readFile(new URL('../housekeeping_incentivos.js', import.meta.url), 'utf8');
+  const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const informes = await readFile(new URL('../informes.js', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../supabase/migrations/20260904084500_unify_housekeeping_absence_periods.sql', import.meta.url), 'utf8');
+  assert.match(source, /renderLiquidacionesPorDepartamento/);
+  assert.match(source, /Entrenadores se liquida por mes; Housekeeping, por semestre/);
+  assert.match(source, /department: 'Entrenadores'/);
+  assert.match(shared, /id:'liquidaciones', label:'💳 Liquidación'/);
+  assert.doesNotMatch(shared, /liquidacionEntr/);
+  assert.match(html, /screen-liquidaciones/);
+  assert.doesNotMatch(html, /screen-liquidacion-entr/);
+  assert.match(informes, /\+ Añadir otra baja de esta empleada/);
+  assert.match(informes, /hkSyncReportAbsences/);
+  assert.match(migration, /count\(distinct day_value\)/);
+  assert.match(migration, /set estado = 'publicado', ts = now\(\)/);
+  assert.match(migration, /incentive\.origen = 'informe_junio_2026'/);
+});
+
+test('Informe de Jefe de Housekeeping muestra la plantilla y captura bajas por fechas', async () => {
+  const informes = await readFile(new URL('../informes.js', import.meta.url), 'utf8');
+  const elements = {
+    'inf-rrhh-rows': { innerHTML: '' },
+    'inf-f-dept': { value: 'Housekeeping' }
+  };
+  const context = vm.createContext({
+    window: {
+      _infRrhhRows: [],
+      _infEmpDept: [
+        { id: 'HK-1', nombre: 'Empleada Uno', area: 'Limpieza', estado: 'Activo' },
+        { id: 'HK-2', nombre: 'Empleada Dos', area: 'HK', estado: 'Activo' }
+      ]
+    },
+    document: { getElementById: id => elements[id] || null },
+    _escHtml: value => String(value ?? ''),
+    toast: () => {},
+    console,
+    Date,
+    JSON,
+    Math,
+    Number,
+    String,
+    Array
+  });
+  vm.runInContext(informes, context);
+  context.window._infRrhhRows = [];
+  context.window._infEmpDept = [
+    { id: 'HK-1', nombre: 'Empleada Uno', area: 'Limpieza', estado: 'Activo' },
+    { id: 'HK-2', nombre: 'Empleada Dos', area: 'HK', estado: 'Activo' }
+  ];
+  context._infRenderRrhhRows();
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Empleada Uno/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Empleada Dos/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /\+ Añadir baja/);
+  context.window._infAddHkAbsence('HK-1');
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Inicio de baja 1/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Fin de baja 1/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /type="date"/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /DD\/MM\/AAAA/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /min="2000-01-01"/);
+  assert.equal(context._infIsValidHkDate('0022-05-03'), false);
+  assert.equal(context._infIsValidHkDate('2026-05-03'), true);
+  assert.match(
+    context._infHkDateIssue({ fecha_inicio: '2026-05-04', fecha_fin: '2026-05-03' }, false),
+    /inicio no puede ser posterior/
+  );
+  assert.equal(
+    context._infHkDateIssue({ fecha_inicio: '2026-05-03', fecha_fin: '2026-05-03' }, false),
+    ''
+  );
+  assert.equal(context._infValidateHkAbsences([
+    { employee_id: 'HK-1', fecha_inicio: '0022-05-03', fecha_fin: '2026-05-04' }
+  ], true).ok, false);
+  assert.equal(context._infValidateHkAbsences([
+    { employee_id: 'HK-1', fecha_inicio: '2026-05-04', fecha_fin: '2026-05-03' }
+  ], true).ok, false);
+  assert.equal(context._infValidateHkAbsences([
+    { employee_id: 'HK-1', fecha_inicio: '2026-05-03', fecha_fin: '2026-05-03' }
+  ], true).ok, true);
+  context.window._infRrhhRows[0].fecha_inicio = '0022-05-03';
+  context._infRenderRrhhRows();
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /Fecha no válida/);
+  assert.match(elements['inf-rrhh-rows'].innerHTML, /aria-invalid="true"/);
+  assert.match(informes, /Registrar bajas laborales/);
+  assert.match(informes, /emps\.forEach\(function\(employee\)/);
+  assert.match(informes, /window\._infAddHkAbsence/);
+  assert.match(informes, /Inicio de baja/);
+  assert.match(informes, /Fin de baja/);
+  assert.match(informes, /Días calculados:/);
+  assert.match(informes, /\+ Añadir otra baja/);
+  assert.match(informes, /_infIsHousekeeping\(e\.area\)/);
+  assert.match(informes, /rol==='gobernante'/);
+  assert.match(informes, /id="inf-operational-kpis"/);
+  assert.match(informes, /kpis\.style\.display=isHk\?'none'/);
+  assert.equal(context._infCurrentHousekeepingPeriod(new Date('2026-06-30T12:00:00Z')), '2026-S1');
+  assert.equal(context._infCurrentHousekeepingPeriod(new Date('2026-07-01T12:00:00Z')), '2026-S2');
+  assert.match(informes, /_infIsHousekeeping\(defaultDept\)\?'semestral':'semanal'/);
+  assert.match(informes, /if\(isHk\) reportType\.value='semestral'/);
 });
