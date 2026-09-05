@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════
 // HOUSEKEEPING · Premio semestral por continuidad y compromiso
-// Entrada de bajas y liquidación desde Liquidaciones por departamento.
+// Liquidación unificada por departamento. Las bajas se introducen en Informes.
 // ═══════════════════════════════════════════════════════════════════════
 
-var _hkSemesterState = { period: null, data: null, view: 'department-liquidation', department: 'Housekeeping' };
+var _hkSemesterState = { period: null, data: null, view: 'department-liquidation', department: 'Entrenadores' };
 
 function _hkEscHtml(value) {
   return String(value == null ? '' : value)
@@ -43,26 +43,12 @@ function _hkPeriodOptions(selected) {
   return options.join('');
 }
 
-function _hkClientTenure(fechaAlta, period) {
-  var info = _hkPeriodInfo(period);
-  if(!info || !/^\d{4}-\d{2}-\d{2}$/.test(fechaAlta||'')) return false;
-  var threshold = new Date(Date.UTC(info.year, info.semester===1?-6:0, 1));
-  var start = new Date(fechaAlta+'T00:00:00Z');
-  return !isNaN(start.getTime()) && start.getTime() < threshold.getTime();
-}
-
 function _hkFormatMoney(value) {
   return (parseFloat(value||0)).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2})+' €';
 }
 
 function _hkBadge(text, color) {
   return '<span style="display:inline-block;padding:3px 7px;border-radius:4px;font-family:var(--font-mono);font-size:10px;font-weight:700;'+color+'">'+_hkEscHtml(text)+'</span>';
-}
-
-function _hkRecordByEmployee(data) {
-  var map = {};
-  (data.records||[]).forEach(function(record){ map[record.employee_id] = record; });
-  return map;
 }
 
 async function _hkApi(method, payload, period) {
@@ -93,173 +79,78 @@ async function _hkLoad(period) {
   return _hkSemesterState.data;
 }
 
-function _hkStatus(record, employee, period) {
-  if(record && record.estado==='liquidado') return _hkBadge('LIQUIDADO', 'background:var(--green-dim);color:var(--green);');
-  if(record && record.estado==='historico') return _hkBadge('HISTÓRICO', 'background:var(--bg3);color:var(--text3);');
-  if(!record) return _hkBadge('PENDIENTE DE DATO', 'background:var(--amber-dim);color:var(--amber);');
-  if(!record.elegible_antiguedad) return _hkBadge('NO CUMPLE ANTIGÜEDAD', 'background:var(--red-dim);color:var(--red);');
-  if(!record.elegible_baja) return _hkBadge('NO CUMPLE BAJAS', 'background:var(--red-dim);color:var(--red);');
-  return _hkBadge('PENDIENTE DE LIQUIDAR', 'background:var(--amber-dim);color:var(--amber);');
-}
-
-function _hkTenureCell(record, employee, period) {
-  if(record && record.elegible_antiguedad) return '<span style="color:var(--green);font-weight:600;">✅ Más de 6 meses</span>';
-  if(record && !record.elegible_antiguedad) return '<span style="color:var(--red);">No cumple</span>';
-  if(!employee.fecha_alta) return '<span style="color:var(--text3);">[NO DATA]</span>';
-  return _hkClientTenure(employee.fecha_alta, period)
-    ? '<span style="color:var(--green);font-weight:600;">✅ Más de 6 meses</span>'
-    : '<span style="color:var(--red);">No cumple</span>';
-}
-
-function _hkReportHtml(data, options) {
-  options = options || {};
-  var recordMap = _hkRecordByEmployee(data);
-  var canRecord = !!(data.permissions||{}).can_record;
-  var period = _hkSemesterState.period;
-  var rows = (data.employees||[]).map(function(employee){
-    var record = recordMap[employee.id];
-    var inputId = 'hk-absence-'+employee.id;
-    var locked = !canRecord || (record && record.estado==='liquidado') || (record && record.estado==='historico');
-    var days = record && record.dias_baja != null ? record.dias_baja : '';
-    var action = locked
-      ? '<span style="color:var(--text3);font-size:11px;">'+(record&&record.estado==='historico'?'Dato importado':'Sin permisos')+'</span>'
-      : '<button class="btn btn-xs" style="background:var(--accent);color:#fff;" onclick=\'hkSaveAbsence('+JSON.stringify(employee.id)+')\'>Guardar</button>';
-    var level = record && record.nivel_premio>0 ? record.nivel_premio+'º' : '—';
-    var amount = record && parseFloat(record.importe_premio||0)>0
-      ? '<strong style="color:var(--green);">'+_hkFormatMoney(record.importe_premio)+'</strong>' : '—';
-    return '<tr>'
-      +'<td><strong>'+_hkEscHtml(employee.nombre)+'</strong><div style="font-size:10px;color:var(--text3);">'+_hkEscHtml(employee.puesto||'Housekeeping')+'</div></td>'
-      +'<td>'+_hkTenureCell(record, employee, period)+'</td>'
-      +'<td style="text-align:center;"><input id="'+_hkEscHtml(inputId)+'" type="number" min="0" max="184" step="1" value="'+_hkEscHtml(days)+'" '+(locked?'disabled':'')+' style="width:82px;text-align:center;" aria-label="Días de baja de '+_hkEscHtml(employee.nombre)+'"></td>'
-      +'<td style="text-align:center;font-family:var(--font-mono);font-weight:700;">'+level+'</td>'
-      +'<td style="font-family:var(--font-mono);">'+amount+'</td>'
-      +'<td>'+_hkStatus(record, employee, period)+'</td>'
-      +'<td style="text-align:right;">'+action+'</td>'
-      +'</tr>';
-  }).join('');
-  var periodControl = options.showPeriod === false ? ''
-    : '<div class="fg" style="min-width:205px;margin:0;"><label>Período</label><select onchange="hkChangeSemesterPeriod(this.value)">'+_hkPeriodOptions(period)+'</select></div>';
-  return '<div class="card">'
-    +'<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">'
-      +'<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;">Housekeeping · Datos de bajas para liquidación</div>'
-      +'<div style="font-size:13px;color:var(--text2);margin-top:5px;">La jefa registra solo los días de baja laboral; el sistema calcula el nivel y el importe.</div></div>'
-      +periodControl
-    +'</div>'
-    +'<div style="padding:11px 13px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);font-size:11px;color:var(--text2);margin-bottom:14px;line-height:1.5;">'
-      +'<strong style="color:var(--text);">Regla:</strong> antigüedad estrictamente superior a 6 meses al inicio del semestre y máximo 10 días de baja. Nivel 1: 250 € · nivel 2: 320 € · nivel 3 y siguientes: 400 €. Más de 10 días reinicia el siguiente período válido en nivel 1.'
-      +'</div>'
-    +'<div class="tbl-wrap"><table><tr><th>Empleada</th><th>Antigüedad al inicio</th><th>Días de baja</th><th>Nivel</th><th>Importe</th><th>Estado</th><th></th></tr>'
-      +(rows||'<tr><td colspan="7" style="text-align:center;color:var(--text3);">Sin empleadas de Housekeeping.</td></tr>')
-      +'</table></div>'
-    +'<p style="font-size:11px;color:var(--text3);margin:12px 0 0;">No se registran diagnósticos ni documentación médica: solo el total de días de baja por período.</p>'
-    +'</div>';
-}
-
-async function renderHousekeepingPremioSemestral(el) {
-  if(!el) return;
-  _hkSemesterState.view = 'report';
-  var period = _hkSemesterState.period || _hkDefaultPeriod();
-  el.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px 0;">Cargando premio semestral…</p></div>';
-  try {
-    var data = await _hkLoad(period);
-    el.innerHTML = _hkReportHtml(data);
-  } catch(error) {
-    el.innerHTML = '<div class="card"><p style="color:var(--red);padding:16px 0;">'+_hkEscHtml(error.message||'No se pudo cargar el premio semestral.')+'</p></div>';
-  }
-}
-window.renderHousekeepingPremioSemestral = renderHousekeepingPremioSemestral;
-
-async function hkChangeSemesterPeriod(period) {
-  _hkSemesterState.period = period;
-  if(_hkSemesterState.view==='department-liquidation') {
-    await renderLiquidacionesPorDepartamento(document.getElementById('liquidaciones-departamento-content'));
-    return;
-  }
-  var target = document.getElementById('inf-main-content');
-  if(_hkSemesterState.view==='liquidation') await renderHousekeepingLiquidacion(target);
-  else await renderHousekeepingPremioSemestral(target);
-}
-window.hkChangeSemesterPeriod = hkChangeSemesterPeriod;
-
-async function hkSaveAbsence(employeeId) {
-  var input = document.getElementById('hk-absence-'+employeeId);
-  var raw = input ? input.value.trim() : '';
-  if(raw===''){ toast('Introduce los días de baja para calcular el premio.','warn'); return; }
-  var days = Number(raw);
-  if(!Number.isInteger(days) || days<0 || days>184){ toast('Los días de baja deben estar entre 0 y 184.','warn'); return; }
-  try {
-    await _hkApi('POST', {action:'save', employee_id:employeeId, periodo:_hkSemesterState.period, dias_baja:days});
-    toast('Días de baja guardados y premio recalculado.','ok');
-    if(_hkSemesterState.view==='department-liquidation') await renderLiquidacionesPorDepartamento(document.getElementById('liquidaciones-departamento-content'));
-    else await renderHousekeepingPremioSemestral(document.getElementById('inf-main-content'));
-  } catch(error) { toast(error.message||'No se pudo guardar.','err'); }
-}
-window.hkSaveAbsence = hkSaveAbsence;
-
-function _hkLiquidationHtml(data, options) {
-  options = options || {};
-  var period = _hkSemesterState.period;
+function _hkLiquidationHtml(data) {
   var canLiquidate = !!(data.permissions||{}).can_liquidate;
-  var payable = (data.records||[]).filter(function(record){ return parseFloat(record.importe_premio||0)>0; });
+  var payable = data.records||[];
   var pending = payable.filter(function(record){ return record.estado==='pendiente'; });
   var totalPending = pending.reduce(function(total, record){ return total+parseFloat(record.importe_premio||0); },0);
   var totalLiquidated = payable.filter(function(record){ return record.estado==='liquidado'; }).reduce(function(total, record){ return total+parseFloat(record.importe_premio||0); },0);
   var rows = payable.map(function(record){
     var status = record.estado==='liquidado'
       ? _hkBadge('LIQUIDADO', 'background:var(--green-dim);color:var(--green);')
-      : _hkBadge('PENDIENTE', 'background:var(--amber-dim);color:var(--amber);');
+      : parseFloat(record.importe_premio||0)>0
+        ? _hkBadge('PENDIENTE', 'background:var(--amber-dim);color:var(--amber);')
+        : _hkBadge('NO LIQUIDABLE', 'background:var(--bg3);color:var(--text3);');
+    var liquidationDate = record.liquidado_at
+      ? new Date(record.liquidado_at).toLocaleDateString('es-ES')
+      : '—';
     var action = record.estado==='liquidado'
-      ? '<span style="font-size:11px;color:var(--text3);">'+_hkEscHtml(record.liquidado_at ? new Date(record.liquidado_at).toLocaleDateString('es-ES') : 'Registrado')+'</span>'
-      : canLiquidate
-        ? '<button class="btn btn-xs" style="background:var(--green);color:#fff;" onclick=\'hkOpenLiquidation('+JSON.stringify(record.employee_id)+')\'>Liquidar</button>'
+      ? '<span style="font-size:11px;color:var(--text3);">Registrado</span>'
+      : canLiquidate && parseFloat(record.importe_premio||0)>0
+        ? '<button class="btn btn-xs" style="background:var(--green);color:#fff;" onclick=\'hkOpenLiquidation('+JSON.stringify(record.employee_id)+')\'>✓ Marcar liquidado</button>'
         : '<span style="font-size:11px;color:var(--text3);">Revisión Dirección</span>';
     return '<tr><td><strong>'+_hkEscHtml(record.employee_nombre)+'</strong></td>'
-      +'<td style="text-align:center;font-family:var(--font-mono);">'+record.nivel_premio+'º</td>'
+      +'<td style="text-align:center;font-family:var(--font-mono);">'+(record.nivel_premio>0?record.nivel_premio+'º':'—')+'</td>'
       +'<td style="text-align:center;font-family:var(--font-mono);">'+record.dias_baja+'</td>'
-      +'<td style="font-family:var(--font-mono);font-weight:700;color:var(--green);">'+_hkFormatMoney(record.importe_premio)+'</td>'
-      +'<td>'+status+'</td><td style="text-align:right;">'+action+'</td></tr>';
+      +'<td style="font-family:var(--font-mono);font-weight:700;color:'+(parseFloat(record.importe_premio||0)>0?'var(--green)':'var(--text3)')+';">'+_hkFormatMoney(record.importe_premio)+'</td>'
+      +'<td>'+status+'</td>'
+      +'<td style="text-align:center;font-family:var(--font-mono);font-size:11px;">'+liquidationDate+'</td>'
+      +'<td style="text-align:right;">'+action+'</td></tr>';
   }).join('');
-  var periodControl = options.showPeriod === false ? ''
-    : '<div class="fg" style="min-width:205px;margin:0;"><label>Período</label><select onchange="hkChangeSemesterPeriod(this.value)">'+_hkPeriodOptions(period)+'</select></div>';
   return '<div class="card">'
     +'<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">'
       +'<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;">Housekeeping · Liquidación semestral</div>'
-      +'<div style="font-size:13px;color:var(--text2);margin-top:5px;">Importes calculados desde los datos registrados por la jefa de Housekeeping.</div></div>'
-      +periodControl
+      +'<div style="font-size:13px;color:var(--text2);margin-top:5px;">Los días se calculan desde las fechas de baja publicadas por la jefa en Informes.</div></div>'
     +'</div>'
     +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">'
       +'<div style="padding:12px 16px;border-radius:8px;border:1px solid var(--amber);background:var(--amber-dim);min-width:180px;"><div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);font-weight:700;">PENDIENTE DE LIQUIDAR</div><div style="font-size:22px;font-family:var(--font-mono);font-weight:700;color:var(--amber);margin-top:3px;">'+_hkFormatMoney(totalPending)+'</div></div>'
       +'<div style="padding:12px 16px;border-radius:8px;border:1px solid var(--green);background:var(--green-dim);min-width:180px;"><div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);font-weight:700;">YA LIQUIDADO</div><div style="font-size:22px;font-family:var(--font-mono);font-weight:700;color:var(--green);margin-top:3px;">'+_hkFormatMoney(totalLiquidated)+'</div></div>'
     +'</div>'
-    +'<div class="tbl-wrap"><table><tr><th>Empleada</th><th>Nivel</th><th>Días baja</th><th>Importe</th><th>Estado</th><th></th></tr>'
-      +(rows||'<tr><td colspan="6" style="text-align:center;color:var(--text3);">No hay premios con importe para este período.</td></tr>')
+    +'<div class="tbl-wrap"><table><tr><th>Empleada</th><th>Nivel</th><th>Días baja</th><th>Importe</th><th>Estado</th><th>Fecha liquidación</th><th></th></tr>'
+      +(rows||'<tr><td colspan="7" style="text-align:center;color:var(--text3);">No hay datos de Housekeeping para este período.</td></tr>')
       +'</table></div>'
     +'</div>';
 }
 
-async function renderHousekeepingLiquidacion(el) {
-  if(!el) return;
-  _hkSemesterState.view = 'liquidation';
-  var period = _hkSemesterState.period || _hkDefaultPeriod();
-  el.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px 0;">Cargando liquidación semestral…</p></div>';
-  try {
-    var data = await _hkLoad(period);
-    el.innerHTML = _hkLiquidationHtml(data);
-  } catch(error) {
-    el.innerHTML = '<div class="card"><p style="color:var(--red);padding:16px 0;">'+_hkEscHtml(error.message||'No se pudo cargar la liquidación.')+'</p></div>';
+function _hkTrainerPeriodOptions(selected) {
+  var options = typeof getMonthOptions==='function' ? getMonthOptions(18) : [];
+  if(selected && !options.some(function(option){ return option.value===selected; })) {
+    var parts = selected.split('-');
+    var months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    options.push({value:selected,label:(months[parseInt(parts[1],10)-1]||parts[1])+' '+parts[0]});
   }
+  return options.map(function(option){
+    return '<option value="'+_hkEscHtml(option.value)+'"'+(option.value===selected?' selected':'')+'>'+_hkEscHtml(option.label)+'</option>';
+  }).join('');
 }
-window.renderHousekeepingLiquidacion = renderHousekeepingLiquidacion;
 
 function _hkLiquidationsDepartmentHtml() {
-  var period = _hkSemesterState.period || _hkDefaultPeriod();
+  var department = _hkSemesterState.department || 'Entrenadores';
+  var isTrainers = department==='Entrenadores';
+  var period = isTrainers
+    ? ((typeof _liqEntrMonth!=='undefined'&&_liqEntrMonth)||'')
+    : (_hkSemesterState.period || _hkDefaultPeriod());
+  var periodOptions = isTrainers ? _hkTrainerPeriodOptions(period) : _hkPeriodOptions(period);
   return '<div class="card" style="margin-bottom:16px;">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;">'
-      +'<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;">Liquidaciones por departamento</div>'
-      +'<div style="font-size:13px;color:var(--text2);margin-top:5px;">Selecciona el departamento y consulta sus datos y liquidaciones del período.</div></div>'
+      +'<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;">Liquidación por departamento</div>'
+      +'<div style="font-size:13px;color:var(--text2);margin-top:5px;">Entrenadores se liquida por mes; Housekeeping, por semestre.</div></div>'
       +'<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">'
-        +'<div class="fg" style="min-width:205px;margin:0;"><label>Departamento</label><button class="btn" type="button" style="width:100%;background:var(--accent);color:#fff;text-align:left;" onclick="hkSelectLiquidationDepartment(\'Housekeeping\')">🧹 Housekeeping</button></div>'
-        +'<div class="fg" style="min-width:205px;margin:0;"><label>Período</label><select onchange="hkChangeSemesterPeriod(this.value)">'+_hkPeriodOptions(period)+'</select></div>'
+        +'<div class="fg" style="min-width:230px;margin:0;"><label>Departamento</label><select onchange="hkSelectLiquidationDepartment(this.value)">'
+          +'<option value="Housekeeping"'+(department==='Housekeeping'?' selected':'')+'>🧹 Housekeeping</option>'
+          +'<option value="Entrenadores"'+(department==='Entrenadores'?' selected':'')+'>🏋 Entrenadores</option>'
+        +'</select></div>'
+        +'<div class="fg" style="min-width:220px;margin:0;"><label>Período '+(isTrainers?'mensual':'semestral')+'</label><select onchange="hkChangeLiquidationPeriod(this.value)">'+periodOptions+'</select></div>'
       +'</div>'
     +'</div>'
     +'</div>'
@@ -269,15 +160,35 @@ function _hkLiquidationsDepartmentHtml() {
 async function renderLiquidacionesPorDepartamento(el) {
   if(!el) return;
   _hkSemesterState.view = 'department-liquidation';
-  _hkSemesterState.department = 'Housekeeping';
-  var period = _hkSemesterState.period || _hkDefaultPeriod();
+  var department = _hkSemesterState.department || 'Entrenadores';
+  if(department==='Entrenadores' && typeof _liqEntrMonth!=='undefined' && !_liqEntrMonth) {
+    var monthOptions = typeof getMonthOptions==='function' ? getMonthOptions(18) : [];
+    try {
+      var trainerRows = await getDB('entrenadores_incentivos_mes');
+      var pendingMonths = (trainerRows||[]).filter(function(row){ return !row.liquidado; }).map(function(row){ return row.ym; }).sort().reverse();
+      _liqEntrMonth = pendingMonths[0] || (monthOptions[0]&&monthOptions[0].value) || '';
+    } catch(_error) {
+      _liqEntrMonth = (monthOptions[0]&&monthOptions[0].value)||'';
+    }
+  }
   el.innerHTML = _hkLiquidationsDepartmentHtml();
   var details = document.getElementById('liquidaciones-departamento-details');
   if(!details) return;
   details.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px 0;">Cargando datos de liquidación…</p></div>';
+  if(department==='Entrenadores') {
+    if(!(typeof canActAsAdmin==='function' && canActAsAdmin(currentUser))) {
+      details.innerHTML = '<div class="card"><p style="color:var(--text3);padding:16px 0;">Solo BOSS puede liquidar Entrenadores.</p></div>';
+      return;
+    }
+    if(typeof _mrEntrMonth!=='undefined') _mrEntrMonth = _liqEntrMonth;
+    details.innerHTML = '<div class="card"><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px;">Entrenadores · Liquidación mensual</div><div id="liq-entr-tabla"><p style="color:var(--text3);">Cargando…</p></div></div>';
+    if(typeof _liqEntrLoadTabla==='function') await _liqEntrLoadTabla();
+    return;
+  }
+  var period = _hkSemesterState.period || _hkDefaultPeriod();
   try {
     var data = await _hkLoad(period);
-    details.innerHTML = _hkReportHtml(data, { showPeriod:false }) + _hkLiquidationHtml(data, { showPeriod:false });
+    details.innerHTML = _hkLiquidationHtml(data);
   } catch(error) {
     details.innerHTML = '<div class="card"><p style="color:var(--red);padding:16px 0;">'+_hkEscHtml(error.message||'No se pudieron cargar los datos de liquidación.')+'</p></div>';
   }
@@ -285,11 +196,27 @@ async function renderLiquidacionesPorDepartamento(el) {
 window.renderLiquidacionesPorDepartamento = renderLiquidacionesPorDepartamento;
 
 function hkSelectLiquidationDepartment(department) {
-  if(department!=='Housekeeping') return;
+  if(department!=='Housekeeping'&&department!=='Entrenadores') return;
   _hkSemesterState.department = department;
   renderLiquidacionesPorDepartamento(document.getElementById('liquidaciones-departamento-content'));
 }
 window.hkSelectLiquidationDepartment = hkSelectLiquidationDepartment;
+
+function hkChangeLiquidationPeriod(period) {
+  if(_hkSemesterState.department==='Entrenadores') {
+    if(typeof _liqEntrMonth!=='undefined') _liqEntrMonth = period;
+    if(typeof _mrEntrMonth!=='undefined') _mrEntrMonth = period;
+  } else {
+    _hkSemesterState.period = period;
+  }
+  renderLiquidacionesPorDepartamento(document.getElementById('liquidaciones-departamento-content'));
+}
+window.hkChangeLiquidationPeriod = hkChangeLiquidationPeriod;
+
+async function hkSyncReportAbsences(reportId, absences) {
+  return _hkApi('POST', {action:'sync_absences', report_id:reportId, absences:absences||[]});
+}
+window.hkSyncReportAbsences = hkSyncReportAbsences;
 
 function hkOpenLiquidation(employeeId) {
   var record = (_hkSemesterState.data&&_hkSemesterState.data.records||[]).find(function(row){ return row.employee_id===employeeId; });
@@ -304,7 +231,7 @@ function hkOpenLiquidation(employeeId) {
     +'<div style="font-size:15px;font-weight:700;margin-bottom:14px;">'+_hkEscHtml(record.employee_nombre)+' · '+_hkEscHtml((_hkPeriodInfo(record.periodo)||{}).label||record.periodo)+'</div>'
     +'<div style="padding:14px;border-radius:8px;background:var(--green-dim);border:1px solid var(--green);margin-bottom:16px;"><div style="font-size:11px;color:var(--text3);">Importe a liquidar</div><div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:var(--green);margin-top:3px;">'+_hkFormatMoney(record.importe_premio)+'</div></div>'
     +'<div class="fg" style="margin-bottom:16px;"><label>Notas (opcional)</label><input id="hk-liquidation-notes" type="text" maxlength="1000" placeholder="Ej.: Incluido en nómina de agosto"></div>'
-    +'<div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:6px;padding:10px;margin-bottom:16px;font-size:12px;color:var(--amber);">Esta acción registra la liquidación y bloquea la edición de los días del período.</div>'
+    +'<div style="background:var(--amber-dim);border:1px solid var(--amber);border-radius:6px;padding:10px;margin-bottom:16px;font-size:12px;color:var(--amber);">Esta acción registra la fecha de liquidación y bloquea cambios de bajas que afecten a este período.</div>'
     +'<div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn btn-secondary" onclick="document.getElementById(\'hk-liquidation-overlay\').remove()">Cancelar</button><button class="btn" style="background:var(--green);color:#fff;" onclick=\'hkConfirmLiquidation('+JSON.stringify(employeeId)+')\'>Confirmar liquidación</button></div>'
     +'</div>';
   document.body.appendChild(overlay);
@@ -318,8 +245,7 @@ async function hkConfirmLiquidation(employeeId) {
     var overlay = document.getElementById('hk-liquidation-overlay');
     if(overlay) overlay.remove();
     toast('Liquidación semestral registrada.','ok');
-    if(_hkSemesterState.view==='department-liquidation') await renderLiquidacionesPorDepartamento(document.getElementById('liquidaciones-departamento-content'));
-    else await renderHousekeepingLiquidacion(document.getElementById('inf-main-content'));
+    await renderLiquidacionesPorDepartamento(document.getElementById('liquidaciones-departamento-content'));
   } catch(error) { toast(error.message||'No se pudo registrar la liquidación.','err'); }
 }
 window.hkConfirmLiquidation = hkConfirmLiquidation;

@@ -21,7 +21,8 @@ import {
 export const config = { runtime: 'edge' };
 
 const PERIOD_RE = /^(\d{4})-S([12])$/;
-const MAX_ABSENCE_DAYS = 184;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_REPORT_ABSENCES = 100;
 
 export function parseSemesterPeriod(value) {
   const match = PERIOD_RE.exec(String(value || ''));
@@ -70,6 +71,33 @@ export function calculateHousekeepingAward({ period, fechaAlta, absenceDays, pre
 export function singleRpcRecord(value) {
   if (Array.isArray(value)) return value[0] || null;
   return value && typeof value === 'object' ? value : null;
+}
+
+function isValidIsoDate(value) {
+  if (!DATE_RE.test(String(value || ''))) return false;
+  const parsed = new Date(String(value) + 'T00:00:00Z');
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+export function normalizeAbsencePeriods(value) {
+  if (!Array.isArray(value) || value.length > MAX_REPORT_ABSENCES) return null;
+  const normalized = [];
+  const seen = new Set();
+  for (const row of value) {
+    const employeeId = normalizeEmployeeId(row && row.employee_id);
+    const start = row && row.fecha_inicio;
+    const end = row && row.fecha_fin;
+    if (!employeeId || !isValidIsoDate(start) || !isValidIsoDate(end)) return null;
+    const startDate = new Date(start + 'T00:00:00Z');
+    const endDate = new Date(end + 'T00:00:00Z');
+    const duration = Math.round((endDate - startDate) / 86400000);
+    if (duration < 0 || duration > 366) return null;
+    const key = `${employeeId}:${start}:${end}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ employee_id: employeeId, fecha_inicio: start, fecha_fin: end });
+  }
+  return normalized;
 }
 
 function isHousekeepingArea(area) {
@@ -149,6 +177,14 @@ export default async function handler(req) {
     const period = parseSemesterPeriod(url.searchParams.get('periodo'));
     if (!period) return jsonResponse({ error: 'Periodo semestral inválido' }, 400);
     try {
+      await adminRequest('rpc/refresh_housekeeping_semester_incentives', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_periodo: period.id,
+          p_actor_id: actor.profile.id,
+          p_actor_nombre: actor.profile.nombre || actor.profile.id
+        })
+      });
       const view = await loadView(period);
       return jsonResponse({
         period,
@@ -174,8 +210,33 @@ export default async function handler(req) {
   if (!actor) return jsonResponse({ error: 'Unauthorized' }, 401);
 
   let body;
-  try { body = await readJson(req, 4096); }
+  try { body = await readJson(req, 32768); }
   catch (_) { return jsonResponse({ error: 'Solicitud inválida' }, 400); }
+
+  if (body.action === 'sync_absences') {
+    if (!canRecordAbsences(actor.profile)) return jsonResponse({ error: 'Forbidden' }, 403);
+    const reportId = normalizeEmployeeId(body.report_id);
+    const absences = normalizeAbsencePeriods(body.absences);
+    if (!reportId || absences === null) {
+      return jsonResponse({ error: 'Completa la empleada y las fechas de inicio y fin de cada baja.' }, 400);
+    }
+    try {
+      const result = await adminRequest('rpc/sync_housekeeping_report_absences', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_report_id: reportId,
+          p_absences: absences,
+          p_actor_id: actor.profile.id,
+          p_actor_nombre: actor.profile.nombre || actor.profile.id
+        })
+      });
+      return jsonResponse({ ok: true, result: singleRpcRecord(result) || result || {} });
+    } catch (_) {
+      return jsonResponse({
+        error: 'No se pudieron registrar las bajas. Comprueba las fechas y que el semestre no esté liquidado.'
+      }, 409);
+    }
+  }
 
   const period = parseSemesterPeriod(body.periodo);
   const employeeId = normalizeEmployeeId(body.employee_id);
@@ -185,31 +246,6 @@ export default async function handler(req) {
   try { target = await getTargetEmployee(employeeId); }
   catch (_) { return jsonResponse({ error: 'Employee service unavailable' }, 503); }
   if (!target) return jsonResponse({ error: 'Empleado de Housekeeping no encontrado' }, 404);
-
-  if (body.action === 'save') {
-    if (!canRecordAbsences(actor.profile)) return jsonResponse({ error: 'Forbidden' }, 403);
-    const absenceDays = Number(body.dias_baja);
-    if (!Number.isInteger(absenceDays) || absenceDays < 0 || absenceDays > MAX_ABSENCE_DAYS) {
-      return jsonResponse({ error: 'Los días de baja deben ser un número entero entre 0 y 184' }, 400);
-    }
-    try {
-      const rows = await adminRequest('rpc/save_housekeeping_semester_incentive', {
-        method: 'POST',
-        body: JSON.stringify({
-          p_employee_id: target.id,
-          p_periodo: period.id,
-          p_dias_baja: absenceDays,
-          p_actor_id: actor.profile.id,
-          p_actor_nombre: actor.profile.nombre || actor.profile.id
-        })
-      });
-      const record = singleRpcRecord(rows);
-      if (!record) throw new Error('EMPTY_RESULT');
-      return jsonResponse({ ok: true, record });
-    } catch (_) {
-      return jsonResponse({ error: 'No se pudieron guardar los días de baja. Actualiza la pantalla e inténtalo de nuevo.' }, 409);
-    }
-  }
 
   if (body.action === 'liquidate') {
     if (!canLiquidateHousekeeping(actor.profile)) return jsonResponse({ error: 'Forbidden' }, 403);

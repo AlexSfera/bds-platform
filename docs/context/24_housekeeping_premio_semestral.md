@@ -2,15 +2,37 @@
 
 ## Finalidad
 
-Gestionar el reconocimiento semestral por continuidad y compromiso del Departamento de Housekeeping. La fuente operativa es SYNCRO HUB: si el dato no está registrado en el sistema, no entra en la liquidación.
+Gestionar el reconocimiento semestral por continuidad y compromiso del Departamento de Housekeeping. La fuente operativa es SYNCRO HUB: si la baja no está registrada en un informe publicado, no se incorpora al cálculo.
 
-## Responsable y acceso
+## Responsables y accesos
 
-- La **jefa de Housekeeping** registra los días de baja laboral de cada empleada.
-- Dirección puede revisar los datos y registrar la liquidación.
-- La aplicación guarda solamente el número total de días de baja por período. No se introducen diagnósticos, partes médicos ni otra información clínica.
+- La **jefa de Housekeeping** registra las bajas laborales desde **Informes → Housekeeping → Informe de Jefe**.
+- Dirección revisa y liquida los premios desde la única pestaña **Liquidación**.
+- No se introducen diagnósticos, partes médicos ni otra información clínica: solo empleada, fecha de inicio y fecha de fin.
+- La pestaña **Liquidación** no permite editar días de baja.
 
-## Períodos
+## Registro de bajas en Informes
+
+1. Abrir **Informes** y seleccionar **Housekeeping**.
+2. Abrir **Informe de Jefe** y crear o editar un informe.
+3. En **Bajas laborales de Housekeeping**, seleccionar la empleada e indicar inicio y fin de la baja.
+4. Si la misma empleada tiene otra baja, pulsar **+ Añadir otra baja de esta empleada**.
+5. Publicar el informe. Un borrador no modifica la liquidación.
+
+Las fechas son inclusivas: una baja del 10 al 10 cuenta como 1 día. Si un intervalo cruza el 30 de junio o el 31 de diciembre, el sistema reparte automáticamente los días entre los dos semestres. Los intervalos solapados de una misma empleada no duplican días.
+
+Una vez liquidado un semestre, no se admiten cambios de bajas que afecten a ese semestre. Si la sincronización no puede completarse, el informe permanece como borrador para su corrección.
+
+## Liquidación unificada
+
+Existe una sola pestaña **Liquidación**, basada en la anterior pantalla de Liquidación Entrenadores:
+
+- **Entrenadores:** selección de período mensual y liquidación mensual existente.
+- **Housekeeping:** selección de período semestral, consulta de días calculados, nivel, importe, estado y fecha de liquidación.
+
+Dirección pulsa **Marcar liquidado** para cada persona. El sistema registra quién realizó la liquidación y la fecha. No se mezclan liquidaciones con la introducción de datos en Informes.
+
+## Períodos de Housekeeping
 
 Los períodos son siempre fijos:
 
@@ -37,14 +59,6 @@ Importes por períodos consecutivos que cumplen ambas condiciones:
 Si una empleada supera 10 días de baja, no recibe premio en ese período. El siguiente período que vuelva a cumplir empieza otra vez en el nivel 1 (250 €). La ausencia de registro del período anterior también rompe la consecutividad.
 
 Si `fecha_alta` no está registrada en el Maestro, el sistema no calcula premio: muestra `[NO DATA]` para evitar una liquidación sin evidencia.
-
-## Flujo en la plataforma
-
-1. Abrir **Liquidaciones → Departamento → Housekeeping**.
-2. Seleccionar el semestre y registrar los días de baja de cada empleada en **Datos de bajas para liquidación**.
-3. El sistema calcula antigüedad, elegibilidad, nivel e importe.
-4. En la misma pantalla, revisar **Liquidación semestral** y el total pendiente.
-5. Dirección confirma individualmente cada liquidación. Tras confirmarla, los días de ese período quedan bloqueados.
 
 ## Datos iniciales del informe de junio de 2026
 

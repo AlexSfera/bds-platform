@@ -1169,8 +1169,11 @@ async function _renderInformeJefeForm(el){
     }
   }
   var cj=(existing&&existing.contenido_json)?existing.contenido_json:{};
+  var defaultDept=existing&&existing.departamento
+    ? existing.departamento
+    : (depts.indexOf(_infDept)>=0?_infDept:(depts[0]||''));
   var deptOpts=depts.map(function(d){
-    var sel=(existing&&existing.departamento===d)?' selected':(!existing&&depts.length===1?' selected':'');
+    var sel=defaultDept===d?' selected':'';
     return '<option value="'+_escHtml(d)+'"'+sel+'>'+(INF_DEPT_LABELS[d]||d)+'</option>';
   }).join('');
   var tipoOpts=['semanal','mensual','evento'].map(function(t){
@@ -1206,10 +1209,10 @@ async function _renderInformeJefeForm(el){
     +  '<textarea id="inf-f-eval" rows="3" placeholder="García: buen rendimiento · Martínez: ausencia no justificada" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:var(--font-ui);resize:vertical;">'+_escHtml(cj.evaluacion_empleados||'')+'</textarea>'
 
     // ── BLOQUE RR.HH. ──
-    +  '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:18px;">🏥 Estado RR.HH. del equipo</div>'
-    +  '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Indica quién está de baja médica o vacaciones. Esta información se usará para la previsión de turnos y el cálculo de incentivos.</div>'
+    +  '<div id="inf-rrhh-title" style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:18px;">🏥 Estado RR.HH. del equipo</div>'
+    +  '<div id="inf-rrhh-help" style="font-size:11px;color:var(--text3);margin-bottom:10px;">Indica quién está de baja médica o vacaciones. Esta información se usará para la previsión de turnos y el cálculo de incentivos.</div>'
     +  '<div id="inf-rrhh-rows" style="margin-bottom:10px;"></div>'
-    +  '<button onclick="window._infAddRrhhRow()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:11px;padding:6px 12px;cursor:pointer;font-family:var(--font-mono);">+ Añadir empleado</button>'
+    +  '<button id="inf-rrhh-add" onclick="window._infAddRrhhRow()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:11px;padding:6px 12px;cursor:pointer;font-family:var(--font-mono);">+ Añadir empleado</button>'
 
     +  '<div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;margin-top:18px;">📅 Previsión semana siguiente</div>'
     +  '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px;">'
@@ -1237,6 +1240,15 @@ window._infLoadRrhhRows = async function(){
     return e.estado==='Activo'&&(e.area===dept||(dept==='FnB'&&(e.area==='Sala'||e.area==='Cocina')));
   });
   window._infEmpDept=empDept;
+  var isHk=dept==='Housekeeping'||dept==='HK'||dept==='Limpieza';
+  var title=document.getElementById('inf-rrhh-title');
+  var help=document.getElementById('inf-rrhh-help');
+  var add=document.getElementById('inf-rrhh-add');
+  if(title) title.textContent=isHk?'🏥 Bajas laborales de Housekeeping':'🏥 Estado RR.HH. del equipo';
+  if(help) help.textContent=isHk
+    ? 'Registra cada baja con fecha de inicio y fin. Usa + para añadir otra baja de la misma empleada. Los días se asignarán automáticamente al semestre correspondiente.'
+    : 'Indica quién está de baja médica o vacaciones. Esta información se usará para la previsión de turnos.';
+  if(add) add.textContent=isHk?'+ Añadir empleada con baja':'+ Añadir empleado';
   _infRenderRrhhRows();
 };
 
@@ -1244,6 +1256,27 @@ window._infAddRrhhRow=function(){
   if(!window._infRrhhRows) window._infRrhhRows=[];
   window._infRrhhRows.push({employee_id:'',nombre:'',tipo:'baja_medica',fecha_inicio:'',fecha_fin:'',notas:''});
   _infRenderRrhhRows();
+};
+
+window._infAddRrhhForEmployee=function(sourceIndex){
+  var source=(window._infRrhhRows||[])[sourceIndex]||{};
+  if(!source.employee_id){ toast('Selecciona primero la empleada','warn'); return; }
+  window._infRrhhRows.push({
+    employee_id:source.employee_id,nombre:source.nombre||'',tipo:'baja_medica',
+    fecha_inicio:'',fecha_fin:'',notas:''
+  });
+  _infRenderRrhhRows();
+};
+
+window._infSetHkEmployee=function(indices,value,nombre){
+  String(indices||'').split(',').forEach(function(rawIndex){
+    var index=parseInt(rawIndex,10);
+    if(!isNaN(index)&&window._infRrhhRows&&window._infRrhhRows[index]){
+      window._infRrhhRows[index].employee_id=value;
+      window._infRrhhRows[index].nombre=nombre||'';
+      window._infRrhhRows[index].tipo='baja_medica';
+    }
+  });
 };
 
 window._infRemoveRrhhRow=function(idx){
@@ -1260,7 +1293,51 @@ function _infRenderRrhhRows(){
     +emps.map(function(e){ return '<option value="'+_escHtml(e.id)+'">'+_escHtml(e.nombre)+'</option>'; }).join('');
 
   if(!rows.length){
-    el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0;">Sin registros. Pulsa "+ Añadir empleado" si hay bajas o vacaciones.</div>';
+    var selectedDept=(document.getElementById('inf-f-dept')||{}).value||'';
+    var emptyText=(selectedDept==='Housekeeping'||selectedDept==='HK'||selectedDept==='Limpieza')
+      ? 'Sin bajas registradas en este informe.'
+      : 'Sin registros. Pulsa "+ Añadir empleado" si hay bajas o vacaciones.';
+    el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0;">'+emptyText+'</div>';
+    return;
+  }
+  var dept=(document.getElementById('inf-f-dept')||{}).value||'';
+  var isHk=dept==='Housekeeping'||dept==='HK'||dept==='Limpieza';
+  if(isHk){
+    var groups=[];
+    rows.forEach(function(row,index){
+      var key=row.employee_id||('__new_'+index);
+      var group=groups.find(function(item){ return item.key===key; });
+      if(!group){ group={key:key,indices:[],row:row};groups.push(group); }
+      group.indices.push(index);
+    });
+    el.innerHTML=groups.map(function(group){
+      var selectedId=group.row.employee_id||'';
+      var options='<option value="">— Seleccionar empleada —</option>'
+        +emps.map(function(employee){
+          return '<option value="'+_escHtml(employee.id)+'"'+(employee.id===selectedId?' selected':'')+'>'+_escHtml(employee.nombre)+'</option>';
+        }).join('');
+      var periods=group.indices.map(function(index,position){
+        var row=rows[index];
+        var days='';
+        if(row.fecha_inicio&&row.fecha_fin){
+          var start=new Date(row.fecha_inicio+'T00:00:00Z');
+          var end=new Date(row.fecha_fin+'T00:00:00Z');
+          var duration=Math.round((end-start)/86400000)+1;
+          if(duration>0) days='<span style="font-family:var(--font-mono);font-size:11px;color:var(--accent);">'+duration+' día'+(duration===1?'':'s')+'</span>';
+        }
+        return '<div style="display:grid;grid-template-columns:minmax(145px,1fr) minmax(145px,1fr) auto auto;gap:8px;align-items:end;margin-top:8px;">'
+          +'<div class="fg" style="margin:0;"><label>Inicio de baja '+(position+1)+'</label><input type="date" value="'+_escHtml(row.fecha_inicio||'')+'" onchange="window._infRrhhRows['+index+'].fecha_inicio=this.value;_infRenderRrhhRows()"></div>'
+          +'<div class="fg" style="margin:0;"><label>Fin de baja '+(position+1)+'</label><input type="date" value="'+_escHtml(row.fecha_fin||'')+'" onchange="window._infRrhhRows['+index+'].fecha_fin=this.value;_infRenderRrhhRows()"></div>'
+          +'<div style="padding:8px 2px;min-width:55px;">'+days+'</div>'
+          +'<button type="button" aria-label="Eliminar baja" onclick="window._infRemoveRrhhRow('+index+')" style="background:transparent;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:8px;">✕</button>'
+          +'</div>';
+      }).join('');
+      return '<div style="padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">'
+        +'<div class="fg" style="margin:0 0 4px;max-width:420px;"><label>Empleada</label><select onchange="window._infSetHkEmployee(\''+group.indices.join(',')+'\',this.value,this.options[this.selectedIndex].text)">'+options+'</select></div>'
+        +periods
+        +'<button type="button" onclick="window._infAddRrhhForEmployee('+group.indices[0]+')" style="margin-top:10px;background:transparent;border:1px solid var(--accent);border-radius:5px;color:var(--accent);font-size:11px;padding:6px 10px;cursor:pointer;font-family:var(--font-mono);">+ Añadir otra baja de esta empleada</button>'
+        +'</div>';
+    }).join('');
     return;
   }
   el.innerHTML=rows.map(function(r,i){
@@ -1288,6 +1365,34 @@ function _infNumField(id,label,val){
     +'</div>';
 }
 
+function _infIsHousekeeping(dept){
+  return dept==='Housekeeping'||dept==='HK'||dept==='Limpieza';
+}
+
+function _infValidateHkAbsences(rows){
+  var absences=[];
+  for(var i=0;i<(rows||[]).length;i++){
+    var row=rows[i]||{};
+    if(!row.employee_id){
+      return {ok:false,message:'Selecciona la empleada en cada baja de Housekeeping.'};
+    }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_inicio||'')||!/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_fin||'')){
+      return {ok:false,message:'Completa la fecha de inicio y fin de cada baja de Housekeeping.'};
+    }
+    var start=new Date(row.fecha_inicio+'T00:00:00Z');
+    var end=new Date(row.fecha_fin+'T00:00:00Z');
+    if(isNaN(start.getTime())||isNaN(end.getTime())||end<start){
+      return {ok:false,message:'La fecha de fin no puede ser anterior al inicio de la baja.'};
+    }
+    absences.push({
+      employee_id:row.employee_id,
+      fecha_inicio:row.fecha_inicio,
+      fecha_fin:row.fecha_fin
+    });
+  }
+  return {ok:true,absences:absences};
+}
+
 window._infGuardarInforme=async function(estado){
   var dept=(document.getElementById('inf-f-dept')||{}).value||'';
   var tipo=(document.getElementById('inf-f-tipo')||{}).value||'semanal';
@@ -1300,20 +1405,54 @@ window._infGuardarInforme=async function(estado){
   var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
   var n=function(id){ var v=parseFloat(g(id)); return isNaN(v)?null:v; };
 
-  // Guardar RR.HH. en employee_status si hay filas
   var plantillaRrhh=window._infRrhhRows||[];
-  if(plantillaRrhh.length&&estado==='publicado'){
-    for(var i=0;i<plantillaRrhh.length;i++){
-      var row=plantillaRrhh[i];
-      if(!row.fecha_inicio) continue;
-      var empId=row.employee_id||null;
-      if(!empId&&row.nombre){
-        var emps=window._infEmpDept||[];
-        var found=emps.find(function(e){ return e.nombre===row.nombre; });
-        empId=found?found.id:null;
-      }
-      if(!empId) continue;
-      try {
+  var isHk=_infIsHousekeeping(dept);
+  var hkValidation=isHk&&estado==='publicado'?_infValidateHkAbsences(plantillaRrhh):{ok:true,absences:[]};
+  if(!hkValidation.ok){ toast(hkValidation.message,'err'); return; }
+
+  var payload={
+    ts:localTs(),autor:currentUser.nombre||currentUser.id,rol:currentUser.rol||'',
+    departamento:dept,tipo:tipo,periodo:periodo,
+    // Housekeeping se publica dentro de la misma transacción que sincroniza
+    // sus bajas. Si falla el cálculo, el informe queda como borrador editable.
+    estado:isHk&&estado==='publicado'?'borrador':estado,
+    contenido_json:{
+      ventas:n('inf-f-ventas'),covers:n('inf-f-covers'),ticket_medio:n('inf-f-ticket-med'),
+      labor_pct:n('inf-f-labor-pct'),fios_activos:n('inf-f-fios'),ocupacion_hotel:n('inf-f-ocup'),
+      resumen:g('inf-f-resumen'),evaluacion_empleados:g('inf-f-eval'),
+      ocupacion_semana_siguiente:n('inf-f-ocup-sig'),eventos_semana_siguiente:g('inf-f-eventos'),
+      justificacion:g('inf-f-just'),plantilla_rrhh:plantillaRrhh
+    }
+  };
+  try {
+    var reportId=_infJefeEditId||('inf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7));
+    if(_infJefeEditId){
+      var pRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeEditId),
+        {method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
+      if(!pRes.ok) throw new Error('HTTP '+pRes.status);
+    } else {
+      payload.id=reportId;
+      var iRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports',
+        {method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
+      if(!iRes.ok) throw new Error('HTTP '+iRes.status);
+    }
+    if(isHk&&estado==='publicado'){
+      if(typeof window.hkSyncReportAbsences!=='function') throw new Error('El cálculo seguro de bajas no está disponible.');
+      await window.hkSyncReportAbsences(reportId,hkValidation.absences);
+      invalidateCache('employee_status');
+    }
+    // El resto de departamentos mantiene su registro operativo de RR.HH.
+    if(!isHk&&plantillaRrhh.length&&estado==='publicado'){
+      for(var i=0;i<plantillaRrhh.length;i++){
+        var row=plantillaRrhh[i];
+        if(!row.fecha_inicio) continue;
+        var empId=row.employee_id||null;
+        if(!empId&&row.nombre){
+          var emps=window._infEmpDept||[];
+          var found=emps.find(function(e){ return e.nombre===row.nombre; });
+          empId=found?found.id:null;
+        }
+        if(!empId) continue;
         var sid='es_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
         await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/employee_status',{
           method:'POST',
@@ -1324,38 +1463,19 @@ window._infGuardarInforme=async function(estado){
             notas:row.notas||'',creado_por:currentUser.nombre||currentUser.id,ts:localTs()
           })
         });
-      } catch(e){}
-    }
-    invalidateCache('employee_status');
-  }
-
-  var payload={
-    ts:localTs(),autor:currentUser.nombre||currentUser.id,rol:currentUser.rol||'',
-    departamento:dept,tipo:tipo,periodo:periodo,estado:estado,
-    contenido_json:{
-      ventas:n('inf-f-ventas'),covers:n('inf-f-covers'),ticket_medio:n('inf-f-ticket-med'),
-      labor_pct:n('inf-f-labor-pct'),fios_activos:n('inf-f-fios'),ocupacion_hotel:n('inf-f-ocup'),
-      resumen:g('inf-f-resumen'),evaluacion_empleados:g('inf-f-eval'),
-      ocupacion_semana_siguiente:n('inf-f-ocup-sig'),eventos_semana_siguiente:g('inf-f-eventos'),
-      justificacion:g('inf-f-just'),plantilla_rrhh:plantillaRrhh
-    }
-  };
-  try {
-    if(_infJefeEditId){
-      var pRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(_infJefeEditId),
-        {method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
-      if(!pRes.ok) throw new Error('HTTP '+pRes.status);
-    } else {
-      payload.id='inf_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-      var iRes=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports',
-        {method:'POST',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
-      if(!iRes.ok) throw new Error('HTTP '+iRes.status);
+      }
+      invalidateCache('employee_status');
     }
     invalidateCache('dept_reports');
     toast(estado==='publicado'?'Informe publicado ✓':'Borrador guardado ✓','ok');
     _infJefeMode='lista';_infJefeEditId=null;_infJefeList=[];
     renderInformes();
-  } catch(e){ toast('Error al guardar: '+e.message,'err'); }
+  } catch(e){
+    var prefix=isHk&&estado==='publicado'
+      ? 'No se pudo publicar. El informe queda guardado como borrador: '
+      : 'Error al guardar: ';
+    toast(prefix+e.message,'err');
+  }
 };
 
 async function _renderInformeJefeDetalle(el){
@@ -1387,7 +1507,7 @@ async function _renderInformeJefeDetalle(el){
       if(r.fecha_inicio){
         var fin=r.fecha_fin?new Date(r.fecha_fin):new Date();
         var ini=new Date(r.fecha_inicio);
-        dias=Math.round((fin-ini)/86400000)+' días';
+        dias=(Math.round((fin-ini)/86400000)+1)+' días';
       }
       return '<tr style="border-bottom:1px solid var(--border);">'
         +'<td style="padding:8px 12px;font-size:13px;font-weight:600;">'+_escHtml(r.nombre||r.employee_id||'—')+'</td>'
@@ -1445,10 +1565,27 @@ async function _renderInformeJefeDetalle(el){
 
 window._infPublicarDesdeVer=async function(id){
   try {
+    var report=(_infJefeList||[]).find(function(item){ return item.id===id; });
+    if(!report){
+      var load=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(id)+'&select=*',
+        {headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+      if(!load.ok) throw new Error('No se pudo cargar el borrador.');
+      var loaded=await load.json();
+      report=loaded[0]||null;
+    }
+    if(!report) throw new Error('Informe no encontrado.');
+    if(_infIsHousekeeping(report.departamento)){
+      var validation=_infValidateHkAbsences((report.contenido_json||{}).plantilla_rrhh||[]);
+      if(!validation.ok) throw new Error(validation.message);
+      if(typeof window.hkSyncReportAbsences!=='function') throw new Error('El cálculo seguro de bajas no está disponible.');
+      await window.hkSyncReportAbsences(id,validation.absences);
+      invalidateCache('employee_status');
+    } else {
     var res=await syncroSupabaseFetch(SUPABASE_URL+'/rest/v1/dept_reports?id=eq.'+encodeURIComponent(id),
       {method:'PATCH',headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
        body:JSON.stringify({estado:'publicado',ts:localTs()})});
     if(!res.ok) throw new Error('HTTP '+res.status);
+    }
     invalidateCache('dept_reports');
     toast('Informe publicado ✓','ok');
     _infJefeMode='lista';_infJefeList=[];

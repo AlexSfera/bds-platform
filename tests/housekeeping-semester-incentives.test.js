@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import {
   calculateHousekeepingAward,
   isTenureEligible,
+  normalizeAbsencePeriods,
   parseSemesterPeriod,
   singleRpcRecord
 } from '../api/housekeeping-semester-incentives.js';
@@ -44,7 +45,24 @@ test('acepta la respuesta única de las funciones de guardado', () => {
   assert.equal(singleRpcRecord([]), null);
 });
 
-test('la interfaz presenta la entrada de bajas y la liquidación semestral', async () => {
+test('valida rangos de baja completos y elimina duplicados exactos', () => {
+  assert.deepEqual(normalizeAbsencePeriods([
+    { employee_id: 'HK-1', fecha_inicio: '2026-06-29', fecha_fin: '2026-07-02' },
+    { employee_id: 'HK-1', fecha_inicio: '2026-06-29', fecha_fin: '2026-07-02' },
+    { employee_id: 'HK-1', fecha_inicio: '2026-08-10', fecha_fin: '2026-08-10' }
+  ]), [
+    { employee_id: 'HK-1', fecha_inicio: '2026-06-29', fecha_fin: '2026-07-02' },
+    { employee_id: 'HK-1', fecha_inicio: '2026-08-10', fecha_fin: '2026-08-10' }
+  ]);
+  assert.equal(normalizeAbsencePeriods([
+    { employee_id: 'HK-1', fecha_inicio: '2026-07-02', fecha_fin: '2026-06-29' }
+  ]), null);
+  assert.equal(normalizeAbsencePeriods([
+    { employee_id: '', fecha_inicio: '2026-07-02', fecha_fin: '2026-07-03' }
+  ]), null);
+});
+
+test('la liquidación de Housekeeping muestra datos calculados sin entrada manual', async () => {
   const source = await readFile(new URL('../housekeeping_incentivos.js', import.meta.url), 'utf8');
   const context = vm.createContext({ window: {}, document: {}, console, Date, JSON, Math, Number, String, Array });
   vm.runInContext(source, context);
@@ -59,22 +77,29 @@ test('la interfaz presenta la entrada de bajas y la liquidación semestral', asy
     permissions: { can_record: true, can_liquidate: true }
   };
 
-  const report = context._hkReportHtml(data);
   const liquidation = context._hkLiquidationHtml(data);
-  assert.match(report, /Datos de bajas para liquidación/);
-  assert.match(report, /Días de baja/);
-  assert.match(report, /400,00 €/);
   assert.match(liquidation, /Liquidación semestral/);
-  assert.match(liquidation, /Liquidar/);
+  assert.match(liquidation, /Días baja/);
+  assert.match(liquidation, /400,00 €/);
+  assert.match(liquidation, /Marcar liquidado/);
+  assert.doesNotMatch(liquidation, /type="number"/);
 });
 
-test('la pantalla de liquidaciones incluye el departamento Housekeeping', async () => {
+test('hay una sola pantalla de Liquidación con Entrenadores y Housekeeping', async () => {
   const source = await readFile(new URL('../housekeeping_incentivos.js', import.meta.url), 'utf8');
   const shared = await readFile(new URL('../shared.js', import.meta.url), 'utf8');
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const informes = await readFile(new URL('../informes.js', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../supabase/migrations/20260904084500_unify_housekeeping_absence_periods.sql', import.meta.url), 'utf8');
   assert.match(source, /renderLiquidacionesPorDepartamento/);
-  assert.match(source, /Departamento/);
-  assert.match(source, /Housekeeping/);
-  assert.match(shared, /id:'liquidaciones'/);
+  assert.match(source, /Entrenadores se liquida por mes; Housekeeping, por semestre/);
+  assert.match(source, /department: 'Entrenadores'/);
+  assert.match(shared, /id:'liquidaciones', label:'💳 Liquidación'/);
+  assert.doesNotMatch(shared, /liquidacionEntr/);
   assert.match(html, /screen-liquidaciones/);
+  assert.doesNotMatch(html, /screen-liquidacion-entr/);
+  assert.match(informes, /\+ Añadir otra baja de esta empleada/);
+  assert.match(informes, /hkSyncReportAbsences/);
+  assert.match(migration, /count\(distinct day_value\)/);
+  assert.match(migration, /set estado = 'publicado', ts = now\(\)/);
 });
