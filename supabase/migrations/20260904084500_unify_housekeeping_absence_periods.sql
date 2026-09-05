@@ -78,6 +78,7 @@ declare
   v_period_end date;
   v_days smallint;
   v_previous_level smallint;
+  v_fecha_alta date;
   v_tenure_ok boolean;
   v_absence_ok boolean;
   v_level smallint;
@@ -115,8 +116,13 @@ begin
     and absence.fecha_fin >= v_period_start;
 
   v_days := coalesce(v_days, 0);
-  v_tenure_ok := v_employee.fecha_alta is not null
-    and v_employee.fecha_alta < (v_period_start - interval '6 months')::date;
+  begin
+    v_fecha_alta := nullif(trim(v_employee.fecha_alta::text), '')::date;
+  exception when others then
+    v_fecha_alta := null;
+  end;
+  v_tenure_ok := v_fecha_alta is not null
+    and v_fecha_alta < (v_period_start - interval '6 months')::date;
   v_absence_ok := v_days <= 10;
 
   select nivel_premio into v_previous_level
