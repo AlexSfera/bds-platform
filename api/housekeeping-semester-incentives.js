@@ -40,6 +40,12 @@ export function parseSemesterPeriod(value) {
   };
 }
 
+export function isSemesterCompleted(value, now = new Date()) {
+  const period = typeof value === 'string' ? parseSemesterPeriod(value) : value;
+  if (!period || !(now instanceof Date) || !Number.isFinite(now.getTime())) return false;
+  return now.toISOString().slice(0, 10) > period.end;
+}
+
 export function isTenureEligible(fechaAlta, period) {
   const parsed = typeof period === 'string' ? parseSemesterPeriod(period) : period;
   if (!parsed || !/^\d{4}-\d{2}-\d{2}$/.test(String(fechaAlta || ''))) return false;
@@ -177,14 +183,16 @@ export default async function handler(req) {
     const period = parseSemesterPeriod(url.searchParams.get('periodo'));
     if (!period) return jsonResponse({ error: 'Periodo semestral inválido' }, 400);
     try {
-      await adminRequest('rpc/refresh_housekeeping_semester_incentives', {
-        method: 'POST',
-        body: JSON.stringify({
-          p_periodo: period.id,
-          p_actor_id: actor.profile.id,
-          p_actor_nombre: actor.profile.nombre || actor.profile.id
-        })
-      });
+      if (isSemesterCompleted(period)) {
+        await adminRequest('rpc/refresh_housekeeping_semester_incentives', {
+          method: 'POST',
+          body: JSON.stringify({
+            p_periodo: period.id,
+            p_actor_id: actor.profile.id,
+            p_actor_nombre: actor.profile.nombre || actor.profile.id
+          })
+        });
+      }
       const view = await loadView(period);
       return jsonResponse({
         period,
@@ -249,6 +257,9 @@ export default async function handler(req) {
 
   if (body.action === 'liquidate') {
     if (!canLiquidateHousekeeping(actor.profile)) return jsonResponse({ error: 'Forbidden' }, 403);
+    if (!isSemesterCompleted(period)) {
+      return jsonResponse({ error: 'No se puede liquidar un semestre que todavía está abierto.' }, 409);
+    }
     const notes = cleanNotes(body.notas);
     if (notes === null) return jsonResponse({ error: 'Notas inválidas' }, 400);
     try {

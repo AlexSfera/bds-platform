@@ -186,6 +186,17 @@ begin
     raise exception 'HK_INVALID_PERIOD';
   end if;
 
+  -- Si el semestre procede de un informe cerrado e importado, la consulta
+  -- conserva exactamente su lista. Un informe nuevo sí puede recalcular a
+  -- una empleada concreta mediante hk_recalculate_employee_period.
+  if exists (
+    select 1 from public.housekeeping_semester_incentives incentive
+    where incentive.periodo = p_periodo
+      and incentive.origen = 'informe_junio_2026'
+  ) then
+    return 0;
+  end if;
+
   for v_employee_id in
     select employee.id
     from public.employees employee
@@ -199,17 +210,6 @@ begin
       )
     order by employee.id
   loop
-    -- El informe de junio de 2026 ya fue validado por Dirección. Una simple
-    -- consulta no debe reescribirlo; solo un nuevo informe publicado lo hace.
-    if exists (
-      select 1 from public.housekeeping_semester_incentives incentive
-      where incentive.employee_id = v_employee_id
-        and incentive.periodo = p_periodo
-        and incentive.estado = 'pendiente'
-        and incentive.origen = 'informe_junio_2026'
-    ) then
-      continue;
-    end if;
     perform public.hk_recalculate_employee_period(
       v_employee_id, p_periodo, p_actor_id, p_actor_nombre
     );

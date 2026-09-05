@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import {
   calculateHousekeepingAward,
+  isSemesterCompleted,
   isTenureEligible,
   normalizeAbsencePeriods,
   parseSemesterPeriod,
@@ -22,6 +23,13 @@ test('exige más de seis meses al inicio del semestre', () => {
   assert.equal(isTenureEligible('2025-06-30', '2026-S1'), true);
   assert.equal(isTenureEligible('2025-07-01', '2026-S1'), false);
   assert.equal(isTenureEligible('', '2026-S1'), false);
+});
+
+test('solo permite liquidar semestres finalizados', () => {
+  const now = new Date('2026-09-05T08:00:00Z');
+  assert.equal(isSemesterCompleted('2026-S1', now), true);
+  assert.equal(isSemesterCompleted('2026-S2', now), false);
+  assert.equal(isSemesterCompleted('2025-S2', now), true);
 });
 
 test('calcula el tercer nivel con diez días o menos de baja', () => {
@@ -102,4 +110,5 @@ test('hay una sola pantalla de Liquidación con Entrenadores y Housekeeping', as
   assert.match(informes, /hkSyncReportAbsences/);
   assert.match(migration, /count\(distinct day_value\)/);
   assert.match(migration, /set estado = 'publicado', ts = now\(\)/);
+  assert.match(migration, /incentive\.origen = 'informe_junio_2026'/);
 });

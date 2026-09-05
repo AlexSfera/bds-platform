@@ -30,7 +30,7 @@ Existe una sola pestaña **Liquidación**, basada en la anterior pantalla de Liq
 - **Entrenadores:** selección de período mensual y liquidación mensual existente.
 - **Housekeeping:** selección de período semestral, consulta de días calculados, nivel, importe, estado y fecha de liquidación.
 
-Dirección pulsa **Marcar liquidado** para cada persona. El sistema registra quién realizó la liquidación y la fecha. No se mezclan liquidaciones con la introducción de datos en Informes.
+Dirección pulsa **Marcar liquidado** para cada persona. El sistema registra quién realizó la liquidación y la fecha. No se mezclan liquidaciones con la introducción de datos en Informes. Housekeeping solo permite liquidar semestres que ya han finalizado.
 
 ## Períodos de Housekeeping
 

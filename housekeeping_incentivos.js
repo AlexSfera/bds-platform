@@ -32,12 +32,14 @@ function _hkPeriodInfo(period) {
 
 function _hkPeriodOptions(selected) {
   var currentYear = new Date().getFullYear();
+  var today = new Date().toISOString().slice(0,10);
   var options = [];
   for(var year=currentYear; year>=2025; year--){
     ['S2','S1'].forEach(function(semester){
       var period = year+'-'+semester;
       var info = _hkPeriodInfo(period);
-      options.push('<option value="'+period+'"'+(period===selected?' selected':'')+'>'+info.label+'</option>');
+      var end = year+'-'+(semester==='S1'?'06-30':'12-31');
+      if(today>end) options.push('<option value="'+period+'"'+(period===selected?' selected':'')+'>'+info.label+'</option>');
     });
   }
   return options.join('');
