@@ -24,12 +24,12 @@ function loadOperationRule() {
   const start = source.indexOf('function _labEsDomingo');
   const end = source.indexOf('\n}\n', source.indexOf('function _labOperacionRequerida')) + 2;
   assert.ok(start >= 0 && end > start, 'regla de operación por turno no encontrada');
-  const context = vm.createContext({ Date });
+  const context = vm.createContext({ Date, currentUser: { rol: 'empleado' } });
   vm.runInContext(
-    source.slice(start, end) + '\nthis.requiredOperation = _labOperacionRequerida;',
+    source.slice(start, end) + '\nthis.requiredOperation = _labOperacionRequerida; this.canClose = _labPuedeCerrar;',
     context
   );
-  return context.requiredOperation;
+  return { requiredOperation: context.requiredOperation, canClose: context.canClose };
 }
 
 function loadChargeRules() {
@@ -40,6 +40,22 @@ function loadChargeRules() {
   const context = vm.createContext({});
   vm.runInContext(source.slice(start, end) + '\nthis.transferCharges = _labCargosTraspasoDeFecha;', context);
   return context.transferCharges;
+}
+
+function loadTodayOperation(rows, date) {
+  const source = fs.readFileSync(new URL('../syncrolab.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function _labEsDomingo');
+  const end = source.indexOf('\n}\n', source.indexOf('async function getLabOpToday')) + 2;
+  assert.ok(start >= 0 && end > start, 'búsqueda de operación diaria no encontrada');
+  const context = vm.createContext({
+    Date,
+    LAB_TABLE: 'syncrolab_cash_closures',
+    currentUser: { rol: 'empleado' },
+    dbGetAll: async () => rows,
+    today: () => date
+  });
+  vm.runInContext(source.slice(start, end) + '\nthis.getTodayOperation = getLabOpToday;', context);
+  return context.getTodayOperation;
 }
 
 test('SYNCROLAB uses the latest actual transfer for each separate cash register', () => {
@@ -125,13 +141,25 @@ test('SYNCROLAB shows charges from Mañana transfer in Tarde closure without tak
   );
 });
 
-test('SYNCROLAB requires exactly one cash operation for each normal shift', () => {
-  const requiredOperation = loadOperationRule();
+test('SYNCROLAB assigns transfer/closure by weekday and a direct closure on Sunday', () => {
+  const { requiredOperation, canClose } = loadOperationRule();
   assert.equal(requiredOperation('Mañana', '2026-08-31'), 'traspaso');
   assert.equal(requiredOperation('Tarde', '2026-08-31'), 'cierre');
-  assert.equal(requiredOperation('Mañana', '2026-08-30'), 'traspaso');
-  assert.equal(requiredOperation('Tarde', '2026-08-30'), 'cierre');
+  assert.equal(requiredOperation('Mañana', '2026-09-06'), 'cierre');
+  assert.equal(requiredOperation('Tarde', '2026-09-06'), 'cierre');
+  assert.equal(canClose('Mañana', '2026-09-06'), true);
+  assert.equal(canClose('Mañana', '2026-09-07'), false);
+  assert.equal(canClose('Tarde', '2026-09-07'), true);
   assert.equal(requiredOperation('Noche', '2026-08-31'), null);
+});
+
+test('SYNCROLAB treats Sunday as one cash operation for the whole day', async () => {
+  const rows = [{ id: 'sunday-close', fecha: '2026-09-06', turno: 'Tarde', tipo: 'cierre' }];
+  const sundayOperation = loadTodayOperation(rows, '2026-09-06');
+  assert.equal((await sundayOperation('Mañana')).id, 'sunday-close');
+
+  const mondayOperation = loadTodayOperation(rows, '2026-09-07');
+  assert.equal(await mondayOperation('Mañana'), null);
 });
 
 test('SYNCROLAB keeps independent guards and blocks duplicate operations for every role', () => {
@@ -156,6 +184,7 @@ test('SYNCROLAB keeps independent guards and blocks duplicate operations for eve
   assert.match(source, /Se guardará con retiro 0 € y explicación obligatoria/);
   assert.doesNotMatch(source, /No hay efectivo suficiente para dejar el fondo final/);
   assert.match(source, /function _labOperacionRequerida\(turno, fecha\)/);
+  assert.match(source, /if\(_labEsDomingo\(fecha\)\) return 'cierre';/);
   assert.match(source, /if\(turno === 'Tarde'\) return 'cierre';/);
   assert.match(source, /function _labFondoInicialCierre\(rows, sistema\)/);
   assert.match(source, /var _labCierreChargesPrevios = \[\]/);
@@ -165,6 +194,8 @@ test('SYNCROLAB keeps independent guards and blocks duplicate operations for eve
   assert.match(source, /_labCargosTraspasoDeFecha\(rows, charges, fecha\)/);
   assert.match(source, /No sumes el traspaso de Mañana otra vez/);
   assert.match(source, /REGLA OBLIGATORIA/);
+  assert.match(source, /Domingo:<\/b> el turno único hace cierre directo; no hay traspaso/);
+  assert.match(source, /El domingo SYNCROLAB realiza un cierre único; no hay traspaso/);
   assert.match(source, /Confirmo que he leído la regla de mi turno/);
   assert.match(source, /El turno de .+ debe registrar un cierre, no un traspaso/);
 });

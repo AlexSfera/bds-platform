@@ -1,8 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════
 // SYNCROLAB.JS — CAJA SYNCROLAB (Nubimed/Clínica + VirtuGym/Fitness)
 // Patrón traspaso/cierre como Sala. 2 cajas físicas de efectivo + 2 sistemas.
-// Reglas: SYNCROLAB trabaja con dos turnos: Mañana traspasa · Tarde cierra.
-// Una operación por turno+fecha. Traspaso solo efectivo, sin retiro.
+// Reglas: lunes–sábado, Mañana traspasa y Tarde cierra.
+// Los domingos hay un único turno: cierra directamente y nunca hace traspaso.
+// Una operación por turno+fecha de lunes a sábado y una por fecha el domingo.
+// Traspaso solo efectivo, sin retiro.
 // Tabla: syncrolab_cash_closures. Requiere SUPABASE_URL/KEY, genId, localTs,
 // today, currentUser, _doSaveTurno, auditLog, invalidateCache, dbGetAll, toast (globales).
 // ═══════════════════════════════════════════════════════════════════════
@@ -200,13 +202,14 @@ function _labEsDomingo(fechaStr){
 }
 function _labPuedeCerrar(turno, fecha){
   if(currentUser && currentUser.rol === 'admin') return true;
-  return turno === 'Tarde';
+  return _labEsDomingo(fecha) || turno === 'Tarde';
 }
 
-// Regla operativa sin excepciones para el personal: una única operación
-// correcta por turno. Evita que un traspaso en Tarde rompa el fondo del cierre.
+// Regla operativa: lunes–sábado, una operación correcta por turno; el domingo,
+// un único cierre directo. Evita crear un traspaso sin turno posterior.
 function _labOperacionRequerida(turno, fecha){
   if(!turno) return null;
+  if(_labEsDomingo(fecha)) return 'cierre';
   if(turno === 'Tarde') return 'cierre';
   if(turno === 'Mañana') return 'traspaso';
   return null;
@@ -229,7 +232,9 @@ async function getLabOpToday(turno){
   var rows = [];
   try { rows = await dbGetAll(LAB_TABLE); } catch(e){ rows = []; }
   var t = today();
-  return rows.find(function(r){ return r.fecha === t && r.turno === turno; }) || null;
+  // El domingo solo existe una operación de caja en todo el día, aunque un
+  // registro antiguo o administrativo tenga otro turno guardado.
+  return rows.find(function(r){ return r.fecha === t && (_labEsDomingo(t) || r.turno === turno); }) || null;
 }
 
 // ── Mi Turno: fijar turno si ya hizo caja hoy ────────────────────────────
@@ -331,9 +336,10 @@ async function evalLabCajaChoice(){
   }
   setLabSkipBtn('none');
   var requerida = _labOperacionRequerida(_labTipoTurno, today());
-  // Administración conserva ambas vías para resolver una excepción auditada;
-  // para el personal solo se habilita la operación que corresponde al turno.
-  setLabTipoBtns(isAdminU || requerida === 'traspaso', isAdminU || requerida === 'cierre');
+  var esDomingo = _labEsDomingo(today());
+  // Administración conserva ambas vías de lunes a sábado para resolver una
+  // excepción auditada. El domingo nunca se crea un traspaso nuevo.
+  setLabTipoBtns((isAdminU && !esDomingo) || requerida === 'traspaso', isAdminU || requerida === 'cierre');
   if(msg){
     if(dup && isAdminU){ msg.textContent = '⚠ Ya existe una operación de este turno hoy. Como admin puedes duplicar — revisa antes de guardar.'; msg.style.color = 'var(--amber)'; }
     else if(requerida === 'traspaso'){ msg.textContent = 'REGLA DEL TURNO: Mañana registra solo traspaso. El cierre lo realiza Tarde.'; msg.style.color = 'var(--amber)'; }
@@ -344,6 +350,9 @@ function startLabTraspaso(){
   var b = document.getElementById('lab-tipo-btn-traspaso');
   if(b && b.disabled) return;
   if(!_labTipoTurno){ toast('Selecciona tu turno','err'); return; }
+  if(_labEsDomingo(today())){
+    toast('El domingo SYNCROLAB realiza un cierre único; no hay traspaso.','err'); return;
+  }
   if(currentUser.rol !== 'admin' && _labOperacionRequerida(_labTipoTurno, today()) !== 'traspaso'){
     toast('El turno de '+_labTipoTurno+' debe registrar un cierre, no un traspaso.','err'); return;
   }
@@ -574,7 +583,9 @@ async function submitLabTraspaso(){
   var nFondo=gv('lab-tras-nub-fondo')||0, nVentas=gv('lab-tras-nub-ventas'), nReal=gv('lab-tras-nub-real');
   var vFondo=gv('lab-tras-vg-fondo')||0,  vVentas=gv('lab-tras-vg-ventas'),  vReal=gv('lab-tras-vg-real');
   if(!turno) errs.push('Selecciona turno');
-  if(!_labTraspasoEditId && currentUser.rol !== 'admin' && _labOperacionRequerida(turno, today()) !== 'traspaso'){
+  if(!_labTraspasoEditId && _labEsDomingo(today())){
+    errs.push('El domingo SYNCROLAB realiza un cierre único; no hay traspaso');
+  } else if(!_labTraspasoEditId && currentUser.rol !== 'admin' && _labOperacionRequerida(turno, today()) !== 'traspaso'){
     errs.push('El turno de '+turno+' debe registrar un cierre, no un traspaso');
   }
   if(!_labTraspasoEditId && (_labMissingTransferHistory.nubimed || _labMissingTransferHistory.virtugym)){
@@ -644,10 +655,11 @@ function _labCargarCargosCierre(rows, fecha, cierreId){
   });
 }
 
-function _labMissingFondoInicialCierreMessage(){
+function _labMissingFondoInicialCierreMessage(fecha){
   var faltan=[];
   if(_labMissingTransferHistory.nubimed) faltan.push('Nubimed');
   if(_labMissingTransferHistory.virtugym) faltan.push('VirtuGym');
+  if(_labEsDomingo(fecha)) return 'No hay historial verificable del fondo inicial para '+faltan.join(' y ')+'. Revisa el último cierre validado o avisa a administración; el domingo no se hace traspaso.';
   return 'No hay historial verificable del fondo inicial para '+faltan.join(' y ')+'. Registra primero el traspaso de Mañana.';
 }
 
@@ -685,7 +697,7 @@ function openLabCierreModal(existingId){
       if(fN&&uN!==null) fN.value=uN.toFixed(2);
       if(fV&&uV!==null) fV.value=uV.toFixed(2);
       if(uN===null || uV===null){
-        if(aviso){ aviso.style.display='block'; aviso.textContent=_labMissingFondoInicialCierreMessage(); }
+        if(aviso){ aviso.style.display='block'; aviso.textContent=_labMissingFondoInicialCierreMessage(today()); }
       }
       calcLabCierre();
       _labCargarCargosCierre(rows, today(), null);
@@ -793,7 +805,7 @@ async function submitLabCierre(){
     var mc='El turno '+turno+' no puede cerrar caja. Haz un traspaso.'; if(errEl) errEl.textContent=mc; toast(mc,'err'); return;
   }
   if(!_labCierreEditId && (_labMissingTransferHistory.nubimed || _labMissingTransferHistory.virtugym)){
-    var mh=_labMissingFondoInicialCierreMessage(); if(errEl) errEl.textContent=mh; toast(mh,'err'); return;
+    var mh=_labMissingFondoInicialCierreMessage(today()); if(errEl) errEl.textContent=mh; toast(mh,'err'); return;
   }
   if(!_labCierreEditId){
     var dup=await getLabOpToday(turno);
@@ -903,7 +915,7 @@ async function submitLabCierre(){
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Dos cajas independientes: Nubimed/Clínica y VirtuGym/Fitness. Una operación correcta por turno y día mantiene la cadena de custodia.</div>
     <div style="background:rgba(245,158,11,.12);border:1px solid var(--amber);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.45;color:var(--text);">
       <div style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.08em;margin-bottom:5px;">ANTES DE ELEGIR · REGLA OBLIGATORIA</div>
-      <div><b>Mañana:</b> traspaso. <b>Tarde:</b> cierre. SYNCROLAB solo trabaja con estos dos turnos.</div>
+      <div><b>Lunes–sábado:</b> Mañana hace traspaso y Tarde hace cierre. <b>Domingo:</b> el turno único hace cierre directo; no hay traspaso.</div>
       <div style="margin-top:5px;color:var(--text2);">En el cierre, el efectivo real es el total físico: fondo inicial + ventas acumuladas del día. No sumes el traspaso de Mañana otra vez: ya está incluido en ese total.</div>
     </div>
     <div class="fg" id="lab-tipo-turno-fixed" style="margin-bottom:12px;display:none;"><label>Turno</label><div id="lab-tipo-turno-label" style="font-size:16px;font-weight:700;color:var(--text);padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;">—</div></div>
@@ -915,7 +927,7 @@ async function submitLabCierre(){
     </label>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <button id="lab-tipo-btn-traspaso" onclick="startLabTraspaso()" disabled style="width:100%;padding:14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">🔁 Traspaso de caja al siguiente turno</button>
-      <button id="lab-tipo-btn-cierre" onclick="startLabCierre()" disabled style="width:100%;padding:14px;background:#a855f7;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (Tarde)</button>
+      <button id="lab-tipo-btn-cierre" onclick="startLabCierre()" disabled style="width:100%;padding:14px;background:#a855f7;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">💰 Cierre de caja (Tarde / domingo)</button>
       <button id="lab-tipo-btn-skip" onclick="skipLabCajaOp()" style="width:100%;padding:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">✓ Cerrar turno sin caja (la gestiona mi compañero/a)</button>
       <button onclick="closeLabCajaChoice()" style="width:100%;padding:10px;background:transparent;color:var(--text3);border:none;font-size:13px;font-weight:600;cursor:pointer;">Cancelar</button>
     </div>
@@ -965,7 +977,7 @@ async function submitLabCierre(){
   <div style="background:var(--bg2);border:2px solid #a855f7;border-radius:14px;padding:24px;width:100%;max-width:640px;margin:40px auto;">
     <div style="font-family:var(--font-mono);font-size:9px;font-weight:700;color:#a855f7;letter-spacing:.2em;margin-bottom:6px;">SYNCROLAB · CIERRE DE CAJA</div>
     <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">Cierre — <span id="lab-c-turno-label">Turno</span></div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Cuenta el efectivo total antes de retirarlo: fondo inicial + ventas acumuladas del día. No añadas el traspaso de Mañana otra vez. Si falta efectivo, introduce el importe físico real; se guardará como incidencia con explicación obligatoria y sin retiro.</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">Cuenta el efectivo total antes de retirarlo: fondo inicial + ventas acumuladas del día. Si hubo traspaso de Mañana (lunes–sábado), no lo añadas otra vez. Si falta efectivo, introduce el importe físico real; se guardará como incidencia con explicación obligatoria y sin retiro.</div>
     <div id="lab-c-aviso" style="display:none;background:rgba(245,158,11,.1);border:1px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--amber);margin-bottom:12px;"></div>
     ${_bloqueCierre('nub','🩺 Nubimed / Clínica','#6366f1')}
     ${_bloqueCierre('vg','🏋 VirtuGym / Fitness','#10b981')}
